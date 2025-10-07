@@ -10,5 +10,6 @@ anthropic
 google-generativeai
 aiofiles
 pydantic
+pydantic_settings
 python-jose
 passlib
