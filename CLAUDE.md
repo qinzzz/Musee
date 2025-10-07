@@ -1,55 +1,89 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Project instructions for Claude Code when working with this repository.
 
 ## Project Overview
 
-Musee is a React Native iOS application featuring an ambient welcome screen with soft gradient colors. The app is built using React Native 0.81.4 with TypeScript support.
+Musee is a React Native iOS app with Python FastAPI backend for AI-powered artwork analysis.
 
-## Development Commands
+**Frontend**: React Native 0.81.4 + TypeScript
+**Backend**: FastAPI + SQLAlchemy + OpenAI/Claude/Gemini
 
-### Essential Commands
-- `npm start` - Start the Metro bundler
-- `npm run ios` - Build and run the iOS app
-- `npm run android` - Build and run the Android app (when Android support is added)
-- `npm test` - Run the Jest test suite
-- `npm run lint` - Run ESLint to check code quality
+See [README.md](README.md) for complete documentation.
 
-### iOS-Specific Setup
-- `cd ios && pod install` - Install CocoaPods dependencies (run after adding new native dependencies)
-- `bundle install` - Install Ruby bundler dependencies (first-time setup only)
-- `bundle exec pod install` - Alternative pod install command using bundler
+## Quick Commands
 
-### Development Workflow
-1. Start Metro: `npm start`
-2. In a new terminal, run: `npm run ios`
-3. For development with live reload, press `R` in the iOS Simulator
+### Backend
+```bash
+cd backend
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-## Architecture
+### Frontend
+```bash
+cd frontend
+npm start                     # Metro bundler
+npm run ios                   # Physical device
+npm run ios:sim               # iPhone 16 Pro simulator
+npm test                      # Jest tests
+npm run lint                  # ESLint
+cd ios && pod install         # Update CocoaPods (after adding dependencies)
+```
 
-### Key Dependencies
-- **react-native-linear-gradient**: Provides gradient background functionality for the welcome screen
-- **react-native-safe-area-context**: Handles safe area insets for different device layouts
-- **@react-native/new-app-screen**: Template components (currently replaced with custom welcome screen)
+## Key Files
 
-### App Structure
-- `App.tsx` - Main application component containing the ambient welcome screen with:
-  - Soft gradient background (purple to pink spectrum)
-  - Centered welcome text with app branding
-  - Ambient floating circles for visual depth
-  - Safe area handling for different iOS devices
+**Backend**:
+- `app/main.py` - FastAPI app entry
+- `app/routers/artwork.py` - Analysis endpoints
+- `app/services/*_client.py` - AI service implementations
+- `app/prompts/*.txt` - Editable prompts (no code changes needed)
 
-### Styling Approach
-- Uses StyleSheet.create for performance
-- Responsive design using Dimensions.get('window')
-- Color scheme: Soft gradient from #667eea → #764ba2 → #f093fb
-- Typography: Clean, modern font weights with proper letter spacing
+**Frontend**:
+- `App.tsx` - Main navigation
+- `src/screens/*.tsx` - Screen components
+- `src/constants/api.ts` - **API URL configuration** (update with Mac IP)
 
-### Testing Configuration
-Jest is configured to handle React Native modules and transform the linear gradient package. The transformIgnorePatterns includes necessary React Native packages for proper test execution.
+## Important Notes
 
-## iOS Configuration Notes
-- Project uses CocoaPods for dependency management
-- Configured for React Native's new architecture
-- Privacy manifest aggregation is enabled
-- Hermes JavaScript engine is used for performance
+### Network Configuration
+Frontend must use Mac's IP address for physical device testing:
+```typescript
+// src/constants/api.ts
+export const API_BASE_URL = 'http://YOUR_MAC_IP:8000';
+```
+
+Get IP: `ifconfig | grep "inet " | grep -v 127.0.0.1`
+
+### Code Style
+- **No hardcoded strings**: Use constants
+- **Type safety**: Full TypeScript on frontend
+- **File-based prompts**: Edit `.txt` files in `backend/app/prompts/`
+- **Clean separation**: AI services follow interface pattern
+
+### Streaming vs Non-Streaming
+- `/api/analyze` - **Streams** artwork analysis (better UX for long text)
+- `/api/analyze-artist` - **Complete response** (easier parsing for structured data)
+
+### Database
+SQLite at `backend/musee.db` stores analysis history. **Note**: Streaming endpoints currently don't save to DB (can be added back if needed).
+
+## Development Tips
+
+- Frontend hot reload: Just save files
+- Backend hot reload: Uses `--reload` flag
+- Edit prompts: Modify `.txt` files, restart backend
+- API docs: Visit `http://localhost:8000/docs`
+- Test API: See README.md for curl examples
+
+## Architecture Pattern
+
+```python
+# AI Service Interface Pattern
+class AIServiceInterface(ABC):
+    async def analyze_artwork(...) -> AsyncGenerator[str, None]
+    async def identify_artist(...) -> str
+
+# Implementations: OpenAIClient, ClaudeClient, GeminiClient
+```
+
+Prompts loaded from files via `utils/prompt_loader.py` with caching.

@@ -1,97 +1,280 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Musee - AI-Powered Artwork Analysis
 
-# Getting Started
+React Native iOS app + Python FastAPI backend for analyzing artwork with AI.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Quick Start
 
-## Step 1: Start Metro
-
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
-
-To start the Metro dev server, run the following command from the root of your React Native project:
-
-```sh
-# Using npm
-npm start
-
-# OR using Yarn
-yarn start
+### Backend
+```bash
+cd backend
+pip install -r requirements.txt
+# Add API keys to .env: OPENAI_API_KEY, CLAUDE_API_KEY, or GEMINI_API_KEY
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+### Frontend
+```bash
+cd frontend
+npm install
+cd ios && pod install && cd ..
+# Edit src/constants/api.ts with your Mac's IP (see Network Setup)
+npm run ios  # Physical device: Chelsea's iPhone
+npm run ios:sim  # Simulator: iPhone 16 Pro
 ```
 
-### iOS
+## Network Setup
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+### Get Your Mac's IP
+```bash
+ifconfig | grep "inet " | grep -v 127.0.0.1
+# Example output: 10.0.0.17
 ```
 
-Then, and every time you update your native dependencies, run:
-
-```sh
-bundle exec pod install
+### Configure Frontend
+**File**: `frontend/src/constants/api.ts`
+```typescript
+export const API_BASE_URL = 'http://YOUR_MAC_IP:8000';  // e.g., http://10.0.0.17:8000
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+### Requirements
+- Mac and iPhone on **same Wi-Fi network**
+- Backend uses `host: "0.0.0.0"` (already configured)
+- iOS allows local networking (already configured)
 
-```sh
-# Using npm
+### Test Connection
+```bash
+curl http://YOUR_MAC_IP:8000/health
+# iPhone Safari: http://YOUR_MAC_IP:8000/health
+```
+
+## Features
+
+### Frontend
+- **Camera**: Capture artwork photos
+- **Artist Identification**: AI identifies artist with confidence scores + manual input option
+- **Streaming Analysis**: Real-time AI artwork descriptions with 5 tones (professional, general, sarcastic, educational, poetic)
+- **3 AI Models**: OpenAI, Claude, Gemini
+
+### Backend
+- **Streaming API**: `/api/analyze` streams artwork analysis
+- **Artist API**: `/api/analyze-artist` identifies artist (non-streaming)
+- **Collection**: `/api/collection` - view, search, filter saved analyses
+- **File-Based Prompts**: All prompts in `backend/app/prompts/` for easy editing
+
+## API Endpoints
+
+| Endpoint | Method | Streaming | Purpose |
+|----------|--------|-----------|---------|
+| `/api/analyze` | POST | Yes | Artwork analysis with tone |
+| `/api/analyze-artist` | POST | No | Artist identification |
+| `/api/collection` | GET | No | View saved analyses (paginated) |
+| `/api/collection/stats` | GET | No | Collection statistics |
+| `/api/collection/search` | GET | No | Search analyses |
+| `/api/analysis/{id}` | GET/DELETE | No | Get/delete specific analysis |
+| `/health` | GET | No | Health check |
+
+### Test API
+```bash
+# Test streaming
+curl -X POST "http://localhost:8000/api/analyze" \
+  -F "image=@artwork.jpg" \
+  -F "tone=professional" \
+  -N
+
+# Test artist identification
+curl -X POST "http://localhost:8000/api/analyze-artist" \
+  -F "image=@artwork.jpg"
+```
+
+## Database Schema
+
+**Table**: `artwork_analyses` (SQLite at `./musee.db`)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `image_path` | String | File path to uploaded image |
+| `image_metadata` | JSON | {filename, size, dimensions, format} |
+| `tone` | String | Analysis tone used |
+| `ai_model` | String | AI provider (openai/claude/gemini) |
+| `analysis_text` | Text | Full AI analysis |
+| `user_id` | String | For future auth (nullable) |
+| `created_at` | DateTime | Creation timestamp |
+| `updated_at` | DateTime | Update timestamp |
+
+**Note**: `/analyze` and `/analyze-artist` currently **don't save** to database (streaming removed this). Collection endpoints still work for manually saved data.
+
+### View Database
+```bash
+cd backend
+sqlite3 musee.db
+sqlite> SELECT COUNT(*) FROM artwork_analyses;
+sqlite> .quit
+```
+
+## Prompt Management
+
+All AI prompts are file-based for easy editing:
+
+```
+backend/app/prompts/
+├── artist_identification.txt   # Artist ID prompt
+├── artwork_analysis.txt        # Base analysis prompt
+└── tones/                      # Tone-specific instructions
+    ├── professional.txt
+    ├── general.txt
+    ├── sarcastic.txt
+    ├── educational.txt
+    └── poetic.txt
+```
+
+**Edit prompts**: Just modify `.txt` files, restart server. No code changes needed.
+
+## Architecture
+
+### AI Service Pattern
+```python
+# Interface
+class AIServiceInterface(ABC):
+    async def analyze_artwork(...) -> AsyncGenerator[str, None]  # Streaming
+    async def identify_artist(...) -> str                        # Non-streaming
+
+# Implementations
+OpenAIClient(AIServiceInterface)   # GPT-4o
+ClaudeClient(AIServiceInterface)   # Claude Sonnet 4
+GeminiClient(AIServiceInterface)   # Gemini Pro Vision
+```
+
+### Data Flow
+1. User takes photo → Camera screen
+2. Photo sent to `/api/analyze-artist`
+3. Backend analyzes, returns artist suggestions
+4. User selects artist or enters manually
+5. (Future) Full analysis with selected tone
+
+## Configuration
+
+### Backend `.env`
+```env
+# AI Provider (default)
+AI_PROVIDER=openai
+
+# API Keys (at least one required)
+OPENAI_API_KEY=sk-...
+CLAUDE_API_KEY=sk-ant-...
+GEMINI_API_KEY=...
+
+# Server
+HOST=0.0.0.0
+PORT=8000
+
+# Database
+DATABASE_URL=sqlite:///./musee.db
+```
+
+### Frontend `api.ts`
+```typescript
+// For physical device
+export const API_BASE_URL = 'http://10.0.0.17:8000';
+
+// For simulator
+// export const API_BASE_URL = 'http://localhost:8000';
+```
+
+## Tech Stack
+
+**Frontend**: React Native 0.81.4, TypeScript, Reanimated, Vision Camera
+**Backend**: FastAPI, SQLAlchemy, Pillow, OpenAI/Claude/Gemini SDKs
+**Database**: SQLite (dev), upgradable to PostgreSQL
+
+## Project Structure
+
+```
+Musee/
+├── backend/
+│   ├── app/
+│   │   ├── main.py              # FastAPI app
+│   │   ├── routers/
+│   │   │   ├── artwork.py       # Analysis endpoints
+│   │   │   └── collection.py    # Collection endpoints
+│   │   ├── services/
+│   │   │   ├── ai_service.py    # AI interface
+│   │   │   ├── openai_client.py
+│   │   │   ├── claude_client.py
+│   │   │   └── gemini_client.py
+│   │   ├── prompts/             # File-based prompts
+│   │   ├── database/
+│   │   │   ├── models.py        # SQLAlchemy models
+│   │   │   └── connection.py
+│   │   └── utils/
+│   │       └── prompt_loader.py # Prompt file loader
+│   ├── uploads/                 # Image storage
+│   └── musee.db                 # SQLite database
+├── frontend/
+│   ├── App.tsx                  # Main navigation
+│   ├── src/
+│   │   ├── screens/
+│   │   │   ├── WelcomeScreen.tsx
+│   │   │   ├── CameraScreen.tsx
+│   │   │   └── ArtistIdentificationScreen.tsx
+│   │   ├── constants/
+│   │   │   ├── api.ts           # API configuration
+│   │   │   └── colors.ts
+│   │   └── styles/
+│   └── ios/
+└── README.md
+```
+
+## Troubleshooting
+
+### "Network request failed"
+- Check Mac and iPhone on same Wi-Fi
+- Verify backend running: `curl http://YOUR_IP:8000/health`
+- Rebuild app after changing `api.ts`: `npm run ios`
+
+### "API key not configured"
+- Add at least one API key to `backend/.env`
+- Restart backend server
+
+### IP address changed
+```bash
+# Get new IP
+ifconfig | grep "inet " | grep -v 127.0.0.1
+# Update frontend/src/constants/api.ts
+# Rebuild: npm run ios
+```
+
+### Firewall blocking
+```bash
+# Check port 8000 is open
+lsof -i :8000
+# Disable firewall temporarily or allow Python
+```
+
+## Development Workflow
+
+**Terminal 1 - Backend**:
+```bash
+cd backend
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Terminal 2 - Frontend**:
+```bash
+cd frontend
+npm start  # Metro bundler
+```
+
+**Terminal 3 - Run iOS**:
+```bash
+cd frontend
 npm run ios
-
-# OR using Yarn
-yarn ios
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+## API Documentation
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+Start backend and visit: `http://localhost:8000/docs`
 
-## Step 3: Modify your app
+## License
 
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+MIT

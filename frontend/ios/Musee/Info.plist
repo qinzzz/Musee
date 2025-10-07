@@ -33,6 +33,10 @@
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
+	<key>NSCameraUsageDescription</key>
+	<string>Musee needs access to your camera to capture and analyze artwork.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Musee may need microphone access for video recording features.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

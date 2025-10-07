@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-multipart
+pillow
+sqlalchemy
+alembic
+python-dotenv
+openai
+anthropic
+google-generativeai
+aiofiles
+pydantic
+python-jose
+passlib
