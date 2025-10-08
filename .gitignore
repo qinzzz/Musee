@@ -58,3 +58,4 @@ backend/uploads/*
 # Environment
 .env
 .env.local
+.vercel

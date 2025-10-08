@@ -168,7 +168,8 @@ GEMINI_API_KEY=...
 HOST=0.0.0.0
 PORT=8000
 
-# Database
+# Database (set USE_DATABASE=false for Vercel/serverless)
+USE_DATABASE=true
 DATABASE_URL=sqlite:///./musee.db
 ```
 
@@ -225,6 +226,19 @@ Musee/
 └── README.md
 ```
 
+## Deployment
+
+### Vercel (Serverless)
+
+**Issue**: SQLite doesn't work on Vercel (read-only filesystem)
+
+**Solution**: Set environment variable in Vercel dashboard:
+```
+USE_DATABASE=false
+```
+
+This disables collection endpoints but keeps analysis working. See [DEPLOYMENT.md](DEPLOYMENT.md) for details.
+
 ## Troubleshooting
 
 ### "Network request failed"
@@ -236,19 +250,16 @@ Musee/
 - Add at least one API key to `backend/.env`
 - Restart backend server
 
+### "unable to open database file" (Vercel)
+- Set `USE_DATABASE=false` in Vercel environment variables
+- Or use PostgreSQL (see DEPLOYMENT.md)
+
 ### IP address changed
 ```bash
 # Get new IP
 ifconfig | grep "inet " | grep -v 127.0.0.1
 # Update frontend/src/constants/api.ts
 # Rebuild: npm run ios
-```
-
-### Firewall blocking
-```bash
-# Check port 8000 is open
-lsof -i :8000
-# Disable firewall temporarily or allow Python
 ```
 
 ## Development Workflow

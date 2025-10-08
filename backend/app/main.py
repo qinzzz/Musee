@@ -2,13 +2,17 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
+import os
 
 from app.config.settings import settings
-from app.routers import artwork, collection
-from app.database.connection import engine, Base
+from app.routers import artwork
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Initialize database only if enabled
+if settings.use_database:
+    from app.routers import collection
+    from app.database.connection import engine, Base
+    # Create database tables
+    Base.metadata.create_all(bind=engine)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -28,12 +32,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for serving images
-app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+# Mount static files for serving images (only if directory exists)
+if os.path.exists(settings.upload_dir):
+    app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 # Include routers
 app.include_router(artwork.router, prefix="/api", tags=["artwork"])
-app.include_router(collection.router, prefix="/api", tags=["collection"])
+
+# Only include collection router if database is enabled
+if settings.use_database:
+    app.include_router(collection.router, prefix="/api", tags=["collection"])
 
 
 @app.get("/")
@@ -47,7 +55,11 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "ai_provider": settings.ai_provider}
+    return {
+        "status": "healthy",
+        "ai_provider": settings.ai_provider,
+        "database_enabled": settings.use_database
+    }
 
 
 if __name__ == "__main__":
