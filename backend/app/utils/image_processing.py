@@ -35,49 +35,40 @@ async def validate_image(file: UploadFile) -> None:
         )
 
 
-async def process_image(file: UploadFile) -> Tuple[str, bytes, Dict[str, Any]]:
+async def process_image(file: UploadFile) -> Tuple[bytes, Dict[str, Any]]:
     """
-    Process uploaded image and return file path, bytes, and metadata
-    
+    Process uploaded image and return bytes and metadata (stateless - no file saving)
+
     Returns:
-        Tuple of (file_path, image_bytes, metadata)
+        Tuple of (image_bytes, metadata)
     """
-    
+
     # Validate image
     await validate_image(file)
-    
+
     # Read image bytes
     image_bytes = await file.read()
-    
+
     # Open image with PIL for processing
     try:
-        image = Image.open(file.file)
+        from io import BytesIO
+        image = Image.open(BytesIO(image_bytes))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
-    
-    # Generate unique filename
-    file_ext = file.filename.split('.')[-1].lower()
-    unique_filename = f"{uuid.uuid4()}.{file_ext}"
-    file_path = os.path.join(settings.upload_dir, unique_filename)
-    
+
     # Resize image if too large (max 2048px on longest side)
     max_dimension = 2048
     if max(image.size) > max_dimension:
         image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
-        # Save resized image
-        image.save(file_path, optimize=True, quality=85)
-        # Re-read bytes for AI processing
-        with open(file_path, 'rb') as f:
-            image_bytes = f.read()
-    else:
-        # Save original image
-        with open(file_path, 'wb') as f:
-            f.write(image_bytes)
-    
+        # Convert resized image back to bytes
+        output = BytesIO()
+        image.save(output, format=image.format or 'JPEG', optimize=True, quality=85)
+        image_bytes = output.getvalue()
+
     # Extract metadata
     metadata = extract_image_metadata(image, file.filename, len(image_bytes))
-    
-    return file_path, image_bytes, metadata
+
+    return image_bytes, metadata
 
 
 def extract_image_metadata(image: Image.Image, filename: str, file_size: int) -> Dict[str, Any]:
@@ -105,19 +96,3 @@ def extract_image_metadata(image: Image.Image, filename: str, file_size: int) ->
     return metadata
 
 
-def cleanup_old_files(days_old: int = 30) -> None:
-    """Clean up old uploaded files (for maintenance)"""
-    
-    import time
-    current_time = time.time()
-    cutoff_time = current_time - (days_old * 24 * 60 * 60)
-    
-    for filename in os.listdir(settings.upload_dir):
-        file_path = os.path.join(settings.upload_dir, filename)
-        if os.path.isfile(file_path):
-            file_age = os.path.getctime(file_path)
-            if file_age < cutoff_time:
-                try:
-                    os.remove(file_path)
-                except OSError:
-                    pass  # File might be in use or already deleted

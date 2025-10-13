@@ -1,6 +1,6 @@
 # Musee - AI-Powered Artwork Analysis
 
-React Native iOS app + Python FastAPI backend for analyzing artwork with AI.
+React Native iOS app + Python FastAPI stateless backend for analyzing artwork with AI. Photos and analysis data stored locally on device.
 
 ## Quick Start
 
@@ -54,24 +54,24 @@ curl http://YOUR_MAC_IP:8000/health
 - **Artist Identification**: AI identifies artist with confidence scores + manual input option
 - **Streaming Analysis**: Real-time AI artwork descriptions with 5 tones (professional, general, sarcastic, educational, poetic)
 - **3 AI Models**: OpenAI, Claude, Gemini
+- **Local Storage**: All photos and analysis data stored on device using AsyncStorage
 
-### Backend
-- **Streaming API**: `/api/analyze` streams artwork analysis
-- **Artist API**: `/api/analyze-artist` identifies artist (non-streaming)
-- **Collection**: `/api/collection` - view, search, filter saved analyses
+### Backend (Stateless)
+- **Streaming API**: `/api/analyze` streams artwork analysis (no data saved on server)
+- **Artist API**: `/api/analyze-artist` identifies artist (no data saved on server)
 - **File-Based Prompts**: All prompts in `backend/app/prompts/` for easy editing
+- **No File Storage**: Images processed in-memory, not saved to disk
 
 ## API Endpoints
 
 | Endpoint | Method | Streaming | Purpose |
 |----------|--------|-----------|---------|
-| `/api/analyze` | POST | Yes | Artwork analysis with tone |
-| `/api/analyze-artist` | POST | No | Artist identification |
-| `/api/collection` | GET | No | View saved analyses (paginated) |
-| `/api/collection/stats` | GET | No | Collection statistics |
-| `/api/collection/search` | GET | No | Search analyses |
-| `/api/analysis/{id}` | GET/DELETE | No | Get/delete specific analysis |
+| `/api/analyze` | POST | Yes | Artwork analysis with tone (stateless) |
+| `/api/analyze-artist` | POST | No | Artist identification (stateless) |
+| `/api/providers` | GET | No | List available AI providers |
 | `/health` | GET | No | Health check |
+
+**Note**: Database endpoints (`/api/collection/*`, `/api/analysis/{id}`) only available if `USE_DATABASE=true`.
 
 ### Test API
 ```bash
@@ -86,31 +86,34 @@ curl -X POST "http://localhost:8000/api/analyze-artist" \
   -F "image=@artwork.jpg"
 ```
 
-## Database Schema
+## Data Storage
 
-**Table**: `artwork_analyses` (SQLite at `./musee.db`)
+### Frontend (Primary Storage)
+All user data stored locally on device using `@react-native-async-storage/async-storage`:
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `image_path` | String | File path to uploaded image |
-| `image_metadata` | JSON | {filename, size, dimensions, format} |
-| `tone` | String | Analysis tone used |
-| `ai_model` | String | AI provider (openai/claude/gemini) |
-| `analysis_text` | Text | Full AI analysis |
-| `user_id` | String | For future auth (nullable) |
-| `created_at` | DateTime | Creation timestamp |
-| `updated_at` | DateTime | Update timestamp |
+**Storage Key**: `@musee:analyses`
 
-**Note**: `/analyze` and `/analyze-artist` currently **don't save** to database (streaming removed this). Collection endpoints still work for manually saved data.
-
-### View Database
-```bash
-cd backend
-sqlite3 musee.db
-sqlite> SELECT COUNT(*) FROM artwork_analyses;
-sqlite> .quit
+```typescript
+interface ArtworkAnalysis {
+  id: string;
+  photoUri: string;              // Local file URI
+  artistName: string;
+  artistConfidence?: number;      // 0-10
+  analysisText?: string;          // AI analysis result
+  tone?: string;                  // Analysis tone used
+  model?: string;                 // AI model used
+  timestamp: string;              // ISO timestamp
+}
 ```
+
+**Functions**: `saveAnalysis()`, `getAnalyses()`, `deleteAnalysis()`, `searchAnalysesByArtist()`, `getStorageStats()`
+
+### Backend (Optional Database)
+SQLite database only used if `USE_DATABASE=true` (disabled by default for stateless deployment).
+
+**Table**: `artwork_analyses` (SQLite at `./musee.db`) - used only by collection endpoints.
+
+**Note**: Main analysis endpoints (`/analyze`, `/analyze-artist`) are stateless and don't save to database.
 
 ## Prompt Management
 
@@ -147,10 +150,11 @@ GeminiClient(AIServiceInterface)   # Gemini Pro Vision
 
 ### Data Flow
 1. User takes photo → Camera screen
-2. Photo sent to `/api/analyze-artist`
+2. Photo sent to `/api/analyze-artist` (backend processes in-memory, no storage)
 3. Backend analyzes, returns artist suggestions
 4. User selects artist or enters manually
-5. (Future) Full analysis with selected tone
+5. Photo + analysis saved to device local storage (AsyncStorage)
+6. (Future) Full analysis with selected tone via `/api/analyze`
 
 ## Configuration
 
@@ -184,9 +188,9 @@ export const API_BASE_URL = 'http://10.0.0.17:8000';
 
 ## Tech Stack
 
-**Frontend**: React Native 0.81.4, TypeScript, Reanimated, Vision Camera
-**Backend**: FastAPI, SQLAlchemy, Pillow, OpenAI/Claude/Gemini SDKs
-**Database**: SQLite (dev), upgradable to PostgreSQL
+**Frontend**: React Native 0.81.4, TypeScript, AsyncStorage, Reanimated, Vision Camera
+**Backend**: FastAPI (stateless), Pillow (in-memory image processing), OpenAI/Claude/Gemini SDKs
+**Storage**: Local device storage via AsyncStorage (primary), SQLite optional (database endpoints only)
 
 ## Project Structure
 
@@ -194,10 +198,10 @@ export const API_BASE_URL = 'http://10.0.0.17:8000';
 Musee/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI app
+│   │   ├── main.py              # FastAPI app (stateless)
 │   │   ├── routers/
-│   │   │   ├── artwork.py       # Analysis endpoints
-│   │   │   └── collection.py    # Collection endpoints
+│   │   │   ├── artwork.py       # Analysis endpoints (stateless)
+│   │   │   └── collection.py    # Collection endpoints (DB only)
 │   │   ├── services/
 │   │   │   ├── ai_service.py    # AI interface
 │   │   │   ├── openai_client.py
@@ -205,12 +209,12 @@ Musee/
 │   │   │   └── gemini_client.py
 │   │   ├── prompts/             # File-based prompts
 │   │   ├── database/
-│   │   │   ├── models.py        # SQLAlchemy models
+│   │   │   ├── models.py        # SQLAlchemy models (optional)
 │   │   │   └── connection.py
 │   │   └── utils/
-│   │       └── prompt_loader.py # Prompt file loader
-│   ├── uploads/                 # Image storage
-│   └── musee.db                 # SQLite database
+│   │       ├── prompt_loader.py # Prompt file loader
+│   │       └── image_processing.py # In-memory image processing
+│   └── musee.db                 # SQLite database (optional)
 ├── frontend/
 │   ├── App.tsx                  # Main navigation
 │   ├── src/
@@ -218,6 +222,8 @@ Musee/
 │   │   │   ├── WelcomeScreen.tsx
 │   │   │   ├── CameraScreen.tsx
 │   │   │   └── ArtistIdentificationScreen.tsx
+│   │   ├── services/
+│   │   │   └── storage.ts       # AsyncStorage service
 │   │   ├── constants/
 │   │   │   ├── api.ts           # API configuration
 │   │   │   └── colors.ts
@@ -228,16 +234,21 @@ Musee/
 
 ## Deployment
 
-### Vercel (Serverless)
+### Vercel (Serverless) - Recommended
 
-**Issue**: SQLite doesn't work on Vercel (read-only filesystem)
+**Configuration**: Server is stateless by default - perfect for serverless deployment.
 
-**Solution**: Set environment variable in Vercel dashboard:
+**Environment Variables**:
 ```
-USE_DATABASE=false
+USE_DATABASE=false  # Default - no file storage needed
+OPENAI_API_KEY=sk-...
+CLAUDE_API_KEY=sk-ant-...
+GEMINI_API_KEY=...
 ```
 
-This disables collection endpoints but keeps analysis working. See [DEPLOYMENT.md](DEPLOYMENT.md) for details.
+**What Works**: `/api/analyze`, `/api/analyze-artist`, `/health` - all stateless endpoints
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment guide.
 
 ## Troubleshooting
 
@@ -250,9 +261,10 @@ This disables collection endpoints but keeps analysis working. See [DEPLOYMENT.m
 - Add at least one API key to `backend/.env`
 - Restart backend server
 
-### "unable to open database file" (Vercel)
-- Set `USE_DATABASE=false` in Vercel environment variables
-- Or use PostgreSQL (see DEPLOYMENT.md)
+### "unable to open database file"
+- Server is stateless by default (`USE_DATABASE=false`)
+- Only occurs if you enabled database for collection endpoints
+- Solution: Keep `USE_DATABASE=false` or use PostgreSQL (see DEPLOYMENT.md)
 
 ### IP address changed
 ```bash

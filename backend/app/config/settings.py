@@ -21,7 +21,6 @@ class Settings(BaseSettings):
 
     # File Upload
     max_file_size_mb: int = 10
-    upload_dir: str = "uploads"
 
     # Security
     secret_key: str = "your-secret-key-change-this-in-production"
@@ -35,6 +34,3 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
-
-# Ensure upload directory exists
-os.makedirs(settings.upload_dir, exist_ok=True)

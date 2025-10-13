@@ -79,8 +79,8 @@ async def analyze_artwork(
             ai_provider = available_providers[0]
 
     try:
-        # Process the image
-        _, image_bytes, _ = await process_image(image)
+        # Process the image (stateless - no file saving)
+        image_bytes, _ = await process_image(image)
 
         # Get AI service
         ai_service = AIServiceFactory.get_service(ai_provider)
@@ -193,8 +193,8 @@ async def analyze_artist(
             ai_provider = available_providers[0]
 
     try:
-        # Process the image
-        _, image_bytes, _ = await process_image(image)
+        # Process the image (stateless - no file saving)
+        image_bytes, _ = await process_image(image)
 
         # Get AI service and analyze
         ai_service = AIServiceFactory.get_service(ai_provider)

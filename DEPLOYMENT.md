@@ -1,12 +1,14 @@
 # Vercel Deployment Guide
 
-## Problem: SQLite Not Supported on Vercel
+## Stateless Architecture
 
-**Error**: `sqlite3.OperationalError: unable to open database file`
+The Musee backend is **stateless by default** - images are processed in-memory and not saved to disk. This makes it perfect for serverless deployment on Vercel.
 
-**Cause**: Vercel uses serverless functions with read-only filesystem. SQLite needs writable storage.
+## Previous Issue: SQLite on Vercel (Now Resolved)
 
-**Solution**: Disable database for Vercel deployment.
+**Old Error**: `sqlite3.OperationalError: unable to open database file`
+
+**Solution**: Backend is now stateless by default. No file storage or database required for main functionality.
 
 ## Quick Deploy to Vercel
 
@@ -34,19 +36,22 @@ GEMINI_API_KEY=...
 vercel deploy
 ```
 
-## What Works Without Database
+## What Works with Stateless Backend
 
-✅ **Working Endpoints**:
-- `/api/analyze` - Streaming artwork analysis
-- `/api/analyze-artist` - Artist identification
+✅ **Fully Functional** (no database needed):
+- `/api/analyze` - Streaming artwork analysis (in-memory processing)
+- `/api/analyze-artist` - Artist identification (in-memory processing)
 - `/api/providers` - Available AI providers
 - `/health` - Health check
+- **Frontend local storage** - All photos and analyses saved on device
 
-❌ **Disabled Endpoints** (require database):
+❌ **Optional Database Endpoints** (only if `USE_DATABASE=true`):
 - `/api/collection` - View saved analyses
 - `/api/collection/stats` - Statistics
 - `/api/collection/search` - Search
 - `/api/analysis/{id}` - Get/delete specific analysis
+
+**Note**: Main app functionality doesn't require database endpoints. All user data stored locally on device.
 
 ## Database Options for Production
 
@@ -74,9 +79,9 @@ DATABASE_URL=postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/dbname
 USE_DATABASE=true
 ```
 
-### Option 2: Disable Collection Features
+### Option 2: Keep Stateless (Recommended)
 
-Keep `USE_DATABASE=false` - app works without history/collection.
+Keep `USE_DATABASE=false` - app works perfectly without database. All user data stored on device.
 
 ## Environment Variables Reference
 
@@ -142,6 +147,6 @@ curl https://your-app.vercel.app/health
 
 ## Summary
 
-**For Vercel**: Set `USE_DATABASE=false` in environment variables.
+**For Vercel (Recommended)**: Use default stateless configuration (`USE_DATABASE=false`). Backend processes images in-memory, frontend stores data locally on device.
 
-**For Production with Database**: Use PostgreSQL (Vercel Postgres, Supabase, or Neon).
+**For Optional Database Features**: Use PostgreSQL (Vercel Postgres, Supabase, or Neon) and set `USE_DATABASE=true`.

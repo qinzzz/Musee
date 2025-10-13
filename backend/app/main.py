@@ -1,8 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 import uvicorn
-import os
 
 from app.config.settings import settings
 from app.routers import artwork
@@ -17,7 +15,7 @@ if settings.use_database:
 # Initialize FastAPI app
 app = FastAPI(
     title="Musee API",
-    description="Backend API for Musee artwork analysis application",
+    description="Stateless backend API for Musee artwork analysis application",
     version="1.0.0",
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None
@@ -31,10 +29,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Mount static files for serving images (only if directory exists)
-if os.path.exists(settings.upload_dir):
-    app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 # Include routers
 app.include_router(artwork.router, prefix="/api", tags=["artwork"])
