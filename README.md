@@ -22,6 +22,9 @@ npm run ios  # Physical device: Chelsea's iPhone
 npm run ios:sim  # Simulator: iPhone 16 Pro
 ```
 
+Debug tips:
+* use homebrew ruby: `PATH="/opt/homebrew/opt/ruby/bin:$PATH"`
+
 ## Network Setup
 
 ### Get Your Mac's IP

@@ -1,6 +1,9 @@
 export const colors = {
   // Background colors
+  background: "#E2E5E8",
   lightGrey: '#F5F5F5',
+  midGrey: 'rgb(226, 226, 226)',
+  darkGrey: '#717171',
   white: '#FFFFFF',
   // Text colors
   black: '#000000',

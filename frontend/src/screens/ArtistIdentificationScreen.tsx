@@ -2,22 +2,25 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
   TextInput,
   Alert,
   Dimensions,
+  StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { styles } from '../styles/AppStyles';
 import { colors } from '../constants/colors';
 import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
+import { saveAnalysis, ArtworkAnalysis } from '../services/storage';
+import { ArtistCard, FramedArtworkCard } from '../components';
 
 interface Artist {
   name: string;
   confidence: number;
+  details?: string;
+  description?: string;
 }
 
 interface Props {
@@ -35,6 +38,7 @@ export default function ArtistIdentificationScreen({ photoUri, onBack, onSelectA
   const [streamingText, setStreamingText] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [artists, setArtists] = useState<Artist[]>([]);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [showManualInput, setShowManualInput] = useState<boolean>(false);
   const [manualArtist, setManualArtist] = useState<string>('');
   const [manualTitle, setManualTitle] = useState<string>('');
@@ -87,6 +91,8 @@ export default function ArtistIdentificationScreen({ photoUri, onBack, onSelectA
       parsedArtists.push({
         name: match[1].trim(),
         confidence: parseInt(match[2], 10),
+        details: `${new Date().getFullYear()} - Contemporary Style`,
+        description: 'Concentric circles, geometric forms, and dynamic color contrasts—hallmarks of modern artistic style.',
       });
     }
 
@@ -95,17 +101,58 @@ export default function ArtistIdentificationScreen({ photoUri, onBack, onSelectA
     }
   };
 
-  const handleArtistSelect = (artist: Artist) => {
-    onSelectArtist(artist.name, 'Unknown');
+  const handleArtistSelect = async (artist: Artist) => {
+    try {
+      // Save to local storage
+      const analysis: ArtworkAnalysis = {
+        id: Date.now().toString(),
+        photoUri,
+        artistName: artist.name,
+        artistConfidence: artist.confidence,
+        analysisText: streamingText,
+        timestamp: new Date().toISOString(),
+      };
+      await saveAnalysis(analysis);
+      onSelectArtist(artist.name, 'Unknown');
+    } catch (error) {
+      console.error('Error saving analysis:', error);
+      Alert.alert('Warning', 'Artist selected but failed to save to local storage');
+      onSelectArtist(artist.name, 'Unknown');
+    }
   };
 
-  const handleManualSubmit = () => {
+  const handleManualSubmit = async () => {
     if (manualArtist.trim() === '') {
       Alert.alert('Error', 'Please enter the artist name');
       return;
     }
 
-    onSelectArtist(manualArtist.trim(), manualTitle.trim() || 'Unknown');
+    try {
+      // Save to local storage
+      const analysis: ArtworkAnalysis = {
+        id: Date.now().toString(),
+        photoUri,
+        artistName: manualArtist.trim(),
+        analysisText: streamingText,
+        timestamp: new Date().toISOString(),
+      };
+      await saveAnalysis(analysis);
+      onSelectArtist(manualArtist.trim(), manualTitle.trim() || 'Unknown');
+    } catch (error) {
+      console.error('Error saving analysis:', error);
+      Alert.alert('Warning', 'Artist submitted but failed to save to local storage');
+      onSelectArtist(manualArtist.trim(), manualTitle.trim() || 'Unknown');
+    }
+  };
+
+  const handleCardPress = (index: number, artist: Artist) => {
+    if (expandedIndex === index) {
+      // If already expanded, select the artist
+      handleArtistSelect(artist);
+    } else {
+      // Otherwise, expand the card
+      setExpandedIndex(index);
+    }
   };
 
   const renderArtistOptions = () => {
@@ -119,24 +166,19 @@ export default function ArtistIdentificationScreen({ photoUri, onBack, onSelectA
           Is this the artist?
         </Text>
 
-        {artists.map((artist, index) => (
-          <TouchableOpacity
-            key={index}
-            style={artistIdentificationStyles.artistOption}
-            onPress={() => handleArtistSelect(artist)}
-          >
-            <View style={artistIdentificationStyles.artistOptionContent}>
-              <Text style={artistIdentificationStyles.artistName}>
-                {artist.name}
-              </Text>
-              <View style={artistIdentificationStyles.confidenceContainer}>
-                <Text style={artistIdentificationStyles.confidenceText}>
-                  {artist.confidence * 10}%
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+        <View style={artistIdentificationStyles.cardList}>
+          {artists.map((artist, index) => (
+            <ArtistCard
+              key={index}
+              artistName={artist.name}
+              details={artist.details || `Confidence: ${artist.confidence * 10}%`}
+              description={artist.description}
+              isExpanded={expandedIndex === index}
+              onPress={() => handleCardPress(index, artist)}
+              style={artistIdentificationStyles.artistCard}
+            />
+          ))}
+        </View>
 
         <TouchableOpacity
           style={artistIdentificationStyles.noneOfAboveButton}
@@ -197,7 +239,7 @@ export default function ArtistIdentificationScreen({ photoUri, onBack, onSelectA
   };
 
   return (
-    <View style={[styles.container, { paddingTop: safeAreaInsets.top }]}>
+    <View style={[artistIdentificationStyles.container, { paddingTop: safeAreaInsets.top }]}>
       {/* Back Button */}
       <TouchableOpacity style={artistIdentificationStyles.backButton} onPress={onBack}>
         <Text style={artistIdentificationStyles.backButtonText}>← Back</Text>
@@ -206,10 +248,8 @@ export default function ArtistIdentificationScreen({ photoUri, onBack, onSelectA
       <ScrollView style={artistIdentificationStyles.scrollView}>
         {/* Image Display */}
         <View style={artistIdentificationStyles.imageContainer}>
-          <Image
-            source={{ uri: photoUri }}
-            style={[artistIdentificationStyles.artworkImage, { width: width - 40 }]}
-            resizeMode="contain"
+          <FramedArtworkCard
+            photoUri={photoUri}
           />
         </View>
 
@@ -254,6 +294,10 @@ export default function ArtistIdentificationScreen({ photoUri, onBack, onSelectA
 }
 
 const artistIdentificationStyles = {
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   backButton: {
     padding: 16,
   },
@@ -269,10 +313,6 @@ const artistIdentificationStyles = {
     alignItems: 'center' as const,
     paddingHorizontal: 20,
     paddingVertical: 20,
-  },
-  artworkImage: {
-    height: 300,
-    borderRadius: 8,
   },
   loadingContainer: {
     alignItems: 'center' as const,
@@ -324,35 +364,11 @@ const artistIdentificationStyles = {
     color: colors.black,
     marginBottom: 16,
   },
-  artistOption: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
+  cardList: {
+    gap: 8,
   },
-  artistOptionContent: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-  },
-  artistName: {
-    fontSize: 16,
-    fontWeight: '500' as const,
-    color: colors.black,
-    flex: 1,
-  },
-  confidenceContainer: {
-    backgroundColor: colors.techBlue,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  confidenceText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: colors.white,
+  artistCard: {
+    marginBottom: 0,
   },
   noneOfAboveButton: {
     marginTop: 8,

@@ -1,0 +1,37 @@
+{
+  "migIndex": 1,
+  "data": [
+    {
+      "path": "assets/fonts/BitcountGridSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf",
+      "sha1": "33de0b2bc7843652a10be38ace6ff1ba8a8a972f"
+    },
+    {
+      "path": "assets/fonts/IBMPlexMono-Bold.ttf",
+      "sha1": "ed7726a11318ec2c3179367471d556fa31050d38"
+    },
+    {
+      "path": "assets/fonts/IBMPlexMono-Light.ttf",
+      "sha1": "996aee021d1487a69be2923568dca3b7bb33de4c"
+    },
+    {
+      "path": "assets/fonts/IBMPlexMono-Medium.ttf",
+      "sha1": "edf16d6f8afa5e378fa8db6307826f9799cf890f"
+    },
+    {
+      "path": "assets/fonts/IBMPlexMono-Regular.ttf",
+      "sha1": "d6acbd905047bf48a872010f366ff7476f7e59ad"
+    },
+    {
+      "path": "assets/fonts/IBMPlexMono-SemiBold.ttf",
+      "sha1": "d8a49e95672ad0180bb4683d9cfc53be68fb7b92"
+    },
+    {
+      "path": "assets/fonts/UbuntuMono-Regular.ttf",
+      "sha1": "f4bfd74c2d10ea57abe1f7fa23f303e6875774ab"
+    },
+    {
+      "path": "assets/fonts/WhisperingSignature.ttf",
+      "sha1": "80b42a01988fa6467f9ae842606c963c88f254d4"
+    }
+  ]
+}

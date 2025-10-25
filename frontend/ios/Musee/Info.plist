@@ -32,11 +32,15 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string/>
 	<key>NSCameraUsageDescription</key>
 	<string>Musee needs access to your camera to capture and analyze artwork.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Musee may need microphone access for video recording features.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Musee needs permission to save artwork photos to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Musee needs access to your photo library to display your saved artworks.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -55,7 +59,14 @@
 	<false/>
 	<key>UIAppFonts</key>
 	<array>
+		<string>IBMPlexMono-Bold.ttf</string>
+		<string>IBMPlexMono-Light.ttf</string>
+		<string>IBMPlexMono-Medium.ttf</string>
+		<string>IBMPlexMono-Regular.ttf</string>
+		<string>IBMPlexMono-SemiBold.ttf</string>
+		<string>UbuntuMono-Regular.ttf</string>
 		<string>WhisperingSignature.ttf</string>
+		<string>BitcountGridSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf</string>
 	</array>
 </dict>
 </plist>

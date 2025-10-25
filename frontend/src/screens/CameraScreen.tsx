@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableHighlight,
+  TouchableOpacity,
   Dimensions,
   Alert,
+  Platform,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -13,7 +15,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { styles } from '../styles/AppStyles';
+import { cameraStyles as styles } from './styles/CameraStyles';
 import {
   Camera,
   useCameraDevice,
@@ -21,32 +23,10 @@ import {
   PhotoFile,
   TakePhotoOptions
 } from 'react-native-vision-camera';
-
-// Scanlines Effect Component
-const ScanlinesEffect = () => {
-  const { height } = Dimensions.get('window');
-  const scanlines = [];
-  
-  // Create scanlines every 4 pixels
-  for (let i = 0; i < height; i += 4) {
-    scanlines.push(
-      <View
-        key={i}
-        style={{
-          position: 'absolute',
-          top: i,
-          left: 0,
-          right: 0,
-          height: 1,
-          backgroundColor: '#333',
-          opacity: 0.3,
-        }}
-      />
-    );
-  }
-  
-  return <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>{scanlines}</View>;
-};
+import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
+import { artistAnalysisCache } from '../utils/artistAnalysisCache';
+import { ScanlinesEffect } from '../components';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 
 interface CameraScreenProps {
   onBack: () => void;
@@ -57,7 +37,7 @@ interface CameraScreenProps {
 export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps) {
   const safeAreaInsets = useSafeAreaInsets();
   const { width, height } = Dimensions.get('window');
-  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(true);
 
   // Animation value for curtain effect (0 = closed, 1 = fully open/scrolled up)
   const curtainTranslateY = useSharedValue(0);
@@ -73,18 +53,22 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
   }, []);
 
   const checkCameraPermission = async () => {
-    if (hasPermission) {
-      return;
+    if (!hasPermission) {
+      const permission = await requestPermission();
+      if (!permission) {
+        Alert.alert(
+          'Camera Permission Required',
+          'Musee needs camera access to capture artwork photos.',
+          [{ text: 'OK' }]
+        );
+      }
     }
     
-    const permission = await requestPermission();
-    if (!permission) {
-      Alert.alert(
-        'Camera Permission Required',
-        'Musee needs camera access to capture artwork photos.',
-        [{ text: 'OK' }]
-      );
-    }
+    // Camera turning on - scroll curtain up
+    curtainTranslateY.value = withTiming(-height, {
+      duration: 800,
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+    });
   };
 
   const handleTakePhoto = async () => {
@@ -105,6 +89,9 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
       const photoUri = `file://${photo.path}`;
       console.log('Photo captured:', photoUri);
 
+      // Start API call immediately (don't await)
+      startArtistAnalysis(photoUri);
+
       if (onPhotoTaken) {
         onPhotoTaken(photoUri);
       } else {
@@ -114,6 +101,79 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
     } catch (error) {
       console.error('Failed to take photo:', error);
       Alert.alert('Error', 'Failed to take photo. Please try again.');
+    }
+  };
+
+  const handleUseTestImage = () => {
+    // For simulator/development: Use test image from assets
+    const testImage = require('../../assets/test/IMG_7647.jpeg');
+    const resolvedImage = Image.resolveAssetSource(testImage);
+    const photoUri = resolvedImage.uri;
+
+    console.log('Using test image:', photoUri);
+
+    // Start API call
+    startArtistAnalysis(photoUri);
+
+    if (onPhotoTaken) {
+      onPhotoTaken(photoUri);
+    }
+  };
+
+  const handleImportFromAlbum = async () => {
+    try {
+      // Get the most recent photo from the camera roll
+      const result = await CameraRoll.getPhotos({
+        first: 1,
+        assetType: 'Photos',
+      });
+
+      if (result.edges.length > 0) {
+        const photoUri = result.edges[0].node.image.uri;
+        console.log('Photo imported from album:', photoUri);
+
+        // Start API call
+        startArtistAnalysis(photoUri);
+
+        if (onPhotoTaken) {
+          onPhotoTaken(photoUri);
+        }
+      } else {
+        Alert.alert('No Photos', 'No photos found in your album.');
+      }
+    } catch (error) {
+      console.error('Failed to import from album:', error);
+      Alert.alert('Error', 'Failed to access photo library. Please grant permission.');
+    }
+  };
+
+  const startArtistAnalysis = async (photoUri: string) => {
+    try {
+      const formData = new FormData();
+      formData.append('image', {
+        uri: photoUri,
+        type: 'image/jpeg',
+        name: 'artwork.jpg',
+      } as any);
+
+      console.log('Starting artist analysis immediately...');
+
+      // Create and cache the promise
+      const analysisPromise = fetch(`${API_BASE_URL}${API_ENDPOINTS.ANALYZE_ARTIST}`, {
+        method: 'POST',
+        body: formData,
+      }).then(response => {
+        if (!response.ok) {
+          throw new Error(`API request failed with status ${response.status}`);
+        }
+        return response.json();
+      });
+
+      // Store in cache so PhotoDisplayScreen can use it
+      artistAnalysisCache.set(photoUri, analysisPromise);
+
+    } catch (error) {
+      console.error('Failed to start artist analysis:', error);
     }
   };
 
@@ -160,10 +220,25 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
     }
 
     if (!device) {
+      // In simulator, allow using test image
+      const isSimulator = Platform.OS === 'ios' && !Platform.isPad && Platform.isTVOS === false;
+
       return (
         <View style={styles.closedCamera}>
           <Text style={styles.cameraOffText}>No camera device found</Text>
-          <Text style={styles.cameraOffSubtext}>Please check your device</Text>
+          <Text style={styles.cameraOffSubtext}>
+            {isSimulator ? 'Running in simulator' : 'Please check your device'}
+          </Text>
+
+          {__DEV__ && (
+            <TouchableOpacity
+              style={styles.devButton}
+              onPress={handleUseTestImage}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.devButtonText}>Use Test Image (Dev)</Text>
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
@@ -203,24 +278,32 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
       </View>
 
       {/* Bottom Control Panel */}
-      <View style={[styles.cameraControlsCenter]}>
-        <TouchableHighlight 
+      <View style={styles.controlsContainer}>
+        {/* Left button - Import from Album */}
+        <TouchableOpacity
+          style={styles.toggleButton}
+          onPress={handleImportFromAlbum}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.toggleButtonText}>
+            <Text style={styles.onText}>ALBUM</Text>
+          </Text>
+        </TouchableOpacity>
+
+        {/* Center - Capture button */}
+        <TouchableOpacity
           disabled={!isCameraOn}
-          style={[styles.cameraButton, styles.cameraButtonActive, !isCameraOn && styles.cameraButtonDisabled]} 
+          style={styles.captureButton}
           onPress={handleTakePhoto}
+          activeOpacity={0.7}
         >
-          <Text style={styles.cameraButtonText}>
-            {isCameraOn? '' : 'Camera is Sleeping zZZ'}
-          </Text>
-        </TouchableHighlight>
-        <TouchableHighlight
-          style={[styles.cameraButton]} 
-          onPress={toggleCamera}
-        >
-          <Text style={styles.cameraButtonText}>
-            {isCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
-          </Text>
-        </TouchableHighlight>
+          <View style={styles.captureButtonInner}>
+            {isCameraOn && <View style={styles.redDot} />}
+          </View>
+        </TouchableOpacity>
+
+        {/* Right - Empty for now */}
+        <View style={styles.emptyButton} />
       </View>
     </View>
   );

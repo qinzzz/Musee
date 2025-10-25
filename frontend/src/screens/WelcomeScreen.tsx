@@ -4,6 +4,7 @@ import {
   View,
   Dimensions,
   Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -17,8 +18,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
 import Svg, { Circle } from 'react-native-svg';
-import { styles } from '../styles/AppStyles';
+import { welcomeStyles as styles } from './styles/WelcomeStyles';
 import { colors } from '../constants/colors';
+import { ActionButton } from '../components';
 
 // Animated bubble component using theta-based elliptical motion
 const AnimatedBubble = ({ rx, ry, phase = 0, colors, rotateValue }) => {
@@ -51,7 +53,12 @@ const AnimatedBubble = ({ rx, ry, phase = 0, colors, rotateValue }) => {
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-export default function WelcomeScreen({ onTouchScreen }) {
+interface WelcomeScreenProps {
+  onCapturePress: () => void;
+  onGalleryPress?: () => void;
+}
+
+export default function WelcomeScreen({ onCapturePress, onGalleryPress }: WelcomeScreenProps) {
   const safeAreaInsets = useSafeAreaInsets();
   const fadeAnim = useSharedValue(0);
   const rotateAnim = useSharedValue(0);
@@ -123,13 +130,19 @@ export default function WelcomeScreen({ onTouchScreen }) {
   const circleY = height * 0.5
 
   return (
-    <Pressable style={styles.container} onPress={onTouchScreen}>
-      
-      <View style={[styles.content, { paddingTop: safeAreaInsets.top - 40, zIndex: 10 }]}>
+    <Pressable style={styles.container}>
+
+      <View style={[styles.content, { paddingTop: safeAreaInsets.top-80, zIndex: 10 }]}>
         <Animated.View style={[styles.welcomeContainer, fadeStyle]}>
           <Text style={styles.appName}>Musee</Text>
           <Text style={styles.subtitle}>{displayedText}</Text>
         </Animated.View>
+      </View>
+
+      {/* Action Buttons - Centered below subtitle */}
+      <View style={styles.actionButtonsContainer}>
+        <ActionButton onPress={onCapturePress} label={'Capture'}/>
+        <ActionButton onPress={onGalleryPress} label={'Gallery'}/>
       </View>
 
       <BlurView
