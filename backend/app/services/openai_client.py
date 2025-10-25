@@ -4,7 +4,7 @@ from openai import AsyncOpenAI
 from app.services.ai_service import AIServiceInterface
 from app.models.artwork import ToneType, AIProvider
 from app.config.settings import settings
-from app.utils.prompt_loader import get_artist_identification_prompt, get_artwork_analysis_prompt
+from app.utils.prompt_loader import get_artist_identification_prompt, get_artwork_analysis_prompt, get_artwork_bite_prompt
 
 
 class OpenAIClient(AIServiceInterface):
@@ -89,6 +89,45 @@ class OpenAIClient(AIServiceInterface):
                 ],
                 max_tokens=1500,
                 temperature=0.7
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+            raise Exception(f"OpenAI API error: {str(e)}")
+
+    async def get_artwork_bite(self, image_bytes: bytes, artist_name: str, artwork_name: str = "Unknown") -> str:
+        """Get a concise, interesting bite of information about the artwork"""
+
+        # Encode image to base64
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+
+        # Get the artwork bite prompt with artist and artwork names
+        prompt = get_artwork_bite_prompt(artist_name, artwork_name)
+
+        try:
+            response = await self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_base64}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=150,  # ~50 words
+                temperature=0.8  # Higher temperature for more creative/interesting facts
             )
 
             return response.choices[0].message.content

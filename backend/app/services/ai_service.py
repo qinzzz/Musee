@@ -34,6 +34,21 @@ class AIServiceInterface(ABC):
         pass
 
     @abstractmethod
+    async def get_artwork_bite(self, image_bytes: bytes, artist_name: str, artwork_name: str = "Unknown") -> str:
+        """
+        Get a concise, interesting bite of information about the artwork
+
+        Args:
+            image_bytes: Raw image data
+            artist_name: Name of the artist
+            artwork_name: Name of the artwork (optional)
+
+        Returns:
+            str: Concise (max 50 words) interesting fact about the artwork
+        """
+        pass
+
+    @abstractmethod
     def get_provider_name(self) -> AIProvider:
         """Return the AI provider name"""
         pass

@@ -8,6 +8,7 @@ PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 TONES_DIR = PROMPTS_DIR / "tones"
 ARTIST_IDENTIFICATION_PROMPT_PATH = PROMPTS_DIR / "artist_identification.txt"
 ARTWORK_ANALYSIS_PROMPT_PATH = PROMPTS_DIR / "artwork_analysis.txt"
+ARTWORK_BITE_PROMPT_PATH = PROMPTS_DIR / "artwork_bite.txt"
 
 
 def _load_prompt_file(file_path: Path) -> str:
@@ -96,3 +97,31 @@ def get_artwork_analysis_prompt(tone: ToneType) -> str:
 
     # Replace the {tone_instruction} placeholder
     return base_prompt.replace("{tone_instruction}", tone_instruction)
+
+
+@lru_cache(maxsize=1)
+def load_artwork_bite_prompt() -> str:
+    """
+    Load the artwork bite prompt from file.
+
+    Returns:
+        str: The prompt text for artwork bite
+    """
+    return _load_prompt_file(ARTWORK_BITE_PROMPT_PATH)
+
+
+def get_artwork_bite_prompt(artist_name: str, artwork_name: str = "Unknown") -> str:
+    """
+    Get the artwork bite prompt with artist and artwork names filled in.
+
+    Args:
+        artist_name: Name of the artist
+        artwork_name: Name of the artwork (optional, defaults to "Unknown")
+
+    Returns:
+        str: The complete prompt text with artist and artwork names
+    """
+    prompt = load_artwork_bite_prompt()
+    prompt = prompt.replace("{artist_name}", artist_name)
+    prompt = prompt.replace("{artwork_name}", artwork_name)
+    return prompt

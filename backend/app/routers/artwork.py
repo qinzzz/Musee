@@ -212,6 +212,64 @@ async def analyze_artist(
             raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
+@router.post("/analyze-bite")
+async def analyze_bite(
+    image: UploadFile = File(...),
+    artist_name: str = Form(...),
+    artwork_name: str = Form("Unknown"),
+    model: Optional[AIProvider] = Form(None)
+):
+    """
+    Get a concise, interesting bite of information about the artwork
+
+    - **image**: Image file to analyze (JPG, PNG, WebP)
+    - **artist_name**: Name of the artist
+    - **artwork_name**: Name of the artwork (optional, defaults to "Unknown")
+    - **model**: Preferred AI model (openai, claude, gemini) - optional
+
+    Returns a short, fascinating fact about the artwork (max 50 words)
+    """
+
+    # Determine which AI service to use
+    if model and model in AIServiceFactory.get_available_providers():
+        ai_provider = model
+    else:
+        # Use configured default or first available
+        available_providers = AIServiceFactory.get_available_providers()
+        if not available_providers:
+            raise HTTPException(
+                status_code=503,
+                detail="No AI services available. Please check configuration."
+            )
+
+        # Try to use configured default, fallback to first available
+        if AIProvider(settings.ai_provider) in available_providers:
+            ai_provider = AIProvider(settings.ai_provider)
+        else:
+            ai_provider = available_providers[0]
+
+    try:
+        # Process the image (stateless - no file saving)
+        image_bytes, _ = await process_image(image)
+
+        # Get AI service and analyze
+        ai_service = AIServiceFactory.get_service(ai_provider)
+        bite_text = await ai_service.get_artwork_bite(image_bytes, artist_name, artwork_name)
+
+        return {
+            "bite": bite_text,
+            "artist_name": artist_name,
+            "artwork_name": artwork_name,
+            "model_used": ai_provider.value
+        }
+
+    except Exception as e:
+        if "API error" in str(e):
+            raise HTTPException(status_code=503, detail=str(e))
+        else:
+            raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
 @router.get("/providers")
 async def get_available_providers():
     """Get list of available AI providers"""

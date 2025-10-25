@@ -4,7 +4,7 @@ from anthropic import AsyncAnthropic
 from app.services.ai_service import AIServiceInterface
 from app.models.artwork import ToneType, AIProvider
 from app.config.settings import settings
-from app.utils.prompt_loader import get_artist_identification_prompt, get_artwork_analysis_prompt
+from app.utils.prompt_loader import get_artist_identification_prompt, get_artwork_analysis_prompt, get_artwork_bite_prompt
 
 
 class ClaudeClient(AIServiceInterface):
@@ -69,6 +69,46 @@ class ClaudeClient(AIServiceInterface):
                 model="claude-sonnet-4-20250514",
                 max_tokens=1500,
                 temperature=0.7,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": image_base64
+                                }
+                            }
+                        ]
+                    }
+                ]
+            )
+
+            return response.content[0].text
+
+        except Exception as e:
+            raise Exception(f"Claude API error: {str(e)}")
+
+    async def get_artwork_bite(self, image_bytes: bytes, artist_name: str, artwork_name: str = "Unknown") -> str:
+        """Get a concise, interesting bite of information about the artwork"""
+
+        # Encode image to base64
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+
+        # Get the artwork bite prompt with artist and artwork names
+        prompt = get_artwork_bite_prompt(artist_name, artwork_name)
+
+        try:
+            response = await self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=150,  # ~50 words
+                temperature=0.8,  # Higher temperature for more creative/interesting facts
                 messages=[
                     {
                         "role": "user",

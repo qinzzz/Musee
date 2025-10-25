@@ -3,7 +3,7 @@ from typing import AsyncGenerator
 from app.services.ai_service import AIServiceInterface
 from app.models.artwork import ToneType, AIProvider
 from app.config.settings import settings
-from app.utils.prompt_loader import get_artist_identification_prompt, get_artwork_analysis_prompt
+from app.utils.prompt_loader import get_artist_identification_prompt, get_artwork_analysis_prompt, get_artwork_bite_prompt
 from PIL import Image
 import io
 
@@ -58,6 +58,29 @@ class GeminiClient(AIServiceInterface):
                 generation_config=genai.types.GenerationConfig(
                     max_output_tokens=1500,
                     temperature=0.7,
+                )
+            )
+
+            return response.text
+
+        except Exception as e:
+            raise Exception(f"Gemini API error: {str(e)}")
+
+    async def get_artwork_bite(self, image_bytes: bytes, artist_name: str, artwork_name: str = "Unknown") -> str:
+        """Get a concise, interesting bite of information about the artwork"""
+
+        # Convert bytes to PIL Image for Gemini
+        image = Image.open(io.BytesIO(image_bytes))
+
+        # Get the artwork bite prompt with artist and artwork names
+        prompt = get_artwork_bite_prompt(artist_name, artwork_name)
+
+        try:
+            response = await self.model.generate_content_async(
+                [prompt, image],
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=150,  # ~50 words
+                    temperature=0.8,  # Higher temperature for more creative/interesting facts
                 )
             )
 
