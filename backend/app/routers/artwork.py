@@ -195,10 +195,14 @@ async def analyze_artist(
     try:
         # Process the image (stateless - no file saving)
         image_bytes, _ = await process_image(image)
+        print(f"[DEBUG] Image processed: {len(image_bytes)} bytes")
 
         # Get AI service and analyze
         ai_service = AIServiceFactory.get_service(ai_provider)
+        print(f"[DEBUG] Using AI provider: {ai_provider.value}")
+
         analysis_text = await ai_service.identify_artist(image_bytes)
+        print(f"[DEBUG] Analysis text received: {analysis_text[:200] if analysis_text else 'EMPTY'}")
 
         return {
             "analysis": analysis_text,
