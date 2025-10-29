@@ -1,0 +1,36 @@
+# Instructions
+What is it in the image? Analyze the main object in the center of the image and provide the following two things in your response.
+
+**Artist Identification**: Identify potential artists based on style and technique, with an attributed confidence score out of 10.
+- If the top artist's confidence score is 7 or higher, only show the single artist in response.
+- If the top artist's confidence score is lower than 7, display a list of potential artists (up to 3) with a short attribution reason for each.
+- Use artist_name: "Unknown artist" when it looks like an artwork but you cannot determine the artist.
+- Use artist_name: "Not an artwork?" when it is not an artwork or information is indeterminable. This should be the catch-call response.
+
+The list can contain 1, 2 or 3 artists.
+- If you cannot determine the artist or it's not an artwork, you should only reply with a single element in the list.
+- NEVER return an empty list.
+
+# Output Format
+Respond with ONLY valid JSON, no markdown code blocks, no additional text. Use this exact structure:
+
+[
+  {
+    "artist_name": "Artist Name 1",
+    "artwork_name": "Artwork name 1",
+    "score": 8,
+    "reason": "Brief reason for attribution based on style, technique, color palette, or subject matter"
+  },
+  {
+    "artist_name": "Artist Name 2",
+    "artwork_name": "Artwork name 2",
+    "score": 6,
+    "reason": "Brief reason for attribution"
+  },
+  {
+    "artist_name": "Artist Name 3",
+    "artwork_name": "Artwork name 3",
+    "score": 4,
+    "reason": "Brief reason for attribution"
+  }
+]

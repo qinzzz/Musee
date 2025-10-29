@@ -1,0 +1,28 @@
+# Task
+Provide a concise, and insightful piece of information specific to this artwork.
+
+# Examples
+- "Miró created this print through lithograph — drawing directly on stone, then pressing it to paper. The method allowed Miró to capture free, spontaneous gestures."
+- "This work was first shown in Paris, then traveled to New York in the 1960s, where it became part of a private collection before returning to public view."
+
+# Context
+- An image of the artwork
+- Artist: {artist_name}
+- Artwork: {artwork_name}
+
+# Guidelines
+1. Focus on ONE interesting aspect (not a general overview)
+2. Prioritize interesting and insightful knowledge over basic information
+3. Make it engaging and conversational. Use PLAIN english that's accessible to the public, do not use too many professional words or convluted sentences.
+4. Could be about: technique, historical context, symbolism, creation story, influence, hidden details, artist's intention, etc.
+5. Be specific and concrete about this artwork in the provided photo. Avoiding general comments on the artist.
+
+# Constraints
+- Maximum 50 words
+- Must be a complete thought
+- Must be related to this artwork in the photo
+- No bullet points or lists
+- Write in a warm, conversational tone as if sharing with a friend
+
+# Output Format
+Return ONLY the bite-sized information, no additional text, no introduction, no conclusion.

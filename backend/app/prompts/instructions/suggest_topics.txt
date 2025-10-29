@@ -1,0 +1,20 @@
+# Task
+Based on the conversation history below about the artwork "{artwork_name}" by {artist_name}, suggest 3-4 interesting topics to explore next.
+
+# Context
+Previous insights shared:
+{previous_insights}
+
+# Guidelines
+Suggest topics that:
+1. Haven't been covered yet
+2. Would provide new, complementary insights
+3. If there are terminologies (e.g. time period, art movement, specific techniques) in previous insights, some of the topics should ask about them.
+4. Every topic should not exceed 10 tokens.
+
+# Topic Categories
+Common topic categories: background, technique, historical context, symbolism, color choices, composition, artist's life, cultural impact, restoration, provenance.
+
+# Output Format
+Return ONLY a JSON array of topic strings, nothing else. Example:
+["lithography?", "Joan Miro?", "What's special about it?"]

@@ -21,12 +21,13 @@ class AIServiceInterface(ABC):
         pass
 
     @abstractmethod
-    async def identify_artist(self, image_bytes: bytes) -> str:
+    async def identify_artist(self, image_bytes: bytes, identity: str = "default") -> str:
         """
         Identify the artist and artwork details (non-streaming)
 
         Args:
             image_bytes: Raw image data
+            identity: AI identity/persona to use (default, museum_narrator, art_historian)
 
         Returns:
             str: Complete artist identification analysis
@@ -34,7 +35,7 @@ class AIServiceInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_artwork_bite(self, image_bytes: bytes, artist_name: str, artwork_name: str = "Unknown") -> str:
+    async def get_artwork_bite(self, image_bytes: bytes, artist_name: str, artwork_name: str = "Unknown", topic: str = None, previous_messages: list = None, identity: str = "default") -> str:
         """
         Get a concise, interesting bite of information about the artwork
 
@@ -42,9 +43,28 @@ class AIServiceInterface(ABC):
             image_bytes: Raw image data
             artist_name: Name of the artist
             artwork_name: Name of the artwork (optional)
+            topic: Optional topic to focus on (e.g., "technique", "historical context", "symbolism")
+            previous_messages: List of previous ConversationMessage objects for context
+            identity: AI identity/persona to use (default, museum_narrator, art_historian)
 
         Returns:
             str: Concise (max 50 words) interesting fact about the artwork
+        """
+        pass
+
+    @abstractmethod
+    async def suggest_topics(self, artist_name: str, artwork_name: str, previous_insights: list, identity: str = "default") -> list:
+        """
+        Suggest next topics to explore based on conversation history
+
+        Args:
+            artist_name: Name of the artist
+            artwork_name: Name of the artwork
+            previous_insights: List of previous insight strings
+            identity: AI identity/persona to use (default, museum_narrator, art_historian)
+
+        Returns:
+            list: Array of 3-4 suggested topic strings
         """
         pass
 
