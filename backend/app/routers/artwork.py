@@ -6,7 +6,7 @@ import os
 import json
 
 from app.database.connection import get_db
-from app.database.models import ArtworkAnalysis, ArtworkHistory
+from app.database.models import ArtworkAnalysis, SavedArtwork
 from app.models.artwork import (
     ToneType, AIProvider, ArtworkAnalysisResponse, ImageMetadata
 )
@@ -455,75 +455,95 @@ async def remove_background(
         )
 
 
-@router.post("/history")
-async def save_to_history(
+@router.post("/saved-artworks")
+async def save_artwork(
     photo_uri: str = Form(...),
     artist_name: str = Form(...),
     artwork_name: str = Form(...),
+    conversation_history: str = Form(...),  # JSON string
+    location: Optional[str] = Form(None),
+    museum_name: Optional[str] = Form(None),
+    conversation_id: Optional[str] = Form(None),
     is_recognized: bool = Form(True),
     db: Session = Depends(get_db)
 ):
     """
-    Save artwork to history with metadata
+    Save artwork with complete conversation history
 
     - **photo_uri**: URI/path to the photo
     - **artist_name**: Name of the artist
     - **artwork_name**: Name of the artwork
+    - **conversation_history**: JSON string of complete conversation history
+    - **location**: Geographic location where photo was taken (optional)
+    - **museum_name**: Museum or gallery name (optional)
+    - **conversation_id**: Optional conversation ID reference
     - **is_recognized**: Whether the artwork was recognized (default: True)
 
-    Returns the saved history entry
+    Returns the saved artwork entry
     """
     try:
-        history_entry = ArtworkHistory(
+        # Parse conversation history JSON
+        conversation_data = json.loads(conversation_history)
+
+        saved_artwork = SavedArtwork(
             photo_uri=photo_uri,
             artist_name=artist_name,
             artwork_name=artwork_name,
+            location=location,
+            museum_name=museum_name,
+            conversation_history=conversation_data,
+            conversation_id=conversation_id,
             is_recognized=1 if is_recognized else 0
         )
 
-        db.add(history_entry)
+        db.add(saved_artwork)
         db.commit()
-        db.refresh(history_entry)
+        db.refresh(saved_artwork)
 
-        return history_entry.to_dict()
+        return saved_artwork.to_dict()
 
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid conversation history JSON: {str(e)}"
+        )
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to save to history: {str(e)}"
+            detail=f"Failed to save artwork: {str(e)}"
         )
 
 
-@router.get("/history")
-async def get_history(
+@router.get("/saved-artworks")
+async def get_saved_artworks(
     recognized_only: Optional[bool] = None,
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db)
 ):
     """
-    Get artwork history with optional filtering
+    Get saved artworks with optional filtering
 
     - **recognized_only**: Filter by recognition status (True/False/None for all)
     - **limit**: Maximum number of entries to return (default: 50)
     - **offset**: Number of entries to skip (default: 0)
 
-    Returns list of history entries sorted by most recent first
+    Returns list of saved artworks sorted by most recent first
     """
     try:
-        query = db.query(ArtworkHistory)
+        query = db.query(SavedArtwork)
 
         # Filter by recognition status if specified
         if recognized_only is not None:
-            query = query.filter(ArtworkHistory.is_recognized == (1 if recognized_only else 0))
+            query = query.filter(SavedArtwork.is_recognized == (1 if recognized_only else 0))
 
         # Order by most recent first and apply pagination
-        history_entries = query.order_by(ArtworkHistory.created_at.desc()).offset(offset).limit(limit).all()
+        saved_artworks = query.order_by(SavedArtwork.created_at.desc()).offset(offset).limit(limit).all()
 
         return {
-            "items": [entry.to_dict() for entry in history_entries],
-            "count": len(history_entries),
+            "items": [artwork.to_dict() for artwork in saved_artworks],
+            "count": len(saved_artworks),
             "offset": offset,
             "limit": limit
         }
@@ -531,36 +551,63 @@ async def get_history(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to retrieve history: {str(e)}"
+            detail=f"Failed to retrieve saved artworks: {str(e)}"
         )
 
 
-@router.delete("/history/{history_id}")
-async def delete_history_entry(
-    history_id: str,
+@router.get("/saved-artworks/{artwork_id}")
+async def get_saved_artwork(
+    artwork_id: str,
     db: Session = Depends(get_db)
 ):
     """
-    Delete a history entry
+    Get a specific saved artwork with full conversation history
 
-    - **history_id**: ID of the history entry to delete
+    - **artwork_id**: ID of the saved artwork
+
+    Returns the saved artwork with complete conversation history
+    """
+    try:
+        saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+
+        if not saved_artwork:
+            raise HTTPException(status_code=404, detail="Saved artwork not found")
+
+        return saved_artwork.to_dict()
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve saved artwork: {str(e)}"
+        )
+
+
+@router.delete("/saved-artworks/{artwork_id}")
+async def delete_saved_artwork(
+    artwork_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a saved artwork
+
+    - **artwork_id**: ID of the saved artwork to delete
 
     Returns success message
     """
     try:
-        history_entry = db.query(ArtworkHistory).filter(ArtworkHistory.id == history_id).first()
+        saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
 
-        if not history_entry:
-            raise HTTPException(status_code=404, detail="History entry not found")
+        if not saved_artwork:
+            raise HTTPException(status_code=404, detail="Saved artwork not found")
 
-        db.delete(history_entry)
+        db.delete(saved_artwork)
         db.commit()
 
-        return {"message": "History entry deleted successfully"}
+        return {"message": "Saved artwork deleted successfully"}
 
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to delete history entry: {str(e)}"
+            detail=f"Failed to delete saved artwork: {str(e)}"
         )

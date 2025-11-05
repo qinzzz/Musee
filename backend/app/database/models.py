@@ -34,16 +34,19 @@ class ArtworkAnalysis(Base):
         }
 
 
-class ArtworkHistory(Base):
-    """Database model for saved artwork history with metadata"""
+class SavedArtwork(Base):
+    """Database model for saved artworks with complete conversation history"""
 
-    __tablename__ = "artwork_history"
+    __tablename__ = "saved_artworks"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     photo_uri = Column(String, nullable=False)  # Local file path or URI
     artist_name = Column(String, nullable=False)
     artwork_name = Column(String, nullable=False)
-    thumbnail_uri = Column(String, nullable=True)  # Optional thumbnail path
+    location = Column(String, nullable=True)  # Geographic location where photo was taken
+    museum_name = Column(String, nullable=True)  # Museum or gallery name
+    conversation_history = Column(JSON, nullable=False)  # Complete conversation with user and AI messages
+    conversation_id = Column(String, nullable=True)  # Link to original conversation
     is_recognized = Column(Integer, default=1)  # 1 for recognized, 0 for unknown
     user_id = Column(String, nullable=True)  # For future user authentication
     created_at = Column(DateTime, server_default=func.now())
@@ -56,7 +59,10 @@ class ArtworkHistory(Base):
             "photo_uri": self.photo_uri,
             "artist_name": self.artist_name,
             "artwork_name": self.artwork_name,
-            "thumbnail_uri": self.thumbnail_uri,
+            "location": self.location,
+            "museum_name": self.museum_name,
+            "conversation_history": self.conversation_history,
+            "conversation_id": self.conversation_id,
             "is_recognized": self.is_recognized,
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,

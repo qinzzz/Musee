@@ -14,13 +14,17 @@ import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/theme';
 import { FramedArtworkCard, ActionButton } from '../components';
-import { historyApiService } from '../services/historyApi';
+import { savedArtworkApiService, ConversationMessage } from '../services/savedArtworkApi';
 import { historyCacheService } from '../services/historyCache';
 
 interface SummaryScreenProps {
   photoUri: string;
   artistName: string;
   artworkName?: string;
+  location?: string;
+  museumName?: string;
+  conversationHistory?: ConversationMessage[];
+  conversationId?: string | null;
   onBack: () => void;
   onSaveComplete?: () => void;
 }
@@ -32,6 +36,10 @@ export default function SummaryScreen({
   photoUri,
   artistName,
   artworkName = 'Untitled',
+  location,
+  museumName,
+  conversationHistory = [],
+  conversationId = null,
   onBack,
   onSaveComplete
 }: SummaryScreenProps) {
@@ -83,12 +91,23 @@ export default function SummaryScreen({
         album: 'Musee',
       });
 
-      // Save to backend history for faster retrieval
+      // Save to backend with complete conversation history
       const isRecognized = artistName.toLowerCase() !== 'unknown';
-      await historyApiService.saveToHistory({
+
+      // Convert conversation history to proper format for API
+      const conversationMessages: ConversationMessage[] = conversationHistory.map(bite => ({
+        role: 'assistant' as const,
+        content: bite.content,
+      }));
+
+      await savedArtworkApiService.saveArtwork({
         photoUri: savedAsset.node.image.uri,
         artistName,
         artworkName,
+        location,
+        museumName,
+        conversationHistory: conversationMessages,
+        conversationId: conversationId || undefined,
         isRecognized,
       });
 
@@ -98,7 +117,7 @@ export default function SummaryScreen({
       setSaveStatus('saved');
       Alert.alert(
         'Success',
-        'Photo saved to your gallery!',
+        'Photo and conversation saved to your gallery!',
         [{ text: 'OK' }]
       );
     } catch (error) {

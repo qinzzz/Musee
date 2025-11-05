@@ -25,11 +25,18 @@ import { getColors } from 'react-native-image-colors';
 import { softenColor } from '../utils/colorUtils';
 
 
+interface ConversationData {
+  artistName: string;
+  artworkName: string;
+  conversationId: string | null;
+  bites: Array<{ content: string; topic?: string }>;
+}
+
 interface PhotoDisplayScreenProps {
   photoUri: string;
   onPhotoPress: () => void;
   onBack: () => void;
-  onFinish?: () => void;
+  onFinish?: (data: ConversationData) => void;
   identity?: string;
 }
 
@@ -717,7 +724,15 @@ export default function PhotoDisplayScreen({
                       {onFinish && (
                         <ActionButton
                           label="Finish"
-                          onPress={onFinish}
+                          onPress={() => {
+                            const selectedArtist = artists[selectedArtistIndex || 0];
+                            onFinish({
+                              artistName: selectedArtist?.artist_name || 'Unknown',
+                              artworkName: selectedArtist?.artwork_name || 'Untitled',
+                              conversationId: conversationId,
+                              bites: artworkBites,
+                            });
+                          }}
                         />
                       )}
                     </View>

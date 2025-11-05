@@ -15,8 +15,7 @@ import { colors } from '../constants/colors';
 import { spacing, borderRadius } from '../constants/theme';
 import { Typography } from '../components';
 import { homeStyles } from './styles/HomeStyles';
-import { historyApiService } from '../services/historyApi';
-import { historyCacheService, HistoryItem } from '../services/historyCache';
+import { savedArtworkApiService, SavedArtwork } from '../services/savedArtworkApi';
 
 interface GalleryItem {
   id: string;
@@ -29,7 +28,7 @@ interface GalleryItem {
 interface GalleryScreenProps {
   onBack: () => void;
   onGalleryPress: () => void;
-
+  onArtworkPress?: (artworkId: string) => void;
 }
 
 const { width } = Dimensions.get('window');
@@ -37,7 +36,7 @@ const COLUMN_GAP = 12;
 const PADDING = 24;
 const ITEM_WIDTH = (width - PADDING * 2 - COLUMN_GAP) / 2;
 
-export default function GalleryScreen({ onBack, onGalleryPress }: GalleryScreenProps) {
+export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }: GalleryScreenProps) {
   const safeAreaInsets = useSafeAreaInsets();
   const [selectedTab, setSelectedTab] = useState<'recognized' | 'unknown'>('recognized');
   const [items, setItems] = useState<GalleryItem[]>([]);
@@ -50,48 +49,25 @@ export default function GalleryScreen({ onBack, onGalleryPress }: GalleryScreenP
   const loadPhotos = async () => {
     setIsLoading(true);
     try {
-      // Try to load from cache first
-      const cachedData = await historyCacheService.getFromCache();
-
-      if (cachedData) {
-        // Use cached data
-        const filteredItems = filterItemsByTab(cachedData);
-        setItems(convertToGalleryItems(filteredItems));
-        setIsLoading(false);
-        return;
-      }
-
-      // Fetch from backend if cache is empty or expired
+      // Fetch saved artworks from backend
       const recognizedOnly = selectedTab === 'recognized' ? true : selectedTab === 'unknown' ? false : undefined;
-      const response = await historyApiService.getHistory({
+      const response = await savedArtworkApiService.getSavedArtworks({
         recognizedOnly,
         limit: 100,
       });
-
-      // Save to cache
-      await historyCacheService.saveToCache(response.items);
 
       // Convert and display
       setItems(convertToGalleryItems(response.items));
     } catch (error) {
       console.error('Error loading photos:', error);
-      Alert.alert('Error', 'Failed to load history. Please check your connection.');
+      Alert.alert('Error', 'Failed to load saved artworks. Please check your connection.');
       setItems([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const filterItemsByTab = (items: HistoryItem[]): HistoryItem[] => {
-    if (selectedTab === 'recognized') {
-      return items.filter(item => item.is_recognized === 1);
-    } else if (selectedTab === 'unknown') {
-      return items.filter(item => item.is_recognized === 0);
-    }
-    return items;
-  };
-
-  const convertToGalleryItems = (items: HistoryItem[]): GalleryItem[] => {
+  const convertToGalleryItems = (items: SavedArtwork[]): GalleryItem[] => {
     return items.map(item => ({
       id: item.id,
       uri: item.photo_uri,
@@ -102,7 +78,11 @@ export default function GalleryScreen({ onBack, onGalleryPress }: GalleryScreenP
   };
 
   const renderItem = ({ item }: { item: GalleryItem }) => (
-    <TouchableOpacity style={styles.gridItem} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={styles.gridItem}
+      activeOpacity={0.8}
+      onPress={() => onArtworkPress?.(item.id)}
+    >
       <View style={styles.imageContainer}>
         <Image
           source={{ uri: item.uri }}

@@ -20,11 +20,19 @@ import GalleryScreen from './src/screens/GalleryScreen';
 
 type ScreenType = 'welcome' | 'home' | 'camera' | 'photo-display' | 'artist-identification' | 'summary' | 'gallery';
 
+interface ConversationData {
+  artistName: string;
+  artworkName: string;
+  conversationId: string | null;
+  bites: Array<{ content: string; topic?: string }>;
+}
+
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('welcome');
   const [photoUri, setPhotoUri] = useState<string>('');
   const [selectedIdentity, setSelectedIdentity] = useState<string>('gamified');
+  const [conversationData, setConversationData] = useState<ConversationData | null>(null);
 
   const handlePhotoTaken = (uri: string) => {
     setPhotoUri(uri);
@@ -70,14 +78,20 @@ function App() {
           photoUri={photoUri}
           onPhotoPress={handlePhotoPress}
           onBack={() => setCurrentScreen('home')}
-          onFinish={() => setCurrentScreen('summary')}
+          onFinish={(data: ConversationData) => {
+            setConversationData(data);
+            setCurrentScreen('summary');
+          }}
           identity={selectedIdentity}
         />
       )}
-      {currentScreen === 'summary' && photoUri && (
+      {currentScreen === 'summary' && photoUri && conversationData && (
         <SummaryScreen
           photoUri={photoUri}
-          artistName=""
+          artistName={conversationData.artistName}
+          artworkName={conversationData.artworkName}
+          conversationHistory={conversationData.bites}
+          conversationId={conversationData.conversationId}
           onBack={() => setCurrentScreen('home')}
           onSaveComplete={() => setCurrentScreen('gallery')}
         />
