@@ -11,9 +11,14 @@ class Settings(BaseSettings):
     claude_api_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
 
-    # Database
+    # Database - Always use Neon PostgreSQL for both dev and production
     use_database: bool = True
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./musee.db")
+    neon_database_url: str  # Required - no fallback
+
+    @property
+    def effective_database_url(self) -> str:
+        """Return NEON_DATABASE_URL"""
+        return self.neon_database_url
 
     # Server Configuration
     host: str = "0.0.0.0"

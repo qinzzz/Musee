@@ -63,7 +63,7 @@ Edit the `.env` file to configure:
 - `MAX_FILE_SIZE_MB`: Maximum upload size (default: 10MB)
 
 ### Database
-- `DATABASE_URL`: SQLite database path (default: sqlite:///./musee.db)
+- `NEON_DATABASE_URL`: Neon PostgreSQL connection string (required for both dev and production)
 
 ## API Endpoints
 
@@ -128,20 +128,35 @@ backend/
 
 ### Database Schema
 
-The SQLite database includes:
+The Neon PostgreSQL database includes:
 - `artwork_analyses`: Analysis records with metadata
+- `artwork_history`: Fast photo history with artist/artwork metadata
 - Automatic timestamps and UUID primary keys
 - JSON storage for flexible image metadata
+
+**Database Setup:**
+```bash
+# Run migrations to create tables
+python migrate_db.py
+
+# Check database connection
+python check_db_config.py
+
+# Test connection
+python test_connection.py
+```
 
 ## Production Deployment
 
 1. Set `DEBUG=False` in environment
-2. Use PostgreSQL instead of SQLite for database
+2. Ensure `NEON_DATABASE_URL` is set with production database credentials
 3. Configure proper CORS origins
 4. Use production ASGI server (Gunicorn + Uvicorn)
 5. Set up file storage (AWS S3, etc.) for images
 6. Add authentication and user management
 7. Implement rate limiting and monitoring
+
+**Note:** The app now uses Neon PostgreSQL for both development and production environments, eliminating the need for separate database configurations.
 
 ## License
 

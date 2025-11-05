@@ -4,9 +4,10 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import settings
 
 # Create database engine
+effective_url = settings.effective_database_url
 engine = create_engine(
-    settings.database_url,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+    effective_url,
+    connect_args={"check_same_thread": False} if "sqlite" in effective_url else {}
 )
 
 # Create SessionLocal class
