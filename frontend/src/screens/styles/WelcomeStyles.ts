@@ -11,10 +11,9 @@ export const welcomeStyles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-start',
     paddingHorizontal: spacing['3xl'],
-    paddingVertical: spacing['4xl'],
+    paddingTop: 300,
   },
   welcomeContainer: {
     alignItems: 'center',
@@ -22,19 +21,20 @@ export const welcomeStyles = StyleSheet.create({
   },
   appName: {
     fontSize: typography.sizes['4xl'],
-    // fontWeight: typography.weights.semibold,
-    fontFamily: 'Bitcount Grid Single',
+    fontWeight: 'bold',
+    fontStyle: 'italic',
+    fontFamily: 'PP Neue Montreal',
     color: colors.black,
     marginBottom: spacing.xs,
     letterSpacing: typography.letterSpacing.wider,
   },
   subtitle: {
-    fontSize: typography.sizes.base,
-    fontWeight: 'thin',
-    fontFamily: 'IBM Plex Mono',
-    color: colors.black,
+    fontSize: typography.sizes.md,
+    fontWeight: 'medium',
+    fontFamily: 'PP Neue Montreal',
+    fontStyle: 'italic',
+    color: colors.orangeTheme,
     textAlign: 'center',
-    letterSpacing: 0.3,
   },
   // Background animation elements
   vignetteContainer: {
@@ -81,10 +81,96 @@ export const welcomeStyles = StyleSheet.create({
   },
   actionButtonsContainer: {
     position: 'absolute',
-    top: height * 0.5 + 80, // Position below subtitle with spacing
+    top: height * 0.5 + 120, // Position below identity dropdown
     flexDirection: 'column',
     gap: 10,
     alignSelf: 'center',
     zIndex: 11,
+  },
+  identityContainer: {
+    position: 'absolute',
+    top: height * 0.5 + 50, // Position below subtitle
+    alignSelf: 'center',
+    zIndex: 11,
+    alignItems: 'center',
+  },
+  identityLabel: {
+    fontSize: 12,
+    fontFamily: 'IBM Plex Mono',
+    color: colors.darkGrey,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  identityDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.black,
+    minWidth: 150,
+    justifyContent: 'space-between',
+  },
+  identityText: {
+    fontSize: 14,
+    fontFamily: 'IBM Plex Mono',
+    color: colors.black,
+    fontWeight: '600',
+  },
+  dropdownArrow: {
+    fontSize: 10,
+    color: colors.black,
+    marginLeft: spacing.sm,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: spacing.lg,
+    width: width - 80,
+    maxHeight: height * 0.6,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: 'IBM Plex Mono',
+    fontWeight: '600',
+    color: colors.black,
+    marginBottom: spacing.base,
+    textAlign: 'center',
+  },
+  identityList: {
+    maxHeight: 300,
+  },
+  identityOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.base,
+    borderRadius: 8,
+    marginVertical: spacing.xs,
+    backgroundColor: colors.background,
+  },
+  identityOptionSelected: {
+    backgroundColor: colors.black,
+  },
+  identityOptionText: {
+    fontSize: 16,
+    fontFamily: 'IBM Plex Mono',
+    color: colors.black,
+  },
+  identityOptionTextSelected: {
+    color: colors.white,
+    fontWeight: '600',
+  },
+  checkmark: {
+    fontSize: 18,
+    color: colors.white,
   },
 });

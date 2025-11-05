@@ -1,21 +1,18 @@
 import { StyleSheet, Dimensions } from 'react-native';
 import { colors } from '../../constants/colors';
-import { spacing, borderRadius, shadows } from '../../constants/theme';
+import { spacing, borderRadius } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 
 export const cameraStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.darkGrey,
+    justifyContent: 'space-between',
   },
   cameraViewfinder: {
+    width: width,
     flex: 1,
-    backgroundColor: '#373737',
-    borderRadius: borderRadius.xl,
-    marginHorizontal: spacing.lg + 5,
-    marginTop: spacing['4xl'],
-    marginBottom: spacing.sm + 5,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -40,17 +37,9 @@ export const cameraStyles = StyleSheet.create({
     fontWeight: '200',
     textAlign: 'center',
   },
-  activeCameraView: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   camera: {
     flex: 1,
     backgroundColor: colors.black,
-    margin: spacing.lg,
-    borderRadius: borderRadius.base,
   },
   curtainOverlay: {
     position: 'absolute',
@@ -58,7 +47,6 @@ export const cameraStyles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    margin: spacing.lg,
     backgroundColor: '#1a1a1a',
     justifyContent: 'center',
     alignItems: 'center',
@@ -67,68 +55,20 @@ export const cameraStyles = StyleSheet.create({
   // Camera Controls (Figma design)
   controlsContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 46,
-    gap: spacing.base - 6,
+    paddingHorizontal: spacing['2xl'],
+    paddingBottom: spacing['4xl'],
+    paddingTop: spacing.lg,
+    gap: spacing['2xl'],
+    backgroundColor: colors.darkGrey,
   },
-  emptyButton: {
-    width: 120,
-    height: 120,
-    backgroundColor: '#D9D9D9',
-    borderRadius: borderRadius.base,
-    ...shadows.cardDarkShadow,
-  },
-  captureButton: {
-    width: 120,
-    height: 120,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  captureButtonInner: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#D9D9D9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 8,
-    borderColor: '#E2E5E8',
-    ...shadows.cardDarkShadow,
-  },
-  redDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#FF0000',
-  },
-  toggleButton: {
-    width: 120,
-    height: 120,
-    backgroundColor: '#D9D9D9',
-    borderRadius: borderRadius.base,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.cardDarkShadow,
-  },
-  toggleButtonText: {
-    fontSize: spacing.base,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.32,
-  },
-  onText: {
-    color: colors.black,
-    fontWeight: '400',
-  },
-  slashText: {
-    color: colors.black,
-    fontWeight: '400',
-  },
-  offText: {
-    color: '#868686',
-    fontWeight: '400',
+  largeButton: {
+    width: 160,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.red,
+    borderColor: colors.white,
   },
   devButton: {
     marginTop: spacing['3xl'],
@@ -137,7 +77,7 @@ export const cameraStyles = StyleSheet.create({
     paddingVertical: spacing.base,
     borderRadius: borderRadius.base,
     borderWidth: 2,
-    borderColor: '#2E5C8A',
+    borderColor: colors.white,
   },
   devButtonText: {
     color: colors.white,

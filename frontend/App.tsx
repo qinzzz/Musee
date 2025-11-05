@@ -12,18 +12,19 @@ import {
   SafeAreaProvider,
 } from 'react-native-safe-area-context';
 import WelcomeScreen from './src/screens/WelcomeScreen';
+import HomePage from './src/screens/HomePage';
 import CameraScreen from './src/screens/CameraScreen';
 import PhotoDisplayScreen from './src/screens/PhotoDisplayScreen';
-import ArtistIdentificationScreen from './src/screens/ArtistIdentificationScreen';
 import SummaryScreen from './src/screens/SummaryScreen';
 import GalleryScreen from './src/screens/GalleryScreen';
 
-type ScreenType = 'welcome' | 'camera' | 'photo-display' | 'artist-identification' | 'summary' | 'gallery';
+type ScreenType = 'welcome' | 'home' | 'camera' | 'photo-display' | 'artist-identification' | 'summary' | 'gallery';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('welcome');
   const [photoUri, setPhotoUri] = useState<string>('');
+  const [selectedIdentity, setSelectedIdentity] = useState<string>('gamified');
 
   const handlePhotoTaken = (uri: string) => {
     setPhotoUri(uri);
@@ -49,13 +50,18 @@ function App() {
       />
       {currentScreen === 'welcome' && (
         <WelcomeScreen
+          onPress={() => setCurrentScreen('home')}
+        />
+      )}
+      {currentScreen === 'home' && (
+        <HomePage
           onCapturePress={() => setCurrentScreen('camera')}
           onGalleryPress={() => setCurrentScreen('gallery')}
         />
       )}
       {currentScreen === 'camera' && (
         <CameraScreen
-          onBack={() => setCurrentScreen('welcome')}
+          onBack={() => setCurrentScreen('home')}
           onPhotoTaken={handlePhotoTaken}
         />
       )}
@@ -63,21 +69,23 @@ function App() {
         <PhotoDisplayScreen
           photoUri={photoUri}
           onPhotoPress={handlePhotoPress}
-          onBack={() => setCurrentScreen('camera')}
+          onBack={() => setCurrentScreen('home')}
           onFinish={() => setCurrentScreen('summary')}
+          identity={selectedIdentity}
         />
       )}
       {currentScreen === 'summary' && photoUri && (
         <SummaryScreen
           photoUri={photoUri}
           artistName=""
-          onBack={() => setCurrentScreen('welcome')}
+          onBack={() => setCurrentScreen('home')}
           onSaveComplete={() => setCurrentScreen('gallery')}
         />
       )}
       {currentScreen === 'gallery' && (
         <GalleryScreen
-          onBack={() => setCurrentScreen('welcome')}
+          onBack={() => setCurrentScreen('home')}
+          onGalleryPress={() => setCurrentScreen('gallery')}
         />
       )}
     </SafeAreaProvider>

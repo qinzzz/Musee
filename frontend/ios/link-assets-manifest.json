@@ -10,6 +10,10 @@
       "sha1": "ed7726a11318ec2c3179367471d556fa31050d38"
     },
     {
+      "path": "assets/fonts/IBMPlexMono-ExtraLight.ttf",
+      "sha1": "74268505a43ec0e8b8e80ec822375034e88ab8b5"
+    },
+    {
       "path": "assets/fonts/IBMPlexMono-Light.ttf",
       "sha1": "996aee021d1487a69be2923568dca3b7bb33de4c"
     },
@@ -24,6 +28,50 @@
     {
       "path": "assets/fonts/IBMPlexMono-SemiBold.ttf",
       "sha1": "d8a49e95672ad0180bb4683d9cfc53be68fb7b92"
+    },
+    {
+      "path": "assets/fonts/IBMPlexMono-Thin.ttf",
+      "sha1": "accc644bf92050016e9dadbc5a9161e1eab8c68a"
+    },
+    {
+      "path": "assets/fonts/PPLettraMono-Medium.otf",
+      "sha1": "ff7e6c21ee7a323fec0c699be538360aadeb9cb0"
+    },
+    {
+      "path": "assets/fonts/PPLettraMono-MediumItalic.otf",
+      "sha1": "6f9b68509d816f2fdf7234f1fede6bed9d3c20f3"
+    },
+    {
+      "path": "assets/fonts/PPLettraMono-Ultralight.otf",
+      "sha1": "aec12d8f04cecf1cb0ba53159022be08e76df9b9"
+    },
+    {
+      "path": "assets/fonts/PPLettraMono-UltralightItalic.otf",
+      "sha1": "391ce1bc20df2ebd4b9c97777d7d37ec3a7da067"
+    },
+    {
+      "path": "assets/fonts/PPNeueMontreal-Bold.otf",
+      "sha1": "95820a6a2994c3ad6ea3525a8de722fa4fac2dde"
+    },
+    {
+      "path": "assets/fonts/PPNeueMontreal-Book.otf",
+      "sha1": "2d5d5ee383d716b326e88e2f5c1dc02cd8c431d7"
+    },
+    {
+      "path": "assets/fonts/PPNeueMontreal-Italic.otf",
+      "sha1": "9b00f42dbd773ab8c1289bf2d574bcb5f92778dd"
+    },
+    {
+      "path": "assets/fonts/PPNeueMontreal-Medium.otf",
+      "sha1": "1a7ebe1563254d0807a979056f7bf2bb872e93d2"
+    },
+    {
+      "path": "assets/fonts/PPNeueMontreal-SemiBolditalic.otf",
+      "sha1": "8ec773a589889a41f6b00ef10c91a986d50e9865"
+    },
+    {
+      "path": "assets/fonts/PPNeueMontreal-Thin.otf",
+      "sha1": "bc5680c171e6e0b4c3c8f59918dfb7f35f43cdc2"
     },
     {
       "path": "assets/fonts/UbuntuMono-Regular.ttf",

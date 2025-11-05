@@ -10,6 +10,7 @@ interface ArtistCardProps {
   isExpanded?: boolean;
   onPress: () => void;
   style?: ViewStyle;
+  hideShadow?: boolean;
 }
 
 export const ArtistCard: React.FC<ArtistCardProps> = ({
@@ -19,11 +20,12 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({
   isExpanded = false,
   onPress,
   style,
+  hideShadow = false,
 }) => {
   return (
     <View style={[styles.cardWrapper, style]}>
       {/* Shadow layer */}
-      <View style={styles.shadowLayer} />
+      {!hideShadow && <View style={styles.shadowLayer} />}
 
       {/* Main card */}
       <TouchableOpacity
@@ -36,13 +38,13 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({
       >
         <View style={styles.content}>
           <View style={styles.textContainer}>
-            {isExpanded && description && (
+            {isExpanded && details && (
               <View style={styles.playIconContainer}>
                 <Text style={styles.playIcon}>▶</Text>
               </View>
             )}
-            <Text style={styles.artistName}>{artistName}</Text>
-            <Text style={styles.details}>{details}</Text>
+            {artistName && <Text style={styles.artistName}>{artistName}</Text>}
+            {details && <Text style={styles.details}>{details}</Text>}
           </View>
 
           {isExpanded && description && (
@@ -64,14 +66,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 17,
     right: -16,
-    bottom: -25,
+    bottom: -16,
     left: 16,
     backgroundColor: colors.black,
     borderRadius: 5,
     zIndex: -1,
   },
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.midGrey,
     borderWidth: 2,
     borderColor: colors.black,
     borderRadius: 5,
@@ -79,14 +81,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   cardExpanded: {
-    minHeight: 156,
+    minHeight: 120,
     justifyContent: 'flex-start',
-    backgroundColor: colors.midGrey
+    backgroundColor: colors.white
   },
   content: {
     paddingHorizontal: 10,
     paddingVertical: 10,
-    gap: 12,
+    gap: 10,
   },
   textContainer: {
     gap: 4,

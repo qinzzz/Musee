@@ -3,6 +3,78 @@ PODS:
   - BVLinearGradient (2.8.3):
     - React-Core
   - DoubleConversion (1.1.6)
+  - EXConstants (18.0.10):
+    - ExpoModulesCore
+  - Expo (54.0.21):
+    - boost
+    - DoubleConversion
+    - ExpoModulesCore
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTAppDelegate
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactAppDependencyProvider
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
+  - ExpoAsset (12.0.9):
+    - ExpoModulesCore
+  - ExpoBlur (15.0.7):
+    - ExpoModulesCore
+  - ExpoFileSystem (19.0.17):
+    - ExpoModulesCore
+  - ExpoFont (14.0.9):
+    - ExpoModulesCore
+  - ExpoKeepAwake (15.0.7):
+    - ExpoModulesCore
+  - ExpoModulesCore (3.0.23):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-jsinspector
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - fast_float (8.0.0)
   - FBLazyVector (0.81.4)
   - fmt (11.0.2)
@@ -10,6 +82,38 @@ PODS:
   - hermes-engine (0.81.4):
     - hermes-engine/Pre-built (= 0.81.4)
   - hermes-engine/Pre-built (0.81.4)
+  - ImageColors (2.5.0):
+    - ExpoModulesCore
+  - lottie-ios (4.5.0)
+  - lottie-react-native (7.3.4):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - lottie-ios (= 4.5.0)
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - RCT-Folly (2024.11.18.00):
     - boost
     - DoubleConversion
@@ -1806,6 +1910,34 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
+  - react-native-image-picker (8.2.1):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - react-native-safe-area-context (5.6.1):
     - boost
     - DoubleConversion
@@ -2398,6 +2530,34 @@ PODS:
     - React-perflogger (= 0.81.4)
     - React-utils (= 0.81.4)
     - SocketRocket
+  - ReactNativeBackgroundRemover (0.3.2):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - RNCAsyncStorage (2.2.0):
     - boost
     - DoubleConversion
@@ -2679,11 +2839,21 @@ DEPENDENCIES:
   - boost (from `../node_modules/react-native/third-party-podspecs/boost.podspec`)
   - BVLinearGradient (from `../node_modules/react-native-linear-gradient`)
   - DoubleConversion (from `../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec`)
+  - EXConstants (from `../node_modules/expo/node_modules/expo-constants/ios`)
+  - Expo (from `../node_modules/expo`)
+  - ExpoAsset (from `../node_modules/expo/node_modules/expo-asset/ios`)
+  - ExpoBlur (from `../node_modules/expo-blur/ios`)
+  - ExpoFileSystem (from `../node_modules/expo/node_modules/expo-file-system/ios`)
+  - ExpoFont (from `../node_modules/expo/node_modules/expo-font/ios`)
+  - ExpoKeepAwake (from `../node_modules/expo/node_modules/expo-keep-awake/ios`)
+  - ExpoModulesCore (from `../node_modules/expo-modules-core`)
   - fast_float (from `../node_modules/react-native/third-party-podspecs/fast_float.podspec`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
   - fmt (from `../node_modules/react-native/third-party-podspecs/fmt.podspec`)
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
+  - ImageColors (from `../node_modules/react-native-image-colors/ios`)
+  - lottie-react-native (from `../node_modules/lottie-react-native`)
   - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
   - RCTRequired (from `../node_modules/react-native/Libraries/Required`)
@@ -2720,6 +2890,7 @@ DEPENDENCIES:
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - "react-native-blur (from `../node_modules/@react-native-community/blur`)"
   - "react-native-cameraroll (from `../node_modules/@react-native-camera-roll/camera-roll`)"
+  - react-native-image-picker (from `../node_modules/react-native-image-picker`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
@@ -2751,6 +2922,7 @@ DEPENDENCIES:
   - ReactAppDependencyProvider (from `build/generated/ios`)
   - ReactCodegen (from `build/generated/ios`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
+  - ReactNativeBackgroundRemover (from `../node_modules/react-native-background-remover`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNSVG (from `../node_modules/react-native-svg`)
@@ -2762,6 +2934,7 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
+    - lottie-ios
     - SocketRocket
 
 EXTERNAL SOURCES:
@@ -2771,6 +2944,22 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-linear-gradient"
   DoubleConversion:
     :podspec: "../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec"
+  EXConstants:
+    :path: "../node_modules/expo/node_modules/expo-constants/ios"
+  Expo:
+    :path: "../node_modules/expo"
+  ExpoAsset:
+    :path: "../node_modules/expo/node_modules/expo-asset/ios"
+  ExpoBlur:
+    :path: "../node_modules/expo-blur/ios"
+  ExpoFileSystem:
+    :path: "../node_modules/expo/node_modules/expo-file-system/ios"
+  ExpoFont:
+    :path: "../node_modules/expo/node_modules/expo-font/ios"
+  ExpoKeepAwake:
+    :path: "../node_modules/expo/node_modules/expo-keep-awake/ios"
+  ExpoModulesCore:
+    :path: "../node_modules/expo-modules-core"
   fast_float:
     :podspec: "../node_modules/react-native/third-party-podspecs/fast_float.podspec"
   FBLazyVector:
@@ -2782,6 +2971,10 @@ EXTERNAL SOURCES:
   hermes-engine:
     :podspec: "../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec"
     :tag: hermes-2025-07-07-RNv0.81.0-e0fc67142ec0763c6b6153ca2bf96df815539782
+  ImageColors:
+    :path: "../node_modules/react-native-image-colors/ios"
+  lottie-react-native:
+    :path: "../node_modules/lottie-react-native"
   RCT-Folly:
     :podspec: "../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec"
   RCTDeprecation:
@@ -2852,6 +3045,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-community/blur"
   react-native-cameraroll:
     :path: "../node_modules/@react-native-camera-roll/camera-roll"
+  react-native-image-picker:
+    :path: "../node_modules/react-native-image-picker"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
   React-NativeModulesApple:
@@ -2914,6 +3109,8 @@ EXTERNAL SOURCES:
     :path: build/generated/ios
   ReactCommon:
     :path: "../node_modules/react-native/ReactCommon"
+  ReactNativeBackgroundRemover:
+    :path: "../node_modules/react-native-background-remover"
   RNCAsyncStorage:
     :path: "../node_modules/@react-native-async-storage/async-storage"
   RNReanimated:
@@ -2933,11 +3130,22 @@ SPEC CHECKSUMS:
   boost: 7e761d76ca2ce687f7cc98e698152abd03a18f90
   BVLinearGradient: cb006ba232a1f3e4f341bb62c42d1098c284da70
   DoubleConversion: cb417026b2400c8f53ae97020b2be961b59470cb
+  EXConstants: fd688cef4e401dcf798a021cfb5d87c890c30ba3
+  Expo: 780dc89251c4dc390eb643edba90dff6f1db9d19
+  ExpoAsset: 9ba6fbd677fb8e241a3899ac00fa735bc911eadf
+  ExpoBlur: 2dd8f64aa31f5d405652c21d3deb2d2588b1852f
+  ExpoFileSystem: b79eadbda7b7f285f378f95f959cc9313a1c9c61
+  ExpoFont: cf9d90ec1d3b97c4f513211905724c8171f82961
+  ExpoKeepAwake: 1a2e820692e933c94a565ec3fbbe38ac31658ffe
+  ExpoModulesCore: 9682b308833cb39dca99e99557b2cab18f7f377c
   fast_float: b32c788ed9c6a8c584d114d0047beda9664e7cc6
   FBLazyVector: 941bef1c8eeabd9fe1f501e30a5220beee913886
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   hermes-engine: 35c763d57c9832d0eef764316ca1c4d043581394
+  ImageColors: 51cd79f7a9d2524b7a681c660b0a50574085563b
+  lottie-ios: a881093fab623c467d3bce374367755c272bdd59
+  lottie-react-native: 86fa7488b1476563f41071244aa73d5b738faf19
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
   RCTDeprecation: c0ed3249a97243002615517dff789bf4666cf585
   RCTRequired: 58719f5124f9267b5f9649c08bf23d9aea845b23
@@ -2973,6 +3181,7 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: 75b6604b667d297292345302cc5bfb6b6aeccc1b
   react-native-blur: 6af83e7e3c4c1446a188d9b2c493600fc4beb173
   react-native-cameraroll: bb98380ee21115d5fe1ae0f8b80c86e044613746
+  react-native-image-picker: 0314366753615115fa55c3cc937ac44cb7e75702
   react-native-safe-area-context: c6e2edd1c1da07bdce287fa9d9e60c5f7b514616
   React-NativeModulesApple: 879fbdc5dcff7136abceb7880fe8a2022a1bd7c3
   React-oscompat: 93b5535ea7f7dff46aaee4f78309a70979bdde9d
@@ -3004,6 +3213,7 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: 433ddfb4536948630aadd5bd925aff8a632d2fe3
   ReactCodegen: 1d05923ad119796be9db37830d5e5dc76586aa00
   ReactCommon: 394c6b92765cf6d211c2c3f7f6bc601dffb316a6
+  ReactNativeBackgroundRemover: ed72e1cca544e12a94ad253201789ff22aafea33
   RNCAsyncStorage: 29f0230e1a25f36c20b05f65e2eb8958d6526e82
   RNReanimated: 3c450abad323c7d57a98d34ab9ff642c18da9021
   RNSVG: 6c39befcfad06eec55b40c19a030b2d9eca63334
@@ -3013,6 +3223,6 @@ SPEC CHECKSUMS:
   VisionCamera: f56eaedde0d3fa095143b78374d29e89e71735f9
   Yoga: a3ed390a19db0459bd6839823a6ac6d9c6db198d
 
-PODFILE CHECKSUM: ee6e672b4815d8ac87013d36e3be1eda4587c5e2
+PODFILE CHECKSUM: 8466c6e50ae39bc38a4baa32b6727f702ee6fb7b
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.15.2

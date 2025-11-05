@@ -67,6 +67,18 @@
 		<string>UbuntuMono-Regular.ttf</string>
 		<string>WhisperingSignature.ttf</string>
 		<string>BitcountGridSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf</string>
+		<string>PPLettraMono-Ultralight.otf</string>
+		<string>PPLettraMono-UltralightItalic.otf</string>
+		<string>PPLettraMono-Medium.otf</string>
+		<string>PPLettraMono-MediumItalic.otf</string>
+		<string>IBMPlexMono-ExtraLight.ttf</string>
+		<string>IBMPlexMono-Thin.ttf</string>
+		<string>PPNeueMontreal-Thin.otf</string>
+		<string>PPNeueMontreal-Bold.otf</string>
+		<string>PPNeueMontreal-Medium.otf</string>
+		<string>PPNeueMontreal-Book.otf</string>
+		<string>PPNeueMontreal-SemiBolditalic.otf</string>
+		<string>PPNeueMontreal-Italic.otf</string>
 	</array>
 </dict>
 </plist>

@@ -3,7 +3,7 @@ export const colors = {
   background: "#E2E5E8",
   lightGrey: '#F5F5F5',
   midGrey: 'rgb(226, 226, 226)',
-  darkGrey: '#717171',
+  darkGrey: '#3C3C3C',
   white: '#FFFFFF',
   // Text colors
   black: '#000000',
@@ -14,6 +14,8 @@ export const colors = {
   techBlue: '#82b3e8',   // Smart blue (full opacity for buttons)
   techBlueTransparent: '#82b3e880',   // Smart blue (50% opacity)
   orange: '#ffb38080',  // Orange
+  red: '#E64A23',
+  orangeTheme: '#FF7C1F',
   transparent: 'transparent',
   halfOpacityWhite: '#FFFFFFAA',
 

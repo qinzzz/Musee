@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
 from typing import Optional
 import os
 import json
 
 from app.database.connection import get_db
-from app.database.models import ArtworkAnalysis
+from app.database.models import ArtworkAnalysis, ArtworkHistory
 from app.models.artwork import (
     ToneType, AIProvider, ArtworkAnalysisResponse, ImageMetadata
 )
@@ -14,6 +14,7 @@ from app.services.ai_service import AIServiceFactory
 from app.services.openai_client import OpenAIClient
 from app.services.claude_client import ClaudeClient
 from app.services.gemini_client import GeminiClient
+from app.services.photoroom_service import photoroom_service
 from app.utils.image_processing import process_image
 from app.utils.conversation_storage import conversation_storage
 from app.config.settings import settings
@@ -411,3 +412,155 @@ async def get_available_identities():
             "suggest_topics": "art_historian"
         }
     }
+
+
+@router.post("/remove-background")
+async def remove_background(
+    image: UploadFile = File(...)
+):
+    """
+    Remove background from an image using PhotoRoom API
+
+    - **image**: Image file to process (JPG, PNG, WebP)
+
+    Returns the image with transparent background as PNG
+    """
+
+    try:
+        # Read image data
+        image_data = await image.read()
+
+        # Call PhotoRoom service to remove background
+        result_image = await photoroom_service.remove_background(image_data)
+
+        if not result_image:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to remove background. Please check PhotoRoom API key configuration."
+            )
+
+        # Return the processed image
+        return Response(
+            content=result_image,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": "attachment; filename=no-background.png"
+            }
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Background removal failed: {str(e)}"
+        )
+
+
+@router.post("/history")
+async def save_to_history(
+    photo_uri: str = Form(...),
+    artist_name: str = Form(...),
+    artwork_name: str = Form(...),
+    is_recognized: bool = Form(True),
+    db: Session = Depends(get_db)
+):
+    """
+    Save artwork to history with metadata
+
+    - **photo_uri**: URI/path to the photo
+    - **artist_name**: Name of the artist
+    - **artwork_name**: Name of the artwork
+    - **is_recognized**: Whether the artwork was recognized (default: True)
+
+    Returns the saved history entry
+    """
+    try:
+        history_entry = ArtworkHistory(
+            photo_uri=photo_uri,
+            artist_name=artist_name,
+            artwork_name=artwork_name,
+            is_recognized=1 if is_recognized else 0
+        )
+
+        db.add(history_entry)
+        db.commit()
+        db.refresh(history_entry)
+
+        return history_entry.to_dict()
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save to history: {str(e)}"
+        )
+
+
+@router.get("/history")
+async def get_history(
+    recognized_only: Optional[bool] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    Get artwork history with optional filtering
+
+    - **recognized_only**: Filter by recognition status (True/False/None for all)
+    - **limit**: Maximum number of entries to return (default: 50)
+    - **offset**: Number of entries to skip (default: 0)
+
+    Returns list of history entries sorted by most recent first
+    """
+    try:
+        query = db.query(ArtworkHistory)
+
+        # Filter by recognition status if specified
+        if recognized_only is not None:
+            query = query.filter(ArtworkHistory.is_recognized == (1 if recognized_only else 0))
+
+        # Order by most recent first and apply pagination
+        history_entries = query.order_by(ArtworkHistory.created_at.desc()).offset(offset).limit(limit).all()
+
+        return {
+            "items": [entry.to_dict() for entry in history_entries],
+            "count": len(history_entries),
+            "offset": offset,
+            "limit": limit
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve history: {str(e)}"
+        )
+
+
+@router.delete("/history/{history_id}")
+async def delete_history_entry(
+    history_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a history entry
+
+    - **history_id**: ID of the history entry to delete
+
+    Returns success message
+    """
+    try:
+        history_entry = db.query(ArtworkHistory).filter(ArtworkHistory.id == history_id).first()
+
+        if not history_entry:
+            raise HTTPException(status_code=404, detail="History entry not found")
+
+        db.delete(history_entry)
+        db.commit()
+
+        return {"message": "History entry deleted successfully"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete history entry: {str(e)}"
+        )

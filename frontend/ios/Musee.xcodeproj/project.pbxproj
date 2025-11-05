@@ -10,19 +10,33 @@
 		0C80B921A6F3F58F76C31292 /* libPods-Musee.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-Musee.a */; };
 		1274BB83405B4BF09AD021C2 /* IBMPlexMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3937020054A842639B9D160A /* IBMPlexMono-Regular.ttf */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		20B0FAB53EF94DF4A7C8B2A9 /* PPNeueMontreal-Book.otf in Resources */ = {isa = PBXBuildFile; fileRef = 668895048F814B80BA056B2A /* PPNeueMontreal-Book.otf */; };
 		20E75511A1C14BE3B39307C1 /* WhisperingSignature.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 47E0AA53899F44C5ABF0CE8D /* WhisperingSignature.ttf */; };
+		2C6948C32B734D548BDE975B /* PPNeueMontreal-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = CA77E0B300E742EDBAC5733E /* PPNeueMontreal-Medium.otf */; };
+		3AAE4730375446D299AAE1F4 /* IBMPlexMono-ExtraLight.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 59DB0E7F16F741AB920F8472 /* IBMPlexMono-ExtraLight.ttf */; };
+		42BD9AA2E2064802A30BEFBB /* PPLettraMono-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = 7BFBC72821AC461D9D99E117 /* PPLettraMono-Medium.otf */; };
 		505C83E6B9E843D880FA80D4 /* IBMPlexMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 73D1E9B78A3D4C3F9FF3DCC5 /* IBMPlexMono-SemiBold.ttf */; };
 		50677AA53EC94A23A9514C74 /* UbuntuMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1D6D060862B44046B97C912C /* UbuntuMono-Regular.ttf */; };
+		53399E8DD1514DECA8AD9518 /* PPLettraMono-UltralightItalic.otf in Resources */ = {isa = PBXBuildFile; fileRef = B8B3601C824A4321855A3348 /* PPLettraMono-UltralightItalic.otf */; };
+		563103C8D33244A6B3C67752 /* PPNeueMontreal-Italic.otf in Resources */ = {isa = PBXBuildFile; fileRef = 841B1051C16842129104C4FE /* PPNeueMontreal-Italic.otf */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		7A5AF3135BAA4409B9D3E627 /* PPLettraMono-MediumItalic.otf in Resources */ = {isa = PBXBuildFile; fileRef = A595BF82FE0A4B6A983B9D66 /* PPLettraMono-MediumItalic.otf */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		87D6CD199EDCA659DB37B145 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDFA7B8B1231B78B7FEBCA3C /* ExpoModulesProvider.swift */; };
 		8AABC48A4BFE4B0082D02D17 /* BitcountGridSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1B5D2597CD994D2FADBADEF8 /* BitcountGridSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf */; };
+		AD63B6BD3CF44068A0AF129D /* IBMPlexMono-Thin.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 379B2B5B550B4AC0A2547457 /* IBMPlexMono-Thin.ttf */; };
 		AE131D8052BB4297898EDBB1 /* IBMPlexMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 49F379AF639B46E3A20E8EC6 /* IBMPlexMono-Medium.ttf */; };
+		B117BF7438E04BD3B865A852 /* PPLettraMono-Ultralight.otf in Resources */ = {isa = PBXBuildFile; fileRef = 03BFB75CAC6E477091942749 /* PPLettraMono-Ultralight.otf */; };
+		C1D07CBC090E4C9FA32EC00D /* PPNeueMontreal-SemiBolditalic.otf in Resources */ = {isa = PBXBuildFile; fileRef = DCE054ABD79845F49991DDF1 /* PPNeueMontreal-SemiBolditalic.otf */; };
+		C9DFBB3E36AA44F5A58CE159 /* PPNeueMontreal-Bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = A61B30ECF8F3419C93A6AED6 /* PPNeueMontreal-Bold.otf */; };
+		CB7EA5C5FA34415A952EFB47 /* PPNeueMontreal-Thin.otf in Resources */ = {isa = PBXBuildFile; fileRef = D7CAAE937088468B815CB10A /* PPNeueMontreal-Thin.otf */; };
 		D564EEC57B2C46D6A79C31BF /* IBMPlexMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0D0EEEE9CB044350A3FF2E93 /* IBMPlexMono-Bold.ttf */; };
 		EF2B8CC6FC8444639532B806 /* IBMPlexMono-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8826A07A22A243C685DC1D5D /* IBMPlexMono-Light.ttf */; };
 		F389E45271C02B581D8603F4 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		03BFB75CAC6E477091942749 /* PPLettraMono-Ultralight.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PPLettraMono-Ultralight.otf"; path = "../assets/fonts/PPLettraMono-Ultralight.otf"; sourceTree = "<group>"; };
 		0D0EEEE9CB044350A3FF2E93 /* IBMPlexMono-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "IBMPlexMono-Bold.ttf"; path = "../assets/fonts/IBMPlexMono-Bold.ttf"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Musee.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Musee.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Musee/Images.xcassets; sourceTree = "<group>"; };
@@ -30,16 +44,28 @@
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = Musee/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		1B5D2597CD994D2FADBADEF8 /* BitcountGridSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "BitcountGridSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf"; path = "../assets/fonts/BitcountGridSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf"; sourceTree = "<group>"; };
 		1D6D060862B44046B97C912C /* UbuntuMono-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "UbuntuMono-Regular.ttf"; path = "../assets/fonts/UbuntuMono-Regular.ttf"; sourceTree = "<group>"; };
+		379B2B5B550B4AC0A2547457 /* IBMPlexMono-Thin.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "IBMPlexMono-Thin.ttf"; path = "../assets/fonts/IBMPlexMono-Thin.ttf"; sourceTree = "<group>"; };
 		3937020054A842639B9D160A /* IBMPlexMono-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "IBMPlexMono-Regular.ttf"; path = "../assets/fonts/IBMPlexMono-Regular.ttf"; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-Musee.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Musee.debug.xcconfig"; path = "Target Support Files/Pods-Musee/Pods-Musee.debug.xcconfig"; sourceTree = "<group>"; };
 		47E0AA53899F44C5ABF0CE8D /* WhisperingSignature.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = WhisperingSignature.ttf; path = ../assets/fonts/WhisperingSignature.ttf; sourceTree = "<group>"; };
 		49F379AF639B46E3A20E8EC6 /* IBMPlexMono-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "IBMPlexMono-Medium.ttf"; path = "../assets/fonts/IBMPlexMono-Medium.ttf"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-Musee.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Musee.release.xcconfig"; path = "Target Support Files/Pods-Musee/Pods-Musee.release.xcconfig"; sourceTree = "<group>"; };
+		59DB0E7F16F741AB920F8472 /* IBMPlexMono-ExtraLight.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "IBMPlexMono-ExtraLight.ttf"; path = "../assets/fonts/IBMPlexMono-ExtraLight.ttf"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-Musee.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Musee.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		668895048F814B80BA056B2A /* PPNeueMontreal-Book.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PPNeueMontreal-Book.otf"; path = "../assets/fonts/PPNeueMontreal-Book.otf"; sourceTree = "<group>"; };
 		73D1E9B78A3D4C3F9FF3DCC5 /* IBMPlexMono-SemiBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "IBMPlexMono-SemiBold.ttf"; path = "../assets/fonts/IBMPlexMono-SemiBold.ttf"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Musee/AppDelegate.swift; sourceTree = "<group>"; };
+		7BFBC72821AC461D9D99E117 /* PPLettraMono-Medium.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PPLettraMono-Medium.otf"; path = "../assets/fonts/PPLettraMono-Medium.otf"; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = Musee/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		841B1051C16842129104C4FE /* PPNeueMontreal-Italic.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PPNeueMontreal-Italic.otf"; path = "../assets/fonts/PPNeueMontreal-Italic.otf"; sourceTree = "<group>"; };
 		8826A07A22A243C685DC1D5D /* IBMPlexMono-Light.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "IBMPlexMono-Light.ttf"; path = "../assets/fonts/IBMPlexMono-Light.ttf"; sourceTree = "<group>"; };
+		A595BF82FE0A4B6A983B9D66 /* PPLettraMono-MediumItalic.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PPLettraMono-MediumItalic.otf"; path = "../assets/fonts/PPLettraMono-MediumItalic.otf"; sourceTree = "<group>"; };
+		A61B30ECF8F3419C93A6AED6 /* PPNeueMontreal-Bold.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PPNeueMontreal-Bold.otf"; path = "../assets/fonts/PPNeueMontreal-Bold.otf"; sourceTree = "<group>"; };
+		B8B3601C824A4321855A3348 /* PPLettraMono-UltralightItalic.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PPLettraMono-UltralightItalic.otf"; path = "../assets/fonts/PPLettraMono-UltralightItalic.otf"; sourceTree = "<group>"; };
+		BDFA7B8B1231B78B7FEBCA3C /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Musee/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		CA77E0B300E742EDBAC5733E /* PPNeueMontreal-Medium.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PPNeueMontreal-Medium.otf"; path = "../assets/fonts/PPNeueMontreal-Medium.otf"; sourceTree = "<group>"; };
+		D7CAAE937088468B815CB10A /* PPNeueMontreal-Thin.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PPNeueMontreal-Thin.otf"; path = "../assets/fonts/PPNeueMontreal-Thin.otf"; sourceTree = "<group>"; };
+		DCE054ABD79845F49991DDF1 /* PPNeueMontreal-SemiBolditalic.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PPNeueMontreal-SemiBolditalic.otf"; path = "../assets/fonts/PPNeueMontreal-SemiBolditalic.otf"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -87,6 +113,18 @@
 				8826A07A22A243C685DC1D5D /* IBMPlexMono-Light.ttf */,
 				49F379AF639B46E3A20E8EC6 /* IBMPlexMono-Medium.ttf */,
 				1B5D2597CD994D2FADBADEF8 /* BitcountGridSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf */,
+				7BFBC72821AC461D9D99E117 /* PPLettraMono-Medium.otf */,
+				A595BF82FE0A4B6A983B9D66 /* PPLettraMono-MediumItalic.otf */,
+				03BFB75CAC6E477091942749 /* PPLettraMono-Ultralight.otf */,
+				B8B3601C824A4321855A3348 /* PPLettraMono-UltralightItalic.otf */,
+				59DB0E7F16F741AB920F8472 /* IBMPlexMono-ExtraLight.ttf */,
+				379B2B5B550B4AC0A2547457 /* IBMPlexMono-Thin.ttf */,
+				A61B30ECF8F3419C93A6AED6 /* PPNeueMontreal-Bold.otf */,
+				668895048F814B80BA056B2A /* PPNeueMontreal-Book.otf */,
+				841B1051C16842129104C4FE /* PPNeueMontreal-Italic.otf */,
+				CA77E0B300E742EDBAC5733E /* PPNeueMontreal-Medium.otf */,
+				DCE054ABD79845F49991DDF1 /* PPNeueMontreal-SemiBolditalic.otf */,
+				D7CAAE937088468B815CB10A /* PPNeueMontreal-Thin.otf */,
 			);
 			name = Resources;
 			sourceTree = "<group>";
@@ -107,6 +145,7 @@
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
 				784844A233044219BA49CDA4 /* Resources */,
+				8E74BC9D7AEFEA995B7AC4D5 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -121,6 +160,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		8E74BC9D7AEFEA995B7AC4D5 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				F65E202492A5A6917EB5C3E4 /* Musee */,
+			);
+			name = ExpoModulesProviders;
+			sourceTree = "<group>";
+		};
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
@@ -128,6 +175,14 @@
 				5709B34CF0A7D63546082F79 /* Pods-Musee.release.xcconfig */,
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		F65E202492A5A6917EB5C3E4 /* Musee */ = {
+			isa = PBXGroup;
+			children = (
+				BDFA7B8B1231B78B7FEBCA3C /* ExpoModulesProvider.swift */,
+			);
+			name = Musee;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -138,6 +193,7 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Musee" */;
 			buildPhases = (
 				C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */,
+				53641F3CC7A9567A3E7A2E3A /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
@@ -202,6 +258,18 @@
 				EF2B8CC6FC8444639532B806 /* IBMPlexMono-Light.ttf in Resources */,
 				AE131D8052BB4297898EDBB1 /* IBMPlexMono-Medium.ttf in Resources */,
 				8AABC48A4BFE4B0082D02D17 /* BitcountGridSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf in Resources */,
+				42BD9AA2E2064802A30BEFBB /* PPLettraMono-Medium.otf in Resources */,
+				7A5AF3135BAA4409B9D3E627 /* PPLettraMono-MediumItalic.otf in Resources */,
+				B117BF7438E04BD3B865A852 /* PPLettraMono-Ultralight.otf in Resources */,
+				53399E8DD1514DECA8AD9518 /* PPLettraMono-UltralightItalic.otf in Resources */,
+				3AAE4730375446D299AAE1F4 /* IBMPlexMono-ExtraLight.ttf in Resources */,
+				AD63B6BD3CF44068A0AF129D /* IBMPlexMono-Thin.ttf in Resources */,
+				C9DFBB3E36AA44F5A58CE159 /* PPNeueMontreal-Bold.otf in Resources */,
+				20B0FAB53EF94DF4A7C8B2A9 /* PPNeueMontreal-Book.otf in Resources */,
+				563103C8D33244A6B3C67752 /* PPNeueMontreal-Italic.otf in Resources */,
+				2C6948C32B734D548BDE975B /* PPNeueMontreal-Medium.otf in Resources */,
+				C1D07CBC090E4C9FA32EC00D /* PPNeueMontreal-SemiBolditalic.otf in Resources */,
+				CB7EA5C5FA34415A952EFB47 /* PPNeueMontreal-Thin.otf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -232,18 +300,37 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Musee/Pods-Musee-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Musee/Pods-Musee-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Musee/Pods-Musee-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
+		};
+		53641F3CC7A9567A3E7A2E3A /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-Musee/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-Musee/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Musee/expo-configure-project.sh\"\n";
 		};
 		C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -275,13 +362,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Musee/Pods-Musee-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Musee/Pods-Musee-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -296,6 +379,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				87D6CD199EDCA659DB37B145 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -307,6 +391,7 @@
 			baseConfigurationReference = 3B4392A12AC88292D35C810B /* Pods-Musee.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 65VRCN6QUF;
@@ -324,6 +409,7 @@
 					"-ObjC",
 					"-lc++",
 				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.musee;
 				PRODUCT_NAME = Musee;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -341,6 +427,7 @@
 			baseConfigurationReference = 5709B34CF0A7D63546082F79 /* Pods-Musee.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 65VRCN6QUF;
@@ -357,6 +444,7 @@
 					"-ObjC",
 					"-lc++",
 				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.musee;
 				PRODUCT_NAME = Musee;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

@@ -6,9 +6,9 @@ import uuid
 
 class ArtworkAnalysis(Base):
     """Database model for artwork analysis records"""
-    
+
     __tablename__ = "artwork_analyses"
-    
+
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     image_path = Column(String, nullable=False)
     image_metadata = Column(JSON, nullable=False)
@@ -18,7 +18,7 @@ class ArtworkAnalysis(Base):
     user_id = Column(String, nullable=True)  # For future user authentication
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    
+
     def to_dict(self):
         """Convert model to dictionary"""
         return {
@@ -31,4 +31,34 @@ class ArtworkAnalysis(Base):
             "user_id": self.user_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at
+        }
+
+
+class ArtworkHistory(Base):
+    """Database model for saved artwork history with metadata"""
+
+    __tablename__ = "artwork_history"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    photo_uri = Column(String, nullable=False)  # Local file path or URI
+    artist_name = Column(String, nullable=False)
+    artwork_name = Column(String, nullable=False)
+    thumbnail_uri = Column(String, nullable=True)  # Optional thumbnail path
+    is_recognized = Column(Integer, default=1)  # 1 for recognized, 0 for unknown
+    user_id = Column(String, nullable=True)  # For future user authentication
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    def to_dict(self):
+        """Convert model to dictionary"""
+        return {
+            "id": self.id,
+            "photo_uri": self.photo_uri,
+            "artist_name": self.artist_name,
+            "artwork_name": self.artwork_name,
+            "thumbnail_uri": self.thumbnail_uri,
+            "is_recognized": self.is_recognized,
+            "user_id": self.user_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }

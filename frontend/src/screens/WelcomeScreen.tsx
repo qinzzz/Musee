@@ -4,7 +4,6 @@ import {
   View,
   Dimensions,
   Pressable,
-  TouchableOpacity,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -14,13 +13,12 @@ import Animated, {
   withTiming,
   useDerivedValue,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
 import Svg, { Circle } from 'react-native-svg';
 import { welcomeStyles as styles } from './styles/WelcomeStyles';
 import { colors } from '../constants/colors';
-import { ActionButton } from '../components';
+import MuseeLogo from '../../assets/images/musee logo.svg';
 
 // Animated bubble component using theta-based elliptical motion
 const AnimatedBubble = ({ rx, ry, phase = 0, colors, rotateValue }) => {
@@ -54,16 +52,14 @@ const AnimatedBubble = ({ rx, ry, phase = 0, colors, rotateValue }) => {
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 interface WelcomeScreenProps {
-  onCapturePress: () => void;
-  onGalleryPress?: () => void;
+  onPress: () => void;
 }
 
-export default function WelcomeScreen({ onCapturePress, onGalleryPress }: WelcomeScreenProps) {
-  const safeAreaInsets = useSafeAreaInsets();
+export default function WelcomeScreen({ onPress }: WelcomeScreenProps) {
   const fadeAnim = useSharedValue(0);
   const rotateAnim = useSharedValue(0);
   const radiusAnim = useSharedValue(0);
-  
+
   // Non-linear transformation with sine waves
   const nonLinearRotateValue = useDerivedValue(() => {
     'worklet';
@@ -71,7 +67,7 @@ export default function WelcomeScreen({ onCapturePress, onGalleryPress }: Welcom
     // const sineWave = Math.sin(baseSpeed * Math.PI) * 0.3;
     return baseSpeed;
   });
-  
+
   const fullText = 'living museum of your own';
   const [displayedText, setDisplayedText] = useState('');
 
@@ -130,26 +126,20 @@ export default function WelcomeScreen({ onCapturePress, onGalleryPress }: Welcom
   const circleY = height * 0.5
 
   return (
-    <Pressable style={styles.container}>
+    <Pressable style={styles.container} onPress={onPress}>
 
-      <View style={[styles.content, { paddingTop: safeAreaInsets.top-80, zIndex: 10 }]}>
+      <View style={[styles.content, { zIndex: 10 }]}>
         <Animated.View style={[styles.welcomeContainer, fadeStyle]}>
-          <Text style={styles.appName}>Musee</Text>
+          <MuseeLogo width={280} height={200} preserveAspectRatio="xMidYMid meet" />
           <Text style={styles.subtitle}>{displayedText}</Text>
         </Animated.View>
-      </View>
-
-      {/* Action Buttons - Centered below subtitle */}
-      <View style={styles.actionButtonsContainer}>
-        <ActionButton onPress={onCapturePress} label={'Capture'}/>
-        <ActionButton onPress={onGalleryPress} label={'Gallery'}/>
       </View>
 
       <BlurView
         style={{...styles.blurOverlay, zIndex: 7}}
         blurType="ultraThinMaterialLight"
         blurAmount={30}
-        reducedTransparencyFallbackColor="white"
+        reducedTransparencyFallbackColor={colors.white}
       />
 
       <Animated.View style={{ ...styles.vignetteContainer, zIndex: 6}}>
@@ -173,7 +163,7 @@ export default function WelcomeScreen({ onCapturePress, onGalleryPress }: Welcom
         style={{...styles.blurOverlay, zIndex: 5}}
         blurType="ultraThinMaterialLight"
         blurAmount={20}
-        reducedTransparencyFallbackColor="white"
+        reducedTransparencyFallbackColor={colors.white}
       />
 
       <View style={{...styles.vignetteContainer, zIndex: 1}}>
@@ -195,7 +185,7 @@ export default function WelcomeScreen({ onCapturePress, onGalleryPress }: Welcom
           rx={circleX} 
           ry={circleY} 
           phase={5 * Math.PI / 4}
-          colors={[colors.techBlue, colors.lightYellow]} 
+          colors={[colors.techBlue, colors.orange]} 
           rotateValue={nonLinearRotateValue}
         />
         <AnimatedBubble 

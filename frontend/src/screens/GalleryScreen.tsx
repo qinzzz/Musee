@@ -11,20 +11,25 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius } from '../constants/theme';
 import { Typography } from '../components';
+import { homeStyles } from './styles/HomeStyles';
+import { historyApiService } from '../services/historyApi';
+import { historyCacheService, HistoryItem } from '../services/historyCache';
 
 interface GalleryItem {
   id: string;
   uri: string;
   artistName: string;
   artworkName: string;
+  createdAt?: string;
 }
 
 interface GalleryScreenProps {
   onBack: () => void;
+  onGalleryPress: () => void;
+
 }
 
 const { width } = Dimensions.get('window');
@@ -32,7 +37,7 @@ const COLUMN_GAP = 12;
 const PADDING = 24;
 const ITEM_WIDTH = (width - PADDING * 2 - COLUMN_GAP) / 2;
 
-export default function GalleryScreen({ onBack }: GalleryScreenProps) {
+export default function GalleryScreen({ onBack, onGalleryPress }: GalleryScreenProps) {
   const safeAreaInsets = useSafeAreaInsets();
   const [selectedTab, setSelectedTab] = useState<'recognized' | 'unknown'>('recognized');
   const [items, setItems] = useState<GalleryItem[]>([]);
@@ -40,50 +45,60 @@ export default function GalleryScreen({ onBack }: GalleryScreenProps) {
 
   useEffect(() => {
     loadPhotos();
-  }, []);
+  }, [selectedTab]);
 
   const loadPhotos = async () => {
     setIsLoading(true);
     try {
-      // First, get all albums to find the Musee album
-      const albums = await CameraRoll.getAlbums({
-        assetType: 'Photos',
-      });
+      // Try to load from cache first
+      const cachedData = await historyCacheService.getFromCache();
 
-      // Find the Musee album
-      const museeAlbum = albums.find(
-        album => album.title.toLowerCase() === 'musee'
-      );
-
-      if (!museeAlbum) {
-        console.log('Musee album not found');
-        setItems([]);
+      if (cachedData) {
+        // Use cached data
+        const filteredItems = filterItemsByTab(cachedData);
+        setItems(convertToGalleryItems(filteredItems));
         setIsLoading(false);
         return;
       }
 
-      // Get photos from the Musee album
-      const result = await CameraRoll.getPhotos({
-        first: 10,
-        assetType: 'Photos',
-        groupName: 'Musee',
-        groupTypes: 'Album',
+      // Fetch from backend if cache is empty or expired
+      const recognizedOnly = selectedTab === 'recognized' ? true : selectedTab === 'unknown' ? false : undefined;
+      const response = await historyApiService.getHistory({
+        recognizedOnly,
+        limit: 100,
       });
 
-      const galleryItems: GalleryItem[] = result.edges.map((edge, index) => ({
-        id: edge.node.id || `photo-${index}`,
-        uri: edge.node.image.uri,
-        artistName: 'Unknown', // TODO: Extract from metadata if available
-        artworkName: 'Untitled', // TODO: Extract from metadata if available
-      }));
+      // Save to cache
+      await historyCacheService.saveToCache(response.items);
 
-      setItems(galleryItems);
+      // Convert and display
+      setItems(convertToGalleryItems(response.items));
     } catch (error) {
       console.error('Error loading photos:', error);
-      Alert.alert('Error', 'Failed to load photos from Musee album');
+      Alert.alert('Error', 'Failed to load history. Please check your connection.');
+      setItems([]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const filterItemsByTab = (items: HistoryItem[]): HistoryItem[] => {
+    if (selectedTab === 'recognized') {
+      return items.filter(item => item.is_recognized === 1);
+    } else if (selectedTab === 'unknown') {
+      return items.filter(item => item.is_recognized === 0);
+    }
+    return items;
+  };
+
+  const convertToGalleryItems = (items: HistoryItem[]): GalleryItem[] => {
+    return items.map(item => ({
+      id: item.id,
+      uri: item.photo_uri,
+      artistName: item.artist_name,
+      artworkName: item.artwork_name,
+      createdAt: item.created_at,
+    }));
   };
 
   const renderItem = ({ item }: { item: GalleryItem }) => (
@@ -124,8 +139,8 @@ export default function GalleryScreen({ onBack }: GalleryScreenProps) {
   return (
     <View style={[styles.container, { paddingTop: safeAreaInsets.top }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <Typography variant="h1" style={styles.title}>HISTORY</Typography>
+      <View style={homeStyles.headerSection}>
+        <Typography variant="h1" style={homeStyles.title}>HISTORY</Typography>
         <View style={styles.tabContainer}>
           <TouchableOpacity
             onPress={() => setSelectedTab('recognized')}
@@ -162,15 +177,28 @@ export default function GalleryScreen({ onBack }: GalleryScreenProps) {
         contentContainerStyle={styles.gridContainer}
         ListEmptyComponent={renderEmpty}
         showsVerticalScrollIndicator={false}
+        // Performance optimizations
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={10}
+        windowSize={5}
+        getItemLayout={(_data, index) => ({
+          length: ITEM_WIDTH + spacing.base,
+          offset: (ITEM_WIDTH + spacing.base) * Math.floor(index / 2),
+          index,
+        })}
       />
 
       {/* Bottom Navigation Placeholder */}
-      <View style={styles.bottomNav}>
+      <View style={[homeStyles.bottomNav, { paddingBottom: safeAreaInsets.bottom }]}>
+          <Text style={[homeStyles.navLabel, homeStyles.navLabelActive]}>History</Text>
         <TouchableOpacity onPress={onBack} activeOpacity={0.7}>
-          <Text style={[styles.navText, styles.navTextActive]}>History</Text>
+          <Text style={homeStyles.navLabel}>Discover</Text>
         </TouchableOpacity>
-        <Text style={styles.navText}>Discover</Text>
-        <Text style={styles.navText}>Gallery</Text>
+        <TouchableOpacity onPress={onGalleryPress} activeOpacity={0.7}>
+          <Text style={homeStyles.navLabel}>Gallery</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -186,25 +214,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.base,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: colors.black,
-    letterSpacing: 0.52,
-    lineHeight: 27.463,
-    textTransform: 'uppercase',
-    marginBottom: spacing.xs,
-  },
   tabContainer: {
     flexDirection: 'row',
     gap: 1,
   },
   tabText: {
     fontSize: 16,
+    fontFamily: 'PP Neue Montreal',
     fontWeight: '500',
     color: '#6D6D6D',
     letterSpacing: 0.32,
-    lineHeight: 27.463,
+    lineHeight: 25,
     textTransform: 'capitalize',
     marginRight: spacing.lg,
   },
@@ -266,29 +286,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#6D6D6D',
     marginTop: spacing.base,
-  },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 98,
-    backgroundColor: colors.white,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: spacing['3xl'],
-  },
-  navText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#6D6D6D',
-    letterSpacing: 0.32,
-    lineHeight: 27.463,
-    textTransform: 'capitalize',
-    textAlign: 'center',
-  },
-  navTextActive: {
-    color: colors.black,
   },
 });

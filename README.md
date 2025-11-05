@@ -166,6 +166,15 @@ GeminiClient(AIServiceInterface)   # Gemini Pro Vision
 # AI Provider (default)
 AI_PROVIDER=openai
 
+# AI Model Override (optional - forces a specific model VERSION for ALL requests)
+# Overrides hardcoded model versions in the code
+# Examples:
+#   OpenAI: "gpt-4o-mini", "gpt-4o", "gpt-4-turbo"
+#   Claude: "claude-opus-4-20250514", "claude-sonnet-4-20250514"
+#   Gemini: "gemini-1.5-pro", "gemini-pro-vision"
+# AI_MODEL_OVERRIDE=gpt-4o-mini  # Example: Use cheaper GPT-4o mini
+AI_MODEL_OVERRIDE=
+
 # API Keys (at least one required)
 OPENAI_API_KEY=sk-...
 CLAUDE_API_KEY=sk-ant-...
@@ -179,6 +188,16 @@ PORT=8000
 USE_DATABASE=true
 DATABASE_URL=sqlite:///./musee.db
 ```
+
+**Default Models** (if AI_MODEL_OVERRIDE not set):
+- OpenAI: `gpt-4o`
+- Claude: `claude-sonnet-4-20250514`
+- Gemini: `gemini-pro-vision`
+
+**Model Override Priority**:
+1. `AI_MODEL_OVERRIDE` env variable (if set) - **overrides hardcoded model versions**
+2. Hardcoded default models in code
+3. Provider selection via `AI_PROVIDER` or API `model` parameter
 
 ### Frontend `api.ts`
 ```typescript

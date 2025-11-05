@@ -6,27 +6,36 @@ import {
   StyleSheet,
   Dimensions,
   Animated,
-  Alert,
   PanResponder,
   Easing,
+  ScrollView,
+  TextInput,
+  Modal,
+  Platform,
 } from 'react-native';
 import { BlurView } from '@react-native-community/blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
 import { artistAnalysisCache } from '../utils/artistAnalysisCache';
-import { Typography, Heading2, Body, Label, LoadingProgressBar, ArtworkCard, ArtistInfoCard, FramedArtworkCard, ArtistCard, ActionButton } from '../components';
+import { Typography, Heading2, Body, Label, LoadingProgressBar, ArtistCard, ActionButton } from '../components';
 import { spacing, shadows, borderRadius, animations } from '../constants/theme';
+import { removeBackground } from 'react-native-background-remover';
+import { getColors } from 'react-native-image-colors';
+import { softenColor } from '../utils/colorUtils';
+
 
 interface PhotoDisplayScreenProps {
   photoUri: string;
   onPhotoPress: () => void;
   onBack: () => void;
   onFinish?: () => void;
+  identity?: string;
 }
 
 interface Artist {
   artist_name: string;
+  artwork_name?: string;
   score: number;
   reason: string;
 }
@@ -37,19 +46,42 @@ export default function PhotoDisplayScreen({
   photoUri,
   onPhotoPress,
   onBack,
-  onFinish
+  onFinish,
+  identity = 'gamified'
 }: PhotoDisplayScreenProps) {
   const safeAreaInsets = useSafeAreaInsets();
   const [isFlipped, setIsFlipped] = useState(false);
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const [artists, setArtists] = useState<Artist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const [expandedArtistIndex, setExpandedArtistIndex] = useState<number | null>(null);
+  const [selectedArtistIndex, setSelectedArtistIndex] = useState<number | null>(null);
+  const [artworkBites, setArtworkBites] = useState<Array<{ content: string; topic?: string }>>([]);
+  const [isBiteLoading, setIsBiteLoading] = useState(false);
+  const [isTopicLoading, setIsTopicLoading] = useState(false);
+
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
+  const [currentSelectedTopic, setCurrentSelectedTopic] = useState<string | null>(null);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualArtistName, setManualArtistName] = useState('');
+  const [manualArtworkName, setManualArtworkName] = useState('');
+  const [manualInputSubmitted, setManualInputSubmitted] = useState(false);
   const swipeTranslateX = useRef(new Animated.Value(0)).current;
   const cardSlideAnim = useRef(new Animated.Value(-height)).current; // Start from above screen
-  const cardDragX = useRef(new Animated.Value(0)).current;
-  const cardDragY = useRef(new Animated.Value(0)).current;
-  const [showArtistDetail, setShowArtistDetail] = useState(false);
+
+  // Background removal states
+  const [photoUriNoBackground, setPhotoUriNoBackground] = useState<string | null>(null);
+  const [isRemovingBackground, setIsRemovingBackground] = useState(false);
+  const [showBackgroundRemoved, setShowBackgroundRemoved] = useState(false);
+
+  // Exploration overlay state
+  const [showExplorationOverlay, setShowExplorationOverlay] = useState(false);
+
+  // Background color state
+  const [backgroundColor, setBackgroundColor] = useState(colors.background);
 
   // Pan responder for swipe gesture with smooth animation
   const panResponder = useRef(
@@ -115,45 +147,6 @@ export default function PhotoDisplayScreen({
     })
   ).current;
 
-  // Pan responder for card dragging (simplified - no movement to top)
-  const cardPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        // Set offset to current values
-        cardDragX.setOffset((cardDragX as any)._value);
-        cardDragY.setOffset((cardDragY as any)._value);
-        cardDragX.setValue(0);
-        cardDragY.setValue(0);
-      },
-      onPanResponderMove: Animated.event(
-        [
-          null,
-          { dx: cardDragX, dy: cardDragY }
-        ],
-        { useNativeDriver: false }
-      ),
-      onPanResponderRelease: () => {
-        // Always spring X and Y back to center position
-        Animated.spring(cardDragX, {
-          toValue: 0,
-          useNativeDriver: true,
-          ...animations.spring.default,
-        }).start(() => {
-          cardDragX.flattenOffset();
-        });
-
-        Animated.spring(cardDragY, {
-          toValue: 0,
-          useNativeDriver: true,
-          ...animations.spring.default,
-        }).start(() => {
-          cardDragY.flattenOffset();
-        });
-      },
-    })
-  ).current;
 
   useEffect(() => {
     setIsLoading(true);
@@ -166,6 +159,8 @@ export default function PhotoDisplayScreen({
     }).start();
 
     fetchArtistIdentification();
+    // handleRemoveBackground();
+    extractDominantColor();
 
     // Cleanup cache when component unmounts
     return () => {
@@ -173,8 +168,20 @@ export default function PhotoDisplayScreen({
     };
   }, []);
 
+  useEffect(() => {
+    
+    setTimeout(() => {
+      fetchSuggestedTopics();
+    }, 500);
+
+  }, [artworkBites])
+
   const fetchArtistIdentification = async () => {
     try {
+      setIsLoading(true);
+      setHasError(false);
+      setErrorMessage('');
+
       // Check if we already have a cached request or data
       const cached = artistAnalysisCache.get(photoUri);
 
@@ -196,8 +203,9 @@ export default function PhotoDisplayScreen({
           type: 'image/jpeg',
           name: 'artwork.jpg',
         } as any);
-
-        const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.ANALYZE_ARTIST}`, {
+        formData.append('identity', identity);
+        const analyze_url = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_ARTIST}`
+        const response = await fetch(analyze_url, {
           method: 'POST',
           body: formData,
         });
@@ -230,40 +238,97 @@ export default function PhotoDisplayScreen({
           // Already an object/array
           artistsData = analysisText;
         }
+
+        console.log("Parsed artists data:", artistsData);
+
+        if (!Array.isArray(artistsData) || artistsData.length === 0) {
+          throw new Error('No artists found in response');
+        }
       } catch (parseError) {
-        console.error('Failed to parse artist data:', parseError);
-        console.error('Raw data:', data.analysis);
+        console.error('=== PARSE ERROR ===');
+        console.error('Error:', parseError);
+        console.error('Raw data:', JSON.stringify(data.analysis));
+        console.error('Full response:', JSON.stringify(data));
         throw new Error('Invalid artist data format');
       }
 
-      // Filter and process artists
-      // 1. If there's any "Unknown" artist, keep only one and replace name
-      // 2. Otherwise, keep all artists
-      const hasUnknown = artistsData.some(artist =>
-        artist.artist_name.toLowerCase() === 'unknown'
-      );
-
-      if (hasUnknown) {
-        // Find the first Unknown artist and modify it
-        const unknownArtist = artistsData.find(artist =>
-          artist.artist_name.toLowerCase() === 'unknown'
-        );
-        if (unknownArtist) {
-          unknownArtist.artist_name = 'Not an artwork?';
-          artistsData = [unknownArtist]; // Only show this one
-        }
-      }
-
       setArtists(artistsData);
+      setHasError(false);
     } catch (error) {
       console.error('Error fetching artist identification:', error);
-      Alert.alert(
-        'Error',
-        'Failed to identify artists. Please try again.',
-        [{ text: 'OK' }]
-      );
+      const errorMsg = error instanceof Error ? error.message : 'Failed to identify artists. Please try again.';
+      setHasError(true);
+      setErrorMessage(errorMsg);
+      // Clear the cache so retry will make a fresh request
+      artistAnalysisCache.clear(photoUri);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRetry = () => {
+    fetchArtistIdentification();
+  };
+
+  const handleRemoveBackground = async () => {
+    try {
+      setIsRemovingBackground(true);
+      console.log('=== STARTING BACKGROUND REMOVAL ===');
+      console.log('Photo URI:', photoUri);
+      console.log('Platform:', Platform.OS);
+
+      // Use native library to remove background
+      const backgroundRemovedImageURI = await removeBackground(photoUri);
+
+      console.log('Background removed successfully');
+      console.log('New URI:', backgroundRemovedImageURI);
+
+      // Check if the URI actually changed (will be same on iOS simulator)
+      if (backgroundRemovedImageURI === photoUri) {
+        console.warn('[Background Removal] Running on iOS Simulator - background removal requires a real device');
+        console.warn('[Background Removal] The library uses Vision framework which is only available on physical iOS devices');
+        // Don't set the photoUriNoBackground since it's the same
+      } else {
+        setPhotoUriNoBackground(backgroundRemovedImageURI);
+      }
+
+    } catch (error) {
+      console.error('Failed to remove background:', error);
+      // Silently fail - background removal is optional
+    } finally {
+      setIsRemovingBackground(false);
+    }
+  };
+
+  const extractDominantColor = async () => {
+    try {
+      console.log('=== EXTRACTING DOMINANT COLOR ===');
+      console.log('Photo URI:', photoUri);
+
+      const result = await getColors(photoUri, {
+        fallback: colors.background,
+        cache: true,
+        key: photoUri,
+      });
+
+      console.log('Color extraction result:', result);
+
+      if (result.platform === 'ios') {
+        const extractedColor = result.background || colors.background;
+        console.log('Extracted iOS color:', extractedColor);
+        const softenedColor = softenColor(extractedColor, colors.background);
+        console.log('Softened color:', softenedColor);
+        setBackgroundColor(softenedColor);
+      } else if (result.platform === 'android') {
+        const extractedColor = result.average || colors.background;
+        console.log('Extracted Android color:', extractedColor);
+        const softenedColor = softenColor(extractedColor, colors.background);
+        console.log('Softened color:', softenedColor);
+        setBackgroundColor(softenedColor);
+      }
+    } catch (error) {
+      console.error('Failed to extract color:', error);
+      setBackgroundColor(colors.background);
     }
   };
 
@@ -281,13 +346,186 @@ export default function PhotoDisplayScreen({
   };
 
   const handleArtistPress = (index: number) => {
-    // Toggle expanded state
-    setExpandedArtistIndex(expandedArtistIndex === index ? null : index);
+    // Toggle expanded state and select artist
+    const isExpanding = expandedArtistIndex !== index;
+    setExpandedArtistIndex(isExpanding ? index : null);
+    setSelectedArtistIndex(isExpanding ? index : null);
   };
 
-  const handleArtistSelect = (artistName: string) => {
-    // Navigate to artist identification screen
-    onPhotoPress();
+  // Check if the identified artist is unknown
+  const isUnknownArtist = () => {
+    if (artists.length === 0) return false;
+    const firstArtist = artists[0].artist_name.toLowerCase();
+    return firstArtist.includes('unknown') || firstArtist.includes('not an artwork');
+  };
+
+  const handleManualInputSubmit = () => {
+    if (!manualArtistName.trim()) {
+      // Could add error handling here
+      return;
+    }
+
+    // Create a manual artist entry
+    const manualArtist: Artist = {
+      artist_name: manualArtistName.trim(),
+      artwork_name: manualArtworkName.trim() || 'Unknown',
+      score: 10, // User input is considered certain
+      reason: 'Manually entered by user'
+    };
+
+    // Add manual artist to the list and select it
+    setArtists([manualArtist]);
+    setSelectedArtistIndex(0);
+    setExpandedArtistIndex(0);
+    setManualInputSubmitted(true);
+    setShowManualInput(false);
+
+    // Clear input fields
+    setManualArtistName('');
+    setManualArtworkName('');
+  };
+
+  const handleManualInputPress = () => {
+    setShowManualInput(true);
+  };
+
+  const fetchSuggestedTopics = async () => {
+    if (!conversationId) {
+      console.log('No conversation ID yet, skipping topic suggestions');
+      return;
+    }
+
+    try {
+      const topicUrl = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_TOPIC}?conversation_id=${conversationId}&identity=${encodeURIComponent(identity)}`;
+      console.log('=== FETCHING SUGGESTED TOPICS ===');
+      console.log('URL:', topicUrl);
+
+      const response = await fetch(topicUrl, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Topic suggestions response:', data);
+
+      if (data.suggested_topics && Array.isArray(data.suggested_topics)) {
+        setSuggestedTopics(data.suggested_topics);
+      }
+    } catch (error) {
+      console.error('Error fetching suggested topics:', error);
+      // Silently fail - topics are optional enhancement
+    } finally {
+      setIsTopicLoading(false);
+    }
+  };
+
+  const fetchArtworkBite = async (topic?: string) => {
+    if (selectedArtistIndex === null || !artists[selectedArtistIndex]) {
+      console.error('No artist selected');
+      return;
+    }
+
+    const selectedArtist = artists[selectedArtistIndex];
+
+    try {
+      setIsBiteLoading(true);
+      setSuggestedTopics([]);
+      // Set the currently selected topic immediately
+      if (topic) {
+        setCurrentSelectedTopic(topic);
+      } else {
+        setCurrentSelectedTopic(null);
+      }
+
+      const formData = new FormData();
+      formData.append('image', {
+        uri: photoUri,
+        type: 'image/jpeg',
+        name: 'artwork.jpg',
+      } as any);
+      formData.append('artist_name', selectedArtist.artist_name);
+      formData.append('artwork_name', selectedArtist.artwork_name || 'Unknown');
+      formData.append('identity', identity);
+
+      // Include conversation ID if we have one
+      if (conversationId) {
+        formData.append('conversation_id', conversationId);
+      }
+
+      // Include topic if provided
+      if (topic) {
+        formData.append('topic', topic);
+      }
+
+      const biteUrl = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_BITE}`;
+      console.log('=== FETCHING ARTWORK BITE ===');
+      console.log('URL:', biteUrl);
+      console.log('Artist:', selectedArtist.artist_name);
+      console.log('Artwork:', selectedArtist.artwork_name);
+      console.log('Topic:', topic || 'none');
+      console.log('Conversation ID:', conversationId || 'new conversation');
+      console.log('Current bites count:', artworkBites.length);
+
+      const response = await fetch(biteUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Bite response:', data);
+
+      // Store conversation ID for subsequent requests
+      if (data.conversation_id && !conversationId) {
+        console.log('Storing conversation ID:', data.conversation_id);
+        setConversationId(data.conversation_id);
+      }
+
+      // Add new bite to the list with its topic
+      setArtworkBites(prev => {
+        const newBite = {
+          content: data.bite,
+          topic: topic // Store which topic this bite is about
+        };
+        return [...prev, newBite];
+      });
+
+      // Clear current selected topic since it's now saved with the bite
+      setCurrentSelectedTopic(null);
+    } catch (error) {
+      console.error('Error fetching artwork bite:', error);
+      // Add error message as a bite
+      setArtworkBites(prev => [...prev, { content: 'Failed to load artwork information. Please try again.' }]);
+      // Clear current selected topic on error too
+      setCurrentSelectedTopic(null);
+    } finally {
+      setIsBiteLoading(false);
+      setIsTopicLoading(true);
+
+    }
+  };
+
+  const handleContinueOrMore = () => {
+    if (selectedArtistIndex === null) {
+      // If no artist is selected, select the first one by default
+      setSelectedArtistIndex(0);
+      setExpandedArtistIndex(0);
+      return;
+    }
+
+    // Open exploration overlay
+    setShowExplorationOverlay(true);
+
+    // Fetch first bite if not already loaded
+    if (artworkBites.length === 0) {
+      fetchArtworkBite();
+    }
   };
 
   // Interpolate rotation values
@@ -318,31 +556,35 @@ export default function PhotoDisplayScreen({
         {
           paddingTop: safeAreaInsets.top,
           transform: [{ translateX: swipeTranslateX }],
+          backgroundColor: backgroundColor,
         },
       ]}
     >
       {/* Background with elliptical shapes - matching Figma */}
-      <View 
+      <View
         style={styles.backgroundContainer}
       >
         <Animated.View // overlay for swipable
           style = {styles.swipeOverlay}
           {...panResponder.panHandlers}
         >
-          <View style={styles.contentWrapper}>
-            {/* Flippable Card Container */}
-            <Animated.View
-              style={[
-                styles.cardContainer,
-                {
-                  transform: [
-                    { translateX: cardDragX },
-                    { translateY: Animated.add(cardSlideAnim, cardDragY) },
-                  ],
-                },
-              ]}
-              {...cardPanResponder.panHandlers}
-            >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={true}
+          >
+            <View style={styles.contentWrapper}>
+              {/* Flippable Card Container */}
+              <Animated.View
+                style={[
+                  styles.cardContainer,
+                  {
+                    transform: [
+                      { translateY: cardSlideAnim },
+                    ],
+                  },
+                ]}
+              >
               {/* Front of Card - Image */}
               <TouchableOpacity
                 activeOpacity={0.95}
@@ -350,13 +592,18 @@ export default function PhotoDisplayScreen({
               >
                 <Animated.View
                   style={[
+                    styles.imageContainer,
                     {
                       transform: [{ rotateY: frontInterpolate }],
                       opacity: frontOpacity,
                     },
                   ]}
                 >
-                  <FramedArtworkCard photoUri={photoUri}/>
+                  <Image
+                    source={{ uri: showBackgroundRemoved && photoUriNoBackground ? photoUriNoBackground : photoUri }}
+                    style={styles.artworkImage}
+                    resizeMode="cover"
+                  />
                 </Animated.View>
               </TouchableOpacity>
 
@@ -368,49 +615,81 @@ export default function PhotoDisplayScreen({
               >
                 <Animated.View
                   style={[
-                    // styles.imageContainer,
+                    styles.imageContainer,
                     {
                       transform: [{ rotateY: backInterpolate }],
                       opacity: backOpacity,
                     },
                   ]}
                 >
-                  <FramedArtworkCard>
-                    <View style={styles.metadataWrapper}>
-                      <View style={styles.metadataItem}>
-                        <Label>Time</Label>
-                        <Typography variant="body">{new Date().toLocaleTimeString()}</Typography>
-                      </View>
-                      <View style={styles.metadataItem}>
-                        <Label>Date</Label>
-                        <Typography variant="body">{new Date().toLocaleDateString()}</Typography>
-                      </View>
-                      <View style={styles.metadataItem}>
-                        <Label>Location</Label>
-                        <Typography variant="body">San Francisco, CA</Typography>
-                      </View>
+                  <View style={styles.metadataWrapper}>
+                    <View style={styles.metadataItem}>
+                      <Label>Time</Label>
+                      <Typography variant="body">{new Date().toLocaleTimeString()}</Typography>
                     </View>
-                  </FramedArtworkCard>
+                    <View style={styles.metadataItem}>
+                      <Label>Date</Label>
+                      <Typography variant="body">{new Date().toLocaleDateString()}</Typography>
+                    </View>
+                    <View style={styles.metadataItem}>
+                      <Label>Location</Label>
+                      <Typography variant="body">San Francisco, CA</Typography>
+                    </View>
+                  </View>
                 </Animated.View>
               </TouchableOpacity>
             </Animated.View>
 
-            {/* Artist List or Artist Detail Below Card (always visible) */}
+            {/* Toggle Background Button */}
+            {/* {photoUriNoBackground && !isFlipped && (
+              <View style={styles.toggleBackgroundContainer}>
+                <ActionButton
+                  label={showBackgroundRemoved ? "Show Original" : "Remove Background"}
+                  onPress={() => setShowBackgroundRemoved(!showBackgroundRemoved)}
+                  theme="light"
+                />
+              </View>
+            )} */}
+
+            {/* Background removal loading indicator */}
+            {/* {isRemovingBackground && (
+              <View style={styles.backgroundLoadingContainer}>
+                <LoadingProgressBar message="Processing..." />
+              </View>
+            )} */}
+
+            {/* Artist List or Error or Artist Detail Below Card (always visible) */}
             <View style={styles.artistListBelow}>
               {isLoading ? (
                 <>
                   <LoadingProgressBar message="Recognizing..." />
                 </>
+              ) : hasError ? (
+                <>
+                  <View style={styles.errorContainer}>
+                    <Typography variant="body" style={styles.errorText}>
+                      {errorMessage || 'Something went wrong'}
+                    </Typography>
+                    <ActionButton
+                      label="Retry"
+                      onPress={handleRetry}
+                    />
+                    <ActionButton
+                      label="Go Back"
+                      onPress={onBack}
+                    />
+                  </View>
+                </>
               ) : (
                   <>
                     <View style={styles.artistListCentered}>
                       {artists.map((artist, index) => {
-                        const isExpanded = expandedArtistIndex === index;
+                        const isExpanded = (expandedArtistIndex === index) && artworkBites.length ===0;
                         return (
                           <ArtistCard
                             key={index}
                             artistName={artist.artist_name}
-                            details={`Confidence: ${artist.score * 10}%`}
+                            details={`${artist.artwork_name || 'Unknown'} (${artist.score * 10}%)`}
                             description={artist.reason}
                             isExpanded={isExpanded}
                             onPress={() => handleArtistPress(index)}
@@ -419,23 +698,196 @@ export default function PhotoDisplayScreen({
                       })}
                     </View>
 
+                    {/* Show manual input button if artist is unknown */}
+                    {isUnknownArtist() && !manualInputSubmitted && (
+                      <View style={styles.manualInputPrompt}>
+                        <ActionButton
+                          label="Manual Input"
+                          onPress={handleManualInputPress}
+                        />
+                      </View>
+                    )}
+
                     {/* Action buttons */}
                     <View style={styles.actionButtonsContainer}>
                       <ActionButton
-                        label="Continue"
-                        onPress={() => setShowArtistDetail(true)}
+                        label="Explore now"
+                        onPress={handleContinueOrMore}
                       />
-                      <ActionButton
-                        label="Maybe later"
-                        onPress={onFinish}
-                      />
+                      {onFinish && (
+                        <ActionButton
+                          label="Finish"
+                          onPress={onFinish}
+                        />
+                      )}
                     </View>
                   </>
                 )}
             </View>
-          </View>
+            </View>
+          </ScrollView>
         </Animated.View>
       </View>
+
+      {/* Manual Input Modal */}
+      <Modal
+        visible={showManualInput}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowManualInput(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Heading2 style={styles.modalTitle}>Enter Artwork Details</Heading2>
+
+            <View style={styles.inputContainer}>
+              <Label>Artist Name *</Label>
+              <TextInput
+                style={styles.input}
+                placeholder=""
+                placeholderTextColor={colors.darkGrey}
+                value={manualArtistName}
+                onChangeText={setManualArtistName}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Label>Artwork Name (Optional)</Label>
+              <TextInput
+                style={styles.input}
+                placeholder=""
+                placeholderTextColor={colors.darkGrey}
+                value={manualArtworkName}
+                onChangeText={setManualArtworkName}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <ActionButton
+                label="Cancel"
+                onPress={() => setShowManualInput(false)}
+              />
+              <ActionButton
+                label="Submit"
+                onPress={handleManualInputSubmit}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Exploration Overlay Modal */}
+      <Modal
+        visible={showExplorationOverlay}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowExplorationOverlay(false)}
+      >
+        <View style={styles.explorationOverlay}>
+          <BlurView
+            style={styles.explorationContent}
+            blurType="ultraThinMaterialLight"
+            blurAmount={10}
+            reducedTransparencyFallbackColor={colors.white}
+          >
+            {/* Header with close button */}
+            <View style={styles.explorationHeader}>
+              <Heading2>Explore this piece</Heading2>
+              <TouchableOpacity onPress={() => setShowExplorationOverlay(false)}>
+                <Typography style={styles.closeButton}>✕</Typography>
+              </TouchableOpacity>
+            </View>
+
+            {/* Scrollable content area */}
+            <ScrollView
+              style={styles.explorationScroll}
+              contentContainerStyle={styles.explorationScrollContent}
+              showsVerticalScrollIndicator={true}
+            >
+              {/* Artwork Bites */}
+              {artworkBites.length > 0 && (
+                <View style={styles.bitesContainer}>
+                  {artworkBites.map((bite, index) => (
+                    <View key={index} style={styles.biteWithTopicContainer}>
+                      {/* Show topic badge if this bite has a topic */}
+                      {bite.topic && (
+                        <View style={styles.selectedTopicContainer}>
+                          <ActionButton
+                            label={bite.topic}
+                            onPress={() => {}}
+                            theme="light"
+                            disabled={true}
+                          />
+                        </View>
+                      )}
+                      <ArtistCard
+                        artistName=""
+                        details=""
+                        description={bite.content}
+                        isExpanded={true}
+                        onPress={() => {}}
+                        hideShadow={true}
+                      />
+                    </View>
+                  ))}
+                  {/* Show currently selected topic while loading */}
+                  {currentSelectedTopic && isBiteLoading && (
+                    <View style={styles.selectedTopicContainer}>
+                      <ActionButton
+                        label={currentSelectedTopic}
+                        onPress={() => {}}
+                        theme="light"
+                        disabled={true}
+                      />
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Loading indicator for new bite */}
+              {isBiteLoading && (
+                <View style={styles.biteLoadingContainer}>
+                  <LoadingProgressBar message="Conjuring..." />
+                </View>
+              )}
+              {isTopicLoading && (
+                <View style={styles.biteLoadingContainer}>
+                  <LoadingProgressBar/>
+                </View>
+              )}
+
+              {/* Topic buttons for follow-up questions */}
+              {suggestedTopics.length > 0 && (
+                <View style={styles.topicButtonsContainer}>
+                  {suggestedTopics.map((topic, index) => (
+                    <ActionButton
+                      key={index}
+                      label={topic}
+                      onPress={() => fetchArtworkBite(topic)}
+                      theme="light"
+                    />
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Bottom action buttons */}
+            <View style={styles.explorationFooter}>
+              <ActionButton
+                label="Tell me more"
+                onPress={() => fetchArtworkBite()}
+              />
+              <ActionButton
+                label="Done"
+                onPress={() => setShowExplorationOverlay(false)}
+                theme="light"
+              />
+            </View>
+          </BlurView>
+        </View>
+      </Modal>
     </Animated.View>
   );
 }
@@ -460,23 +912,28 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: spacing['4xl'], // Extra padding at bottom for scroll
+  },
   contentWrapper: {
     alignItems: 'center',
   },
   imageContainer: {
     width: width - 80, // 40px padding on each side
+    height: width - 80, // Square dimensions
     backgroundColor: '#FDFDFD',
     borderRadius: borderRadius.lg,
     ...shadows.lg,
-    padding: spacing.lg,
-    paddingBottom: spacing['5xl'],
     alignSelf: 'center',
     backfaceVisibility: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
   artworkImage: {
     width: '100%',
-    height: 440,
-    // borderRadius: 5,
+    height: '100%',
     backgroundColor: colors.white,
   },
   cardContainer: {
@@ -504,9 +961,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   metadataWrapper: {
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'flex-start',
     gap: spacing.xs,
+    padding: spacing.lg,
+    width: '100%',
   },
   metadataTitle: {
     marginBottom: spacing.base,
@@ -520,12 +979,60 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing['3xl'],
     paddingTop: spacing.lg,
   },
+  biteContainer: {
+    marginTop: spacing['2xl'],
+    width: '100%',
+    alignItems: 'center',
+  },
+  bitesContainer: {
+    marginTop: spacing['2xl'],
+    width: '100%',
+    alignItems: 'center',
+    gap: spacing.base,
+  },
+  biteWithTopicContainer: {
+    width: '100%',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  biteLoadingContainer: {
+    marginTop: spacing.lg,
+    width: '100%',
+    alignItems: 'center',
+    alignSelf: 'center'
+  },
+  errorContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.lg,
+    paddingVertical: spacing['2xl'],
+  },
+  errorText: {
+    color: colors.darkGrey,
+    textAlign: 'center',
+    marginBottom: spacing.base,
+    fontFamily: 'IBM Plex Mono',
+  },
   actionButtonsContainer: {
     flexDirection: 'row',
-    gap: 18,
+    gap: spacing.lg,
     marginTop: spacing['3xl'],
     justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
+  },
+  topicButtonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.base,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  selectedTopicContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   finishButtonContainer: {
     flexDirection: 'row',
@@ -556,5 +1063,105 @@ const styles = StyleSheet.create({
     color: '#767676',
     letterSpacing: 0.28,
     textAlign: 'right',
+  },
+  manualInputPrompt: {
+    marginBottom: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.base,
+    paddingVertical: spacing.lg,
+  },
+  manualInputText: {
+    textAlign: 'center',
+    color: colors.darkGrey,
+    fontFamily: 'IBM Plex Mono',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing['2xl'],
+    width: width - 80,
+    gap: spacing.lg,
+    ...shadows.lg,
+  },
+  modalTitle: {
+    textAlign: 'center',
+    marginBottom: spacing.base,
+  },
+  inputContainer: {
+    gap: spacing.sm,
+  },
+  input: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.base,
+    fontFamily: 'IBM Plex Mono',
+    fontSize: 16,
+    color: colors.black,
+    borderWidth: 1,
+    borderColor: colors.darkGrey,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.base,
+    justifyContent: 'space-between',
+    marginTop: spacing.base,
+  },
+  toggleBackgroundContainer: {
+    marginTop: spacing.lg,
+    alignItems: 'center',
+    width: '100%',
+  },
+  backgroundLoadingContainer: {
+    marginTop: spacing.base,
+    width: '100%',
+    alignItems: 'center',
+  },
+  // Exploration Overlay Styles
+  explorationOverlay: {
+    flex: 1,
+    height: height * 0.9,
+    justifyContent: 'flex-end',
+  },
+  explorationContent: {
+    backgroundColor: 'rgba(255, 255, 255, 0.47)',
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    height: height * 0.9,
+    overflow: 'hidden',
+  },
+  explorationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing['xl'],
+    paddingVertical: spacing.lg,
+  },
+  closeButton: {
+    fontSize: 28,
+    fontWeight: '300',
+    color: colors.darkGrey,
+  },
+  explorationScroll: {
+    flex: 1,
+  },
+  explorationScrollContent: {
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.lg,
+    gap: spacing.base,
+  },
+  explorationFooter: {
+    flexDirection: 'row',
+    gap: spacing.base,
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.midGrey,
+    justifyContent: 'space-between',
   },
 });

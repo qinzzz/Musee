@@ -25,8 +25,9 @@ import {
 } from 'react-native-vision-camera';
 import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
 import { artistAnalysisCache } from '../utils/artistAnalysisCache';
-import { ScanlinesEffect } from '../components';
-import { CameraRoll } from '@react-native-camera-roll/camera-roll';
+import { ScanlinesEffect, ActionButton } from '../components';
+import { launchImageLibrary } from 'react-native-image-picker';
+import { colors } from '../constants/colors';
 
 interface CameraScreenProps {
   onBack: () => void;
@@ -36,15 +37,15 @@ interface CameraScreenProps {
 // Camera Screen Component
 export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps) {
   const safeAreaInsets = useSafeAreaInsets();
-  const { width, height } = Dimensions.get('window');
-  const [isCameraOn, setIsCameraOn] = useState(true);
+  const { height } = Dimensions.get('window');
+  const [isCameraOn] = useState(true);
 
   // Animation value for curtain effect (0 = closed, 1 = fully open/scrolled up)
   const curtainTranslateY = useSharedValue(0);
 
   // Camera setup
   const { hasPermission, requestPermission } = useCameraPermission();
-  const position = onBack? 'back' : 'front'
+  const position = 'back'
   const device = useCameraDevice(position);
   const camera = useRef<Camera>(null);
 
@@ -122,28 +123,43 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
 
   const handleImportFromAlbum = async () => {
     try {
-      // Get the most recent photo from the camera roll
-      const result = await CameraRoll.getPhotos({
-        first: 1,
-        assetType: 'Photos',
+      // Launch the iOS native photo picker
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        selectionLimit: 1,
+        quality: 1,
       });
 
-      if (result.edges.length > 0) {
-        const photoUri = result.edges[0].node.image.uri;
-        console.log('Photo imported from album:', photoUri);
+      // User cancelled the picker
+      if (result.didCancel) {
+        console.log('User cancelled photo picker');
+        return;
+      }
 
-        // Start API call
-        startArtistAnalysis(photoUri);
+      // Error occurred
+      if (result.errorCode) {
+        console.error('ImagePicker Error:', result.errorMessage);
+        Alert.alert('Error', 'Failed to access photo library. Please grant permission in Settings.');
+        return;
+      }
 
-        if (onPhotoTaken) {
-          onPhotoTaken(photoUri);
+      // Photo selected
+      if (result.assets && result.assets.length > 0) {
+        const photoUri = result.assets[0].uri;
+        if (photoUri) {
+          console.log('Photo imported from album:', photoUri);
+
+          // Start API call
+          startArtistAnalysis(photoUri);
+
+          if (onPhotoTaken) {
+            onPhotoTaken(photoUri);
+          }
         }
-      } else {
-        Alert.alert('No Photos', 'No photos found in your album.');
       }
     } catch (error) {
       console.error('Failed to import from album:', error);
-      Alert.alert('Error', 'Failed to access photo library. Please grant permission.');
+      Alert.alert('Error', 'Failed to access photo library. Please try again.');
     }
   };
 
@@ -156,17 +172,33 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
         name: 'artwork.jpg',
       } as any);
 
-      console.log('Starting artist analysis immediately...');
+      const analyze_url = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_ARTIST}`
+      console.log('=== STARTING ARTIST ANALYSIS ===');
+      console.log('URL:', analyze_url);
+      console.log('Photo URI:', photoUri);
 
       // Create and cache the promise
-      const analysisPromise = fetch(`${API_BASE_URL}${API_ENDPOINTS.ANALYZE_ARTIST}`, {
+      const analysisPromise = fetch(analyze_url, {
         method: 'POST',
         body: formData,
-      }).then(response => {
+      }).then(async response => {
+        console.log('=== API RESPONSE ===');
+        console.log('Status:', response.status);
+        console.log('OK:', response.ok);
+
         if (!response.ok) {
-          throw new Error(`API request failed with status ${response.status}`);
+          const errorText = await response.text();
+          console.error('Error response:', errorText);
+          throw new Error(`API request failed with status ${response.status}: ${errorText}`);
         }
-        return response.json();
+
+        const jsonData = await response.json();
+        console.log('Response data:', JSON.stringify(jsonData));
+        return jsonData;
+      }).catch(error => {
+        console.error('=== FETCH ERROR ===');
+        console.error('Error:', error);
+        throw error;
       });
 
       // Store in cache so PhotoDisplayScreen can use it
@@ -174,31 +206,6 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
 
     } catch (error) {
       console.error('Failed to start artist analysis:', error);
-    }
-  };
-
-  const toggleCamera = () => {
-    if (!hasPermission) {
-      checkCameraPermission();
-      return;
-    }
-
-    const newState = !isCameraOn;
-    setIsCameraOn(newState);
-
-    // Animate the curtain
-    if (newState) {
-      // Camera turning on - scroll curtain up
-      curtainTranslateY.value = withTiming(-height, {
-        duration: 800,
-        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-      });
-    } else {
-      // Camera turning off - scroll curtain down
-      curtainTranslateY.value = withTiming(0, {
-        duration: 800,
-        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-      });
     }
   };
 
@@ -279,31 +286,28 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
 
       {/* Bottom Control Panel */}
       <View style={styles.controlsContainer}>
-        {/* Left button - Import from Album */}
-        <TouchableOpacity
-          style={styles.toggleButton}
+        {/* Album button - Secondary action */}
+        <ActionButton
+          label="album"
           onPress={handleImportFromAlbum}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.toggleButtonText}>
-            <Text style={styles.onText}>ALBUM</Text>
-          </Text>
-        </TouchableOpacity>
-
-        {/* Center - Capture button */}
-        <TouchableOpacity
-          disabled={!isCameraOn}
-          style={styles.captureButton}
+          theme="light"
+          // style={[styles.largeButton, {backgroundColor: colors.white}]}
+        />
+        {/* Capture button - Primary action */}
+        <ActionButton
+          label="capture"
           onPress={handleTakePhoto}
-          activeOpacity={0.7}
-        >
-          <View style={styles.captureButtonInner}>
-            {isCameraOn && <View style={styles.redDot} />}
-          </View>
-        </TouchableOpacity>
+          disabled={!isCameraOn}
+          theme="dark"
+          style={styles.largeButton}
+        />
+        <ActionButton
+          label="back"
+          onPress={onBack}
+          theme="light"
+          // style={[styles.largeButton, {backgroundColor: colors.white}]}
+        />
 
-        {/* Right - Empty for now */}
-        <View style={styles.emptyButton} />
       </View>
     </View>
   );

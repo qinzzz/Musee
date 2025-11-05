@@ -13,3 +13,4 @@ pydantic
 pydantic_settings
 python-jose
 passlib
+aiohttp
