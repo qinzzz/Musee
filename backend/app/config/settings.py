@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Database
     use_database: bool = True
-    database_url: str = "sqlite:///./musee.db"
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./musee.db")
 
     # Server Configuration
     host: str = "0.0.0.0"

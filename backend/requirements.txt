@@ -14,3 +14,4 @@ pydantic_settings
 python-jose
 passlib
 aiohttp
+psycopg2-binary
