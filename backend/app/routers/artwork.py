@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from typing import Optional
 import os
 import json
@@ -239,7 +240,8 @@ async def analyze_bite(
     topic: Optional[str] = Form(None),
     conversation_id: Optional[str] = Form(None),
     model: Optional[AIProvider] = Form(None),
-    identity: Optional[str] = Form("default")
+    identity: Optional[str] = Form("default"),
+    db: Session = Depends(get_db)
 ):
     """
     Get a concise, interesting bite of information about the artwork
@@ -288,9 +290,46 @@ async def analyze_bite(
             identity=identity
         )
 
-        # Store the new bite in conversation history
+        # Store the new bite in conversation history (in-memory)
         conversation_storage.add_message(conversation_id, "user", followup_question)
         conversation_storage.add_message(conversation_id, "assistant", bite_text)
+
+        # Also update the database if this conversation is saved
+        try:
+            db_artwork = db.query(SavedArtwork).filter(
+                SavedArtwork.conversation_id == conversation_id
+            ).first()
+
+            if db_artwork:
+                print(f"[DEBUG] Updating saved artwork conversation in database: {conversation_id}")
+
+                # Get current conversation history from database
+                current_history = db_artwork.conversation_history or []
+
+                # Add new user message
+                current_history.append({
+                    "role": "user",
+                    "content": followup_question
+                })
+
+                # Add new assistant message
+                current_history.append({
+                    "role": "assistant",
+                    "content": bite_text
+                })
+
+                # Update the database
+                # Mark the field as modified to ensure SQLAlchemy detects the JSON change
+                db_artwork.conversation_history = current_history
+                flag_modified(db_artwork, "conversation_history")
+                db.commit()
+                print(f"[DEBUG] Successfully updated conversation in database. Total messages: {len(current_history)}")
+            else:
+                print(f"[DEBUG] Conversation {conversation_id} not found in database (might be a new conversation)")
+        except Exception as db_error:
+            print(f"[ERROR] Failed to update database: {str(db_error)}")
+            # Don't fail the request if database update fails - the in-memory conversation still works
+            db.rollback()
 
         return {
             "bite": bite_text,
@@ -312,7 +351,8 @@ async def analyze_bite(
 async def suggest_topic(
     conversation_id: str,
     model: Optional[AIProvider] = None,
-    identity: Optional[str] = "default"
+    identity: Optional[str] = "default",
+    db: Session = Depends(get_db)
 ):
     """
     Suggest next topic to explore based on conversation history
@@ -328,14 +368,52 @@ async def suggest_topic(
     ai_provider = determine_ai_provider(model)
 
     try:
-        # Get conversation history
+        # Try to get conversation from in-memory storage first
         conversation = conversation_storage.get_conversation(conversation_id)
-        if not conversation:
-            raise HTTPException(status_code=404, detail=f"Conversation {conversation_id} not found")
+        previous_messages = conversation_storage.get_messages(conversation_id) if conversation else []
 
-        previous_messages = conversation_storage.get_messages(conversation_id)
-        if not previous_messages:
-            # No history, return default topics
+        # If not in memory, try to load from database
+        if not conversation:
+            print(f"[DEBUG] Conversation {conversation_id} not in memory, checking database...")
+            db_artwork = db.query(SavedArtwork).filter(
+                SavedArtwork.conversation_id == conversation_id
+            ).first()
+
+            if db_artwork:
+                print(f"[DEBUG] Found artwork in database: {db_artwork.artist_name} - {db_artwork.artwork_name}")
+                # Reconstruct conversation data from database
+                artist_name = db_artwork.artist_name
+                artwork_name = db_artwork.artwork_name
+
+                # Extract previous insights from conversation history
+                if db_artwork.conversation_history:
+                    previous_insights = [
+                        msg.get("content", "")
+                        for msg in db_artwork.conversation_history
+                        if msg.get("role") == "assistant"
+                    ]
+                else:
+                    previous_insights = []
+            else:
+                # Conversation not found anywhere, return default topics
+                print(f"[DEBUG] Conversation {conversation_id} not found in memory or database")
+                return {
+                    "suggested_topics": [
+                        "background",
+                        "technique",
+                        "historical context",
+                        "symbolism"
+                    ],
+                    "conversation_id": conversation_id
+                }
+        else:
+            # Using in-memory conversation
+            artist_name = conversation.artist_name
+            artwork_name = conversation.artwork_name
+            previous_insights = [msg.content for msg in previous_messages if msg.role == "assistant"]
+
+        # If no previous insights, return default topics
+        if not previous_insights:
             return {
                 "suggested_topics": [
                     "background",
@@ -346,14 +424,11 @@ async def suggest_topic(
                 "conversation_id": conversation_id
             }
 
-        # Extract previous insights (assistant messages only)
-        previous_insights = [msg.content for msg in previous_messages if msg.role == "assistant"]
-
         # Get AI service and call suggest_topics method
         ai_service = AIServiceFactory.get_service(ai_provider)
         suggested_topics = await ai_service.suggest_topics(
-            conversation.artist_name,
-            conversation.artwork_name,
+            artist_name,
+            artwork_name,
             previous_insights,
             identity=identity
         )
@@ -377,6 +452,7 @@ async def suggest_topic(
             "error": "Failed to generate custom topics, using defaults"
         }
     except Exception as e:
+        print(f"[ERROR] Topic suggestion failed: {str(e)}")
         if "API error" in str(e):
             raise HTTPException(status_code=503, detail=str(e))
         else:
