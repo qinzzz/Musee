@@ -7,7 +7,6 @@ from app.routers import artwork
 
 # Initialize database only if enabled
 if settings.use_database:
-    from app.routers import collection
     from app.database.connection import engine, Base
     # Create database tables
     Base.metadata.create_all(bind=engine)
@@ -32,10 +31,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(artwork.router, prefix="/api", tags=["artwork"])
-
-# Only include collection router if database is enabled
-if settings.use_database:
-    app.include_router(collection.router, prefix="/api", tags=["collection"])
 
 
 @app.get("/")

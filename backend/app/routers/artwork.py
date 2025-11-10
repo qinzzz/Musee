@@ -1,23 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.attributes import flag_modified
 from typing import Optional
 import os
 import json
 
 from app.database.connection import get_db
-from app.database.models import ArtworkAnalysis, SavedArtwork
-from app.models.artwork import (
-    ToneType, AIProvider, ArtworkAnalysisResponse, ImageMetadata
-)
+from app.database.models import SavedArtwork, Conversation
+from app.models.artwork import ToneType, AIProvider
 from app.services.ai_service import AIServiceFactory
 from app.services.openai_client import OpenAIClient
 from app.services.claude_client import ClaudeClient
 from app.services.gemini_client import GeminiClient
 from app.services.photoroom_service import photoroom_service
 from app.utils.image_processing import process_image
-from app.utils.conversation_storage import conversation_storage
 from app.config.settings import settings
 
 router = APIRouter()
@@ -146,54 +142,6 @@ async def analyze_artwork(
             raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
-@router.get("/analysis/{analysis_id}", response_model=ArtworkAnalysisResponse)
-async def get_analysis(analysis_id: str, db: Session = Depends(get_db)):
-    """Get specific artwork analysis by ID"""
-    
-    analysis = db.query(ArtworkAnalysis).filter(ArtworkAnalysis.id == analysis_id).first()
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Analysis not found")
-    
-    image_metadata = ImageMetadata(
-        filename=analysis.image_metadata["filename"],
-        size=analysis.image_metadata["size"],
-        dimensions=tuple(analysis.image_metadata["dimensions"]),
-        format=analysis.image_metadata["format"],
-        upload_timestamp=analysis.created_at
-    )
-    
-    return ArtworkAnalysisResponse(
-        id=analysis.id,
-        analysis=analysis.analysis_text,
-        metadata=image_metadata,
-        tone=ToneType(analysis.tone),
-        model_used=AIProvider(analysis.ai_model),
-        timestamp=analysis.created_at
-    )
-
-
-@router.delete("/analysis/{analysis_id}")
-async def delete_analysis(analysis_id: str, db: Session = Depends(get_db)):
-    """Delete artwork analysis and associated image"""
-    
-    analysis = db.query(ArtworkAnalysis).filter(ArtworkAnalysis.id == analysis_id).first()
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Analysis not found")
-    
-    # Delete image file
-    if os.path.exists(analysis.image_path):
-        try:
-            os.remove(analysis.image_path)
-        except OSError:
-            pass  # File might already be deleted
-    
-    # Delete database record
-    db.delete(analysis)
-    db.commit()
-    
-    return {"message": "Analysis deleted successfully"}
-
-
 @router.post("/analyze-artist")
 async def analyze_artist(
     image: UploadFile = File(...),
@@ -238,7 +186,7 @@ async def analyze_bite(
     artist_name: str = Form(...),
     artwork_name: str = Form("Unknown"),
     topic: Optional[str] = Form(None),
-    conversation_id: Optional[str] = Form(None),
+    saved_artwork_id: Optional[str] = Form(None),
     model: Optional[AIProvider] = Form(None),
     identity: Optional[str] = Form("default"),
     db: Session = Depends(get_db)
@@ -250,11 +198,11 @@ async def analyze_bite(
     - **artist_name**: Name of the artist
     - **artwork_name**: Name of the artwork (optional, defaults to "Unknown")
     - **topic**: Optional topic to focus on (e.g., "technique", "historical context", "symbolism")
-    - **conversation_id**: Optional conversation ID for context-aware responses
+    - **saved_artwork_id**: Optional saved artwork ID for context-aware responses from saved artworks
     - **model**: Preferred AI model (openai, claude, gemini) - optional
     - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
 
-    Returns a short, fascinating fact about the artwork (max 50 words) and conversation_id
+    Returns a short, fascinating fact about the artwork (max 50 words) and saved_artwork_id if applicable
     """
 
     # Determine which AI service to use (with override support)
@@ -264,21 +212,33 @@ async def analyze_bite(
         # Process the image (stateless - no file saving)
         image_bytes, _ = await process_image(image)
 
-        # Get or create conversation
-        if not conversation_id:
-            # Create new conversation
-            conversation_id = conversation_storage.create_conversation(artist_name, artwork_name)
-        else:
-            # Verify conversation exists
-            conversation = conversation_storage.get_conversation(conversation_id)
-            if not conversation:
-                conversation_id = conversation_storage.create_conversation(artist_name, artwork_name)
+        # Get conversation history from database if saved_artwork_id provided
+        previous_messages = []
+        db_artwork = None
 
-        # Get conversation history
-        previous_messages = conversation_storage.get_messages(conversation_id)
-        print(f"[DEBUG] Conversation {conversation_id} has {len(previous_messages)} previous messages")
+        if saved_artwork_id:
+            # Load saved artwork and its conversation history
+            db_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == saved_artwork_id).first()
+
+            if db_artwork:
+                print(f"[DEBUG] Found saved artwork: {db_artwork.id}")
+                # Get conversation history from Conversation table
+                conversations = db.query(Conversation).filter(
+                    Conversation.saved_artwork_id == db_artwork.id
+                ).order_by(Conversation.sequence_number).all()
+
+                # Convert to message format expected by AI service
+                from app.utils.conversation_storage import ConversationMessage
+                previous_messages = [
+                    ConversationMessage(role=conv.role, content=conv.content)
+                    for conv in conversations
+                ]
+                print(f"[DEBUG] Loaded {len(previous_messages)} previous messages from database")
+            else:
+                print(f"[WARNING] saved_artwork_id {saved_artwork_id} not found in database")
 
         followup_question = topic if topic else "Tell me one more thing about this artwork."
+
         # Get AI service and analyze with conversation history
         ai_service = AIServiceFactory.get_service(ai_provider)
         bite_text = await ai_service.get_artwork_bite(
@@ -290,53 +250,50 @@ async def analyze_bite(
             identity=identity
         )
 
-        # Store the new bite in conversation history (in-memory)
-        conversation_storage.add_message(conversation_id, "user", followup_question)
-        conversation_storage.add_message(conversation_id, "assistant", bite_text)
+        # Update the database if this is a saved artwork
+        if db_artwork:
+            try:
+                print(f"[DEBUG] Updating saved artwork conversation in database: {db_artwork.id}")
 
-        # Also update the database if this conversation is saved
-        try:
-            db_artwork = db.query(SavedArtwork).filter(
-                SavedArtwork.conversation_id == conversation_id
-            ).first()
+                # Get the next sequence number
+                max_seq = db.query(Conversation.sequence_number).filter(
+                    Conversation.saved_artwork_id == db_artwork.id
+                ).order_by(Conversation.sequence_number.desc()).first()
 
-            if db_artwork:
-                print(f"[DEBUG] Updating saved artwork conversation in database: {conversation_id}")
+                next_seq = (max_seq[0] + 1) if max_seq else 0
 
-                # Get current conversation history from database
-                current_history = db_artwork.conversation_history or []
+                # Add user message
+                user_conversation = Conversation(
+                    saved_artwork_id=db_artwork.id,
+                    sequence_number=next_seq,
+                    role="user",
+                    content=followup_question,
+                    message_metadata={"topic": topic} if topic else None
+                )
+                db.add(user_conversation)
 
-                # Add new user message
-                current_history.append({
-                    "role": "user",
-                    "content": followup_question
-                })
+                # Add assistant message
+                assistant_conversation = Conversation(
+                    saved_artwork_id=db_artwork.id,
+                    sequence_number=next_seq + 1,
+                    role="assistant",
+                    content=bite_text
+                )
+                db.add(assistant_conversation)
 
-                # Add new assistant message
-                current_history.append({
-                    "role": "assistant",
-                    "content": bite_text
-                })
-
-                # Update the database
-                # Mark the field as modified to ensure SQLAlchemy detects the JSON change
-                db_artwork.conversation_history = current_history
-                flag_modified(db_artwork, "conversation_history")
                 db.commit()
-                print(f"[DEBUG] Successfully updated conversation in database. Total messages: {len(current_history)}")
-            else:
-                print(f"[DEBUG] Conversation {conversation_id} not found in database (might be a new conversation)")
-        except Exception as db_error:
-            print(f"[ERROR] Failed to update database: {str(db_error)}")
-            # Don't fail the request if database update fails - the in-memory conversation still works
-            db.rollback()
+                print(f"[DEBUG] Successfully added 2 conversations to database (seq: {next_seq}, {next_seq + 1})")
+            except Exception as db_error:
+                print(f"[ERROR] Failed to update database: {str(db_error)}")
+                db.rollback()
+                raise HTTPException(status_code=500, detail=f"Failed to save conversation: {str(db_error)}")
 
         return {
             "bite": bite_text,
             "artist_name": artist_name,
             "artwork_name": artwork_name,
             "topic": topic,
-            "conversation_id": conversation_id,
+            "saved_artwork_id": saved_artwork_id,
             "model_used": ai_provider.value
         }
 
@@ -349,7 +306,7 @@ async def analyze_bite(
 
 @router.get("/analyze-topic")
 async def suggest_topic(
-    conversation_id: str,
+    saved_artwork_id: str,
     model: Optional[AIProvider] = None,
     identity: Optional[str] = "default",
     db: Session = Depends(get_db)
@@ -357,7 +314,7 @@ async def suggest_topic(
     """
     Suggest next topic to explore based on conversation history
 
-    - **conversation_id**: ID of the conversation to analyze
+    - **saved_artwork_id**: ID of the saved artwork to analyze
     - **model**: Preferred AI model (openai, claude, gemini) - optional
     - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
 
@@ -368,49 +325,35 @@ async def suggest_topic(
     ai_provider = determine_ai_provider(model)
 
     try:
-        # Try to get conversation from in-memory storage first
-        conversation = conversation_storage.get_conversation(conversation_id)
-        previous_messages = conversation_storage.get_messages(conversation_id) if conversation else []
+        # Load saved artwork and its conversation history from database
+        db_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == saved_artwork_id).first()
 
-        # If not in memory, try to load from database
-        if not conversation:
-            print(f"[DEBUG] Conversation {conversation_id} not in memory, checking database...")
-            db_artwork = db.query(SavedArtwork).filter(
-                SavedArtwork.conversation_id == conversation_id
-            ).first()
+        if not db_artwork:
+            # Artwork not found, return default topics
+            print(f"[DEBUG] Saved artwork {saved_artwork_id} not found in database")
+            return {
+                "suggested_topics": [
+                    "background",
+                    "technique",
+                    "historical context",
+                    "symbolism"
+                ],
+                "saved_artwork_id": saved_artwork_id
+            }
 
-            if db_artwork:
-                print(f"[DEBUG] Found artwork in database: {db_artwork.artist_name} - {db_artwork.artwork_name}")
-                # Reconstruct conversation data from database
-                artist_name = db_artwork.artist_name
-                artwork_name = db_artwork.artwork_name
+        print(f"[DEBUG] Found artwork in database: {db_artwork.artist_name} - {db_artwork.artwork_name}")
 
-                # Extract previous insights from conversation history
-                if db_artwork.conversation_history:
-                    previous_insights = [
-                        msg.get("content", "")
-                        for msg in db_artwork.conversation_history
-                        if msg.get("role") == "assistant"
-                    ]
-                else:
-                    previous_insights = []
-            else:
-                # Conversation not found anywhere, return default topics
-                print(f"[DEBUG] Conversation {conversation_id} not found in memory or database")
-                return {
-                    "suggested_topics": [
-                        "background",
-                        "technique",
-                        "historical context",
-                        "symbolism"
-                    ],
-                    "conversation_id": conversation_id
-                }
-        else:
-            # Using in-memory conversation
-            artist_name = conversation.artist_name
-            artwork_name = conversation.artwork_name
-            previous_insights = [msg.content for msg in previous_messages if msg.role == "assistant"]
+        # Get conversation history from Conversation table
+        conversations = db.query(Conversation).filter(
+            Conversation.saved_artwork_id == db_artwork.id
+        ).order_by(Conversation.sequence_number).all()
+
+        # Extract previous insights from assistant messages
+        previous_insights = [
+            conv.content
+            for conv in conversations
+            if conv.role == "assistant"
+        ]
 
         # If no previous insights, return default topics
         if not previous_insights:
@@ -421,21 +364,21 @@ async def suggest_topic(
                     "historical context",
                     "symbolism"
                 ],
-                "conversation_id": conversation_id
+                "saved_artwork_id": saved_artwork_id
             }
 
         # Get AI service and call suggest_topics method
         ai_service = AIServiceFactory.get_service(ai_provider)
         suggested_topics = await ai_service.suggest_topics(
-            artist_name,
-            artwork_name,
+            db_artwork.artist_name,
+            db_artwork.artwork_name,
             previous_insights,
             identity=identity
         )
 
         return {
             "suggested_topics": suggested_topics,
-            "conversation_id": conversation_id,
+            "saved_artwork_id": saved_artwork_id,
             "model_used": ai_provider.value
         }
 
@@ -448,7 +391,7 @@ async def suggest_topic(
                 "technique",
                 "historical context"
             ],
-            "conversation_id": conversation_id,
+            "saved_artwork_id": saved_artwork_id,
             "error": "Failed to generate custom topics, using defaults"
         }
     except Exception as e:
@@ -552,7 +495,7 @@ async def save_artwork(
     - **conversation_history**: JSON string of complete conversation history
     - **location**: Geographic location where photo was taken (optional)
     - **museum_name**: Museum or gallery name (optional)
-    - **conversation_id**: Optional conversation ID reference
+    - **conversation_id**: Optional conversation ID reference (deprecated, kept for compatibility)
     - **is_recognized**: Whether the artwork was recognized (default: True)
 
     Returns the saved artwork entry
@@ -561,18 +504,41 @@ async def save_artwork(
         # Parse conversation history JSON
         conversation_data = json.loads(conversation_history)
 
+        # Create SavedArtwork (without conversation_history and conversation_id)
         saved_artwork = SavedArtwork(
             photo_uri=photo_uri,
             artist_name=artist_name,
             artwork_name=artwork_name,
             location=location,
             museum_name=museum_name,
-            conversation_history=conversation_data,
-            conversation_id=conversation_id,
             is_recognized=1 if is_recognized else 0
         )
 
         db.add(saved_artwork)
+        db.flush()  # Get the artwork ID without committing
+
+        # Create Conversation records from conversation_history
+        for idx, message in enumerate(conversation_data):
+            role = message.get('role', 'assistant')
+            content = message.get('content', '')
+
+            if not content:
+                continue
+
+            # Extract optional metadata
+            metadata = {}
+            if 'topic' in message:
+                metadata['topic'] = message['topic']
+
+            conversation = Conversation(
+                saved_artwork_id=saved_artwork.id,
+                sequence_number=idx,
+                role=role,
+                content=content,
+                message_metadata=metadata if metadata else None
+            )
+            db.add(conversation)
+
         db.commit()
         db.refresh(saved_artwork)
 
