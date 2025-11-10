@@ -7,7 +7,7 @@ import json
 
 from app.database.connection import get_db
 from app.database.models import SavedArtwork, Conversation
-from app.models.artwork import ToneType, AIProvider
+from app.models.artwork import ToneType, AIProvider, UpdateArtworkRequest
 from app.services.ai_service import AIServiceFactory
 from app.services.openai_client import OpenAIClient
 from app.services.claude_client import ClaudeClient
@@ -621,6 +621,55 @@ async def get_saved_artwork(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve saved artwork: {str(e)}"
+        )
+
+
+@router.put("/saved-artworks/{artwork_id}")
+async def update_saved_artwork(
+    artwork_id: str,
+    request: UpdateArtworkRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Update saved artwork details (artist name and/or artwork name)
+
+    - **artwork_id**: ID of the saved artwork to update
+    - **request**: JSON body with artist_name and artwork_name
+
+    This will also update the is_recognized field based on the new values:
+    - If artist_name is not "Unknown Artist" and artwork_name is not "Unknown", is_recognized is True
+    - Otherwise, is_recognized is False
+
+    Returns the updated artwork entry
+    """
+    try:
+        saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+
+        if not saved_artwork:
+            raise HTTPException(status_code=404, detail="Saved artwork not found")
+
+        # Update fields
+        saved_artwork.artist_name = request.artist_name.strip()
+        saved_artwork.artwork_name = request.artwork_name.strip()
+
+        # Recalculate is_recognized based on new values
+        # Consider artwork as recognized if both artist and artwork names are meaningful
+        is_recognized = (
+            saved_artwork.artist_name.lower() != "unknown artist" and
+            saved_artwork.artwork_name.lower() != "unknown"
+        )
+        saved_artwork.is_recognized = 1 if is_recognized else 0
+
+        db.commit()
+        db.refresh(saved_artwork)
+
+        return saved_artwork.to_dict()
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update saved artwork: {str(e)}"
         )
 
 
