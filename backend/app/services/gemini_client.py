@@ -149,5 +149,48 @@ class GeminiClient(AIServiceInterface):
         except Exception as e:
             raise Exception(f"Gemini API error: {str(e)}")
 
+    async def generate_summary(self, image_bytes: bytes, artist_name: str, artwork_name: str, conversation_history: list, identity: str = "default") -> str:
+        """Generate a fun, one-sentence summary of the artwork based on the image and conversation"""
+
+        # Convert bytes to PIL Image for Gemini
+        image = Image.open(io.BytesIO(image_bytes))
+
+        # Build a prompt for generating a fun summary
+        if conversation_history:
+            conversation_text = "\n".join([
+                f"{msg.role}: {msg.content}"
+                for msg in conversation_history
+            ])
+
+            prompt = f"""Based on this image and conversation about {artwork_name} by {artist_name}:
+
+{conversation_text}
+
+Generate ONE fun, engaging, memorable sentence that captures the essence of this artwork. Make it witty, intriguing, or surprising - something that would make someone want to learn more about this piece. Keep it under 20 words.
+
+Return ONLY the one sentence, no quotes, no extra text."""
+        else:
+            # No conversation history, generate based on the image and artwork info
+            prompt = f"""Looking at this artwork {artwork_name} by {artist_name}, generate ONE fun, engaging, memorable sentence that captures its essence. Make it witty, intriguing, or surprising - something that would make someone want to learn more about this piece. Keep it under 20 words.
+
+Return ONLY the one sentence, no quotes, no extra text."""
+
+        try:
+            response = await self.model.generate_content_async(
+                [prompt, image],
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=50,
+                    temperature=0.9,  # High temperature for creative summaries
+                )
+            )
+
+            summary = response.text.strip()
+            # Remove quotes if present
+            summary = summary.strip('"').strip("'")
+            return summary
+
+        except Exception as e:
+            raise Exception(f"Gemini API error: {str(e)}")
+
     def get_provider_name(self) -> AIProvider:
         return AIProvider.GEMINI

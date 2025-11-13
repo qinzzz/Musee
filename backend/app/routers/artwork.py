@@ -15,6 +15,7 @@ from app.services.gemini_client import GeminiClient
 from app.services.photoroom_service import photoroom_service
 from app.utils.image_processing import process_image
 from app.config.settings import settings
+from app.utils.conversation_storage import ConversationMessage
 
 router = APIRouter()
 
@@ -702,3 +703,75 @@ async def delete_saved_artwork(
             status_code=500,
             detail=f"Failed to delete saved artwork: {str(e)}"
         )
+
+
+@router.post("/artwork-summary")
+async def generate_artwork_summary(
+    image: UploadFile = File(...),
+    saved_artwork_id: str = Form(...),
+    model: Optional[AIProvider] = Form(None),
+    identity: Optional[str] = Form("default"),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate a fun, one-sentence summary of the artwork based on the image and conversation history
+
+    - **image**: Image file to analyze (JPG, PNG, WebP)
+    - **saved_artwork_id**: ID of the saved artwork
+    - **model**: Preferred AI model (openai, claude, gemini) - optional
+    - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
+
+    Returns the generated summary and updates the database
+    """
+
+    # Determine which AI service to use
+    ai_provider = determine_ai_provider(model)
+
+    try:
+        # Process the image
+        image_bytes, _ = await process_image(image)
+
+        # Load saved artwork from database
+        db_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == saved_artwork_id).first()
+
+        if not db_artwork:
+            raise HTTPException(status_code=404, detail="Saved artwork not found")
+
+        # Get conversation history from Conversation table
+        conversations = db.query(Conversation).filter(
+            Conversation.saved_artwork_id == db_artwork.id
+        ).order_by(Conversation.sequence_number).all()
+
+        # Convert to message format expected by AI service
+        conversation_history = [
+            ConversationMessage(role=conv.role, content=conv.content)
+            for conv in conversations
+        ]
+
+        # Get AI service and generate summary (even if no conversation history)
+        ai_service = AIServiceFactory.get_service(ai_provider)
+        summary = await ai_service.generate_summary(
+            image_bytes,
+            db_artwork.artist_name,
+            db_artwork.artwork_name,
+            conversation_history,
+            identity=identity
+        )
+
+        # Update the database with the summary
+        db_artwork.summary = summary
+        db.commit()
+        db.refresh(db_artwork)
+
+        return {
+            "summary": summary,
+            "saved_artwork_id": saved_artwork_id,
+            "model_used": ai_provider.value
+        }
+
+    except Exception as e:
+        db.rollback()
+        if "API error" in str(e):
+            raise HTTPException(status_code=503, detail=str(e))
+        else:
+            raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")

@@ -69,6 +69,23 @@ class AIServiceInterface(ABC):
         pass
 
     @abstractmethod
+    async def generate_summary(self, image_bytes: bytes, artist_name: str, artwork_name: str, conversation_history: list, identity: str = "default") -> str:
+        """
+        Generate a fun, one-sentence summary of the artwork based on the image and conversation
+
+        Args:
+            image_bytes: Raw image data
+            artist_name: Name of the artist
+            artwork_name: Name of the artwork
+            conversation_history: List of previous ConversationMessage objects
+            identity: AI identity/persona to use (default, museum_narrator, art_historian)
+
+        Returns:
+            str: One-sentence fun summary of the artwork
+        """
+        pass
+
+    @abstractmethod
     def get_provider_name(self) -> AIProvider:
         """Return the AI provider name"""
         pass

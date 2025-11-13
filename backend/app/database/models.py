@@ -16,6 +16,7 @@ class SavedArtwork(Base):
     artwork_name = Column(String, nullable=False)
     location = Column(String, nullable=True)  # Geographic location where photo was taken
     museum_name = Column(String, nullable=True)  # Museum or gallery name
+    summary = Column(String, nullable=True)  # One-sentence fun summary of the artwork
     is_recognized = Column(Integer, default=1)  # 1 for recognized, 0 for unknown
     user_id = Column(String, nullable=True)  # For future user authentication
     created_at = Column(DateTime, server_default=func.now())
@@ -37,6 +38,7 @@ class SavedArtwork(Base):
             "artwork_name": self.artwork_name,
             "location": self.location,
             "museum_name": self.museum_name,
+            "summary": self.summary,
             "is_recognized": self.is_recognized,
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
