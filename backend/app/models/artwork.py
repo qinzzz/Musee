@@ -19,5 +19,6 @@ class AIProvider(str, Enum):
 
 class UpdateArtworkRequest(BaseModel):
     """Request model for updating saved artwork details"""
-    artist_name: str
-    artwork_name: str
+    artist_name: Optional[str] = None
+    artwork_name: Optional[str] = None
+    background_color: Optional[str] = None

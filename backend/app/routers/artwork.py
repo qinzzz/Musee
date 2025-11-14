@@ -632,10 +632,10 @@ async def update_saved_artwork(
     db: Session = Depends(get_db)
 ):
     """
-    Update saved artwork details (artist name and/or artwork name)
+    Update saved artwork details (artist name, artwork name, and/or background color)
 
     - **artwork_id**: ID of the saved artwork to update
-    - **request**: JSON body with artist_name and artwork_name
+    - **request**: JSON body with optional artist_name, artwork_name, and background_color
 
     This will also update the is_recognized field based on the new values:
     - If artist_name is not "Unknown Artist" and artwork_name is not "Unknown", is_recognized is True
@@ -649,11 +649,17 @@ async def update_saved_artwork(
         if not saved_artwork:
             raise HTTPException(status_code=404, detail="Saved artwork not found")
 
-        # Update fields
-        saved_artwork.artist_name = request.artist_name.strip()
-        saved_artwork.artwork_name = request.artwork_name.strip()
+        # Update fields if provided
+        if request.artist_name is not None:
+            saved_artwork.artist_name = request.artist_name.strip()
 
-        # Recalculate is_recognized based on new values
+        if request.artwork_name is not None:
+            saved_artwork.artwork_name = request.artwork_name.strip()
+
+        if request.background_color is not None:
+            saved_artwork.background_color = request.background_color
+
+        # Recalculate is_recognized based on current values
         # Consider artwork as recognized if both artist and artwork names are meaningful
         is_recognized = (
             saved_artwork.artist_name.lower() != "unknown artist" and
