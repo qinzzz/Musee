@@ -1,6 +1,6 @@
 import { StyleSheet, Dimensions } from 'react-native';
 import { colors } from '../../constants/colors';
-import { spacing, borderRadius } from '../../constants/theme';
+import { spacing, borderRadius, shadows } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -9,6 +9,15 @@ export const cameraStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.darkGrey,
     justifyContent: 'space-between',
+  },
+  backButton: {
+    position: 'absolute',
+    left: spacing.lg,
+    zIndex: 1000,
+    padding: spacing.sm,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    ...shadows.md,
   },
   cameraViewfinder: {
     width: width,

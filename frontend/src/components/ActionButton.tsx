@@ -2,6 +2,7 @@ import React from 'react';
 import { TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import { Typography } from './Typography';
 import { colors } from '../constants/colors';
+import { spacing, borderRadius } from '../constants/theme';
 
 interface ActionButtonProps {
   onPress: () => void;
@@ -18,8 +19,8 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
   disabled = false,
   theme = 'dark',
 }) => {
-  const buttonStyle = theme === 'light' ? styles.lightButton : styles.actionButton;
-  const textStyle = theme === 'light' ? styles.lightButtonText : styles.actionButtonText;
+  const buttonStyle = theme === 'light' ? styles.lightButton : styles.darkButton;
+  const textStyle = theme === 'light' ? styles.lightButtonText : styles.darkButtonText;
 
   return (
     <TouchableOpacity
@@ -34,10 +35,10 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
 };
 
 const styles = StyleSheet.create({
-  actionButton: {
+  darkButton: {
     backgroundColor: '#2A2A2A',
-    borderWidth: 2,
-    borderRadius: 17,
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
     height: 38,
     width: 'auto',
     paddingHorizontal: 12,
@@ -46,9 +47,9 @@ const styles = StyleSheet.create({
   },
   lightButton: {
     backgroundColor: colors.white,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: colors.black,
-    borderRadius: 17,
+    borderRadius: borderRadius.lg,
     height: 38,
     width: 'auto',
     paddingHorizontal: 12,
@@ -58,23 +59,22 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.5,
   },
-  actionButtonText: {
-    fontFamily: 'IBM Plex Mono',
+  darkButtonText: {
+    fontFamily: 'PP Neue Montreal',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '600',
     color: colors.white,
-    letterSpacing: 0.28,
-    textTransform: 'uppercase',
     textAlign: 'center',
     lineHeight: 28,
+    letterSpacing: 0.32,
   },
   lightButtonText: {
-    fontFamily: 'IBM Plex Mono',
+    fontFamily: 'PP Neue Montreal',
     fontSize: 14,
     fontWeight: '600',
     color: colors.black,
-    letterSpacing: 0.28,
     textAlign: 'center',
     lineHeight: 28,
+    letterSpacing: 0.32,
   },
 });

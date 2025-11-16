@@ -10,7 +10,6 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/theme';
 import { FramedArtworkCard, ActionButton } from '../components';
@@ -24,7 +23,7 @@ interface SummaryScreenProps {
   location?: string;
   museumName?: string;
   conversationHistory?: ConversationMessage[];
-  conversationId?: string | null;
+  savedArtworkId?: string | null;
   onBack: () => void;
   onSaveComplete?: () => void;
 }
@@ -38,8 +37,8 @@ export default function SummaryScreen({
   artworkName = 'Untitled',
   location,
   museumName,
+  savedArtworkId,
   conversationHistory = [],
-  conversationId = null,
   onBack,
   onSaveComplete
 }: SummaryScreenProps) {
@@ -47,6 +46,9 @@ export default function SummaryScreen({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('unsaved');
+  const [dbSaved, setDbSaved] = useState(false);
+  const [summary, setSummary] = useState<string>('');
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   useEffect(() => {
     // Fade in and slide up animation on mount
@@ -62,7 +64,33 @@ export default function SummaryScreen({
         useNativeDriver: true,
       }),
     ]).start();
+
+    // Artwork is already saved to database in PhotoDisplayScreen
+    // All conversations are automatically saved via backend on each /analyze-bite call
+    // Just invalidate cache to ensure gallery shows latest data
+    historyCacheService.invalidateCache();
+    setDbSaved(true);
+
+    // Generate artwork summary when screen mounts
+    generateSummary();
+    
   }, []);
+
+  const generateSummary = async () => {
+    console.log('[SummaryScreen] Generating summary for artwork:', savedArtworkId);
+    if (!savedArtworkId) return;
+
+    try {
+      setIsGeneratingSummary(true);
+      const result = await savedArtworkApiService.generateArtworkSummary(savedArtworkId, photoUri);
+      setSummary(result.summary);
+      console.log('[SummaryScreen] Summary generated successfully:', result.summary);
+    } catch (error) {
+      console.error('[SummaryScreen] Failed to generate summary:', error);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
 
   const handleThumbsDown = () => {
     console.log('Thumbs down');
@@ -85,48 +113,16 @@ export default function SummaryScreen({
 
     setSaveStatus('saving');
     try {
-      // Save to camera roll in "Musee" album
-      const savedAsset = await CameraRoll.saveAsset(photoUri, {
-        type: 'photo',
-        album: 'Musee',
-      });
-
-      // Save to backend with complete conversation history
-      const isRecognized = artistName.toLowerCase() !== 'unknown';
-
-      // Convert conversation history to proper format for API
-      const conversationMessages: ConversationMessage[] = conversationHistory.map(bite => ({
-        role: 'assistant' as const,
-        content: bite.content,
-      }));
-
-      await savedArtworkApiService.saveArtwork({
-        photoUri: savedAsset.node.image.uri,
-        artistName,
-        artworkName,
-        location,
-        museumName,
-        conversationHistory: conversationMessages,
-        conversationId: conversationId || undefined,
-        isRecognized,
-      });
-
-      // Invalidate cache to force refresh on next gallery load
-      await historyCacheService.invalidateCache();
-
+      // Photo is already saved to camera roll in "Musee" album
+      // Just confirm to the user
       setSaveStatus('saved');
       Alert.alert(
-        'Success',
-        'Photo and conversation saved to your gallery!',
+        'Already Saved',
+        'This photo is already in your Musee album in Photos!',
         [{ text: 'OK' }]
       );
     } catch (error) {
-      console.error('Error saving photo:', error);
-      Alert.alert(
-        'Error',
-        'Failed to save photo. Please check permissions.',
-        [{ text: 'OK' }]
-      );
+      console.error('Error:', error);
       setSaveStatus('unsaved');
     }
   };
@@ -173,6 +169,18 @@ export default function SummaryScreen({
             photoUri={photoUri}
             style={styles.artworkCard}
           />
+
+          {/* Summary */}
+          {isGeneratingSummary && (
+            <View style={styles.summaryContainer}>
+              <Text style={styles.summaryText}>Generating summary...</Text>
+            </View>
+          )}
+          {!isGeneratingSummary && summary && (
+            <View style={styles.summaryContainer}>
+              <Text style={styles.summaryText}>{summary}</Text>
+            </View>
+          )}
 
           {/* Save Photo Button */}
           <View style={styles.savePhotoButtonContainer}>
@@ -242,6 +250,21 @@ const styles = StyleSheet.create({
   artworkCard: {
     marginTop: 50,
     marginBottom: spacing.lg,
+  },
+  summaryContainer: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing['2xl'],
+    alignItems: 'center',
+  },
+  summaryText: {
+    fontFamily: 'IBM Plex Mono',
+    fontSize: 16,
+    fontWeight: '300',
+    fontStyle: 'italic',
+    color: colors.darkGrey,
+    textAlign: 'center',
+    lineHeight: 24,
   },
   savePhotoButtonContainer: {
     marginTop: spacing.lg,

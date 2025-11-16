@@ -7,7 +7,7 @@ const { width, height } = Dimensions.get('window');
 export const homeStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.lightGrey,
   },
   content: {
     flex: 1,
@@ -36,7 +36,6 @@ export const homeStyles = StyleSheet.create({
     fontWeight: '500',
     color: colors.black,
     textTransform: 'capitalize',
-    letterSpacing: 0.4,
     lineHeight: 25,
   },
   normalText: {
@@ -45,7 +44,6 @@ export const homeStyles = StyleSheet.create({
     fontWeight: '300',
     color: colors.black,
     textTransform: 'capitalize',
-    letterSpacing: 0.32,
     lineHeight: 25,
   },
   // Artwork Image Placeholder
@@ -56,22 +54,23 @@ export const homeStyles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 10,
   },
-  // Camera Button Container
-  cameraButtonContainer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingBottom: 20,
+  // Import from Album Button
+  importButton: {
+    marginTop: spacing.xl,
+    paddingVertical: spacing.base,
+    paddingHorizontal: spacing['2xl'],
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.base,
+    borderWidth: 1,
+    borderColor: colors.black,
+    ...shadows.sm,
   },
-  // Floating Camera Button
-  floatingCameraButton: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
-    backgroundColor: colors.black,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.lg,
+  importButtonText: {
+    fontSize: 16,
+    fontFamily: 'PP Neue Montreal Medium',
+    fontWeight: '500',
+    color: colors.black,
+    textAlign: 'center',
   },
   // Bottom Navigation Bar
   bottomNav: {
@@ -94,7 +93,6 @@ export const homeStyles = StyleSheet.create({
     fontWeight: '500',
     color: '#6D6D6D',
     textTransform: 'capitalize',
-    letterSpacing: 0.32,
     lineHeight: 26,
   },
   navLabelActive: {
@@ -103,7 +101,6 @@ export const homeStyles = StyleSheet.create({
     fontWeight: '500',
     color: colors.black,
     textTransform: 'capitalize',
-    letterSpacing: 0.32,
     lineHeight: 26,
   },
 });

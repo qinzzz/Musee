@@ -13,9 +13,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius } from '../constants/theme';
-import { Typography } from '../components';
+import { Typography, Toast } from '../components';
 import { homeStyles } from './styles/HomeStyles';
 import { savedArtworkApiService, SavedArtwork } from '../services/savedArtworkApi';
+import { historyCacheService } from '../services/historyCache';
 
 interface GalleryItem {
   id: string;
@@ -23,12 +24,13 @@ interface GalleryItem {
   artistName: string;
   artworkName: string;
   createdAt?: string;
+  backgroundColor?: string;
 }
 
 interface GalleryScreenProps {
   onBack: () => void;
   onGalleryPress: () => void;
-  onArtworkPress?: (artworkId: string) => void;
+  onArtworkPress?: (artworkId: string, photoUri: string, backgroundColor?: string) => void;
 }
 
 const { width } = Dimensions.get('window');
@@ -41,6 +43,8 @@ export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }
   const [selectedTab, setSelectedTab] = useState<'recognized' | 'unknown'>('recognized');
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
     loadPhotos();
@@ -49,21 +53,80 @@ export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }
   const loadPhotos = async () => {
     setIsLoading(true);
     try {
-      // Fetch saved artworks from backend
+      // Try to load from cache first
+      const cachedData = await historyCacheService.getFromCache();
+
+      if (cachedData) {
+        // Filter cached data based on selectedTab
+        const filteredData = selectedTab === 'recognized'
+          ? cachedData.filter(item => item.is_recognized === 1)
+          : selectedTab === 'unknown'
+          ? cachedData.filter(item => item.is_recognized === 0)
+          : cachedData;
+
+        const convertedItems = filteredData.map(item => ({
+          id: item.id,
+          uri: item.photo_uri,
+          artistName: item.artist_name,
+          artworkName: item.artwork_name,
+          createdAt: item.created_at,
+          backgroundColor: item.background_color,
+        }));
+
+        setItems(convertedItems);
+        setIsLoading(false);
+
+        // Optionally refresh in background
+        refreshDataInBackground();
+        return;
+      }
+
+      // No cache or expired - fetch from backend
+      await fetchFromBackend();
+    } catch (error) {
+      console.error('Error loading photos:', error);
+      Alert.alert('Error', 'Failed to load saved artworks. Please check your connection.');
+      setItems([]);
+      setIsLoading(false);
+    }
+  };
+
+  const fetchFromBackend = async () => {
+    try {
       const recognizedOnly = selectedTab === 'recognized' ? true : selectedTab === 'unknown' ? false : undefined;
       const response = await savedArtworkApiService.getSavedArtworks({
         recognizedOnly,
         limit: 100,
       });
 
+      // Save to cache (save all items, not just filtered)
+      await historyCacheService.saveToCache(response.items);
+
       // Convert and display
       setItems(convertToGalleryItems(response.items));
-    } catch (error) {
-      console.error('Error loading photos:', error);
-      Alert.alert('Error', 'Failed to load saved artworks. Please check your connection.');
-      setItems([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const refreshDataInBackground = async () => {
+    // Silently refresh data in background without showing loading indicator
+    try {
+      const recognizedOnly = selectedTab === 'recognized' ? true : selectedTab === 'unknown' ? false : undefined;
+      const response = await savedArtworkApiService.getSavedArtworks({
+        recognizedOnly,
+        limit: 100,
+      });
+
+      // Update cache
+      await historyCacheService.saveToCache(response.items);
+
+      // Update UI if data has changed
+      const newItems = convertToGalleryItems(response.items);
+      setItems(newItems);
+    } catch (error) {
+      // Silently fail - user already has cached data
+      console.log('Background refresh failed:', error);
     }
   };
 
@@ -74,27 +137,81 @@ export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }
       artistName: item.artist_name,
       artworkName: item.artwork_name,
       createdAt: item.created_at,
+      backgroundColor: item.background_color,
     }));
   };
 
-  const renderItem = ({ item }: { item: GalleryItem }) => (
-    <TouchableOpacity
-      style={styles.gridItem}
-      activeOpacity={0.8}
-      onPress={() => onArtworkPress?.(item.id)}
-    >
-      <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: item.uri }}
-          style={styles.itemImage}
-          resizeMode="cover"
-        />
-      </View>
-      <Text style={styles.itemText} numberOfLines={2}>
-        {item.artworkName} by {item.artistName}
-      </Text>
-    </TouchableOpacity>
-  );
+  const handleLongPress = (itemId: string) => {
+    setDeletingItemId(itemId);
+  };
+
+  const handleCancelDelete = () => {
+    setDeletingItemId(null);
+  };
+
+  const handleConfirmDelete = async (itemId: string) => {
+    try {
+      // Delete from database (does not delete the photo from album)
+      await savedArtworkApiService.deleteSavedArtwork(itemId);
+
+      // Remove from local state
+      setItems(prevItems => prevItems.filter(item => item.id !== itemId));
+      setDeletingItemId(null);
+
+      // Show toast message
+      setShowToast(true);
+    } catch (error) {
+      console.error('Error deleting artwork:', error);
+      Alert.alert('Error', 'Failed to delete artwork. Please try again.');
+      setDeletingItemId(null);
+    }
+  };
+
+  const handleToastHide = () => {
+    setShowToast(false);
+  };
+
+  const renderItem = ({ item }: { item: GalleryItem }) => {
+    const isDeleting = deletingItemId === item.id;
+
+    return (
+      <TouchableOpacity
+        style={styles.gridItem}
+        activeOpacity={0.8}
+        onPress={() => {
+          if (isDeleting) {
+            handleCancelDelete();
+          } else {
+            onArtworkPress?.(item.id, item.uri, item.backgroundColor);
+          }
+        }}
+        onLongPress={() => handleLongPress(item.id)}
+        delayLongPress={500}
+      >
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: item.uri }}
+            style={styles.itemImage}
+            resizeMode="cover"
+          />
+          {isDeleting && (
+            <View style={styles.deleteOverlay}>
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => handleConfirmDelete(item.id)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+        <Text style={styles.itemText} numberOfLines={2}>
+          {item.artworkName} by {item.artistName}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmpty = () => {
     if (isLoading) {
@@ -180,6 +297,13 @@ export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }
           <Text style={homeStyles.navLabel}>Gallery</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Toast */}
+      <Toast
+        message="Deleted successfully"
+        visible={showToast}
+        onHide={handleToastHide}
+      />
     </View>
   );
 }
@@ -266,5 +390,36 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#6D6D6D',
     marginTop: spacing.base,
+  },
+  deleteOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: borderRadius.sm,
+  },
+  deleteButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  deleteText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF3B30',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

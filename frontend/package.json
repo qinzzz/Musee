@@ -12,6 +12,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@bam.tech/react-native-image-resizer": "^3.0.11",
     "@lottiefiles/dotlottie-vue": "^0.10.5",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-camera-roll/camera-roll": "^7.10.2",
@@ -25,8 +26,10 @@
     "react-native": "0.81.4",
     "react-native-asset": "^2.1.1",
     "react-native-background-remover": "^0.3.2",
+    "react-native-fs": "^2.20.0",
     "react-native-image-colors": "^2.5.0",
     "react-native-image-picker": "^8.2.1",
+    "react-native-keyboard-controller": "^1.19.5",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-radial-gradient": "^1.2.1",
     "react-native-reanimated": "^4.1.2",

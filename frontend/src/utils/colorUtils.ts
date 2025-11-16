@@ -92,10 +92,91 @@ export const softenColor = (hexColor: string, fallbackColor: string = '#F5F5F5')
   const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
 
   // Reduce saturation by 60% and increase lightness significantly
-  const newS = hsl.s * 0.4; // Keep only 40% of original saturation
+  const newS = hsl.s * 0.5; // Keep only 40% of original saturation
   const newL = Math.min(hsl.l * 1.5 + 20, 95); // Increase lightness, cap at 95%
 
   const newRgb = hslToRgb(hsl.h, newS, newL);
 
+  return `rgba(${newRgb.r}, ${newRgb.g}, ${newRgb.b}, 0.75)`;
+};
+
+/**
+ * Brighten a color by increasing its lightness
+ * Works with both hex colors and rgb/rgba strings
+ *
+ * @param color - Color string (hex like "#FF0000" or rgb like "rgb(255, 0, 0)")
+ * @param amount - Amount to brighten (0-100), default is 15
+ * @returns Brightened color as rgb string
+ */
+export const brightenColor = (color: string, amount: number = 15): string => {
+  let r = 0, g = 0, b = 0;
+
+  // Parse hex color
+  if (color.startsWith('#')) {
+    const rgb = hexToRgb(color);
+    if (rgb) {
+      r = rgb.r;
+      g = rgb.g;
+      b = rgb.b;
+    }
+  }
+  // Parse rgb/rgba color
+  else if (color.startsWith('rgb')) {
+    const match = color.match(/\d+/g);
+    if (match && match.length >= 3) {
+      r = parseInt(match[0]);
+      g = parseInt(match[1]);
+      b = parseInt(match[2]);
+    }
+  }
+
+  // Convert to HSL
+  const hsl = rgbToHsl(r, g, b);
+
+  // Increase lightness
+  const newL = Math.min(hsl.l + amount, 95);
+
+  // Convert back to RGB
+  const newRgb = hslToRgb(hsl.h, hsl.s, newL);
+
   return `rgb(${newRgb.r}, ${newRgb.g}, ${newRgb.b})`;
+};
+
+/**
+ * Get either black or white, whichever is further away from the given color
+ * Works with both hex colors and rgb/rgba strings
+ * Uses the relative luminance formula to determine which color provides better contrast
+ *
+ * @param color - Color string (hex like "#FF0000" or rgb like "rgb(255, 0, 0)")
+ * @returns Either "#000000" (black) or "#FFFFFF" (white)
+ */
+export const getOppositeColor = (color: string): string => {
+  let r = 0, g = 0, b = 0;
+
+  // Parse hex color
+  if (color.startsWith('#')) {
+    const rgb = hexToRgb(color);
+    if (rgb) {
+      r = rgb.r;
+      g = rgb.g;
+      b = rgb.b;
+    }
+  }
+  // Parse rgb/rgba color
+  else if (color.startsWith('rgb')) {
+    const match = color.match(/\d+/g);
+    if (match && match.length >= 3) {
+      r = parseInt(match[0]);
+      g = parseInt(match[1]);
+      b = parseInt(match[2]);
+    }
+  }
+
+  // Calculate relative luminance using the formula:
+  // L = 0.2126 * R + 0.7152 * G + 0.0722 * B
+  // where R, G, B are normalized to 0-1
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+
+  // If luminance is closer to white (> 0.5), return black, otherwise return white
+  return luminance > 0.5 ? '#000000' : '#FFFFFF';
 };

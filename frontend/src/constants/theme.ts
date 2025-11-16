@@ -88,6 +88,13 @@ export const shadows = {
     shadowRadius: 10,
     elevation: 10,
   },
+  xl: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
   cardDarkShadow: {
     shadowColor: 'rgba(13, 39, 80, 0.25)',
     shadowOffset: { width: 10, height: 10 },

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import { colors } from '../constants/colors';
-import { spacing } from '../constants/theme';
+import { spacing, borderRadius } from '../constants/theme';
 
 interface ArtistCardProps {
   artistName: string;
@@ -64,20 +64,20 @@ const styles = StyleSheet.create({
   },
   shadowLayer: {
     position: 'absolute',
-    top: 17,
-    right: -16,
-    bottom: -16,
-    left: 16,
+    top: 12,
+    right: -12,
+    bottom: -12,
+    left: 12,
     backgroundColor: colors.black,
-    borderRadius: 5,
+    borderRadius: borderRadius.base,
     zIndex: -1,
   },
   card: {
     backgroundColor: colors.midGrey,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: colors.black,
-    borderRadius: 5,
-    minHeight: 73,
+    borderRadius: borderRadius.base,
+    minHeight: 64,
     justifyContent: 'flex-start',
   },
   cardExpanded: {
@@ -109,31 +109,28 @@ const styles = StyleSheet.create({
     color: colors.black,
   },
   artistName: {
-    fontFamily: 'IBM Plex Mono',
-    fontSize: 20,
+    fontFamily: 'PP Neue Montreal',
+    fontSize: 22,
     fontWeight: 'bold',
     color: colors.black,
     textAlign: 'center',
-    letterSpacing: 0.4,
     lineHeight: 30,
     textTransform: 'capitalize',
   },
   details: {
-    fontFamily: 'Ubuntu Mono',
-    fontSize: 14,
-    fontWeight: '400',
+    fontFamily: 'PP Neue Montreal',
+    fontSize: 15,
+    fontWeight: 'medium',
     color: colors.black,
     textAlign: 'center',
-    letterSpacing: 0.28,
     lineHeight: 28,
     textTransform: 'capitalize',
   },
   description: {
-    fontFamily: 'IBM Plex Mono',
-    fontSize: 12,
+    fontFamily: 'PP Neue Montreal',
+    fontSize: 13,
     fontWeight: '400',
     color: '#2F2F2F',
     textAlign: 'center',
-    letterSpacing: 0.2,
   },
 });

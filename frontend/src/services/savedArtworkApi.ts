@@ -12,8 +12,9 @@ export interface SavedArtwork {
   artwork_name: string;
   location?: string;
   museum_name?: string;
+  summary: string;
+  background_color?: string;
   conversation_history: ConversationMessage[];
-  conversation_id?: string;
   is_recognized: number;
   created_at: string;
   updated_at: string;
@@ -26,7 +27,6 @@ interface SaveArtworkParams {
   location?: string;
   museumName?: string;
   conversationHistory: ConversationMessage[];
-  conversationId?: string;
   isRecognized?: boolean;
 }
 
@@ -60,10 +60,6 @@ class SavedArtworkApiService {
 
     if (params.museumName) {
       formData.append('museum_name', params.museumName);
-    }
-
-    if (params.conversationId) {
-      formData.append('conversation_id', params.conversationId);
     }
 
     formData.append('is_recognized', params.isRecognized !== false ? 'true' : 'false');
@@ -120,6 +116,34 @@ class SavedArtworkApiService {
   }
 
   /**
+   * Update a saved artwork's artist name and artwork name
+   */
+  async updateSavedArtwork(
+    artworkId: string,
+    artistName: string,
+    artworkName: string,
+    summary?: string
+  ): Promise<SavedArtwork> {
+    const response = await fetch(`${API_BASE_URL}/api/saved-artworks/${artworkId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        artist_name: artistName,
+        artwork_name: artworkName,
+        ...(summary !== undefined && { summary }),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update saved artwork');
+    }
+
+    return await response.json();
+  }
+
+  /**
    * Delete a saved artwork
    */
   async deleteSavedArtwork(artworkId: string): Promise<void> {
@@ -130,6 +154,53 @@ class SavedArtworkApiService {
     if (!response.ok) {
       throw new Error('Failed to delete saved artwork');
     }
+  }
+
+  /**
+   * Generate a fun, one-sentence summary for an artwork
+   */
+  async generateArtworkSummary(artworkId: string, imageUri: string): Promise<{ summary: string; saved_artwork_id: string; model_used: string }> {
+    const formData = new FormData();
+    formData.append('saved_artwork_id', artworkId);
+
+    // Append the image file
+    formData.append('image', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'artwork.jpg',
+    } as any);
+
+    const response = await fetch(`${API_BASE_URL}/api/artwork-summary`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to generate artwork summary');
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Update the background color for an artwork
+   */
+  async updateBackgroundColor(artworkId: string, backgroundColor: string): Promise<SavedArtwork> {
+    const response = await fetch(`${API_BASE_URL}/api/saved-artworks/${artworkId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        background_color: backgroundColor,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update background color');
+    }
+
+    return await response.json();
   }
 }
 

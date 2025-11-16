@@ -9,6 +9,7 @@ import {
   Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -28,6 +29,8 @@ import { artistAnalysisCache } from '../utils/artistAnalysisCache';
 import { ScanlinesEffect, ActionButton } from '../components';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { colors } from '../constants/colors';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
+import { compressImage, getCompressionSettings } from '../utils/imageUtils';
 
 interface CameraScreenProps {
   onBack: () => void;
@@ -85,16 +88,25 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
       };
 
       const photo: PhotoFile = await camera.current.takePhoto(options);
+      const tempPhotoUri = `file://${photo.path}`;
+      console.log('Photo captured (temp):', tempPhotoUri);
 
-      // Navigate to artist identification screen
-      const photoUri = `file://${photo.path}`;
-      console.log('Photo captured:', photoUri);
+      // Immediately save to camera roll in "Musee" album to get persistent ph:// identifier
+      const savedAsset = await CameraRoll.saveAsset(tempPhotoUri, {
+        type: 'photo',
+        album: 'Musee',
+      });
 
-      // Start API call immediately (don't await)
-      startArtistAnalysis(photoUri);
+      // Get the persistent ph:// URI
+      const persistentPhotoUri = savedAsset.node.image.uri;
+      console.log('Photo saved to camera roll:', persistentPhotoUri);
+
+      // Start API call with the temporary file URI (for immediate analysis)
+      startArtistAnalysis(tempPhotoUri);
 
       if (onPhotoTaken) {
-        onPhotoTaken(photoUri);
+        // Pass the persistent ph:// URI for saving to database
+        onPhotoTaken(persistentPhotoUri);
       } else {
         Alert.alert('Photo Captured!', `Saved to: ${photo.path}`);
       }
@@ -145,15 +157,38 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
 
       // Photo selected
       if (result.assets && result.assets.length > 0) {
-        const photoUri = result.assets[0].uri;
-        if (photoUri) {
-          console.log('Photo imported from album:', photoUri);
+        const originalUri = result.assets[0].uri;
+        if (originalUri) {
+          console.log('Photo imported from album:', originalUri);
 
-          // Start API call
-          startArtistAnalysis(photoUri);
+          // Check if we already have a ph:// URI (Photos library identifier)
+          // If so, use it directly. If it's a file:// URI, we need to get the ph:// reference
+          let persistentPhotoUri = originalUri;
+
+          // The iOS image picker returns ph:// URIs when selecting from Photos library
+          // We only need to save if it's NOT already a ph:// URI
+          if (!originalUri.startsWith('ph://')) {
+            try {
+              console.log('Converting file:// URI to ph:// identifier...');
+              const savedAsset = await CameraRoll.saveAsset(originalUri, {
+                type: 'photo',
+                album: 'Musee',
+              });
+              persistentPhotoUri = savedAsset.node.image.uri;
+              console.log('Photo saved to Musee album with ph:// URI:', persistentPhotoUri);
+            } catch (saveError) {
+              console.error('Failed to save to Musee album, using original URI:', saveError);
+            }
+          } else {
+            console.log('Using existing ph:// URI from Photos library:', originalUri);
+          }
+
+          // Start API call with original URI (might be file:// for immediate access)
+          startArtistAnalysis(originalUri);
 
           if (onPhotoTaken) {
-            onPhotoTaken(photoUri);
+            // Pass the persistent ph:// URI for database storage
+            onPhotoTaken(persistentPhotoUri);
           }
         }
       }
@@ -165,9 +200,15 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
 
   const startArtistAnalysis = async (photoUri: string) => {
     try {
+      // Compress image before uploading to avoid 413 errors (Vercel 4.5MB limit)
+      console.log('[CameraScreen] Compressing image for API upload...');
+      const compressed = await compressImage(photoUri, getCompressionSettings());
+      const uploadUri = compressed.uri;
+      console.log(`[CameraScreen] Using ${compressed.size > 0 ? 'compressed' : 'original'} image for upload`);
+
       const formData = new FormData();
       formData.append('image', {
-        uri: photoUri,
+        uri: uploadUri,
         type: 'image/jpeg',
         name: 'artwork.jpg',
       } as any);
@@ -176,6 +217,7 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
       console.log('=== STARTING ARTIST ANALYSIS ===');
       console.log('URL:', analyze_url);
       console.log('Photo URI:', photoUri);
+      console.log('Upload URI:', uploadUri);
 
       // Create and cache the promise
       const analysisPromise = fetch(analyze_url, {
@@ -279,6 +321,23 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
 
   return (
     <View style={[styles.container, { paddingTop: safeAreaInsets.top }]}>
+      {/* Back Arrow */}
+      <TouchableOpacity
+        style={[styles.backButton, { top: safeAreaInsets.top + 16 }]}
+        onPress={onBack}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <Path
+            d="M15 18L9 12L15 6"
+            stroke={colors.darkGrey}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </Svg>
+      </TouchableOpacity>
+
       {/* Camera Viewfinder Area */}
       <View style={[styles.cameraViewfinder]}>
         {renderCameraView()}
@@ -301,13 +360,6 @@ export default function CameraScreen({ onBack, onPhotoTaken }: CameraScreenProps
           theme="dark"
           style={styles.largeButton}
         />
-        <ActionButton
-          label="back"
-          onPress={onBack}
-          theme="light"
-          // style={[styles.largeButton, {backgroundColor: colors.white}]}
-        />
-
       </View>
     </View>
   );

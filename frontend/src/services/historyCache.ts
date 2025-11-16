@@ -12,6 +12,7 @@ export interface HistoryItem {
   is_recognized: number;
   created_at: string;
   updated_at: string;
+  background_color?: string;
 }
 
 interface CachedData {

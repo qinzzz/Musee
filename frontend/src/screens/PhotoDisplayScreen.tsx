@@ -12,24 +12,27 @@ import {
   TextInput,
   Modal,
   Platform,
+  Alert,
 } from 'react-native';
 import { BlurView } from '@react-native-community/blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
 import { artistAnalysisCache } from '../utils/artistAnalysisCache';
-import { Typography, Heading2, Body, Label, LoadingProgressBar, ArtistCard, ActionButton } from '../components';
+import { Typography, Heading2, Body, Label, LoadingProgressBar, ArtistCard, ActionButton, TopicChip, ArtworkBite } from '../components';
 import { spacing, shadows, borderRadius, animations } from '../constants/theme';
 import { removeBackground } from 'react-native-background-remover';
 import { getColors } from 'react-native-image-colors';
 import { softenColor } from '../utils/colorUtils';
+import { compressImage, getCompressionSettings } from '../utils/imageUtils';
+import { savedArtworkApiService } from '../services/savedArtworkApi';
 
 
 interface ConversationData {
   artistName: string;
   artworkName: string;
-  conversationId: string | null;
-  bites: Array<{ content: string; topic?: string }>;
+  savedArtworkId: string | null;
+  bites: Array<{ content: string; topic?: string; role?: 'user' | 'assistant' }>;
 }
 
 interface PhotoDisplayScreenProps {
@@ -65,11 +68,11 @@ export default function PhotoDisplayScreen({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [expandedArtistIndex, setExpandedArtistIndex] = useState<number | null>(null);
   const [selectedArtistIndex, setSelectedArtistIndex] = useState<number | null>(null);
-  const [artworkBites, setArtworkBites] = useState<Array<{ content: string; topic?: string }>>([]);
+  const [artworkBites, setArtworkBites] = useState<Array<{ content: string; topic?: string; role?: 'user' | 'assistant' }>>([]);
   const [isBiteLoading, setIsBiteLoading] = useState(false);
   const [isTopicLoading, setIsTopicLoading] = useState(false);
 
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [savedArtworkId, setSavedArtworkId] = useState<string | null>(null);
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [currentSelectedTopic, setCurrentSelectedTopic] = useState<string | null>(null);
   const [showManualInput, setShowManualInput] = useState(false);
@@ -156,7 +159,8 @@ export default function PhotoDisplayScreen({
 
 
   useEffect(() => {
-    setIsLoading(true);
+    extractDominantColor();
+    // setIsLoading(true);
     // Animate card sliding down like Instax camera, then stay in center
     Animated.timing(cardSlideAnim, {
       toValue: 0,
@@ -167,7 +171,6 @@ export default function PhotoDisplayScreen({
 
     fetchArtistIdentification();
     // handleRemoveBackground();
-    extractDominantColor();
 
     // Cleanup cache when component unmounts
     return () => {
@@ -175,13 +178,6 @@ export default function PhotoDisplayScreen({
     };
   }, []);
 
-  useEffect(() => {
-    
-    setTimeout(() => {
-      fetchSuggestedTopics();
-    }, 500);
-
-  }, [artworkBites])
 
   const fetchArtistIdentification = async () => {
     try {
@@ -312,10 +308,34 @@ export default function PhotoDisplayScreen({
       console.log('=== EXTRACTING DOMINANT COLOR ===');
       console.log('Photo URI:', photoUri);
 
-      const result = await getColors(photoUri, {
+      let imageUri = photoUri;
+
+      // If it's a ph:// URI from iOS Photos library, convert it to a file path
+      if (photoUri.startsWith('ph://')) {
+        console.log('[ColorExtraction] Converting ph:// URI to file path...');
+        const RNFS = require('react-native-fs');
+
+        try {
+          // Create a temporary file path
+          const tempPath = `${RNFS.CachesDirectoryPath}/temp_color_extract_${Date.now()}.jpg`;
+
+          // Copy the asset from Photos library to cache directory
+          await RNFS.copyAssetsFileIOS(photoUri, tempPath, 0, 0);
+
+          // Use file:// prefix for the temporary path
+          imageUri = `file://${tempPath}`;
+          console.log('[ColorExtraction] Converted to file path:', imageUri);
+        } catch (conversionError) {
+          console.warn('[ColorExtraction] Failed to convert ph:// URI, using original:', conversionError);
+          // Fall back to original URI
+          imageUri = photoUri;
+        }
+      }
+
+      const result = await getColors(imageUri, {
         fallback: colors.background,
         cache: true,
-        key: photoUri,
+        key: photoUri, // Use original URI as cache key
       });
 
       console.log('Color extraction result:', result);
@@ -350,6 +370,41 @@ export default function PhotoDisplayScreen({
 
   const handleCardPress = () => {
     flipCard();
+  };
+
+  const saveArtworkToDatabase = async (artist: Artist): Promise<string | null> => {
+    try {
+      console.log('[PhotoDisplay] Saving artwork to database...');
+
+      // Check if artwork is recognized
+      const artistLower = artist.artist_name.toLowerCase().trim();
+      const artworkLower = (artist.artwork_name || 'untitled').toLowerCase().trim();
+
+      const isRecognized =
+        artistLower !== 'unknown' &&
+        artistLower !== 'untitled' &&
+        artistLower !== '' &&
+        artworkLower !== 'unknown' &&
+        artworkLower !== 'untitled' &&
+        artworkLower !== '' &&
+        !artistLower.includes('not an artwork') &&
+        !artworkLower.includes('not an artwork');
+
+      const result = await savedArtworkApiService.saveArtwork({
+        photoUri,
+        artistName: artist.artist_name,
+        artworkName: artist.artwork_name || 'Unknown',
+        conversationHistory: [], // Empty initially, will be populated as user explores
+        isRecognized,
+      });
+
+      console.log('[PhotoDisplay] Artwork saved with ID:', result.id);
+      setSavedArtworkId(result.id);
+      return result.id;
+    } catch (error) {
+      console.error('[PhotoDisplay] Error saving artwork to database:', error);
+      return null;
+    }
   };
 
   const handleArtistPress = (index: number) => {
@@ -396,14 +451,9 @@ export default function PhotoDisplayScreen({
     setShowManualInput(true);
   };
 
-  const fetchSuggestedTopics = async () => {
-    if (!conversationId) {
-      console.log('No conversation ID yet, skipping topic suggestions');
-      return;
-    }
-
+  const fetchSuggestedTopics = async (artworkId: string) => {
     try {
-      const topicUrl = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_TOPIC}?conversation_id=${conversationId}&identity=${encodeURIComponent(identity)}`;
+      const topicUrl = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_TOPIC}?saved_artwork_id=${artworkId}&identity=${encodeURIComponent(identity)}`;
       console.log('=== FETCHING SUGGESTED TOPICS ===');
       console.log('URL:', topicUrl);
 
@@ -429,7 +479,7 @@ export default function PhotoDisplayScreen({
     }
   };
 
-  const fetchArtworkBite = async (topic?: string) => {
+  const fetchArtworkBite = async (topic?: string, artworkIdOverride?: string) => {
     if (selectedArtistIndex === null || !artists[selectedArtistIndex]) {
       console.error('No artist selected');
       return;
@@ -447,9 +497,15 @@ export default function PhotoDisplayScreen({
         setCurrentSelectedTopic(null);
       }
 
+      // Compress image before uploading to avoid 413 errors (Vercel 4.5MB limit)
+      console.log('[PhotoDisplay] Compressing image for API upload...');
+      const compressed = await compressImage(photoUri, getCompressionSettings());
+      const uploadUri = compressed.uri;
+      console.log(`[PhotoDisplay] Using ${compressed.size > 0 ? 'compressed' : 'original'} image for upload`);
+
       const formData = new FormData();
       formData.append('image', {
-        uri: photoUri,
+        uri: uploadUri,
         type: 'image/jpeg',
         name: 'artwork.jpg',
       } as any);
@@ -457,9 +513,13 @@ export default function PhotoDisplayScreen({
       formData.append('artwork_name', selectedArtist.artwork_name || 'Unknown');
       formData.append('identity', identity);
 
-      // Include conversation ID if we have one
-      if (conversationId) {
-        formData.append('conversation_id', conversationId);
+      // Use artworkIdOverride if provided, otherwise use state
+      // This fixes the issue where state hasn't updated yet after saving
+      const artworkId = artworkIdOverride || savedArtworkId;
+
+      // Include saved artwork ID if we have one
+      if (artworkId) {
+        formData.append('saved_artwork_id', artworkId);
       }
 
       // Include topic if provided
@@ -473,7 +533,7 @@ export default function PhotoDisplayScreen({
       console.log('Artist:', selectedArtist.artist_name);
       console.log('Artwork:', selectedArtist.artwork_name);
       console.log('Topic:', topic || 'none');
-      console.log('Conversation ID:', conversationId || 'new conversation');
+      console.log('Saved Artwork ID:', artworkId || 'not saved yet');
       console.log('Current bites count:', artworkBites.length);
 
       const response = await fetch(biteUrl, {
@@ -488,50 +548,70 @@ export default function PhotoDisplayScreen({
       const data = await response.json();
       console.log('Bite response:', data);
 
-      // Store conversation ID for subsequent requests
-      if (data.conversation_id && !conversationId) {
-        console.log('Storing conversation ID:', data.conversation_id);
-        setConversationId(data.conversation_id);
+      // Add user message if topic was provided
+      if (topic) {
+        setArtworkBites(prev => [...prev, {
+          content: topic,
+          role: 'user' as const,
+        }]);
       }
 
       // Add new bite to the list with its topic
       setArtworkBites(prev => {
         const newBite = {
           content: data.bite,
-          topic: topic // Store which topic this bite is about
+          topic: topic, // Store which topic this bite is about
+          role: 'assistant' as const,
         };
         return [...prev, newBite];
       });
 
       // Clear current selected topic since it's now saved with the bite
       setCurrentSelectedTopic(null);
+
+      // Fetch suggested topics after bite completes successfully
+      // This ensures the topic generation has the latest conversation context
+      setTimeout(() => {
+        fetchSuggestedTopics(artworkId);
+      }, 500);
     } catch (error) {
       console.error('Error fetching artwork bite:', error);
       // Add error message as a bite
-      setArtworkBites(prev => [...prev, { content: 'Failed to load artwork information. Please try again.' }]);
+      setArtworkBites(prev => [...prev, {
+        content: 'Failed to load artwork information. Please try again.',
+        role: 'assistant' as const,
+      }]);
       // Clear current selected topic on error too
       setCurrentSelectedTopic(null);
     } finally {
       setIsBiteLoading(false);
-      setIsTopicLoading(true);
 
     }
   };
 
-  const handleContinueOrMore = () => {
+  const handleContinueOrMore = async () => {
     if (selectedArtistIndex === null) {
-      // If no artist is selected, select the first one by default
-      setSelectedArtistIndex(0);
-      setExpandedArtistIndex(0);
+      Alert.alert(
+        'Select Artist',
+        'Please select an artist first by tapping on one of the cards.',
+        [{ text: 'OK' }]
+      );
       return;
+    }
+
+    // Save artwork to database when user confirms they want to explore
+    let artworkId = savedArtworkId;
+    if (!savedArtworkId) {
+      artworkId = await saveArtworkToDatabase(artists[selectedArtistIndex]);
     }
 
     // Open exploration overlay
     setShowExplorationOverlay(true);
 
     // Fetch first bite if not already loaded
+    // Pass the artworkId directly to avoid state update delay
     if (artworkBites.length === 0) {
-      fetchArtworkBite();
+      fetchArtworkBite(undefined, artworkId || undefined);
     }
   };
 
@@ -720,16 +800,24 @@ export default function PhotoDisplayScreen({
                       <ActionButton
                         label="Explore now"
                         onPress={handleContinueOrMore}
+                        disabled={selectedArtistIndex === null}
                       />
                       {onFinish && (
                         <ActionButton
                           label="Finish"
-                          onPress={() => {
+                          onPress={async () => {
                             const selectedArtist = artists[selectedArtistIndex || 0];
+
+                            // Save artwork to database if not already saved
+                            let artworkId = savedArtworkId;
+                            if (!savedArtworkId) {
+                              artworkId = await saveArtworkToDatabase(selectedArtist);
+                            }
+
                             onFinish({
                               artistName: selectedArtist?.artist_name || 'Unknown',
                               artworkName: selectedArtist?.artwork_name || 'Untitled',
-                              conversationId: conversationId,
+                              savedArtworkId: artworkId,
                               bites: artworkBites,
                             });
                           }}
@@ -826,34 +914,39 @@ export default function PhotoDisplayScreen({
                 <View style={styles.bitesContainer}>
                   {artworkBites.map((bite, index) => (
                     <View key={index} style={styles.biteWithTopicContainer}>
-                      {/* Show topic badge if this bite has a topic */}
-                      {bite.topic && (
+                      {/* Show user messages as topic buttons */}
+                      {bite.role === 'user' ? (
                         <View style={styles.selectedTopicContainer}>
-                          <ActionButton
-                            label={bite.topic}
+                          <TopicChip
+                            label={bite.content}
                             onPress={() => {}}
-                            theme="light"
                             disabled={true}
                           />
                         </View>
+                      ) : (
+                        /* Show assistant messages as bite cards */
+                        <>
+                          {/* Show topic badge if this bite has a topic */}
+                          {bite.topic && (
+                            <View style={styles.selectedTopicContainer}>
+                              <TopicChip
+                                label={bite.topic}
+                                onPress={() => {}}
+                                disabled={true}
+                              />
+                            </View>
+                          )}
+                          <ArtworkBite content={bite.content} />
+                        </>
                       )}
-                      <ArtistCard
-                        artistName=""
-                        details=""
-                        description={bite.content}
-                        isExpanded={true}
-                        onPress={() => {}}
-                        hideShadow={true}
-                      />
                     </View>
                   ))}
                   {/* Show currently selected topic while loading */}
                   {currentSelectedTopic && isBiteLoading && (
                     <View style={styles.selectedTopicContainer}>
-                      <ActionButton
+                      <TopicChip
                         label={currentSelectedTopic}
                         onPress={() => {}}
-                        theme="light"
                         disabled={true}
                       />
                     </View>
@@ -877,11 +970,10 @@ export default function PhotoDisplayScreen({
               {suggestedTopics.length > 0 && (
                 <View style={styles.topicButtonsContainer}>
                   {suggestedTopics.map((topic, index) => (
-                    <ActionButton
+                    <TopicChip
                       key={index}
                       label={topic}
                       onPress={() => fetchArtworkBite(topic)}
-                      theme="light"
                     />
                   ))}
                 </View>
