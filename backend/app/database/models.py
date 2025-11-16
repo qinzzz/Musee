@@ -19,6 +19,7 @@ class SavedArtwork(Base):
     summary = Column(String, nullable=True)  # One-sentence fun summary of the artwork
     background_color = Column(String, nullable=True)  # Cached background color for UI
     is_recognized = Column(Integer, default=1)  # 1 for recognized, 0 for unknown
+    device_id = Column(String, nullable=True)  # Persistent device identifier from Keychain UUID
     user_id = Column(String, nullable=True)  # For future user authentication
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -42,6 +43,7 @@ class SavedArtwork(Base):
             "summary": self.summary,
             "background_color": self.background_color,
             "is_recognized": self.is_recognized,
+            "device_id": self.device_id,
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None

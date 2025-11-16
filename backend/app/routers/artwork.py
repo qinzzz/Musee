@@ -481,6 +481,7 @@ async def save_artwork(
     artist_name: str = Form(...),
     artwork_name: str = Form(...),
     conversation_history: str = Form(...),  # JSON string
+    device_id: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
     museum_name: Optional[str] = Form(None),
     conversation_id: Optional[str] = Form(None),
@@ -494,6 +495,7 @@ async def save_artwork(
     - **artist_name**: Name of the artist
     - **artwork_name**: Name of the artwork
     - **conversation_history**: JSON string of complete conversation history
+    - **device_id**: Persistent device identifier from Keychain UUID (optional)
     - **location**: Geographic location where photo was taken (optional)
     - **museum_name**: Museum or gallery name (optional)
     - **conversation_id**: Optional conversation ID reference (deprecated, kept for compatibility)
@@ -510,6 +512,7 @@ async def save_artwork(
             photo_uri=photo_uri,
             artist_name=artist_name,
             artwork_name=artwork_name,
+            device_id=device_id,
             location=location,
             museum_name=museum_name,
             is_recognized=1 if is_recognized else 0
@@ -560,6 +563,7 @@ async def save_artwork(
 
 @router.get("/saved-artworks")
 async def get_saved_artworks(
+    device_id: Optional[str] = None,
     recognized_only: Optional[bool] = None,
     limit: int = 50,
     offset: int = 0,
@@ -568,6 +572,7 @@ async def get_saved_artworks(
     """
     Get saved artworks with optional filtering
 
+    - **device_id**: Filter by device ID (optional)
     - **recognized_only**: Filter by recognition status (True/False/None for all)
     - **limit**: Maximum number of entries to return (default: 50)
     - **offset**: Number of entries to skip (default: 0)
@@ -576,6 +581,10 @@ async def get_saved_artworks(
     """
     try:
         query = db.query(SavedArtwork)
+
+        # Filter by device_id if specified
+        if device_id is not None:
+            query = query.filter(SavedArtwork.device_id == device_id)
 
         # Filter by recognition status if specified
         if recognized_only is not None:
