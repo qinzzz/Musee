@@ -481,6 +481,7 @@ async def save_artwork(
     artist_name: str = Form(...),
     artwork_name: str = Form(...),
     conversation_history: str = Form(...),  # JSON string
+    user_id: Optional[str] = Form(None),
     device_id: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
     museum_name: Optional[str] = Form(None),
@@ -495,7 +496,8 @@ async def save_artwork(
     - **artist_name**: Name of the artist
     - **artwork_name**: Name of the artwork
     - **conversation_history**: JSON string of complete conversation history
-    - **device_id**: Persistent device identifier from Keychain UUID (optional)
+    - **user_id**: User ID (foreign key to users table) - recommended
+    - **device_id**: Persistent device identifier from Keychain UUID (optional, legacy)
     - **location**: Geographic location where photo was taken (optional)
     - **museum_name**: Museum or gallery name (optional)
     - **conversation_id**: Optional conversation ID reference (deprecated, kept for compatibility)
@@ -512,6 +514,7 @@ async def save_artwork(
             photo_uri=photo_uri,
             artist_name=artist_name,
             artwork_name=artwork_name,
+            user_id=user_id,
             device_id=device_id,
             location=location,
             museum_name=museum_name,
@@ -563,6 +566,7 @@ async def save_artwork(
 
 @router.get("/saved-artworks")
 async def get_saved_artworks(
+    user_id: Optional[str] = None,
     device_id: Optional[str] = None,
     recognized_only: Optional[bool] = None,
     limit: int = 50,
@@ -572,7 +576,8 @@ async def get_saved_artworks(
     """
     Get saved artworks with optional filtering
 
-    - **device_id**: Filter by device ID (optional)
+    - **user_id**: Filter by user ID (recommended)
+    - **device_id**: Filter by device ID (legacy, optional)
     - **recognized_only**: Filter by recognition status (True/False/None for all)
     - **limit**: Maximum number of entries to return (default: 50)
     - **offset**: Number of entries to skip (default: 0)
@@ -582,8 +587,11 @@ async def get_saved_artworks(
     try:
         query = db.query(SavedArtwork)
 
-        # Filter by device_id if specified
-        if device_id is not None:
+        # Filter by user_id if specified (preferred)
+        if user_id is not None:
+            query = query.filter(SavedArtwork.user_id == user_id)
+        # Fall back to device_id for backwards compatibility
+        elif device_id is not None:
             query = query.filter(SavedArtwork.device_id == device_id)
 
         # Filter by recognition status if specified

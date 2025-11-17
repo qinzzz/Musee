@@ -5,6 +5,35 @@ from app.database.connection import Base
 import uuid
 
 
+class User(Base):
+    """Database model for users"""
+
+    __tablename__ = "users"
+
+    user_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String, nullable=True, unique=True)  # Optional username for user accounts
+    email = Column(String, nullable=True, unique=True)  # Optional email for user accounts
+    device_id = Column(String, nullable=True, unique=True)  # Unique device identifier from Keychain
+    created_at = Column(DateTime, server_default=func.now())
+    last_active = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    settings = Column(JSON, nullable=True)  # User preferences and settings
+
+    # Relationship to artworks
+    artworks = relationship("SavedArtwork", back_populates="user", cascade="all, delete-orphan")
+
+    def to_dict(self):
+        """Convert model to dictionary"""
+        return {
+            "user_id": self.user_id,
+            "username": self.username,
+            "email": self.email,
+            "device_id": self.device_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "last_active": self.last_active.isoformat() if self.last_active else None,
+            "settings": self.settings
+        }
+
+
 class SavedArtwork(Base):
     """Database model for saved artworks"""
 
@@ -19,12 +48,13 @@ class SavedArtwork(Base):
     summary = Column(String, nullable=True)  # One-sentence fun summary of the artwork
     background_color = Column(String, nullable=True)  # Cached background color for UI
     is_recognized = Column(Integer, default=1)  # 1 for recognized, 0 for unknown
-    device_id = Column(String, nullable=True)  # Persistent device identifier from Keychain UUID
-    user_id = Column(String, nullable=True)  # For future user authentication
+    device_id = Column(String, nullable=True)  # Temporary: Persistent device identifier from Keychain UUID (for backwards compatibility)
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)  # Foreign key to users table
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    # Relationship to conversations
+    # Relationships
+    user = relationship("User", back_populates="artworks")
     conversations = relationship("Conversation", back_populates="artwork", cascade="all, delete-orphan", order_by="Conversation.sequence_number")
 
     def to_dict(self, include_conversations=True):

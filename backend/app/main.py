@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from app.config.settings import settings
-from app.routers import artwork
+from app.routers import artwork, users
 
 # Initialize database only if enabled
 if settings.use_database:
@@ -31,6 +31,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(artwork.router, prefix="/api", tags=["artwork"])
+app.include_router(users.router, prefix="/api", tags=["users"])
 
 
 @app.get("/")
