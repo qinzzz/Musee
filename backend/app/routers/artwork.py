@@ -485,8 +485,8 @@ async def save_artwork(
     device_id: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
     museum_name: Optional[str] = Form(None),
-    conversation_id: Optional[str] = Form(None),
     is_recognized: bool = Form(True),
+    color_palette: Optional[str] = Form(None),  # JSON string of color palette
     db: Session = Depends(get_db)
 ):
     """
@@ -500,7 +500,6 @@ async def save_artwork(
     - **device_id**: Persistent device identifier from Keychain UUID (optional, legacy)
     - **location**: Geographic location where photo was taken (optional)
     - **museum_name**: Museum or gallery name (optional)
-    - **conversation_id**: Optional conversation ID reference (deprecated, kept for compatibility)
     - **is_recognized**: Whether the artwork was recognized (default: True)
 
     Returns the saved artwork entry
@@ -509,7 +508,16 @@ async def save_artwork(
         # Parse conversation history JSON
         conversation_data = json.loads(conversation_history)
 
-        # Create SavedArtwork (without conversation_history and conversation_id)
+        # Parse color_palette JSON if provided
+        color_palette_data = None
+        if color_palette:
+            try:
+                color_palette_data = json.loads(color_palette)
+            except json.JSONDecodeError:
+                print(f"Warning: Failed to parse color_palette JSON: {color_palette}")
+                color_palette_data = None
+
+        # Create SavedArtwork (without conversation_history)
         saved_artwork = SavedArtwork(
             photo_uri=photo_uri,
             artist_name=artist_name,
@@ -518,7 +526,8 @@ async def save_artwork(
             device_id=device_id,
             location=location,
             museum_name=museum_name,
-            is_recognized=1 if is_recognized else 0
+            is_recognized=1 if is_recognized else 0,
+            color_palette=color_palette_data
         )
 
         db.add(saved_artwork)

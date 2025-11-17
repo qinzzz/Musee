@@ -47,6 +47,7 @@ class SavedArtwork(Base):
     museum_name = Column(String, nullable=True)  # Museum or gallery name
     summary = Column(String, nullable=True)  # One-sentence fun summary of the artwork
     background_color = Column(String, nullable=True)  # Cached background color for UI
+    color_palette = Column(JSON, nullable=True)  # Color palette extracted from image: {background, detail, primary, secondary}
     is_recognized = Column(Integer, default=1)  # 1 for recognized, 0 for unknown
     device_id = Column(String, nullable=True)  # Temporary: Persistent device identifier from Keychain UUID (for backwards compatibility)
     user_id = Column(String, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)  # Foreign key to users table
@@ -72,6 +73,7 @@ class SavedArtwork(Base):
             "museum_name": self.museum_name,
             "summary": self.summary,
             "background_color": self.background_color,
+            "color_palette": self.color_palette,
             "is_recognized": self.is_recognized,
             "device_id": self.device_id,
             "user_id": self.user_id,
