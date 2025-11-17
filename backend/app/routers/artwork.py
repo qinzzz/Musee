@@ -670,6 +670,8 @@ async def update_saved_artwork(
     Returns the updated artwork entry
     """
     try:
+        print(f"[UPDATE] Updating artwork {artwork_id} with request: {request}")
+
         saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
 
         if not saved_artwork:
@@ -685,6 +687,10 @@ async def update_saved_artwork(
         if request.background_color is not None:
             saved_artwork.background_color = request.background_color
 
+        if request.color_palette is not None:
+            print(f"[UPDATE] Setting color_palette: {request.color_palette}")
+            saved_artwork.color_palette = request.color_palette
+
         # Recalculate is_recognized based on current values
         # Consider artwork as recognized if both artist and artwork names are meaningful
         is_recognized = (
@@ -696,6 +702,7 @@ async def update_saved_artwork(
         db.commit()
         db.refresh(saved_artwork)
 
+        print(f"[UPDATE] Successfully updated artwork. Color palette in DB: {saved_artwork.color_palette}")
         return saved_artwork.to_dict()
 
     except Exception as e:

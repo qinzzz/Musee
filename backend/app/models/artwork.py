@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 
 
 class ToneType(str, Enum):
@@ -22,3 +22,4 @@ class UpdateArtworkRequest(BaseModel):
     artist_name: Optional[str] = None
     artwork_name: Optional[str] = None
     background_color: Optional[str] = None
+    color_palette: Optional[Dict[str, Any]] = None
