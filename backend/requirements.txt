@@ -7,7 +7,7 @@ alembic
 python-dotenv
 openai
 anthropic
-google-generativeai
+google-genai
 aiofiles
 pydantic
 pydantic_settings

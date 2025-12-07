@@ -25,7 +25,7 @@ import { removeBackground } from 'react-native-background-remover';
 import { getColors } from 'react-native-image-colors';
 import { softenColor } from '../utils/colorUtils';
 import { compressImage, getCompressionSettings } from '../utils/imageUtils';
-import { savedArtworkApiService } from '../services/savedArtworkApi';
+import { savedArtworkApiService, ColorPalette } from '../services/savedArtworkApi';
 
 
 interface ConversationData {
@@ -50,6 +50,10 @@ interface Artist {
   reason: string;
 }
 
+interface AnalysisResponse {
+  analysis?: string;
+}
+
 const { width, height } = Dimensions.get('window');
 
 export default function PhotoDisplayScreen({
@@ -63,6 +67,7 @@ export default function PhotoDisplayScreen({
   const [isFlipped, setIsFlipped] = useState(false);
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const [artists, setArtists] = useState<Artist[]>([]);
+  const [artworkAnalysis, setArtworkAnalysis] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -92,6 +97,7 @@ export default function PhotoDisplayScreen({
 
   // Background color state
   const [backgroundColor, setBackgroundColor] = useState(colors.background);
+  const [colorPalette, setColorPalette] = useState<ColorPalette | null>(null);
 
   // Pan responder for swipe gesture with smooth animation
   const panResponder = useRef(
@@ -222,6 +228,7 @@ export default function PhotoDisplayScreen({
 
       // Parse the analysis field which should contain JSON
       let artistsData: Artist[];
+      let analysisContent: string = '';
       try {
         let analysisText = data.analysis;
 
@@ -247,6 +254,20 @@ export default function PhotoDisplayScreen({
         if (!Array.isArray(artistsData) || artistsData.length === 0) {
           throw new Error('No artists found in response');
         }
+
+        // Check if the last item has an 'analysis' field instead of artist data
+        const lastItem = artistsData[artistsData.length - 1];
+        if (lastItem && 'analysis' in lastItem && !('artist_name' in lastItem)) {
+          // Extract the analysis content
+          analysisContent = (lastItem as AnalysisResponse).analysis || '';
+          // Remove the analysis item from the artists array
+          artistsData = artistsData.slice(0, -1);
+          console.log("Extracted analysis content:", analysisContent);
+        }
+
+        if (artistsData.length === 0) {
+          throw new Error('No artists found in response');
+        }
       } catch (parseError) {
         console.error('=== PARSE ERROR ===');
         console.error('Error:', parseError);
@@ -256,6 +277,7 @@ export default function PhotoDisplayScreen({
       }
 
       setArtists(artistsData);
+      setArtworkAnalysis(analysisContent);
       setHasError(false);
     } catch (error) {
       console.error('Error fetching artist identification:', error);
@@ -341,6 +363,16 @@ export default function PhotoDisplayScreen({
       console.log('Color extraction result:', result);
 
       if (result.platform === 'ios') {
+        // Extract all 4 color dimensions from iOS result
+        const colorPalette: ColorPalette = {
+          background: result.background || colors.background,
+          detail: result.detail || colors.background,
+          primary: result.primary || colors.background,
+          secondary: result.secondary || colors.background,
+        };
+        console.log('Color palette extracted:', colorPalette);
+        setColorPalette(colorPalette);
+
         const extractedColor = result.background || colors.background;
         console.log('Extracted iOS color:', extractedColor);
         const softenedColor = softenColor(extractedColor, colors.background);
@@ -372,7 +404,7 @@ export default function PhotoDisplayScreen({
     flipCard();
   };
 
-  const saveArtworkToDatabase = async (artist: Artist): Promise<string | null> => {
+  const saveArtworkToDatabase = async (artist: Artist, colorPalette?: ColorPalette): Promise<string | null> => {
     try {
       console.log('[PhotoDisplay] Saving artwork to database...');
 
@@ -389,13 +421,14 @@ export default function PhotoDisplayScreen({
         artworkLower !== '' &&
         !artistLower.includes('not an artwork') &&
         !artworkLower.includes('not an artwork');
-
+      
       const result = await savedArtworkApiService.saveArtwork({
         photoUri,
         artistName: artist.artist_name,
         artworkName: artist.artwork_name || 'Unknown',
         conversationHistory: [], // Empty initially, will be populated as user explores
         isRecognized,
+        colorPalette,
       });
 
       console.log('[PhotoDisplay] Artwork saved with ID:', result.id);
@@ -602,7 +635,7 @@ export default function PhotoDisplayScreen({
     // Save artwork to database when user confirms they want to explore
     let artworkId = savedArtworkId;
     if (!savedArtworkId) {
-      artworkId = await saveArtworkToDatabase(artists[selectedArtistIndex]);
+      artworkId = await saveArtworkToDatabase(artists[selectedArtistIndex], colorPalette || undefined);
     }
 
     // Open exploration overlay
@@ -785,6 +818,13 @@ export default function PhotoDisplayScreen({
                       })}
                     </View>
 
+                    {/* Display artwork analysis if available */}
+                    {artworkAnalysis && (
+                      <View style={styles.analysisContainer}>
+                        <ArtworkBite content={artworkAnalysis} />
+                      </View>
+                    )}
+
                     {/* Show manual input button if artist is unknown */}
                     {isUnknownArtist() && !manualInputSubmitted && (
                       <View style={styles.manualInputPrompt}>
@@ -811,7 +851,7 @@ export default function PhotoDisplayScreen({
                             // Save artwork to database if not already saved
                             let artworkId = savedArtworkId;
                             if (!savedArtworkId) {
-                              artworkId = await saveArtworkToDatabase(selectedArtist);
+                              artworkId = await saveArtworkToDatabase(selectedArtist, colorPalette || undefined);
                             }
 
                             onFinish({
@@ -1066,6 +1106,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.base,
     width: '100%',
+  },
+  analysisContainer: {
+    marginTop: spacing['2xl'],
+    width: '100%',
+    alignItems: 'center',
   },
   metadataWrapper: {
     justifyContent: 'center',

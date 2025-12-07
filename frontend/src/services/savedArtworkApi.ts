@@ -1,8 +1,16 @@
 import { API_BASE_URL } from '../constants/api';
+import { userApiService } from './userApi';
 
 export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+export interface ColorPalette {
+  background: string;
+  primary: string;
+  secondary: string;
+  detail: string;
 }
 
 export interface SavedArtwork {
@@ -10,10 +18,12 @@ export interface SavedArtwork {
   photo_uri: string;
   artist_name: string;
   artwork_name: string;
+  device_id?: string;
   location?: string;
   museum_name?: string;
   summary: string;
   background_color?: string;
+  color_palette?: ColorPalette;
   conversation_history: ConversationMessage[];
   is_recognized: number;
   created_at: string;
@@ -28,6 +38,7 @@ interface SaveArtworkParams {
   museumName?: string;
   conversationHistory: ConversationMessage[];
   isRecognized?: boolean;
+  colorPalette?: ColorPalette;
 }
 
 interface GetSavedArtworksParams {
@@ -48,11 +59,16 @@ class SavedArtworkApiService {
    * Save artwork with complete conversation history
    */
   async saveArtwork(params: SaveArtworkParams): Promise<SavedArtwork> {
+    // Get user ID
+    const userId = await userApiService.getUserId();
+
     const formData = new FormData();
     formData.append('photo_uri', params.photoUri);
     formData.append('artist_name', params.artistName);
     formData.append('artwork_name', params.artworkName);
     formData.append('conversation_history', JSON.stringify(params.conversationHistory));
+    formData.append('user_id', userId);
+    formData.append('color_palette', JSON.stringify(params.colorPalette));
 
     if (params.location) {
       formData.append('location', params.location);
@@ -77,10 +93,14 @@ class SavedArtworkApiService {
   }
 
   /**
-   * Get all saved artworks
+   * Get all saved artworks for this user
    */
   async getSavedArtworks(params: GetSavedArtworksParams = {}): Promise<SavedArtworksResponse> {
+    // Get user ID to filter artworks
+    const userId = await userApiService.getUserId();
+
     const queryParams = new URLSearchParams();
+    queryParams.append('user_id', userId);
 
     if (params.recognizedOnly !== undefined) {
       queryParams.append('recognized_only', params.recognizedOnly.toString());
@@ -122,7 +142,8 @@ class SavedArtworkApiService {
     artworkId: string,
     artistName: string,
     artworkName: string,
-    summary?: string
+    summary?: string,
+    colorPalette?: ColorPalette
   ): Promise<SavedArtwork> {
     const response = await fetch(`${API_BASE_URL}/api/saved-artworks/${artworkId}`, {
       method: 'PUT',
@@ -133,6 +154,7 @@ class SavedArtworkApiService {
         artist_name: artistName,
         artwork_name: artworkName,
         ...(summary !== undefined && { summary }),
+        ...(colorPalette !== undefined && { color_palette: colorPalette }),
       }),
     });
 

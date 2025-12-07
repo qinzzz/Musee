@@ -1,44 +1,49 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Optional
 import os
 import json
+import logging
 
 from app.database.connection import get_db
 from app.database.models import SavedArtwork, Conversation
-from app.models.artwork import ToneType, AIProvider, UpdateArtworkRequest
+from app.models.artwork import AIProvider, UpdateArtworkRequest
 from app.services.ai_service import AIServiceFactory
-from app.services.openai_client import OpenAIClient
-from app.services.claude_client import ClaudeClient
-from app.services.gemini_client import GeminiClient
+from app.services.openai_api_client import OpenAIAPIClient
+from app.services.claude_api_client import ClaudeAPIClient
+from app.services.gemini_api_client import GeminiAPIClient
 from app.services.photoroom_service import photoroom_service
 from app.utils.image_processing import process_image
 from app.config.settings import settings
 from app.utils.conversation_storage import ConversationMessage
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-# Initialize and register AI services
+# Initialize and register AI clients
 def initialize_ai_services():
-    """Initialize available AI services based on configuration"""
+    """Initialize available AI clients based on configuration"""
     try:
         if settings.openai_api_key:
-            AIServiceFactory.register_service(AIProvider.OPENAI, OpenAIClient())
+            AIServiceFactory.register_client(AIProvider.OPENAI, OpenAIAPIClient())
+            logger.info("OpenAI client initialized successfully")
     except Exception as e:
-        print(f"Failed to initialize OpenAI: {e}")
-    
+        logger.error(f"Failed to initialize OpenAI: {e}")
+
     try:
         if settings.claude_api_key:
-            AIServiceFactory.register_service(AIProvider.CLAUDE, ClaudeClient())
+            AIServiceFactory.register_client(AIProvider.CLAUDE, ClaudeAPIClient())
+            logger.info("Claude client initialized successfully")
     except Exception as e:
-        print(f"Failed to initialize Claude: {e}")
-    
+        logger.error(f"Failed to initialize Claude: {e}")
+
     try:
         if settings.gemini_api_key:
-            AIServiceFactory.register_service(AIProvider.GEMINI, GeminiClient())
+            AIServiceFactory.register_client(AIProvider.GEMINI, GeminiAPIClient())
+            logger.info("Gemini client initialized successfully")
     except Exception as e:
-        print(f"Failed to initialize Gemini: {e}")
+        logger.error(f"Failed to initialize Gemini: {e}")
 
 # Initialize services on module load
 initialize_ai_services()
@@ -72,82 +77,30 @@ def determine_ai_provider(requested_model: Optional[AIProvider] = None) -> AIPro
 
     # Use requested model if provided and available
     if requested_model and requested_model in available_providers:
-        print(f"[CONFIG] Using requested model: {requested_model.value}")
+        logger.info(f"Using requested model: {requested_model.value}")
         return requested_model
 
     # Try to use configured default
     try:
         default_provider = AIProvider(settings.ai_provider)
         if default_provider in available_providers:
-            print(f"[CONFIG] Using default AI provider: {default_provider.value}")
+            logger.info(f"Using default AI provider: {default_provider.value}")
             return default_provider
     except ValueError:
         pass
 
     # Fallback to first available
     fallback = available_providers[0]
-    print(f"[CONFIG] Using fallback provider: {fallback.value}")
+    logger.info(f"Using fallback provider: {fallback.value}")
     return fallback
-
-
-@router.post("/analyze")
-async def analyze_artwork(
-    image: UploadFile = File(...),
-    tone: ToneType = Form(ToneType.GENERAL),
-    model: Optional[AIProvider] = Form(None)
-):
-    """
-    Analyze uploaded artwork image using AI with streaming response
-
-    - **image**: Image file to analyze (JPG, PNG, WebP)
-    - **tone**: Analysis tone (professional, general, sarcastic, educational, poetic)
-    - **model**: Preferred AI model (openai, claude, gemini) - optional
-
-    Returns a streaming response with artwork analysis
-    """
-
-    # Determine which AI service to use (with override support)
-    ai_provider = determine_ai_provider(model)
-
-    try:
-        # Process the image (stateless - no file saving)
-        image_bytes, _ = await process_image(image)
-
-        # Get AI service
-        ai_service = AIServiceFactory.get_service(ai_provider)
-
-        # Create streaming generator
-        async def generate():
-            try:
-                async for chunk in ai_service.analyze_artwork(image_bytes, tone):
-                    # Send as Server-Sent Events format
-                    yield f"data: {json.dumps({'content': chunk})}\n\n"
-            except Exception as e:
-                error_msg = f"Error during streaming: {str(e)}"
-                yield f"data: {json.dumps({'error': error_msg})}\n\n"
-
-        return StreamingResponse(
-            generate(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"
-            }
-        )
-
-    except Exception as e:
-        if "API error" in str(e):
-            raise HTTPException(status_code=503, detail=str(e))
-        else:
-            raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
 @router.post("/analyze-artist")
 async def analyze_artist(
     image: UploadFile = File(...),
     model: Optional[AIProvider] = Form(None),
-    identity: Optional[str] = Form("default")
+    identity: Optional[str] = Form("default"),
+    language: Optional[str] = Form(None)
 ):
     """
     Analyze uploaded artwork image to identify artist (non-streaming response)
@@ -155,19 +108,21 @@ async def analyze_artist(
     - **image**: Image file to analyze (JPG, PNG, WebP)
     - **model**: Preferred AI model (openai, claude, gemini) - optional
     - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
+    - **language**: Language code for response (e.g., "en", "es", "fr", "zh") - optional
 
     Returns complete artist identification details
     """
 
     # Determine which AI service to use (with override support)
     ai_provider = determine_ai_provider(model)
-
+    logger.info(f"analyzing with model: {model}, identity: {identity}, language: {language}")
+    
     try:
         # Process the image (stateless - no file saving)
-        image_bytes, _ = await process_image(image)
+        image_bytes = await process_image(image)
         # Get AI service and analyze
         ai_service = AIServiceFactory.get_service(ai_provider)
-        analysis_text = await ai_service.identify_artist(image_bytes, identity=identity)
+        analysis_text = await ai_service.identify_artist(image_bytes, identity=identity, language=language)
 
         return {
             "analysis": analysis_text,
@@ -175,6 +130,7 @@ async def analyze_artist(
         }
 
     except Exception as e:
+        logger.error(f"Error in analyze_artist: {str(e)}", exc_info=True)
         if "API error" in str(e):
             raise HTTPException(status_code=503, detail=str(e))
         else:
@@ -190,6 +146,8 @@ async def analyze_bite(
     saved_artwork_id: Optional[str] = Form(None),
     model: Optional[AIProvider] = Form(None),
     identity: Optional[str] = Form("default"),
+    language: Optional[str] = Form(None),
+    test_env: bool = Form(False),
     db: Session = Depends(get_db)
 ):
     """
@@ -202,6 +160,7 @@ async def analyze_bite(
     - **saved_artwork_id**: Optional saved artwork ID for context-aware responses from saved artworks
     - **model**: Preferred AI model (openai, claude, gemini) - optional
     - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
+    - **language**: Language code for response (e.g., "en", "es", "fr", "zh") - optional
 
     Returns a short, fascinating fact about the artwork (max 50 words) and saved_artwork_id if applicable
     """
@@ -211,7 +170,7 @@ async def analyze_bite(
 
     try:
         # Process the image (stateless - no file saving)
-        image_bytes, _ = await process_image(image)
+        image_bytes = await process_image(image)
 
         # Get conversation history from database if saved_artwork_id provided
         previous_messages = []
@@ -222,7 +181,7 @@ async def analyze_bite(
             db_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == saved_artwork_id).first()
 
             if db_artwork:
-                print(f"[DEBUG] Found saved artwork: {db_artwork.id}")
+                logger.info(f"Found saved artwork: {db_artwork.id}")
                 # Get conversation history from Conversation table
                 conversations = db.query(Conversation).filter(
                     Conversation.saved_artwork_id == db_artwork.id
@@ -234,9 +193,9 @@ async def analyze_bite(
                     ConversationMessage(role=conv.role, content=conv.content)
                     for conv in conversations
                 ]
-                print(f"[DEBUG] Loaded {len(previous_messages)} previous messages from database")
+                logger.info(f"Loaded {len(previous_messages)} previous messages from database")
             else:
-                print(f"[WARNING] saved_artwork_id {saved_artwork_id} not found in database")
+                logger.warning(f"saved_artwork_id {saved_artwork_id} not found in database")
 
         followup_question = topic if topic else "Tell me one more thing about this artwork."
 
@@ -248,13 +207,14 @@ async def analyze_bite(
             artwork_name,
             followup_question,
             previous_messages,
-            identity=identity
+            identity=identity,
+            language=language
         )
 
         # Update the database if this is a saved artwork
-        if db_artwork:
+        if db_artwork and not test_env:
             try:
-                print(f"[DEBUG] Updating saved artwork conversation in database: {db_artwork.id}")
+                logger.info(f"Updating saved artwork conversation in database: {db_artwork.id}")
 
                 # Get the next sequence number
                 max_seq = db.query(Conversation.sequence_number).filter(
@@ -283,9 +243,9 @@ async def analyze_bite(
                 db.add(assistant_conversation)
 
                 db.commit()
-                print(f"[DEBUG] Successfully added 2 conversations to database (seq: {next_seq}, {next_seq + 1})")
+                logger.info(f"Successfully added 2 conversations to database (seq: {next_seq}, {next_seq + 1})")
             except Exception as db_error:
-                print(f"[ERROR] Failed to update database: {str(db_error)}")
+                logger.error(f"Failed to update database: {str(db_error)}")
                 db.rollback()
                 raise HTTPException(status_code=500, detail=f"Failed to save conversation: {str(db_error)}")
 
@@ -310,6 +270,7 @@ async def suggest_topic(
     saved_artwork_id: str,
     model: Optional[AIProvider] = None,
     identity: Optional[str] = "default",
+    language: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -318,12 +279,14 @@ async def suggest_topic(
     - **saved_artwork_id**: ID of the saved artwork to analyze
     - **model**: Preferred AI model (openai, claude, gemini) - optional
     - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
+    - **language**: Language code for response (e.g., "en", "es", "fr", "zh") - optional
 
     Returns suggested topics like "background", "technique", "color choices", etc.
     """
 
     # Determine which AI service to use (with override support)
     ai_provider = determine_ai_provider(model)
+    DEFAULT_TOPIC = "default topic"
 
     try:
         # Load saved artwork and its conversation history from database
@@ -331,18 +294,13 @@ async def suggest_topic(
 
         if not db_artwork:
             # Artwork not found, return default topics
-            print(f"[DEBUG] Saved artwork {saved_artwork_id} not found in database")
+            logger.info(f"Saved artwork {saved_artwork_id} not found in database")
             return {
-                "suggested_topics": [
-                    "background",
-                    "technique",
-                    "historical context",
-                    "symbolism"
-                ],
+                "suggested_topics": [DEFAULT_TOPIC],
                 "saved_artwork_id": saved_artwork_id
             }
 
-        print(f"[DEBUG] Found artwork in database: {db_artwork.artist_name} - {db_artwork.artwork_name}")
+        logger.info(f"Found artwork in database: {db_artwork.artist_name} - {db_artwork.artwork_name}")
 
         # Get conversation history from Conversation table
         conversations = db.query(Conversation).filter(
@@ -359,12 +317,7 @@ async def suggest_topic(
         # If no previous insights, return default topics
         if not previous_insights:
             return {
-                "suggested_topics": [
-                    "background",
-                    "technique",
-                    "historical context",
-                    "symbolism"
-                ],
+                "suggested_topics": [DEFAULT_TOPIC],
                 "saved_artwork_id": saved_artwork_id
             }
 
@@ -374,7 +327,8 @@ async def suggest_topic(
             db_artwork.artist_name,
             db_artwork.artwork_name,
             previous_insights,
-            identity=identity
+            identity=identity,
+            language=language
         )
 
         return {
@@ -384,19 +338,15 @@ async def suggest_topic(
         }
 
     except json.JSONDecodeError as e:
-        print(f"[ERROR] Failed to parse topics JSON")
+        logger.error("Failed to parse topics JSON")
         # Fallback to default topics
         return {
-            "suggested_topics": [
-                "background",
-                "technique",
-                "historical context"
-            ],
+            "suggested_topics": [DEFAULT_TOPIC],
             "saved_artwork_id": saved_artwork_id,
             "error": "Failed to generate custom topics, using defaults"
         }
     except Exception as e:
-        print(f"[ERROR] Topic suggestion failed: {str(e)}")
+        logger.error(f"Topic suggestion failed: {str(e)}")
         if "API error" in str(e):
             raise HTTPException(status_code=503, detail=str(e))
         else:
@@ -514,7 +464,7 @@ async def save_artwork(
             try:
                 color_palette_data = json.loads(color_palette)
             except json.JSONDecodeError:
-                print(f"Warning: Failed to parse color_palette JSON: {color_palette}")
+                logger.warning(f"Failed to parse color_palette JSON: {color_palette}")
                 color_palette_data = None
 
         # Create SavedArtwork (without conversation_history)
@@ -670,7 +620,7 @@ async def update_saved_artwork(
     Returns the updated artwork entry
     """
     try:
-        print(f"[UPDATE] Updating artwork {artwork_id} with request: {request}")
+        logger.info(f"Updating artwork {artwork_id} with request: {request}")
 
         saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
 
@@ -688,7 +638,7 @@ async def update_saved_artwork(
             saved_artwork.background_color = request.background_color
 
         if request.color_palette is not None:
-            print(f"[UPDATE] Setting color_palette: {request.color_palette}")
+            logger.info(f"Setting color_palette: {request.color_palette}")
             saved_artwork.color_palette = request.color_palette
 
         # Recalculate is_recognized based on current values
@@ -702,7 +652,7 @@ async def update_saved_artwork(
         db.commit()
         db.refresh(saved_artwork)
 
-        print(f"[UPDATE] Successfully updated artwork. Color palette in DB: {saved_artwork.color_palette}")
+        logger.info(f"Successfully updated artwork. Color palette in DB: {saved_artwork.color_palette}")
         return saved_artwork.to_dict()
 
     except Exception as e:
@@ -750,6 +700,7 @@ async def generate_artwork_summary(
     saved_artwork_id: str = Form(...),
     model: Optional[AIProvider] = Form(None),
     identity: Optional[str] = Form("default"),
+    language: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -759,6 +710,7 @@ async def generate_artwork_summary(
     - **saved_artwork_id**: ID of the saved artwork
     - **model**: Preferred AI model (openai, claude, gemini) - optional
     - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
+    - **language**: Language code for response (e.g., "en", "es", "fr", "zh") - optional
 
     Returns the generated summary and updates the database
     """
@@ -768,7 +720,7 @@ async def generate_artwork_summary(
 
     try:
         # Process the image
-        image_bytes, _ = await process_image(image)
+        image_bytes = await process_image(image)
 
         # Load saved artwork from database
         db_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == saved_artwork_id).first()
@@ -794,7 +746,8 @@ async def generate_artwork_summary(
             db_artwork.artist_name,
             db_artwork.artwork_name,
             conversation_history,
-            identity=identity
+            identity=identity,
+            language=language
         )
 
         # Update the database with the summary

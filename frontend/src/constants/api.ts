@@ -26,7 +26,6 @@ export const API_BASE_URL = __DEV__ ? DEV_BASE_URL : PROD_BASE_URL;
 
 export const API_ENDPOINTS = {
   ANALYZE_ARTIST: '/api/analyze-artist',
-  ANALYZE_ARTWORK: '/api/analyze',
   ANALYZE_BITE: '/api/analyze-bite',
   ANALYZE_TOPIC: '/api/analyze-topic',
   GET_PROVIDERS: '/api/providers',

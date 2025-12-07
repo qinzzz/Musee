@@ -2,6 +2,11 @@
 
 Project instructions for Claude Code when working with this repository.
 
+NOTE:
+Do not write new markdown files when making code changes. You should add only IMPORTANT changes to existing CHANGE_LOG.md files, other changes can be communicated through chat. The CHANGE_LOG.md is meant for AI coding assistants to prepend change logs for human developers to better keep track of.
+Only if there are changes in project structure, high-level architecture, command to run the project, etc. then you update README.md.
+Only create new .Md files when you are asked to.
+
 ## Project Overview
 
 Musee is a React Native iOS app with Python FastAPI backend for AI-powered artwork analysis.

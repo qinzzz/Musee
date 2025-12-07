@@ -92,13 +92,62 @@ export const softenColor = (hexColor: string, fallbackColor: string = '#F5F5F5')
   const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
 
   // Reduce saturation by 60% and increase lightness significantly
-  const newS = hsl.s * 0.5; // Keep only 40% of original saturation
-  const newL = Math.min(hsl.l * 1.5 + 20, 95); // Increase lightness, cap at 95%
+  const newS = Math.max(hsl.s * 0.6, 20); // Keep only 50% of original saturation
+  const newL = Math.max(Math.min(hsl.l * 1.5, 90), 20); // Increase lightness, cap at 95%
 
   const newRgb = hslToRgb(hsl.h, newS, newL);
 
-  return `rgba(${newRgb.r}, ${newRgb.g}, ${newRgb.b}, 0.75)`;
+  return `rgba(${newRgb.r}, ${newRgb.g}, ${newRgb.b}, 1)`;
 };
+
+/**
+ * Helper function to create a more saturated and darker version of a color
+ * Works with both hex colors and rgb/rgba strings
+ *
+ * @param color - Color string (hex like "#FF0000" or rgb like "rgb(255, 0, 0)")
+ * @param saturationAmount - Multiplier for saturation (default 1.3 = 30% increase)
+ * @param darkenAmount - Amount to reduce lightness (default 30)
+ * @returns RGB color string (e.g., "rgb(255, 0, 0)")
+ */
+export function darkenColor(color: string, darkenAmount: number = 10, darkenPercentage: number = 0.8): string {
+  let r = 0, g = 0, b = 0;
+
+  // Parse hex color
+  if (color.startsWith('#')) {
+    const rgb = hexToRgb(color);
+    if (rgb) {
+      r = rgb.r;
+      g = rgb.g;
+      b = rgb.b;
+    } else {
+      return color; // Return as-is if parsing fails
+    }
+  }
+  // Parse rgb/rgba color
+  else if (color.startsWith('rgb')) {
+    const match = color.match(/\d+/g);
+    if (match && match.length >= 3) {
+      r = parseInt(match[0]);
+      g = parseInt(match[1]);
+      b = parseInt(match[2]);
+    } else {
+      return color; // Return as-is if parsing fails
+    }
+  } else {
+    return color; // Return as-is if not a recognized format
+  }
+
+  // Convert RGB to HSL
+  const hsl = rgbToHsl(r, g, b);
+
+  // Decrease lightness (ensure it doesn't go below 10%)
+  const newL = Math.max(Math.min(hsl.l - darkenAmount, hsl.l * darkenPercentage), 10);
+
+  // Convert back to RGB
+  const newRGB = hslToRgb(hsl.h, hsl.s, newL);
+
+  return `rgb(${newRGB.r}, ${newRGB.g}, ${newRGB.b})`;
+}
 
 /**
  * Brighten a color by increasing its lightness
@@ -150,7 +199,7 @@ export const brightenColor = (color: string, amount: number = 15): string => {
  * @param color - Color string (hex like "#FF0000" or rgb like "rgb(255, 0, 0)")
  * @returns Either "#000000" (black) or "#FFFFFF" (white)
  */
-export const getOppositeColor = (color: string): string => {
+export const getContrastColorBW = (color: string): string => {
   let r = 0, g = 0, b = 0;
 
   // Parse hex color

@@ -2,7 +2,7 @@ export const colors = {
   // Background colors
   background: "#E2E5E8",
   lightGrey: '#F5F5F5',
-  midGrey: 'rgb(226, 226, 226)',
+  midGrey: 'rgb(155, 155, 155)',
   darkGrey: 'rgb(87, 87, 87)',
   white: '#FFFFFF',
   halfOpacityWhite: 'rgba(255,255,255,0.5)',

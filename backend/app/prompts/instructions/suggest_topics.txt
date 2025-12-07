@@ -17,4 +17,4 @@ Common topic categories: background, technique, historical context, symbolism, c
 
 # Output Format
 Return ONLY a JSON array of topic strings, nothing else. Example:
-["lithography?", "Joan Miro?", "What's special about it?"]
+["Tell me more about lithography?", "Who is Joan Miro?", "What's special about it?"]

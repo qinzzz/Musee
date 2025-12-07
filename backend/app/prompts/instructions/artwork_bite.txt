@@ -18,11 +18,11 @@ Provide a concise, and insightful piece of information specific to this artwork.
 5. Be specific and concrete about this artwork in the provided photo. Avoiding general comments on the artist.
 
 # Constraints
-- Maximum 50 words
+- Start with a short, intriguing title
+- Maximum 100 words
 - Must be a complete thought
 - Must be related to this artwork in the photo
-- No bullet points or lists
 - Write in a warm, conversational tone as if sharing with a friend
 
 # Output Format
-Return ONLY the bite-sized information, no additional text, no introduction, no conclusion.
+Return ONLY a short title and the bite-sized information, no additional text, no introduction, no conclusion.

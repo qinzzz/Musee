@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 from functools import lru_cache
-from app.models.artwork import ToneType
 
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
@@ -60,48 +59,6 @@ def load_artwork_analysis_base_prompt() -> str:
         str: The base prompt text for artwork analysis
     """
     return _load_prompt_file(ARTWORK_ANALYSIS_PROMPT_PATH)
-
-
-@lru_cache(maxsize=5)
-def load_tone_prompt(tone: ToneType) -> str:
-    """
-    Load a tone-specific prompt from file.
-
-    Args:
-        tone: The tone type to load
-
-    Returns:
-        str: The tone-specific prompt text
-    """
-    tone_file_path = TONES_DIR / f"{tone.value}.txt"
-    return _load_prompt_file(tone_file_path)
-
-
-def get_artist_identification_prompt() -> str:
-    """
-    Get the artist identification prompt (with caching).
-
-    Returns:
-        str: The prompt text for artist identification
-    """
-    return load_artist_identification_prompt()
-
-
-def get_artwork_analysis_prompt(tone: ToneType) -> str:
-    """
-    Get the complete artwork analysis prompt with tone instruction.
-
-    Args:
-        tone: The tone type for the analysis
-
-    Returns:
-        str: The complete prompt text with tone instruction
-    """
-    base_prompt = load_artwork_analysis_base_prompt()
-    tone_instruction = load_tone_prompt(tone)
-
-    # Replace the {tone_instruction} placeholder
-    return base_prompt.replace("{tone_instruction}", tone_instruction)
 
 
 @lru_cache(maxsize=1)
@@ -226,13 +183,14 @@ def load_instruction(instruction_name: str) -> str:
     return _load_prompt_file(instruction_path)
 
 
-def compose_prompt(identity_name: str, instruction_name: str, **kwargs) -> str:
+def compose_prompt(identity_name: str, instruction_name: str, language: str = None, **kwargs) -> str:
     """
     Compose a complete prompt from an identity and instruction.
 
     Args:
         identity_name: Name of the identity file (without .txt extension)
         instruction_name: Name of the instruction file (without .txt extension)
+        language: Language code for response (e.g., "en", "es", "fr", "zh") - optional
         **kwargs: Variable replacements for placeholders in the prompts
 
     Returns:
@@ -254,16 +212,36 @@ def compose_prompt(identity_name: str, instruction_name: str, **kwargs) -> str:
     for key, value in kwargs.items():
         placeholder = "{" + key + "}"
         prompt = prompt.replace(placeholder, str(value))
-
+    
+    # Add language instruction if specified
+    if language:
+        language_map = {
+            "en": "English",
+            "es": "Spanish",
+            "fr": "French",
+            "de": "German",
+            "it": "Italian",
+            "pt": "Portuguese",
+            "zh": "Chinese",
+            "ja": "Japanese",
+            "ko": "Korean",
+            "ru": "Russian",
+            "ar": "Arabic",
+            "hi": "Hindi"
+        }
+        language_name = language_map.get(language.lower(), language)
+        prompt += f"\n\nIMPORTANT: Respond in {language_name} ({language}). All your output should be in {language_name}."
+    
     return prompt
 
 
-def get_artist_identification_prompt_v2(identity: str = "default") -> str:
+def get_artist_identification_prompt_v2(identity: str = "default", language: str = None) -> str:
     """
     Get the artist identification prompt using composable system.
 
     Args:
         identity: Identity to use ("default" maps to "museum_narrator")
+        language: Language code for response (e.g., "en", "es", "fr", "zh") - optional
 
     Returns:
         str: The complete prompt for artist identification
@@ -271,13 +249,14 @@ def get_artist_identification_prompt_v2(identity: str = "default") -> str:
     # Map "default" to the appropriate identity for this task
     if identity == "default":
         identity = DEFAULT_IDENTITY
-    return compose_prompt(identity, "artist_identification")
+    return compose_prompt(identity, "artist_identification_with_analysis", language=language)
 
 
 def get_artwork_bite_prompt_v2(
     artist_name: str,
     artwork_name: str = "Unknown",
-    identity: str = "default"
+    identity: str = "default",
+    language: str = None
 ) -> str:
     """
     Get the artwork bite prompt using composable system.
@@ -286,6 +265,7 @@ def get_artwork_bite_prompt_v2(
         artist_name: Name of the artist
         artwork_name: Name of the artwork (optional, defaults to "Unknown")
         identity: Identity to use ("default" maps to "art_historian")
+        language: Language code for response (e.g., "en", "es", "fr", "zh") - optional
 
     Returns:
         str: The complete prompt for artwork bite
@@ -296,6 +276,7 @@ def get_artwork_bite_prompt_v2(
     return compose_prompt(
         identity,
         "artwork_bite",
+        language=language,
         artist_name=artist_name,
         artwork_name=artwork_name
     )
@@ -305,7 +286,8 @@ def get_suggest_topics_prompt_v2(
     artist_name: str,
     artwork_name: str,
     previous_insights: list,
-    identity: str = "default"
+    identity: str = "default",
+    language: str = None
 ) -> str:
     """
     Get the suggest topics prompt using composable system.
@@ -315,6 +297,7 @@ def get_suggest_topics_prompt_v2(
         artwork_name: Name of the artwork
         previous_insights: List of previous insights shared
         identity: Identity to use ("default" maps to "art_historian")
+        language: Language code for response (e.g., "en", "es", "fr", "zh") - optional
 
     Returns:
         str: The complete prompt for suggesting topics
@@ -329,6 +312,7 @@ def get_suggest_topics_prompt_v2(
     return compose_prompt(
         identity,
         "suggest_topics",
+        language=language,
         artist_name=artist_name,
         artwork_name=artwork_name,
         previous_insights=insights_text

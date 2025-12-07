@@ -17,6 +17,7 @@ import { Typography, Toast } from '../components';
 import { homeStyles } from './styles/HomeStyles';
 import { savedArtworkApiService, SavedArtwork } from '../services/savedArtworkApi';
 import { historyCacheService } from '../services/historyCache';
+import { artworkCacheService } from '../services/artworkCache';
 
 interface GalleryItem {
   id: string;
@@ -30,12 +31,12 @@ interface GalleryItem {
 interface GalleryScreenProps {
   onBack: () => void;
   onGalleryPress: () => void;
-  onArtworkPress?: (artworkId: string, photoUri: string, backgroundColor?: string) => void;
+  onArtworkPress?: (artworkId: string, photoUri: string, backgroundColor?: string, artworkIds?: string[]) => void;
 }
 
 const { width } = Dimensions.get('window');
 const COLUMN_GAP = 12;
-const PADDING = 24;
+const PADDING = 16;
 const ITEM_WIDTH = (width - PADDING * 2 - COLUMN_GAP) / 2;
 
 export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }: GalleryScreenProps) {
@@ -76,6 +77,11 @@ export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }
         setItems(convertedItems);
         setIsLoading(false);
 
+        // Pre-fetch full artwork details for all items from cache
+        console.log('[GalleryScreen] Loading from cache, pre-fetching', convertedItems.length, 'full details');
+        const artworkIds = convertedItems.map(item => item.id);
+        artworkCacheService.prefetch(artworkIds, (id) => savedArtworkApiService.getSavedArtwork(id));
+
         // Optionally refresh in background
         refreshDataInBackground();
         return;
@@ -103,7 +109,13 @@ export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }
       await historyCacheService.saveToCache(response.items);
 
       // Convert and display
-      setItems(convertToGalleryItems(response.items));
+      const galleryItems = convertToGalleryItems(response.items);
+      setItems(galleryItems);
+
+      // Pre-fetch full artwork details for all items in gallery
+      console.log('[GalleryScreen] Pre-fetching full details for', galleryItems.length, 'artworks');
+      const artworkIds = galleryItems.map(item => item.id);
+      artworkCacheService.prefetch(artworkIds, (id) => savedArtworkApiService.getSavedArtwork(id));
     } finally {
       setIsLoading(false);
     }
@@ -124,6 +136,11 @@ export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }
       // Update UI if data has changed
       const newItems = convertToGalleryItems(response.items);
       setItems(newItems);
+
+      // Pre-fetch full artwork details for all items
+      console.log('[GalleryScreen] Background: Pre-fetching full details for', newItems.length, 'artworks');
+      const artworkIds = newItems.map(item => item.id);
+      artworkCacheService.prefetch(artworkIds, (id) => savedArtworkApiService.getSavedArtwork(id));
     } catch (error) {
       // Silently fail - user already has cached data
       console.log('Background refresh failed:', error);
@@ -182,7 +199,10 @@ export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }
           if (isDeleting) {
             handleCancelDelete();
           } else {
-            onArtworkPress?.(item.id, item.uri, item.backgroundColor);
+            // Pass all artwork IDs so detail screen can navigate between them
+            const allIds = items.map(i => i.id);
+            // Note: All artworks are already pre-fetched when gallery loaded
+            onArtworkPress?.(item.id, item.uri, item.backgroundColor, allIds);
           }
         }}
         onLongPress={() => handleLongPress(item.id)}
@@ -206,8 +226,11 @@ export default function GalleryScreen({ onBack, onGalleryPress, onArtworkPress }
             </View>
           )}
         </View>
-        <Text style={styles.itemText} numberOfLines={2}>
-          {item.artworkName} by {item.artistName}
+        <Text style={styles.titleText}>
+          {item.artworkName}
+        </Text>
+        <Text style={styles.itemText}>
+          {item.artistName}
         </Text>
       </TouchableOpacity>
     );
@@ -345,7 +368,6 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     width: ITEM_WIDTH,
-    marginBottom: spacing.base,
   },
   imageContainer: {
     width: '100%',
@@ -359,13 +381,19 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  itemText: {
-    fontSize: 9,
+  titleText: {
+    fontSize: 11,
     fontWeight: '600',
     color: colors.black,
-    letterSpacing: 0.18,
-    lineHeight: 16,
-    textTransform: 'lowercase',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  itemText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.midGrey,
+    letterSpacing: 0.2,
+    textTransform: 'capitalize',
   },
   emptyContainer: {
     flex: 1,
@@ -397,7 +425,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: borderRadius.sm,
@@ -416,10 +444,8 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   deleteText: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#FF3B30',
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
 });

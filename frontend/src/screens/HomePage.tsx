@@ -28,21 +28,13 @@ export default function HomePage({
         {/* Header Section */}
         <View style={styles.headerSection}>
           <Typography variant="h1" style={styles.title}>DISCOVER</Typography>
-          <Text style={styles.secondaryTitle}>Capture what you see</Text>
-          <Text style={styles.normalText}>San Francisco</Text>
+          <Text style={styles.secondaryTitle}>Musee is... </Text>
+          <Text style={[styles.normalText, {alignSelf: 'flex-end'}]}>Your personal collection / your museum guide / your art journey </Text>
         </View>
 
         {/* Artwork Image Placeholder */}
-        <ArtworkPlaceholder onPress={onCapturePress} />
-
-        {/* Import from Album Button */}
-        <TouchableOpacity
-          style={styles.importButton}
-          onPress={onImportFromAlbum}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.importButtonText}>Import from Album</Text>
-        </TouchableOpacity>
+        <ArtworkPlaceholder onPress={onCapturePress} onImportFromAlbum={onImportFromAlbum}/>
+        
       </View>
 
       {/* Bottom Navigation Bar */}

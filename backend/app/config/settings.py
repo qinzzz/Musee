@@ -1,6 +1,9 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -8,6 +11,8 @@ class Settings(BaseSettings):
     ai_provider: str = "openai"
     ai_model_override: Optional[str] = None  # Override model version (e.g., "gpt-4o-mini", "claude-opus-4", "gemini-1.5-pro")
     openai_api_key: Optional[str] = None
+    openai_reasoning_effort: Optional[str] = None  # Reasoning effort level (e.g., "low", "medium", "high")
+    openai_verbosity: Optional[str] = None  # Verbosity level (e.g., "low", "medium", "high")
     claude_api_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
 
@@ -62,14 +67,14 @@ def get_ai_provider(requested_model: Optional[str] = None) -> str:
     """
     # Check if override is set in environment
     if settings.ai_model_override:
-        print(f"[CONFIG] Using AI_MODEL_OVERRIDE: {settings.ai_model_override}")
+        logger.info(f"Using AI_MODEL_OVERRIDE: {settings.ai_model_override}")
         return settings.ai_model_override.lower()
 
     # Use requested model if provided
     if requested_model:
-        print(f"[CONFIG] Using requested model: {requested_model}")
+        logger.info(f"Using requested model: {requested_model}")
         return requested_model.lower()
 
     # Fall back to default provider
-    print(f"[CONFIG] Using default AI provider: {settings.ai_provider}")
+    logger.info(f"Using default AI provider: {settings.ai_provider}")
     return settings.ai_provider.lower()

@@ -1,6 +1,6 @@
 import { StyleSheet, Dimensions } from 'react-native';
 import { colors } from '../../constants/colors';
-import { spacing, typography, shadows, borderRadius } from '../../constants/theme';
+import { spacing, shadows, borderRadius } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,7 +22,6 @@ export const homeStyles = StyleSheet.create({
     paddingBottom: spacing.base,
   },
   title: {
-    // fontSize: 26,
     fontFamily: 'PP Neue Montreal',
     fontWeight: '500',
     color: colors.black,
@@ -31,19 +30,17 @@ export const homeStyles = StyleSheet.create({
     // lineHeight: 29,
   },
   secondaryTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'PP Neue Montreal Medium',
     fontWeight: '500',
-    color: colors.black,
-    textTransform: 'capitalize',
+    color: colors.darkGrey,
     lineHeight: 25,
   },
   normalText: {
     fontSize: 16,
     fontFamily: 'PP Neue Montreal Book',
-    fontWeight: '300',
-    color: colors.black,
-    textTransform: 'capitalize',
+    fontWeight: '400',
+    color: colors.darkGrey,
     lineHeight: 25,
   },
   // Artwork Image Placeholder
@@ -56,9 +53,9 @@ export const homeStyles = StyleSheet.create({
   },
   // Import from Album Button
   importButton: {
-    marginTop: spacing.xl,
+    marginTop: spacing.base,
     paddingVertical: spacing.base,
-    paddingHorizontal: spacing['2xl'],
+    paddingHorizontal: spacing['xl'],
     backgroundColor: colors.white,
     borderRadius: borderRadius.base,
     borderWidth: 1,
@@ -76,7 +73,7 @@ export const homeStyles = StyleSheet.create({
   bottomNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',    
+    justifyContent: 'space-around',
     backgroundColor: colors.white,
     paddingTop: 23,
     paddingHorizontal: spacing['3xl'],

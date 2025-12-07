@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, TextInput } from 'react-native';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius, shadows } from '../constants/theme';
-import { brightenColor } from '../utils/colorUtils';
+import { brightenColor, getContrastColorBW } from '../utils/colorUtils';
 import { MoreIcon } from './icons/MoreIcon';
 
 interface ArtistCardProps {
@@ -46,6 +46,7 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
   const cardBackgroundColor = backgroundColor
     ? brightenColor(backgroundColor, 25)
     : colors.white;
+  const textColor = getContrastColorBW(cardBackgroundColor)
 
   const handleEditPress = () => {
     setShowMenu(false);
@@ -90,7 +91,7 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
         {showMenu && !isEditing && (
           <View style={styles.dropdownMenu}>
             <TouchableOpacity style={styles.menuItem} onPress={handleEditPress}>
-              <Text style={styles.menuItemText}>Edit</Text>
+              <Text style={[styles.menuItemText, {color: textColor}]}>Edit</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -111,7 +112,7 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
           disabled={isEditing}
         >
           <View style={styles.textContainer}>
-            <Text style={styles.annotation}>Artist</Text>
+            <Text style={[styles.annotation, {color: textColor}]}>Artist</Text>
             {isEditing ? (
               <TextInput
                 style={styles.input}
@@ -122,12 +123,12 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
                 autoCapitalize="words"
               />
             ) : (
-              <Text style={styles.artistName}>{artistName}</Text>
+              <Text style={[styles.artistName, {color: textColor}]}>{artistName}</Text>
             )}
           </View>
 
           <View style={styles.textContainer}>
-            <Text style={styles.annotation}>Title</Text>
+            <Text style={[styles.annotation, {color: textColor}]}>Title</Text>
             {isEditing ? (
               <TextInput
                 style={styles.input}
@@ -138,14 +139,14 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
                 autoCapitalize="words"
               />
             ) : (
-              <Text style={styles.title}>{title}</Text>
+              <Text style={[styles.title, {color: textColor}]}>{title}</Text>
             )}
           </View>
 
           <View style={styles.textContainer}>
           {isEditing ? (
             <>
-              <Text style={styles.annotation}>Summary</Text>
+              <Text style={[styles.annotation, {color: textColor}]}>Summary</Text>
               <TextInput
                 style={[styles.input]}
                 value={editedSummary}
@@ -157,7 +158,7 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
               />
             </>
           ) : (
-            <Text style={styles.description}>"{summary}"</Text>
+            <Text style={[styles.description, {color: textColor}]}>"{summary}"</Text>
           )}
           </View>
           

@@ -3,7 +3,7 @@
  * @format
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StatusBar,
   useColorScheme,
@@ -21,6 +21,7 @@ import PhotoDisplayScreen from './src/screens/PhotoDisplayScreen';
 import SummaryScreen from './src/screens/SummaryScreen';
 import GalleryScreen from './src/screens/GalleryScreen';
 import SavedArtworkDetailScreen from './src/screens/SavedArtworkDetailScreen';
+import { userApiService } from './src/services/userApi';
 
 type ScreenType = 'welcome' | 'home' | 'camera' | 'photo-display' | 'artist-identification' | 'summary' | 'gallery' | 'artwork-detail';
 
@@ -40,6 +41,24 @@ function App() {
   const [selectedArtworkId, setSelectedArtworkId] = useState<string>('');
   const [selectedArtworkPhotoUri, setSelectedArtworkPhotoUri] = useState<string>('');
   const [selectedArtworkBackgroundColor, setSelectedArtworkBackgroundColor] = useState<string | undefined>(undefined);
+  const [galleryArtworkIds, setGalleryArtworkIds] = useState<string[]>([]);
+  const [isFromGallery, setIsFromGallery] = useState<boolean>(false);
+
+  // Initialize user on app launch
+  useEffect(() => {
+    const initUser = async () => {
+      try {
+        await userApiService.initializeUser();
+        console.log('[App] User initialized successfully');
+      } catch (error) {
+        console.error('[App] Failed to initialize user:', error);
+        // User creation failed, but app can still function
+        // The user will be created on next attempt or when saving artwork
+      }
+    };
+
+    initUser();
+  }, []);
 
   const handlePhotoTaken = (uri: string) => {
     setPhotoUri(uri);
@@ -166,14 +185,16 @@ function App() {
           onSaveComplete={() => setCurrentScreen('gallery')}
         />
       )}
-      {currentScreen === 'gallery' && (
+      {(currentScreen === 'gallery' || currentScreen === 'artwork-detail') && (
         <GalleryScreen
           onBack={() => setCurrentScreen('home')}
           onGalleryPress={() => setCurrentScreen('gallery')}
-          onArtworkPress={(artworkId: string, photoUri: string, backgroundColor?: string) => {
+          onArtworkPress={(artworkId: string, photoUri: string, backgroundColor?: string, artworkIds?: string[]) => {
             setSelectedArtworkId(artworkId);
             setSelectedArtworkPhotoUri(photoUri);
             setSelectedArtworkBackgroundColor(backgroundColor);
+            setGalleryArtworkIds(artworkIds || []);
+            setIsFromGallery(true); // Mark as coming from gallery
             setCurrentScreen('artwork-detail');
           }}
         />
@@ -184,6 +205,23 @@ function App() {
           onBack={() => setCurrentScreen('gallery')}
           initialPhotoUri={selectedArtworkPhotoUri}
           initialBackgroundColor={selectedArtworkBackgroundColor}
+          artworkIds={galleryArtworkIds}
+          currentIndex={galleryArtworkIds.indexOf(selectedArtworkId)}
+          onNavigateToArtwork={(newArtworkId: string) => {
+            console.log('[App] Navigation requested:', {
+              from: selectedArtworkId,
+              to: newArtworkId,
+              allIds: galleryArtworkIds,
+              currentIndex: galleryArtworkIds.indexOf(selectedArtworkId),
+              newIndex: galleryArtworkIds.indexOf(newArtworkId)
+            });
+            setSelectedArtworkId(newArtworkId);
+            // Clear photo and background to force reload from new artwork
+            setSelectedArtworkPhotoUri('');
+            setSelectedArtworkBackgroundColor(undefined);
+            setIsFromGallery(false); // No longer from gallery, navigating between artworks
+          }}
+          isFromGallery={isFromGallery}
         />
       )}
     </SafeAreaProvider>

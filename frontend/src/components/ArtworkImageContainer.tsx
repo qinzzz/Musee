@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Image, StyleSheet, ViewStyle, ImageStyle } from 'react-native';
+import { View, Image, StyleSheet, ViewStyle, ImageStyle, TouchableOpacity } from 'react-native';
 import { borderRadius, shadows, spacing } from '../constants/theme';
 
 interface ArtworkImageContainerProps {
@@ -10,6 +10,7 @@ interface ArtworkImageContainerProps {
   marginTop?: number;
   containerStyle?: ViewStyle;
   imageStyle?: ImageStyle;
+  onPress?: () => void;
 }
 
 export const ArtworkImageContainer: React.FC<ArtworkImageContainerProps> = ({
@@ -20,6 +21,7 @@ export const ArtworkImageContainer: React.FC<ArtworkImageContainerProps> = ({
   marginTop = spacing.md,
   containerStyle,
   imageStyle,
+  onPress,
 }) => {
   const wrapperStyles: ViewStyle[] = [
     styles.wrapper,
@@ -35,15 +37,25 @@ export const ArtworkImageContainer: React.FC<ArtworkImageContainerProps> = ({
     borderRadius: borderRadius[borderRadiusSize],
   };
 
+  const imageContent = (
+    <View style={[styles.imageContainer, imageContainerStyles]}>
+      <Image
+        source={{ uri: imageUri }}
+        style={[styles.artworkImage, imageStyle]}
+        resizeMode="cover"
+      />
+    </View>
+  );
+
   return (
     <View style={wrapperStyles}>
-      <View style={[styles.imageContainer, imageContainerStyles]}>
-        <Image
-          source={{ uri: imageUri }}
-          style={[styles.artworkImage, imageStyle]}
-          resizeMode="cover"
-        />
-      </View>
+      {onPress ? (
+        <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
+          {imageContent}
+        </TouchableOpacity>
+      ) : (
+        imageContent
+      )}
     </View>
   );
 };

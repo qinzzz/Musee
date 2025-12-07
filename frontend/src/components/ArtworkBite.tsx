@@ -5,12 +5,13 @@ import { spacing, borderRadius } from '../constants/theme';
 
 interface ArtworkBiteProps {
   content: string;
+  textColor?: string;
 }
 
-export const ArtworkBite: React.FC<ArtworkBiteProps> = ({ content }) => {
+export const ArtworkBite: React.FC<ArtworkBiteProps> = ({ content, textColor }) => {
   return (
     <View style={styles.container}>
-      <Text style={styles.content}>{content}</Text>
+      <Text style={[styles.content, textColor && { color: textColor }]}>{content}</Text>
     </View>
   );
 };

@@ -7,12 +7,14 @@ interface TopicChipProps {
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  textColor?: string;
 }
 
 export const TopicChip: React.FC<TopicChipProps> = ({
   label,
   onPress,
-  disabled = false
+  disabled = false,
+  textColor
 }) => {
   return (
     <TouchableOpacity
@@ -21,7 +23,7 @@ export const TopicChip: React.FC<TopicChipProps> = ({
       activeOpacity={0.7}
       disabled={disabled}
     >
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, textColor && { color: textColor }]}>{label}</Text>
     </TouchableOpacity>
   );
 }

@@ -3,14 +3,6 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
 
-class ToneType(str, Enum):
-    PROFESSIONAL = "professional"
-    GENERAL = "general"
-    SARCASTIC = "sarcastic"
-    EDUCATIONAL = "educational"
-    POETIC = "poetic"
-
-
 class AIProvider(str, Enum):
     OPENAI = "openai"
     CLAUDE = "claude"

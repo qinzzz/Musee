@@ -65,10 +65,7 @@ async def process_image(file: UploadFile) -> Tuple[bytes, Dict[str, Any]]:
         image.save(output, format=image.format or 'JPEG', optimize=True, quality=85)
         image_bytes = output.getvalue()
 
-    # Extract metadata
-    metadata = extract_image_metadata(image, file.filename, len(image_bytes))
-
-    return image_bytes, metadata
+    return image_bytes
 
 
 def extract_image_metadata(image: Image.Image, filename: str, file_size: int) -> Dict[str, Any]:
