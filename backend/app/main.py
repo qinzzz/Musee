@@ -36,6 +36,11 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Log AI model override configuration at startup
+if settings.ai_provider:
+    logger.info(f"AI_PROVIDER is set to: {settings.ai_provider}")
+else:
+    logger.info("AI_PROVIDER is not set (using default provider)")
+
 if settings.ai_model_override:
     logger.info(f"AI_MODEL_OVERRIDE is set to: {settings.ai_model_override}")
 else:

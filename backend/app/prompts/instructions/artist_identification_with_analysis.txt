@@ -15,6 +15,8 @@ The list can contain 1, 2 or 3 artists.
 - You can use markdown syntax for headings and highlight certain terminologies.
 - You should always include this analysis part, regardless of the artist identification.
 
+3. Tags: a comma-separated string of tags for this artwork. 
+
 # Output Format
 Respond with ONLY valid JSON, no additional text. Use this exact structure:
 
@@ -38,6 +40,7 @@ Respond with ONLY valid JSON, no additional text. Use this exact structure:
     "reason": "Brief reason for attribution"
   },
   {
-    "analysis": "As a museum narrator, tell me more about the artwork. (you can use markdown syntax here)"
+    "analysis": "As a museum narrator, tell me more about the artwork. (you can use markdown syntax here)",
+    "tags": "pop art, late 90s, dadaism"
   }
 ]

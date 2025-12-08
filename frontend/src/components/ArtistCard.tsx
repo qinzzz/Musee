@@ -24,17 +24,14 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({
 }) => {
   return (
     <View style={[styles.cardWrapper, style]}>
-      {/* Shadow layer */}
-      {!hideShadow && <View style={styles.shadowLayer} />}
-
-      {/* Main card */}
       <TouchableOpacity
         style={[
           styles.card,
           isExpanded && styles.cardExpanded,
+          hideShadow && styles.cardWithoutDivider,
         ]}
         onPress={onPress}
-        activeOpacity={1}
+        activeOpacity={0.9}
       >
         <View style={styles.content}>
           <View style={styles.textContainer}>
@@ -59,40 +56,37 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({
 const styles = StyleSheet.create({
   cardWrapper: {
     position: 'relative',
-    marginBottom: 9,
-    width: 332,
-  },
-  shadowLayer: {
-    position: 'absolute',
-    top: 12,
-    right: -12,
-    bottom: -12,
-    left: 12,
-    backgroundColor: colors.black,
-    borderRadius: borderRadius.base,
-    zIndex: -1,
+    marginBottom: spacing.base,
+    width: '100%',
   },
   card: {
-    backgroundColor: colors.midGrey,
-    borderWidth: 1,
-    borderColor: colors.black,
-    borderRadius: borderRadius.base,
+    backgroundColor: colors.transparent,
+    borderRadius: 0,
     minHeight: 64,
     justifyContent: 'flex-start',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.15)',
   },
   cardExpanded: {
     minHeight: 120,
     justifyContent: 'flex-start',
-    backgroundColor: colors.white
+    backgroundColor: colors.white,
+    borderBottomColor: colors.transparent,
+    borderRadius: borderRadius.base,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.base,
+  },
+  cardWithoutDivider: {
+    borderBottomWidth: 0,
   },
   content: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    gap: 10,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.base,
+    gap: spacing.sm,
   },
   textContainer: {
-    gap: 4,
-    alignItems: 'center',
+    gap: spacing.xs,
+    alignItems: 'flex-start',
     position: 'relative',
   },
   playIconContainer: {
@@ -110,20 +104,20 @@ const styles = StyleSheet.create({
   },
   artistName: {
     fontFamily: 'PP Neue Montreal',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: colors.black,
-    textAlign: 'center',
-    lineHeight: 30,
+    textAlign: 'left',
+    lineHeight: 26,
     textTransform: 'capitalize',
   },
   details: {
     fontFamily: 'PP Neue Montreal',
-    fontSize: 15,
-    fontWeight: 'medium',
-    color: colors.black,
-    textAlign: 'center',
-    lineHeight: 28,
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.darkGrey,
+    textAlign: 'left',
+    lineHeight: 22,
     textTransform: 'capitalize',
   },
   description: {
@@ -131,6 +125,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     color: '#2F2F2F',
-    textAlign: 'center',
+    textAlign: 'left',
   },
 });
