@@ -436,6 +436,8 @@ async def save_artwork(
     location: Optional[str] = Form(None),
     museum_name: Optional[str] = Form(None),
     is_recognized: bool = Form(True),
+    tags: Optional[str] = Form(None),  # Comma-separated tags from AI
+    analysis: Optional[str] = Form(None),  # Detailed analysis text from AI
     color_palette: Optional[str] = Form(None),  # JSON string of color palette
     db: Session = Depends(get_db)
 ):
@@ -477,6 +479,8 @@ async def save_artwork(
             location=location,
             museum_name=museum_name,
             is_recognized=1 if is_recognized else 0,
+            tags=tags,
+            analysis=analysis,
             color_palette=color_palette_data
         )
 
@@ -633,6 +637,15 @@ async def update_saved_artwork(
 
         if request.artwork_name is not None:
             saved_artwork.artwork_name = request.artwork_name.strip()
+
+        if request.summary is not None:
+            saved_artwork.summary = request.summary
+
+        if request.tags is not None:
+            saved_artwork.tags = request.tags
+
+        if request.analysis is not None:
+            saved_artwork.analysis = request.analysis
 
         if request.background_color is not None:
             saved_artwork.background_color = request.background_color
