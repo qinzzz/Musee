@@ -22,6 +22,7 @@ import SummaryScreen from './src/screens/SummaryScreen';
 import GalleryScreen from './src/screens/GalleryScreen';
 import SavedArtworkDetailScreen from './src/screens/SavedArtworkDetailScreen';
 import { userApiService } from './src/services/userApi';
+import { LanguageProvider } from './src/contexts/LanguageContext';
 
 type ScreenType = 'welcome' | 'home' | 'camera' | 'photo-display' | 'artist-identification' | 'summary' | 'gallery' | 'artwork-detail';
 
@@ -33,6 +34,14 @@ interface ConversationData {
 }
 
 function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
+  );
+}
+
+function AppContent() {
   const isDarkMode = useColorScheme() === 'dark';
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('welcome');
   const [photoUri, setPhotoUri] = useState<string>('');

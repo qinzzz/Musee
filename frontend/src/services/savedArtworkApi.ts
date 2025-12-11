@@ -38,6 +38,8 @@ interface SaveArtworkParams {
   museumName?: string;
   conversationHistory: ConversationMessage[];
   isRecognized?: boolean;
+  tags?: string;
+  analysis?: string;
   colorPalette?: ColorPalette;
 }
 
@@ -76,6 +78,14 @@ class SavedArtworkApiService {
 
     if (params.museumName) {
       formData.append('museum_name', params.museumName);
+    }
+
+    if (params.tags) {
+      formData.append('tags', params.tags);
+    }
+
+    if (params.analysis) {
+      formData.append('analysis', params.analysis);
     }
 
     formData.append('is_recognized', params.isRecognized !== false ? 'true' : 'false');
@@ -181,7 +191,7 @@ class SavedArtworkApiService {
   /**
    * Generate a fun, one-sentence summary for an artwork
    */
-  async generateArtworkSummary(artworkId: string, imageUri: string): Promise<{ summary: string; saved_artwork_id: string; model_used: string }> {
+  async generateArtworkSummary(artworkId: string, imageUri: string, language?: string): Promise<{ summary: string; saved_artwork_id: string; model_used: string }> {
     const formData = new FormData();
     formData.append('saved_artwork_id', artworkId);
 
@@ -191,6 +201,11 @@ class SavedArtworkApiService {
       type: 'image/jpeg',
       name: 'artwork.jpg',
     } as any);
+
+    // Append language if provided
+    if (language) {
+      formData.append('language', language);
+    }
 
     const response = await fetch(`${API_BASE_URL}/api/artwork-summary`, {
       method: 'POST',

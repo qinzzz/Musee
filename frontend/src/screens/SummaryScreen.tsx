@@ -15,6 +15,8 @@ import { spacing } from '../constants/theme';
 import { FramedArtworkCard, ActionButton } from '../components';
 import { savedArtworkApiService, ConversationMessage } from '../services/savedArtworkApi';
 import { historyCacheService } from '../services/historyCache';
+import { artworkSummaryCache } from '../utils/artworkSummaryCache';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface SummaryScreenProps {
   photoUri: string;
@@ -43,6 +45,7 @@ export default function SummaryScreen({
   onSaveComplete
 }: SummaryScreenProps) {
   const safeAreaInsets = useSafeAreaInsets();
+  const { language } = useLanguage();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('unsaved');
@@ -82,11 +85,38 @@ export default function SummaryScreen({
 
     try {
       setIsGeneratingSummary(true);
-      const result = await savedArtworkApiService.generateArtworkSummary(savedArtworkId, photoUri);
+
+      // Check if we already have a cached summary or request in progress
+      const cached = artworkSummaryCache.get(savedArtworkId);
+
+      let result;
+      if (cached?.data) {
+        // Data already available from cache
+        console.log('[SummaryScreen] Using cached summary data');
+        result = { summary: cached.data };
+      } else if (cached?.promise) {
+        // Request already in progress, wait for it
+        console.log('[SummaryScreen] Waiting for in-progress summary generation...');
+        result = await cached.promise;
+      } else {
+        // No cache, make new request
+        console.log('[SummaryScreen] Making new summary request');
+        const summaryPromise = savedArtworkApiService.generateArtworkSummary(savedArtworkId, photoUri, language);
+
+        // Cache the promise so other components can await it
+        artworkSummaryCache.set(savedArtworkId, summaryPromise);
+
+        result = await summaryPromise;
+      }
+
       setSummary(result.summary);
-      console.log('[SummaryScreen] Summary generated successfully:', result.summary);
+      console.log('[SummaryScreen] Summary set successfully:', result.summary);
     } catch (error) {
       console.error('[SummaryScreen] Failed to generate summary:', error);
+      // Clear the cache on error so retry will make a fresh request
+      if (savedArtworkId) {
+        artworkSummaryCache.clear(savedArtworkId);
+      }
     } finally {
       setIsGeneratingSummary(false);
     }
@@ -108,39 +138,9 @@ export default function SummaryScreen({
     console.log('Add to collection');
   };
 
-  const handleSave = async () => {
-    if (saveStatus !== 'unsaved') return;
-
-    setSaveStatus('saving');
-    try {
-      // Photo is already saved to camera roll in "Musee" album
-      // Just confirm to the user
-      setSaveStatus('saved');
-      Alert.alert(
-        'Already Saved',
-        'This photo is already in your Musee album in Photos!',
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      console.error('Error:', error);
-      setSaveStatus('unsaved');
-    }
-  };
-
   const handleDone = () => {
     if (onSaveComplete) {
       onSaveComplete();
-    }
-  };
-
-  const getSaveButtonLabel = () => {
-    switch (saveStatus) {
-      case 'saving':
-        return 'Saving...';
-      case 'saved':
-        return 'Saved';
-      default:
-        return 'Save the photo';
     }
   };
 
@@ -181,15 +181,6 @@ export default function SummaryScreen({
               <Text style={styles.summaryText}>{summary}</Text>
             </View>
           )}
-
-          {/* Save Photo Button */}
-          <View style={styles.savePhotoButtonContainer}>
-            <ActionButton
-              label={getSaveButtonLabel()}
-              onPress={handleSave}
-              disabled={saveStatus !== 'unsaved'}
-            />
-          </View>
 
           {/* Action Icons */}
           <View style={styles.iconContainer}>

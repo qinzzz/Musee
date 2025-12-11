@@ -92,9 +92,52 @@ export function shouldCompressImage(uri: string): boolean {
  */
 export function getCompressionSettings(): CompressImageOptions {
   return {
-    maxWidth: 1920,
-    maxHeight: 1920,
-    quality: 80,
+    maxWidth: 1600,
+    maxHeight: 1600,
+    quality: 75,
     format: 'JPEG',
   };
+}
+
+/**
+ * Compress image with multiple quality passes if needed to stay under size limit
+ * @param uri - Original image URI
+ * @param maxSizeBytes - Maximum file size in bytes (default: 4MB to be safe for 4.5MB limit)
+ */
+export async function compressImageToSize(
+  uri: string,
+  maxSizeBytes: number = 4 * 1024 * 1024 // 4MB
+): Promise<{ uri: string; width: number; height: number; size: number }> {
+  // Try initial compression
+  let result = await compressImage(uri, getCompressionSettings());
+
+  // If still too large, try more aggressive compression
+  if (result.size > maxSizeBytes) {
+    console.log(`[ImageUtils] Image still too large (${(result.size / 1024 / 1024).toFixed(2)}MB), trying more aggressive compression...`);
+
+    result = await compressImage(uri, {
+      maxWidth: 1280,
+      maxHeight: 1280,
+      quality: 65,
+      format: 'JPEG',
+    });
+  }
+
+  // Last resort: very aggressive compression
+  if (result.size > maxSizeBytes) {
+    console.log(`[ImageUtils] Image STILL too large (${(result.size / 1024 / 1024).toFixed(2)}MB), trying maximum compression...`);
+
+    result = await compressImage(uri, {
+      maxWidth: 1024,
+      maxHeight: 1024,
+      quality: 60,
+      format: 'JPEG',
+    });
+  }
+
+  if (result.size > maxSizeBytes) {
+    console.warn(`[ImageUtils] WARNING: Image is ${(result.size / 1024 / 1024).toFixed(2)}MB, may exceed API limit!`);
+  }
+
+  return result;
 }

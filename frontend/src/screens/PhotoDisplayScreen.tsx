@@ -19,12 +19,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
 import { artistAnalysisCache } from '../utils/artistAnalysisCache';
+import { artworkSummaryCache } from '../utils/artworkSummaryCache';
+import { useLanguage } from '../contexts/LanguageContext';
 import { Typography, Heading2, Body, Label, LoadingProgressBar, ArtistCard, ActionButton, TopicChip, ArtworkBite } from '../components';
 import { spacing, shadows, borderRadius, animations } from '../constants/theme';
 import { removeBackground } from 'react-native-background-remover';
 import { getColors } from 'react-native-image-colors';
 import { softenColor } from '../utils/colorUtils';
-import { compressImage, getCompressionSettings } from '../utils/imageUtils';
+import { compressImageToSize } from '../utils/imageUtils';
 import { savedArtworkApiService, ColorPalette } from '../services/savedArtworkApi';
 
 
@@ -52,6 +54,7 @@ interface Artist {
 
 interface AnalysisResponse {
   analysis?: string;
+  tags?: string;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -64,10 +67,12 @@ export default function PhotoDisplayScreen({
   identity = 'gamified'
 }: PhotoDisplayScreenProps) {
   const safeAreaInsets = useSafeAreaInsets();
+  const { language } = useLanguage();
   const [isFlipped, setIsFlipped] = useState(false);
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const [artists, setArtists] = useState<Artist[]>([]);
   const [artworkAnalysis, setArtworkAnalysis] = useState<string>('');
+  const [artworkTags, setArtworkTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -206,13 +211,21 @@ export default function PhotoDisplayScreen({
       } else {
         // No cache, make new request
         console.log('Making new artist analysis request');
+
+        // Compress image before uploading to avoid 413 errors (Vercel 4.5MB limit)
+        console.log('[PhotoDisplay] Compressing image for artist identification...');
+        const compressed = await compressImageToSize(photoUri, 4 * 1024 * 1024); // 4MB max
+        const uploadUri = compressed.uri;
+        console.log(`[PhotoDisplay] Using ${compressed.size > 0 ? 'compressed' : 'original'} image for upload (size: ${(compressed.size / 1024 / 1024).toFixed(2)}MB)`);
+
         const formData = new FormData();
         formData.append('image', {
-          uri: photoUri,
+          uri: uploadUri,
           type: 'image/jpeg',
           name: 'artwork.jpg',
         } as any);
         formData.append('identity', identity);
+        formData.append('language', language);
         const analyze_url = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_ARTIST}`
         const response = await fetch(analyze_url, {
           method: 'POST',
@@ -220,7 +233,8 @@ export default function PhotoDisplayScreen({
         });
 
         if (!response.ok) {
-          throw new Error(`API request failed with status ${response.status}`);
+          const errorBody = await response.text(); // or await response.json()
+          throw new Error(`API request failed with status ${response.status} ${response.statusText}: ${errorBody}`);
         }
 
         data = await response.json();
@@ -229,6 +243,7 @@ export default function PhotoDisplayScreen({
       // Parse the analysis field which should contain JSON
       let artistsData: Artist[];
       let analysisContent: string = '';
+      let tagsArray: string[] = [];
       try {
         let analysisText = data.analysis;
 
@@ -260,6 +275,16 @@ export default function PhotoDisplayScreen({
         if (lastItem && 'analysis' in lastItem && !('artist_name' in lastItem)) {
           // Extract the analysis content
           analysisContent = (lastItem as AnalysisResponse).analysis || '';
+
+          // Extract tags if present
+          const analysisItem = lastItem as AnalysisResponse;
+          if (analysisItem.tags) {
+            const tagsString = analysisItem.tags;
+            // Split by comma and trim whitespace
+            tagsArray = tagsString.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+            console.log("Extracted tags:", tagsArray);
+          }
+
           // Remove the analysis item from the artists array
           artistsData = artistsData.slice(0, -1);
           console.log("Extracted analysis content:", analysisContent);
@@ -278,7 +303,20 @@ export default function PhotoDisplayScreen({
 
       setArtists(artistsData);
       setArtworkAnalysis(analysisContent);
+      setArtworkTags(tagsArray);
       setHasError(false);
+
+      // Save artwork to database immediately after successful artist identification
+      // This allows us to start background summary generation early
+      if (artistsData.length > 0) {
+        const firstArtist = artistsData[0];
+        const artworkId = await saveArtworkToDatabase(firstArtist, colorPalette || undefined);
+
+        // Start background summary generation immediately
+        if (artworkId) {
+          startBackgroundSummaryGeneration(artworkId);
+        }
+      }
     } catch (error) {
       console.error('Error fetching artist identification:', error);
       const errorMsg = error instanceof Error ? error.message : 'Failed to identify artists. Please try again.';
@@ -421,13 +459,15 @@ export default function PhotoDisplayScreen({
         artworkLower !== '' &&
         !artistLower.includes('not an artwork') &&
         !artworkLower.includes('not an artwork');
-      
+
       const result = await savedArtworkApiService.saveArtwork({
         photoUri,
         artistName: artist.artist_name,
         artworkName: artist.artwork_name || 'Unknown',
         conversationHistory: [], // Empty initially, will be populated as user explores
         isRecognized,
+        tags: artworkTags.length > 0 ? artworkTags.join(', ') : undefined,
+        analysis: artworkAnalysis || undefined,
         colorPalette,
       });
 
@@ -437,6 +477,30 @@ export default function PhotoDisplayScreen({
     } catch (error) {
       console.error('[PhotoDisplay] Error saving artwork to database:', error);
       return null;
+    }
+  };
+
+  const startBackgroundSummaryGeneration = async (artworkId: string) => {
+    try {
+      console.log('[PhotoDisplay] Starting background summary generation for artwork:', artworkId);
+
+      // Check if summary is already cached
+      const cached = artworkSummaryCache.get(artworkId);
+      if (cached?.data || cached?.promise) {
+        console.log('[PhotoDisplay] Summary already cached or in progress, skipping');
+        return;
+      }
+
+      // Start the summary generation in background
+      const summaryPromise = savedArtworkApiService.generateArtworkSummary(artworkId, photoUri, language);
+
+      // Cache the promise so other components can await it
+      artworkSummaryCache.set(artworkId, summaryPromise);
+
+      console.log('[PhotoDisplay] Background summary generation started');
+    } catch (error) {
+      console.error('[PhotoDisplay] Error starting background summary generation:', error);
+      // Silently fail - summary is optional
     }
   };
 
@@ -454,7 +518,7 @@ export default function PhotoDisplayScreen({
     return firstArtist.includes('unknown') || firstArtist.includes('not an artwork');
   };
 
-  const handleManualInputSubmit = () => {
+  const handleManualInputSubmit = async () => {
     if (!manualArtistName.trim()) {
       // Could add error handling here
       return;
@@ -475,6 +539,35 @@ export default function PhotoDisplayScreen({
     setManualInputSubmitted(true);
     setShowManualInput(false);
 
+    // Update database if artwork is already saved
+    if (savedArtworkId) {
+      try {
+        console.log('[PhotoDisplay] Updating database with manually entered artist:', manualArtist.artist_name);
+        await savedArtworkApiService.updateSavedArtwork(
+          savedArtworkId,
+          manualArtist.artist_name,
+          manualArtist.artwork_name || 'Unknown'
+        );
+        console.log('[PhotoDisplay] Database updated successfully with manual input');
+
+        // Clear the summary cache since we changed the artist
+        artworkSummaryCache.clear(savedArtworkId);
+
+        // Restart background summary generation for the manual artist
+        startBackgroundSummaryGeneration(savedArtworkId);
+      } catch (error) {
+        console.error('[PhotoDisplay] Error updating database with manual input:', error);
+      }
+    } else {
+      // If not saved yet, save the artwork with manual info
+      const artworkId = await saveArtworkToDatabase(manualArtist, colorPalette || undefined);
+
+      // Start background summary generation
+      if (artworkId) {
+        startBackgroundSummaryGeneration(artworkId);
+      }
+    }
+
     // Clear input fields
     setManualArtistName('');
     setManualArtworkName('');
@@ -486,7 +579,7 @@ export default function PhotoDisplayScreen({
 
   const fetchSuggestedTopics = async (artworkId: string) => {
     try {
-      const topicUrl = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_TOPIC}?saved_artwork_id=${artworkId}&identity=${encodeURIComponent(identity)}`;
+      const topicUrl = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_TOPIC}?saved_artwork_id=${artworkId}&identity=${encodeURIComponent(identity)}&language=${language}`;
       console.log('=== FETCHING SUGGESTED TOPICS ===');
       console.log('URL:', topicUrl);
 
@@ -495,7 +588,8 @@ export default function PhotoDisplayScreen({
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
+        const errorBody = await response.text(); // or await response.json()
+        throw new Error(`API request failed with status ${response.status} ${response.statusText}: ${errorBody}`);
       }
 
       const data = await response.json();
@@ -532,9 +626,9 @@ export default function PhotoDisplayScreen({
 
       // Compress image before uploading to avoid 413 errors (Vercel 4.5MB limit)
       console.log('[PhotoDisplay] Compressing image for API upload...');
-      const compressed = await compressImage(photoUri, getCompressionSettings());
+      const compressed = await compressImageToSize(photoUri, 4 * 1024 * 1024); // 4MB max
       const uploadUri = compressed.uri;
-      console.log(`[PhotoDisplay] Using ${compressed.size > 0 ? 'compressed' : 'original'} image for upload`);
+      console.log(`[PhotoDisplay] Using ${compressed.size > 0 ? 'compressed' : 'original'} image for upload (size: ${(compressed.size / 1024 / 1024).toFixed(2)}MB)`);
 
       const formData = new FormData();
       formData.append('image', {
@@ -545,6 +639,7 @@ export default function PhotoDisplayScreen({
       formData.append('artist_name', selectedArtist.artist_name);
       formData.append('artwork_name', selectedArtist.artwork_name || 'Unknown');
       formData.append('identity', identity);
+      formData.append('language', language);
 
       // Use artworkIdOverride if provided, otherwise use state
       // This fixes the issue where state hasn't updated yet after saving
@@ -575,8 +670,10 @@ export default function PhotoDisplayScreen({
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
+        const errorBody = await response.text(); // or await response.json()
+        throw new Error(`API request failed with status ${response.status} ${response.statusText}: ${errorBody}`);
       }
+
 
       const data = await response.json();
       console.log('Bite response:', data);
@@ -604,9 +701,11 @@ export default function PhotoDisplayScreen({
 
       // Fetch suggested topics after bite completes successfully
       // This ensures the topic generation has the latest conversation context
-      setTimeout(() => {
-        fetchSuggestedTopics(artworkId);
-      }, 500);
+      if (artworkId) {
+        setTimeout(() => {
+          fetchSuggestedTopics(artworkId);
+        }, 500);
+      }
     } catch (error) {
       console.error('Error fetching artwork bite:', error);
       // Add error message as a bite
@@ -632,10 +731,34 @@ export default function PhotoDisplayScreen({
       return;
     }
 
+    const selectedArtist = artists[selectedArtistIndex];
+
     // Save artwork to database when user confirms they want to explore
     let artworkId = savedArtworkId;
     if (!savedArtworkId) {
-      artworkId = await saveArtworkToDatabase(artists[selectedArtistIndex], colorPalette || undefined);
+      artworkId = await saveArtworkToDatabase(selectedArtist, colorPalette || undefined);
+    } else if (selectedArtistIndex !== 0 && savedArtworkId) {
+      // User selected a different artist than the first one (which was auto-saved)
+      // Update the database with the selected artist
+      try {
+        console.log('[PhotoDisplay] Updating database with user-selected artist:', selectedArtist.artist_name);
+        await savedArtworkApiService.updateSavedArtwork(
+          savedArtworkId,
+          selectedArtist.artist_name,
+          selectedArtist.artwork_name || 'Unknown'
+        );
+        console.log('[PhotoDisplay] Database updated successfully');
+
+        // Clear the summary cache since we changed the artist
+        artworkSummaryCache.clear(savedArtworkId);
+      } catch (error) {
+        console.error('[PhotoDisplay] Error updating database with selected artist:', error);
+      }
+    }
+
+    // Start background summary generation if we have an artwork ID
+    if (artworkId) {
+      startBackgroundSummaryGeneration(artworkId);
     }
 
     // Open exploration overlay
@@ -802,28 +925,49 @@ export default function PhotoDisplayScreen({
                 </>
               ) : (
                   <>
-                    <View style={styles.artistListCentered}>
-                      {artists.map((artist, index) => {
-                        const isExpanded = (expandedArtistIndex === index) && artworkBites.length ===0;
-                        return (
-                          <ArtistCard
-                            key={index}
-                            artistName={artist.artist_name}
-                            details={`${artist.artwork_name || 'Unknown'} (${artist.score * 10}%)`}
-                            description={artist.reason}
-                            isExpanded={isExpanded}
-                            onPress={() => handleArtistPress(index)}
-                          />
-                        );
-                      })}
-                    </View>
-
-                    {/* Display artwork analysis if available */}
-                    {artworkAnalysis && (
-                      <View style={styles.analysisContainer}>
-                        <ArtworkBite content={artworkAnalysis} />
+                    <View style={styles.discoveryContainer}>
+                      <View style={styles.artistListCentered}>
+                        {artists.map((artist, index) => {
+                          const isExpanded = (expandedArtistIndex === index) && artworkBites.length === 0;
+                          return (
+                            <ArtistCard
+                              key={index}
+                              artistName={artist.artist_name}
+                              details={`${artist.artwork_name || 'Unknown'} (${artist.score * 10}%)`}
+                              description={artist.reason}
+                              isExpanded={isExpanded}
+                              onPress={() => handleArtistPress(index)}
+                            />
+                          );
+                        })}
                       </View>
-                    )}
+
+                      {(artworkTags.length > 0 || artworkAnalysis) && (
+                        <>
+                          <View style={styles.sectionDivider} />
+
+                          {/* Tags Display */}
+                          {artworkTags.length > 0 && (
+                            <View style={styles.tagsContainer}>
+                              {artworkTags.map((tag, index) => (
+                                <View key={index} style={styles.tag}>
+                                  <Typography variant="label" style={styles.tagText}>
+                                    {tag}
+                                  </Typography>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+
+                          {/* Analysis */}
+                          {artworkAnalysis && (
+                            <View style={styles.analysisContainer}>
+                              <ArtworkBite content={artworkAnalysis} />
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </View>
 
                     {/* Show manual input button if artist is unknown */}
                     {isUnknownArtist() && !manualInputSubmitted && (
@@ -852,6 +996,23 @@ export default function PhotoDisplayScreen({
                             let artworkId = savedArtworkId;
                             if (!savedArtworkId) {
                               artworkId = await saveArtworkToDatabase(selectedArtist, colorPalette || undefined);
+                            } else if (selectedArtistIndex !== 0 && selectedArtistIndex !== null && savedArtworkId) {
+                              // User selected a different artist than the first one (which was auto-saved)
+                              // Update the database with the selected artist
+                              try {
+                                console.log('[PhotoDisplay] Updating database with user-selected artist before finish:', selectedArtist.artist_name);
+                                await savedArtworkApiService.updateSavedArtwork(
+                                  savedArtworkId,
+                                  selectedArtist.artist_name,
+                                  selectedArtist.artwork_name || 'Unknown'
+                                );
+                                console.log('[PhotoDisplay] Database updated successfully');
+
+                                // Clear the summary cache since we changed the artist
+                                artworkSummaryCache.clear(savedArtworkId);
+                              } catch (error) {
+                                console.error('[PhotoDisplay] Error updating database with selected artist:', error);
+                              }
                             }
 
                             onFinish({
@@ -1096,21 +1257,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
   },
-  artistListWrapper: {
-    height: 440, // Same height as artworkImage
-    justifyContent: 'center',
-    alignItems: 'center',
+  discoveryContainer: {
+    width: '100%',
+    alignSelf: 'stretch',
+    backgroundColor: colors.white,
+    borderRadius: borderRadius['2xl'],
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    gap: spacing.xl,
   },
   artistListCentered: {
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.base,
     width: '100%',
   },
-  analysisContainer: {
-    marginTop: spacing['2xl'],
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     width: '100%',
-    alignItems: 'center',
+    marginBottom: spacing.base,
+  },
+  tag: {
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.midGrey,
+  },
+  tagText: {
+    fontSize: 12,
+    color: colors.darkGrey,
+  },
+  analysisContainer: {
+    width: '100%',
+    alignItems: 'stretch',
+  },
+  sectionDivider: {
+    width: '100%',
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   metadataWrapper: {
     justifyContent: 'center',
@@ -1128,7 +1317,7 @@ const styles = StyleSheet.create({
   },
   artistListBelow: {
     marginTop: spacing['4xl'], // Space below the centered card
-    paddingHorizontal: spacing['3xl'],
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
   biteContainer: {

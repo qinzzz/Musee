@@ -33,10 +33,15 @@ const PlusIcon = ({ size = 132, color = '#B0B0B0' }: PlusIconProps) => (
 interface ArtworkPlaceholderProps {
   onPress?: () => void;
   onImportFromAlbum?: () => void;
+  language?: string;
 }
 
 // Main Artwork Placeholder Component
-export const ArtworkPlaceholder = ({ onPress, onImportFromAlbum }: ArtworkPlaceholderProps) => {
+export const ArtworkPlaceholder = ({ onPress, onImportFromAlbum, language }: ArtworkPlaceholderProps) => {
+  const languageLabels: { [key: string]: string } = {
+    en: 'English',
+    zh: '中文',
+  };
   return (
     <View
       style={styles.container}
@@ -62,7 +67,14 @@ export const ArtworkPlaceholder = ({ onPress, onImportFromAlbum }: ArtworkPlaceh
             activeOpacity={0.7}
           >
             <Text style={styles.importButtonText}>Import from Album</Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
+
+          {/* Language Indicator */}
+          {language && (
+            <Text style={styles.languageIndicator}>
+              Current language: {languageLabels[language] || language}
+            </Text>
+          )}
       </View>
 
       {/* Horizontal Scrollable Lottie Carousel */}
@@ -179,6 +191,13 @@ const styles = StyleSheet.create({
     fontFamily: 'PP Neue Montreal Medium',
     fontWeight: '500',
     color: colors.black,
+    textAlign: 'center',
+  },
+  languageIndicator: {
+    marginTop: spacing.sm,
+    fontSize: 11,
+    fontFamily: 'IBM Plex Mono',
+    color: colors.darkGrey,
     textAlign: 'center',
   },
 });

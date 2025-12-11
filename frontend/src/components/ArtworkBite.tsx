@@ -19,8 +19,9 @@ export const ArtworkBite: React.FC<ArtworkBiteProps> = ({ content, textColor }) 
 const styles = StyleSheet.create({
   container: {
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.xs,
     width: '100%',
     borderWidth: 1,
     borderRadius: borderRadius.base,

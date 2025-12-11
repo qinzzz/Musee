@@ -35,17 +35,14 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({
       >
         <View style={styles.content}>
           <View style={styles.textContainer}>
-            {isExpanded && details && (
-              <View style={styles.playIconContainer}>
-                <Text style={styles.playIcon}>▶</Text>
-              </View>
-            )}
             {artistName && <Text style={styles.artistName}>{artistName}</Text>}
             {details && <Text style={styles.details}>{details}</Text>}
           </View>
 
           {isExpanded && description && (
-            <Text style={styles.description}>{description}</Text>
+            <View style={styles.descriptionContainer}>
+              <Text style={styles.description}>{description}</Text>
+            </View>
           )}
         </View>
       </TouchableOpacity>
@@ -71,10 +68,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
     justifyContent: 'flex-start',
     backgroundColor: colors.white,
-    borderBottomColor: colors.transparent,
     borderRadius: borderRadius.base,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.base,
   },
   cardWithoutDivider: {
     borderBottomWidth: 0,
@@ -88,19 +82,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     alignItems: 'flex-start',
     position: 'relative',
-  },
-  playIconContainer: {
-    position: 'absolute',
-    left: 0,
-    top: 1,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playIcon: {
-    fontSize: 20,
-    color: colors.black,
   },
   artistName: {
     fontFamily: 'PP Neue Montreal',
@@ -120,11 +101,17 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textTransform: 'capitalize',
   },
+  descriptionContainer: {
+    backgroundColor: colors.lightGrey,
+    borderRadius: borderRadius.base,
+    padding: spacing.base,
+    width: '100%',
+  },
   description: {
     fontFamily: 'PP Neue Montreal',
     fontSize: 13,
     fontWeight: '400',
-    color: '#2F2F2F',
+    color: colors.darkGrey,
     textAlign: 'left',
   },
 });
