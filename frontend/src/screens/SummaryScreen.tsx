@@ -18,32 +18,16 @@ import { historyCacheService } from '../services/historyCache';
 import { artworkSummaryCache } from '../utils/artworkSummaryCache';
 import { useLanguage } from '../contexts/LanguageContext';
 
-interface SummaryScreenProps {
-  photoUri: string;
-  artistName: string;
-  artworkName?: string;
-  location?: string;
-  museumName?: string;
-  conversationHistory?: ConversationMessage[];
-  savedArtworkId?: string | null;
-  onBack: () => void;
-  onSaveComplete?: () => void;
-}
-
 type SaveStatus = 'unsaved' | 'saving' | 'saved';
 
-
-export default function SummaryScreen({
-  photoUri,
-  artistName,
-  artworkName = 'Untitled',
-  location,
-  museumName,
-  savedArtworkId,
-  conversationHistory = [],
-  onBack,
-  onSaveComplete
-}: SummaryScreenProps) {
+export default function SummaryScreen({ route, navigation }: any) {
+  const {
+    photoUri,
+    artistName,
+    artworkName = 'Untitled',
+    savedArtworkId,
+    conversationHistory = []
+  } = route.params;
   const safeAreaInsets = useSafeAreaInsets();
   const { language } = useLanguage();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -68,7 +52,7 @@ export default function SummaryScreen({
       }),
     ]).start();
 
-    // Artwork is already saved to database in PhotoDisplayScreen
+    // Artwork is already saved to database in ArtworkAnalysisScreen
     // All conversations are automatically saved via backend on each /analyze-bite call
     // Just invalidate cache to ensure gallery shows latest data
     historyCacheService.invalidateCache();
@@ -76,7 +60,7 @@ export default function SummaryScreen({
 
     // Generate artwork summary when screen mounts
     generateSummary();
-    
+
   }, []);
 
   const generateSummary = async () => {
@@ -139,9 +123,7 @@ export default function SummaryScreen({
   };
 
   const handleDone = () => {
-    if (onSaveComplete) {
-      onSaveComplete();
-    }
+    navigation.navigate('Gallery');
   };
 
   return (

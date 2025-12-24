@@ -5,8 +5,12 @@ import {
   TouchableOpacity,
   Modal,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { launchImageLibrary } from 'react-native-image-picker';
+import { extractMetadataFromAsset } from '../utils/metadataUtils';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { homeStyles as styles } from './styles/HomeStyles';
 import { Typography, ArtworkPlaceholder } from '../components';
 import { MenuIcon } from '../components/icons/MenuIcon';
@@ -14,31 +18,48 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius, shadows } from '../constants/theme';
 
-interface HomePageProps {
-  onCapturePress: () => void;
-  onGalleryPress: () => void;
-  onImportFromAlbum: () => void;
-}
-
-export default function HomePage({
-  onCapturePress,
-  onGalleryPress,
-  onImportFromAlbum,
-}: HomePageProps) {
+export default function HomePage({ navigation }: any) {
   const safeAreaInsets = useSafeAreaInsets();
   const { language, setLanguage } = useLanguage();
   const [showMenuDropdown, setShowMenuDropdown] = useState(false);
 
-  const languageLabels = {
-    en: 'English',
-    zh: '中文',
+  const handleImportFromAlbum = async () => {
+    try {
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        selectionLimit: 1,
+        quality: 1,
+        includeExtra: true,
+      });
+
+      if (result.didCancel) return;
+
+      if (result.errorCode) {
+        Alert.alert('Error', 'Failed to access photo library. Please grant permission in Settings.');
+        return;
+      }
+
+      if (result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const originalUri = asset.uri;
+
+        if (originalUri) {
+          const metadata = extractMetadataFromAsset(asset);
+          navigation.navigate('ArtworkAnalysis', {
+            photoUri: originalUri,
+            metadata
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to import from album:', error);
+      Alert.alert('Error', 'Failed to access photo library. Please try again.');
+    }
   };
 
   return (
     <View style={[styles.container, { paddingTop: safeAreaInsets.top }]}>
-      {/* Main Content Area */}
       <View style={styles.content}>
-        {/* Header Section */}
         <View style={styles.headerSection}>
           <View style={localStyles.headerRow}>
             <Typography variant="h1" style={styles.title}>DISCOVER</Typography>
@@ -50,44 +71,35 @@ export default function HomePage({
             </TouchableOpacity>
           </View>
           <Text style={styles.secondaryTitle}>Musee is... </Text>
-          <Text style={[styles.normalText, {alignSelf: 'flex-end'}]}>Your personal collection / your museum guide / your art journey </Text>
+          <Text style={[styles.normalText, { alignSelf: 'flex-end' }]}>Your personal collection / your museum guide / your art journey </Text>
         </View>
-        {/* Artwork Image Placeholder */}
         <ArtworkPlaceholder
-          onPress={onCapturePress}
-          onImportFromAlbum={onImportFromAlbum}
+          onPress={() => navigation.navigate('Camera')}
+          onImportFromAlbum={handleImportFromAlbum}
           language={language}
         />
-
       </View>
 
-      {/* Bottom Navigation Bar */}
       <View style={[styles.bottomNav, { paddingBottom: safeAreaInsets.bottom }]}>
-        {/* History Button */}
         <TouchableOpacity
           style={styles.navButton}
-          onPress={onGalleryPress}
+          onPress={() => navigation.navigate('Gallery')}
         >
           <Text style={styles.navLabel}>History</Text>
         </TouchableOpacity>
 
-        {/* Discover Button (Active) */}
-        <TouchableOpacity
-          style={styles.navButton}
-        >
+        <TouchableOpacity style={styles.navButton}>
           <Text style={styles.navLabelActive}>Discover</Text>
         </TouchableOpacity>
 
-        {/* Gallery Button */}
         <TouchableOpacity
           style={styles.navButton}
-          onPress={onGalleryPress}
+          onPress={() => navigation.navigate('Gallery')}
         >
           <Text style={styles.navLabel}>Gallery</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Menu Dropdown Modal */}
       <Modal
         visible={showMenuDropdown}
         transparent={true}
@@ -101,43 +113,31 @@ export default function HomePage({
         >
           <View style={localStyles.menuDropdown}>
             <Text style={localStyles.menuTitle}>Settings</Text>
-
-            {/* Language Config */}
             <View style={localStyles.menuSection}>
               <Text style={localStyles.menuSectionTitle}>Language</Text>
-
               <TouchableOpacity
                 style={[
                   localStyles.menuOption,
                   language === 'en' && localStyles.menuOptionSelected,
                 ]}
-                onPress={() => {
-                  setLanguage('en');
-                }}
+                onPress={() => setLanguage('en')}
               >
                 <Text style={[
                   localStyles.menuOptionText,
                   language === 'en' && localStyles.menuOptionTextSelected,
-                ]}>
-                  English
-                </Text>
+                ]}>English</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={[
                   localStyles.menuOption,
                   language === 'zh' && localStyles.menuOptionSelected,
                 ]}
-                onPress={() => {
-                  setLanguage('zh');
-                }}
+                onPress={() => setLanguage('zh')}
               >
                 <Text style={[
                   localStyles.menuOptionText,
                   language === 'zh' && localStyles.menuOptionTextSelected,
-                ]}>
-                  中文
-                </Text>
+                ]}>中文</Text>
               </TouchableOpacity>
             </View>
           </View>

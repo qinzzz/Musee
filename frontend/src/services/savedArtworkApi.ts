@@ -1,5 +1,6 @@
-import { API_BASE_URL } from '../constants/api';
+import { apiClient } from './apiClient';
 import { userApiService } from './userApi';
+import { compressImageToSize } from '../utils/imageUtils';
 
 export interface ConversationMessage {
   role: 'user' | 'assistant';
@@ -20,6 +21,7 @@ export interface SavedArtwork {
   artwork_name: string;
   device_id?: string;
   location?: string;
+  photo_time?: string;
   museum_name?: string;
   summary: string;
   background_color?: string;
@@ -37,6 +39,8 @@ interface SaveArtworkParams {
   location?: string;
   museumName?: string;
   conversationHistory: ConversationMessage[];
+  photoTime?: string;
+  createdTime?: string;
   isRecognized?: boolean;
   tags?: string;
   analysis?: string;
@@ -61,7 +65,6 @@ class SavedArtworkApiService {
    * Save artwork with complete conversation history
    */
   async saveArtwork(params: SaveArtworkParams): Promise<SavedArtwork> {
-    // Get user ID
     const userId = await userApiService.getUserId();
 
     const formData = new FormData();
@@ -72,77 +75,37 @@ class SavedArtworkApiService {
     formData.append('user_id', userId);
     formData.append('color_palette', JSON.stringify(params.colorPalette));
 
-    if (params.location) {
-      formData.append('location', params.location);
-    }
-
-    if (params.museumName) {
-      formData.append('museum_name', params.museumName);
-    }
-
-    if (params.tags) {
-      formData.append('tags', params.tags);
-    }
-
-    if (params.analysis) {
-      formData.append('analysis', params.analysis);
-    }
+    if (params.location) formData.append('location', params.location);
+    if (params.museumName) formData.append('museum_name', params.museumName);
+    if (params.tags) formData.append('tags', params.tags);
+    if (params.analysis) formData.append('analysis', params.analysis);
+    if (params.photoTime) formData.append('photo_time', params.photoTime);
+    if (params.createdTime) formData.append('created_at', params.createdTime);
 
     formData.append('is_recognized', params.isRecognized !== false ? 'true' : 'false');
 
-    const response = await fetch(`${API_BASE_URL}/api/saved-artworks`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to save artwork');
-    }
-
-    return await response.json();
+    return apiClient.post<SavedArtwork>('/api/saved-artworks', formData);
   }
 
   /**
    * Get all saved artworks for this user
    */
   async getSavedArtworks(params: GetSavedArtworksParams = {}): Promise<SavedArtworksResponse> {
-    // Get user ID to filter artworks
     const userId = await userApiService.getUserId();
 
-    const queryParams = new URLSearchParams();
-    queryParams.append('user_id', userId);
+    const queryParams: Record<string, string> = { user_id: userId };
+    if (params.recognizedOnly !== undefined) queryParams.recognized_only = params.recognizedOnly.toString();
+    if (params.limit !== undefined) queryParams.limit = params.limit.toString();
+    if (params.offset !== undefined) queryParams.offset = params.offset.toString();
 
-    if (params.recognizedOnly !== undefined) {
-      queryParams.append('recognized_only', params.recognizedOnly.toString());
-    }
-    if (params.limit !== undefined) {
-      queryParams.append('limit', params.limit.toString());
-    }
-    if (params.offset !== undefined) {
-      queryParams.append('offset', params.offset.toString());
-    }
-
-    const url = `${API_BASE_URL}/api/saved-artworks?${queryParams.toString()}`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch saved artworks');
-    }
-
-    return await response.json();
+    return apiClient.get<SavedArtworksResponse>('/api/saved-artworks', queryParams);
   }
 
   /**
    * Get a specific saved artwork with full conversation history
    */
   async getSavedArtwork(artworkId: string): Promise<SavedArtwork> {
-    const response = await fetch(`${API_BASE_URL}/api/saved-artworks/${artworkId}`);
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch saved artwork');
-    }
-
-    return await response.json();
+    return apiClient.get<SavedArtwork>(`/api/saved-artworks/${artworkId}`);
   }
 
   /**
@@ -155,89 +118,48 @@ class SavedArtworkApiService {
     summary?: string,
     colorPalette?: ColorPalette
   ): Promise<SavedArtwork> {
-    const response = await fetch(`${API_BASE_URL}/api/saved-artworks/${artworkId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        artist_name: artistName,
-        artwork_name: artworkName,
-        ...(summary !== undefined && { summary }),
-        ...(colorPalette !== undefined && { color_palette: colorPalette }),
-      }),
+    return apiClient.put<SavedArtwork>(`/api/saved-artworks/${artworkId}`, {
+      artist_name: artistName,
+      artwork_name: artworkName,
+      ...(summary !== undefined && { summary }),
+      ...(colorPalette !== undefined && { color_palette: colorPalette }),
     });
-
-    if (!response.ok) {
-      throw new Error('Failed to update saved artwork');
-    }
-
-    return await response.json();
   }
 
   /**
    * Delete a saved artwork
    */
   async deleteSavedArtwork(artworkId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/api/saved-artworks/${artworkId}`, {
-      method: 'DELETE',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to delete saved artwork');
-    }
+    return apiClient.delete(`/api/saved-artworks/${artworkId}`);
   }
 
-  /**
-   * Generate a fun, one-sentence summary for an artwork
-   */
   async generateArtworkSummary(artworkId: string, imageUri: string, language?: string): Promise<{ summary: string; saved_artwork_id: string; model_used: string }> {
     const formData = new FormData();
     formData.append('saved_artwork_id', artworkId);
 
-    // Append the image file
+    // Compress image to ensure it's under the 4.5MB Vercel limit
+    // Targeting 4MB for safety
+    console.log('[savedArtworkApiService] Compressing image for summary generation:', imageUri);
+    const compressedImage = await compressImageToSize(imageUri, 4 * 1024 * 1024);
+
     formData.append('image', {
-      uri: imageUri,
+      uri: compressedImage.uri,
       type: 'image/jpeg',
       name: 'artwork.jpg',
     } as any);
 
-    // Append language if provided
-    if (language) {
-      formData.append('language', language);
-    }
+    if (language) formData.append('language', language);
 
-    const response = await fetch(`${API_BASE_URL}/api/artwork-summary`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to generate artwork summary');
-    }
-
-    return await response.json();
+    return apiClient.post('/api/artwork-summary', formData);
   }
 
   /**
    * Update the background color for an artwork
    */
   async updateBackgroundColor(artworkId: string, backgroundColor: string): Promise<SavedArtwork> {
-    const response = await fetch(`${API_BASE_URL}/api/saved-artworks/${artworkId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        background_color: backgroundColor,
-      }),
+    return apiClient.put<SavedArtwork>(`/api/saved-artworks/${artworkId}`, {
+      background_color: backgroundColor,
     });
-
-    if (!response.ok) {
-      throw new Error('Failed to update background color');
-    }
-
-    return await response.json();
   }
 }
 

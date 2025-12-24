@@ -1,10 +1,4 @@
-/**
- * User API Service
- *
- * Manages user creation and authentication with the backend
- */
-
-import { API_BASE_URL } from '../constants/api';
+import { apiClient } from './apiClient';
 import { getDeviceId } from './deviceId';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -51,21 +45,7 @@ class UserApiService {
       const deviceId = await getDeviceId();
       console.log('[UserAPI] Creating/getting user with device_id:', deviceId.substring(0, 8) + '...');
 
-      const response = await fetch(`${API_BASE_URL}/api/users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          device_id: deviceId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to create/get user: ${response.status}`);
-      }
-
-      const user: User = await response.json();
+      const user = await apiClient.post<User>('/api/users', { device_id: deviceId });
 
       // Store user_id locally for future use
       await AsyncStorage.setItem(USER_ID_KEY, user.user_id);
@@ -105,26 +85,14 @@ class UserApiService {
    * Get user by user_id
    */
   async getUser(userId: string): Promise<User> {
-    const response = await fetch(`${API_BASE_URL}/api/users/${userId}`);
-
-    if (!response.ok) {
-      throw new Error('User not found');
-    }
-
-    return await response.json();
+    return apiClient.get<User>(`/api/users/${userId}`);
   }
 
   /**
    * Get user by device_id
    */
   async getUserByDevice(deviceId: string): Promise<User> {
-    const response = await fetch(`${API_BASE_URL}/api/users/by-device/${deviceId}`);
-
-    if (!response.ok) {
-      throw new Error('User not found');
-    }
-
-    return await response.json();
+    return apiClient.get<User>(`/api/users/by-device/${deviceId}`);
   }
 
   /**
@@ -138,19 +106,7 @@ class UserApiService {
       settings?: Record<string, any>;
     }
   ): Promise<User> {
-    const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(updates),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to update user');
-    }
-
-    return await response.json();
+    return apiClient.put<User>(`/api/users/${userId}`, updates);
   }
 
   /**

@@ -1,4 +1,5 @@
 import ImageResizer from '@bam.tech/react-native-image-resizer';
+import RNFS from 'react-native-fs';
 
 interface CompressImageOptions {
   maxWidth?: number;
@@ -26,11 +27,14 @@ export async function compressImage(
   } = options;
 
   try {
-    console.log(`[ImageUtils] Compressing image: ${uri.substring(0, 50)}...`);
+    // Ensure ph:// is resolved to a readable file://
+    const resolvedUri = await resolvePhUri(uri);
+
+    console.log(`[ImageUtils] Compressing image: ${resolvedUri.substring(0, 50)}...`);
     console.log(`[ImageUtils] Max dimensions: ${maxWidth}x${maxHeight}, Quality: ${quality}%, Format: ${format}`);
 
     const result = await ImageResizer.createResizedImage(
-      uri,
+      resolvedUri,
       maxWidth,
       maxHeight,
       format,
@@ -140,4 +144,72 @@ export async function compressImageToSize(
   }
 
   return result;
+}
+/**
+ * Resolves a ph:// URI into a readable file:// URI for tools that don't support ph://
+ */
+export async function resolvePhUri(uri: string): Promise<string> {
+  if (!uri.startsWith('ph://')) return uri;
+
+  try {
+    console.log(`[ImageUtils] Resolving ph:// URI: ${uri}`);
+    const identifier = uri.replace('ph://', '');
+    const tempPath = `${RNFS.CachesDirectoryPath}/ph_resolve_${Date.now()}.jpg`;
+
+    // Attempt 1: RNFS copyAssetsFileIOS (Standard path)
+    try {
+      await RNFS.copyAssetsFileIOS(identifier, tempPath, 0, 0);
+      if (await RNFS.exists(tempPath)) {
+        console.log(`[ImageUtils] Successfully resolved via RNFS: file://${tempPath}`);
+        return `file://${tempPath}`;
+      }
+    } catch (rnfsError) {
+      console.warn(`[ImageUtils] RNFS resolution failed for ${identifier}`, rnfsError);
+    }
+
+    // Attempt 2: Fetch bridge (Special iOS workaround)
+    try {
+      console.log(`[ImageUtils] Attempting fetch resolution for ${uri}`);
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      // Read blob as base64 and write to file
+      const reader = new FileReader();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      await RNFS.writeFile(tempPath, base64Data, 'base64');
+      console.log(`[ImageUtils] Successfully resolved via fetch blob: file://${tempPath}`);
+      return `file://${tempPath}`;
+    } catch (fetchError) {
+      console.warn(`[ImageUtils] Fetch resolution failed for ${uri}`, fetchError);
+    }
+
+    // Attempt 3: ImageResizer (Last resort transformation)
+    try {
+      console.log(`[ImageUtils] Attempting ImageResizer resolution for ${uri}`);
+      const resized = await ImageResizer.createResizedImage(
+        uri,
+        1200, // Reasonable max
+        1200,
+        'JPEG',
+        80
+      );
+      console.log(`[ImageUtils] Successfully resolved via ImageResizer: ${resized.uri}`);
+      return resized.uri;
+    } catch (resizerError) {
+      console.error(`[ImageUtils] All resolution attempts failed for ${uri}`, resizerError);
+    }
+
+  } catch (globalError) {
+    console.error(`[ImageUtils] Global error in resolvePhUri: ${globalError}`);
+  }
+
+  return uri; // Fallback to original
 }

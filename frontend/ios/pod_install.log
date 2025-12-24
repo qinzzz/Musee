@@ -1,0 +1,30 @@
+    [33mWARNING: CocoaPods requires your terminal to be using UTF-8 encoding.
+    Consider adding the following to ~/.profile:
+
+    export LANG=en_US.UTF-8
+    [0m
+/opt/homebrew/Cellar/ruby/3.4.6/lib/ruby/3.4.0/unicode_normalize/normalize.rb:141:in 'UnicodeNormalize.normalize': Unicode Normalization not appropriate for ASCII-8BIT (Encoding::CompatibilityError)
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/config.rb:167:in 'String#unicode_normalize'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/config.rb:167:in 'Pod::Config#installation_root'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/config.rb:227:in 'Pod::Config#podfile_path'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/user_interface/error_report.rb:105:in 'Pod::UserInterface::ErrorReport.markdown_podfile'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/user_interface/error_report.rb:30:in 'Pod::UserInterface::ErrorReport.report'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/command.rb:66:in 'Pod::Command.report_error'
+	from /opt/homebrew/lib/ruby/gems/3.4.0/gems/claide-1.1.0/lib/claide/command.rb:396:in 'CLAide::Command.handle_exception'
+	from /opt/homebrew/lib/ruby/gems/3.4.0/gems/claide-1.1.0/lib/claide/command.rb:337:in 'CLAide::Command.run'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/command.rb:52:in 'Pod::Command.run'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/bin/pod:55:in '<top (required)>'
+	from /opt/homebrew/Cellar/cocoapods/1.16.2_1/libexec/bin/pod:25:in 'Kernel#load'
+	from /opt/homebrew/Cellar/cocoapods/1.16.2_1/libexec/bin/pod:25:in '<main>'
+/opt/homebrew/Cellar/ruby/3.4.6/lib/ruby/3.4.0/unicode_normalize/normalize.rb:141:in 'UnicodeNormalize.normalize': Unicode Normalization not appropriate for ASCII-8BIT (Encoding::CompatibilityError)
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/config.rb:167:in 'String#unicode_normalize'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/config.rb:167:in 'Pod::Config#installation_root'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/config.rb:227:in 'Pod::Config#podfile_path'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/config.rb:206:in 'Pod::Config#podfile'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/command.rb:160:in 'Pod::Command#verify_podfile_exists!'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/command/install.rb:46:in 'Pod::Command::Install#run'
+	from /opt/homebrew/lib/ruby/gems/3.4.0/gems/claide-1.1.0/lib/claide/command.rb:334:in 'CLAide::Command.run'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/lib/cocoapods/command.rb:52:in 'Pod::Command.run'
+	from /Users/qinzzz/.gem/ruby/3.4.0/gems/cocoapods-1.16.2/bin/pod:55:in '<top (required)>'
+	from /opt/homebrew/Cellar/cocoapods/1.16.2_1/libexec/bin/pod:25:in 'Kernel#load'
+	from /opt/homebrew/Cellar/cocoapods/1.16.2_1/libexec/bin/pod:25:in '<main>'

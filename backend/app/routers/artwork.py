@@ -5,9 +5,11 @@ from typing import Optional
 import os
 import json
 import logging
+from datetime import datetime
 
 from app.database.connection import get_db
 from app.database.models import SavedArtwork, Conversation
+from sqlalchemy import func
 from app.models.artwork import AIProvider, UpdateArtworkRequest
 from app.services.ai_service import AIServiceFactory
 from app.services.openai_api_client import OpenAIAPIClient
@@ -439,6 +441,8 @@ async def save_artwork(
     tags: Optional[str] = Form(None),  # Comma-separated tags from AI
     analysis: Optional[str] = Form(None),  # Detailed analysis text from AI
     color_palette: Optional[str] = Form(None),  # JSON string of color palette
+    photo_time: Optional[str] = Form(None),  # Original capture time of the photo
+    created_at: Optional[str] = Form(None),  # ISO timestamp (deprecated for metadata)
     db: Session = Depends(get_db)
 ):
     """
@@ -469,20 +473,58 @@ async def save_artwork(
                 logger.warning(f"Failed to parse color_palette JSON: {color_palette}")
                 color_palette_data = None
 
-        # Create SavedArtwork (without conversation_history)
-        saved_artwork = SavedArtwork(
-            photo_uri=photo_uri,
-            artist_name=artist_name,
-            artwork_name=artwork_name,
-            user_id=user_id,
-            device_id=device_id,
-            location=location,
-            museum_name=museum_name,
-            is_recognized=1 if is_recognized else 0,
-            tags=tags,
-            analysis=analysis,
-            color_palette=color_palette_data
-        )
+        # Check if an artwork with this photo_uri already exists for this user
+        # This prevents duplicate records if the user navigates back and forth
+        existing_artwork = None
+        if user_id:
+            existing_artwork = db.query(SavedArtwork).filter(
+                SavedArtwork.photo_uri == photo_uri,
+                SavedArtwork.user_id == user_id
+            ).first()
+        
+        if existing_artwork:
+            logger.info(f"Updating existing artwork record: {existing_artwork.id}")
+            saved_artwork = existing_artwork
+            # Update fields with new data if provided
+            saved_artwork.artist_name = artist_name
+            saved_artwork.artwork_name = artwork_name
+            saved_artwork.is_recognized = 1 if is_recognized else 0
+            if tags:
+                saved_artwork.tags = tags
+            if analysis:
+                saved_artwork.analysis = analysis
+            if color_palette_data:
+                saved_artwork.color_palette = color_palette_data
+            if location:
+                saved_artwork.location = location
+            if photo_time:
+                saved_artwork.photo_time = photo_time
+            elif created_at:
+                saved_artwork.photo_time = created_at
+        else:
+            # Create new SavedArtwork
+            saved_artwork = SavedArtwork(
+                photo_uri=photo_uri,
+                artist_name=artist_name,
+                artwork_name=artwork_name,
+                user_id=user_id,
+                device_id=device_id,
+                location=location,
+                museum_name=museum_name,
+                is_recognized=1 if is_recognized else 0,
+                tags=tags,
+                analysis=analysis,
+                color_palette=color_palette_data,
+                photo_time=photo_time if photo_time else created_at
+            )
+            db.add(saved_artwork)
+
+        if created_at:
+            try:
+                dt_str = created_at.replace('Z', '+00:00')
+                saved_artwork.created_at = datetime.fromisoformat(dt_str)
+            except Exception as e:
+                logger.warning(f"Failed to parse created_at: {created_at}, error: {e}")
 
         db.add(saved_artwork)
         db.flush()  # Get the artwork ID without committing

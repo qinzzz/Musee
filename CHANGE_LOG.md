@@ -1,5 +1,43 @@
 # Change Log
 
+## 2025-12-24 - Frontend: Major Screen Refactoring & Modularization
+
+### Architectural Improvement - Logic Seperation and Component Decomposition
+- **Modular Frontend Architecture**: Refactored major screens to separate business logic from UI using custom hooks and decomposed complex components.
+
+  **Key Changes**:
+  - **Custom Hooks for State & Logic**:
+    - Created `useArtworkAnalysis`: Centralized logic for artist identification, artwork analysis, and bite fetching.
+    - Created `useGallery`: Manages gallery data fetching, caching, and background sync.
+    - Created `useSavedArtwork`: Encapsulates detail screen logic, conversation history, and color extraction.
+    - Created `useNavigationSwipe`: Abstracted PanResponder logic for cross-screen swipe gestures.
+  
+  - **Screen Decomposition**:
+    - **PhotoDisplayScreen**: Decoupled into `FlippableArtworkCard`, `ArtistDiscoveryList`, and `ExplorationOverlay`.
+    - **GalleryScreen**: Decoupled into `GalleryHeader`, `GalleryGridItem`, and `GalleryEmptyState`.
+    - **SavedArtworkDetailScreen**: Decoupled into `SavedArtworkDetailHeader`, `ArtworkDetailCard`, and `ImmersiveExplorationPanel`.
+  
+  - **API & Data Layer**:
+    - Standardized API interaction using centralized `apiClient`.
+    - Improved data caching and background fetching in `useGallery` and `useSavedArtwork`.
+    - Enhanced type safety across all frontend services and hooks.
+
+  **Benefits**:
+  - **Improved Maintainability**: Screen files reduced from ~1500 lines to ~300 lines.
+  - **Reusability**: Core logic and UI elements are now shared across different parts of the app.
+  - **Consistent UX**: Standardized gestures and animations across all interactive screens.
+  - **Easier Testing**: Independent logic hooks and visual components are simpler to verify.
+
+  **Files Modified**:
+  - [frontend/src/screens/PhotoDisplayScreen.tsx](frontend/src/screens/PhotoDisplayScreen.tsx)
+  - [frontend/src/screens/GalleryScreen.tsx](frontend/src/screens/GalleryScreen.tsx)
+  - [frontend/src/screens/SavedArtworkDetailScreen.tsx](frontend/src/screens/SavedArtworkDetailScreen.tsx)
+  - [frontend/src/hooks/useArtworkAnalysis.ts](frontend/src/hooks/useArtworkAnalysis.ts) - New
+  - [frontend/src/hooks/useGallery.ts](frontend/src/hooks/useGallery.ts) - New
+  - [frontend/src/hooks/useSavedArtwork.ts](frontend/src/hooks/useSavedArtwork.ts) - New
+  - [frontend/src/hooks/useNavigationSwipe.ts](frontend/src/hooks/useNavigationSwipe.ts) - New
+  - [frontend/src/components/index.ts](frontend/src/components/index.ts) - Updated exports
+
 ## 2025-12-07 - Backend & Frontend: Persist Tags and Analysis to Database
 
 ### Feature - Database Persistence for Tags and Analysis

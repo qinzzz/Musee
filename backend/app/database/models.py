@@ -44,6 +44,7 @@ class SavedArtwork(Base):
     artist_name = Column(String, nullable=False)
     artwork_name = Column(String, nullable=False)
     location = Column(String, nullable=True)  # Geographic location where photo was taken
+    photo_time = Column(String, nullable=True)  # Original capture time of the photo
     museum_name = Column(String, nullable=True)  # Museum or gallery name
     summary = Column(String, nullable=True)  # One-sentence fun summary of the artwork
     tags = Column(String, nullable=True)  # Comma-separated tags describing the artwork (e.g., "pop art, late 90s, dadaism")
@@ -72,6 +73,7 @@ class SavedArtwork(Base):
             "artist_name": self.artist_name,
             "artwork_name": self.artwork_name,
             "location": self.location,
+            "photo_time": self.photo_time,
             "museum_name": self.museum_name,
             "summary": self.summary,
             "tags": self.tags,

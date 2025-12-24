@@ -91,7 +91,7 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
         {showMenu && !isEditing && (
           <View style={styles.dropdownMenu}>
             <TouchableOpacity style={styles.menuItem} onPress={handleEditPress}>
-              <Text style={[styles.menuItemText, {color: textColor}]}>Edit</Text>
+              <Text style={[styles.menuItemText, { color: textColor }]}>Edit</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -104,7 +104,7 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
             onPress={() => setShowMenu(false)}
           />
         )} */}
-        
+
         <TouchableOpacity
           style={styles.content}
           onPress={isEditing ? undefined : onPress}
@@ -112,7 +112,7 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
           disabled={isEditing}
         >
           <View style={styles.textContainer}>
-            <Text style={[styles.annotation, {color: textColor}]}>Artist</Text>
+            <Text style={[styles.annotation, { color: textColor }]}>Artist</Text>
             {isEditing ? (
               <TextInput
                 style={styles.input}
@@ -123,12 +123,12 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
                 autoCapitalize="words"
               />
             ) : (
-              <Text style={[styles.artistName, {color: textColor}]}>{artistName}</Text>
+              <Text style={[styles.artistName, { color: textColor }]}>{artistName}</Text>
             )}
           </View>
 
           <View style={styles.textContainer}>
-            <Text style={[styles.annotation, {color: textColor}]}>Title</Text>
+            <Text style={[styles.annotation, { color: textColor }]}>Title</Text>
             {isEditing ? (
               <TextInput
                 style={styles.input}
@@ -139,29 +139,31 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
                 autoCapitalize="words"
               />
             ) : (
-              <Text style={[styles.title, {color: textColor}]}>{title}</Text>
+              <Text style={[styles.title, { color: textColor }]}>{title}</Text>
             )}
           </View>
 
           <View style={styles.textContainer}>
-          {isEditing ? (
-            <>
-              <Text style={[styles.annotation, {color: textColor}]}>Summary</Text>
-              <TextInput
-                style={[styles.input]}
-                value={editedSummary}
-                onChangeText={setEditedSummary}
-                placeholder="Enter summary"
-                placeholderTextColor={colors.midGrey}
-                multiline
-                numberOfLines={3}
-              />
-            </>
-          ) : (
-            <Text style={[styles.description, {color: textColor}]}>"{summary}"</Text>
-          )}
+            {isEditing ? (
+              <>
+                <Text style={[styles.annotation, { color: textColor }]}>Summary</Text>
+                <TextInput
+                  style={[styles.input]}
+                  value={editedSummary}
+                  onChangeText={setEditedSummary}
+                  placeholder="Enter summary"
+                  placeholderTextColor={colors.midGrey}
+                  multiline
+                  numberOfLines={3}
+                />
+              </>
+            ) : (
+              <Text style={[styles.description, { color: textColor }]}>
+                {summary === 'Generating analysis...' ? summary : `"${summary}"`}
+              </Text>
+            )}
           </View>
-          
+
           {isEditing && (
             <View style={styles.editButtons}>
               <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
@@ -239,7 +241,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.base + 24,
     right: spacing.base,
-    alignItems:"flex-end",
+    alignItems: "flex-end",
     zIndex: 1001,
     backgroundColor: colors.quarterOpacityWhite,
     borderRadius: borderRadius.sm,
