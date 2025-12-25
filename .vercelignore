@@ -1,0 +1,28 @@
+# Backend
+backend/venv/
+backend/musee-env/
+backend/__pycache__/
+backend/*.pyc
+backend/musee.db
+backend/testing/
+
+# Frontend
+frontend/node_modules/
+frontend/.expo/
+frontend/web-build/
+frontend/dist/
+frontend/ios/
+frontend/android/
+frontend/vendor/
+
+# General
+.gitignore
+.env
+.DS_Store
+*.log
+.vercel/
+.git/
+.vscode/
+.claude/
+.bundle/
+logo/
