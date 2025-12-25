@@ -28,13 +28,18 @@ import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
 import { artistAnalysisCache } from '../utils/artistAnalysisCache';
 import { ScanlinesEffect, ActionButton } from '../components';
 import { launchImageLibrary } from 'react-native-image-picker';
+import { savedArtworkApiService } from '../services/savedArtworkApi';
 import { colors } from '../constants/colors';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useIdentity } from '../contexts/IdentityContext';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { compressImage, getCompressionSettings } from '../utils/imageUtils';
 import { extractMetadataFromAsset } from '../utils/metadataUtils';
 
 export default function CameraScreen({ navigation }: any) {
   const safeAreaInsets = useSafeAreaInsets();
+  const { language } = useLanguage();
+  const { identity } = useIdentity();
   const { height } = Dimensions.get('window');
   const [isCameraOn] = useState(true);
 
@@ -90,9 +95,12 @@ export default function CameraScreen({ navigation }: any) {
       const persistentPhotoUri = savedAsset.node.image.uri;
       console.log('Photo saved to camera roll:', persistentPhotoUri);
 
-      startArtistAnalysis(tempPhotoUri);
+      // CRITICAL: Kick off identification early
+      console.log('[CameraScreen] Pre-warming artist identification (capture) for:', persistentPhotoUri, 'with identity:', identity);
+      const identificationPromise = savedArtworkApiService.identifyArtist(persistentPhotoUri, identity, language);
+      artistAnalysisCache.set(persistentPhotoUri, identificationPromise);
 
-      navigation.navigate('ArtworkAnalysis', { photoUri: persistentPhotoUri });
+      navigation.navigate('ArtworkAnalysis', { photoUri: persistentPhotoUri, identity });
 
     } catch (error) {
       console.error('Failed to take photo:', error);
@@ -105,8 +113,10 @@ export default function CameraScreen({ navigation }: any) {
     const resolvedImage = Image.resolveAssetSource(testImage);
     const photoUri = resolvedImage.uri;
 
-    startArtistAnalysis(photoUri);
-    navigation.navigate('ArtworkAnalysis', { photoUri });
+    // For test image, we can still pre-warm
+    const identificationPromise = savedArtworkApiService.identifyArtist(photoUri, identity, language);
+    artistAnalysisCache.set(photoUri, identificationPromise);
+    navigation.navigate('ArtworkAnalysis', { photoUri, identity });
   };
 
   const handleImportFromAlbum = async () => {
@@ -130,10 +140,16 @@ export default function CameraScreen({ navigation }: any) {
         const originalUri = asset.uri;
         if (originalUri) {
           const metadata = extractMetadataFromAsset(asset);
-          startArtistAnalysis(originalUri);
+
+          // Pre-warm identification
+          console.log('[CameraScreen] Pre-warming artist identification (album) for:', originalUri, 'with identity:', identity);
+          const identificationPromise = savedArtworkApiService.identifyArtist(originalUri, identity, language);
+          artistAnalysisCache.set(originalUri, identificationPromise);
+
           navigation.navigate('ArtworkAnalysis', {
             photoUri: originalUri,
-            metadata
+            metadata,
+            identity
           });
         }
       }
@@ -143,36 +159,6 @@ export default function CameraScreen({ navigation }: any) {
     }
   };
 
-  const startArtistAnalysis = async (photoUri: string) => {
-    try {
-      const compressed = await compressImage(photoUri, getCompressionSettings());
-      const uploadUri = compressed.uri;
-
-      const formData = new FormData();
-      formData.append('image', {
-        uri: uploadUri,
-        type: 'image/jpeg',
-        name: 'artwork.jpg',
-      } as any);
-
-      const analyze_url = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_ARTIST}`
-
-      const analysisPromise = fetch(analyze_url, {
-        method: 'POST',
-        body: formData,
-      }).then(async response => {
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`API request failed with status ${response.status}: ${errorText}`);
-        }
-        return response.json();
-      });
-
-      artistAnalysisCache.set(photoUri, analysisPromise);
-    } catch (error) {
-      console.error('Failed to start artist analysis:', error);
-    }
-  };
 
   const curtainAnimatedStyle = useAnimatedStyle(() => {
     return {

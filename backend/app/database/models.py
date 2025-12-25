@@ -20,6 +20,7 @@ class User(Base):
 
     # Relationship to artworks
     artworks = relationship("SavedArtwork", back_populates="user", cascade="all, delete-orphan")
+    collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self):
         """Convert model to dictionary"""
@@ -60,6 +61,7 @@ class SavedArtwork(Base):
     # Relationships
     user = relationship("User", back_populates="artworks")
     conversations = relationship("Conversation", back_populates="artwork", cascade="all, delete-orphan", order_by="Conversation.sequence_number")
+    collections = relationship("Collection", secondary="collection_artworks", back_populates="artworks")
 
     def to_dict(self, include_conversations=True):
         """Convert model to dictionary
@@ -131,3 +133,45 @@ class Conversation(Base):
             "metadata": self.message_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
+
+
+class CollectionArtwork(Base):
+    """Junction table for collections and artworks"""
+    __tablename__ = "collection_artworks"
+    
+    collection_id = Column(String, ForeignKey('collections.id', ondelete='CASCADE'), primary_key=True)
+    artwork_id = Column(String, ForeignKey('saved_artworks.id', ondelete='CASCADE'), primary_key=True)
+
+
+class Collection(Base):
+    """Database model for collections"""
+
+    __tablename__ = "collections"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="collections")
+    artworks = relationship("SavedArtwork", secondary="collection_artworks", back_populates="collections")
+
+    def to_dict(self, include_artworks=False):
+        """Convert model to dictionary"""
+        result = {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "user_id": self.user_id,
+            "artwork_count": len(self.artworks),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
+        
+        if include_artworks:
+            result["artworks"] = [artwork.to_dict(include_conversations=False) for artwork in self.artworks]
+            
+        return result

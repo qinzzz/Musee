@@ -24,6 +24,8 @@ export interface SavedArtwork {
   photo_time?: string;
   museum_name?: string;
   summary: string;
+  tags?: string;
+  analysis?: string;
   background_color?: string;
   color_palette?: ColorPalette;
   conversation_history: ConversationMessage[];
@@ -160,6 +162,45 @@ class SavedArtworkApiService {
     return apiClient.put<SavedArtwork>(`/api/saved-artworks/${artworkId}`, {
       background_color: backgroundColor,
     });
+  }
+
+  /**
+   * Identify the artist and artwork from an image
+   * Handles compression and API call
+   */
+  async identifyArtist(photoUri: string, identity: string = 'museum_narrator', language: string = 'en'): Promise<any> {
+    console.log('[SavedArtworkApiService] Identifying artist for:', photoUri);
+
+    // 1. Compress image (max 4MB for Vercel/API limits)
+    const compressed = await compressImageToSize(photoUri, 4 * 1024 * 1024);
+    const uploadUri = compressed.uri;
+
+    // 2. Prepare Form Data
+    const formData = new FormData();
+    formData.append('image', {
+      uri: uploadUri,
+      type: 'image/jpeg',
+      name: 'artwork.jpg',
+    } as any);
+    formData.append('identity', identity);
+    formData.append('language', language);
+
+    // 3. Call API
+    // Note: We use the fetch API directly for multipart form data with identity/language
+    // to match the previous implementation in useArtworkAnalysis
+    const { API_BASE_URL, API_ENDPOINTS } = require('../constants/api');
+    const analyze_url = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_ARTIST}`;
+
+    const response = await fetch(analyze_url, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+
+    return response.json();
   }
 }
 

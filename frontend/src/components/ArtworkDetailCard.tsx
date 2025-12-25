@@ -32,6 +32,10 @@ export const ArtworkDetailCard: React.FC<ArtworkDetailCardProps> = ({
                 artistName={artwork?.artist_name || 'Loading...'}
                 title={artwork?.artwork_name || 'Identifying artwork...'}
                 summary={artwork?.summary || 'Generating analysis...'}
+                location={artwork?.location}
+                photoTime={artwork?.photo_time}
+                tags={artwork?.tags}
+                analysis={artwork?.analysis}
                 withShadow={true}
                 backgroundColor={backgroundColor}
                 onPress={() => { }}
@@ -44,13 +48,11 @@ export const ArtworkDetailCard: React.FC<ArtworkDetailCardProps> = ({
 const styles = StyleSheet.create({
     cardContainer: {
         width: '92%',
-        height: '85%',
         borderRadius: borderRadius.lg,
         paddingVertical: spacing['3xl'],
         paddingHorizontal: spacing['xl'],
         gap: spacing.xl,
         alignItems: 'stretch',
-        justifyContent: 'space-around',
         ...shadows.lg,
     },
 });

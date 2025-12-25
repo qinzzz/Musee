@@ -12,6 +12,7 @@ import {
   Modal,
   Image,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
@@ -145,15 +146,19 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
         const startY = evt.nativeEvent.pageY - gestureState.dy;
         const fromLeftEdge = startX < 50;
         const fromTopEdge = startY < (safeAreaInsets.top + 100);
+        const fromLowerThird = startY > height * 0.7; // Only capture swipe-up from lower 30%
         const fromCenterArea = startY > height * 0.2 && startY < height * 0.8 && startX > width * 0.1 && startX < width * 0.9;
         const isHorizontal = Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
         const isVertical = Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
 
-        const shouldCaptureVertical = !isKeyboardVisible && ((gestureState.dy < -5 || (gestureState.dy > 5 && fromTopEdge)) && isVertical);
+        // Only capture swipe-up gesture if it starts from the lower 30% of the screen
+        const shouldCaptureSwipeUp = !isKeyboardVisible && gestureState.dy < -5 && isVertical && fromLowerThird && !isExplorationVisibleRef.current;
+        // Capture swipe-down to close exploration panel from anywhere
+        const shouldCaptureSwipeDown = gestureState.dy > 5 && fromTopEdge && isVertical && isExplorationVisibleRef.current;
         const shouldCaptureBackSwipe = fromLeftEdge && gestureState.dx > 5 && isHorizontal;
         const shouldCaptureNavSwipe = fromCenterArea && Math.abs(gestureState.dx) > 5 && isHorizontal && !isExplorationVisibleRef.current;
 
-        return shouldCaptureBackSwipe || shouldCaptureVertical || shouldCaptureNavSwipe;
+        return shouldCaptureBackSwipe || shouldCaptureSwipeUp || shouldCaptureSwipeDown || shouldCaptureNavSwipe;
       },
       onPanResponderMove: (evt, gestureState) => {
         const isHorizontal = Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
@@ -226,7 +231,13 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
               behavior="padding"
               keyboardVerticalOffset={0}
             >
-              <View style={[styles.contentWrapper, { paddingTop: safeAreaInsets.top }]}>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingTop: safeAreaInsets.top, alignItems: 'center', paddingBottom: spacing['2xl'] }}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
+                scrollEnabled={!isExplorationVisible}
+              >
                 <ArtworkDetailCard
                   artwork={artwork}
                   photoUri={photoUri}
@@ -238,30 +249,30 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
                     artworkCacheService.set(artworkId, updated);
                   }}
                 />
+              </ScrollView>
 
-                <ImmersiveExplorationPanel
-                  translateY={explorationTranslateY}
-                  pulseAnim={pulseAnim}
-                  isVisible={isExplorationVisible}
-                  artwork={artwork}
-                  artworkBites={artworkBites}
-                  isBiteLoading={isBiteLoading}
-                  isTopicLoading={isTopicLoading}
-                  suggestedTopics={suggestedTopics}
-                  onFetchBite={(topic) => {
-                    setCurrentSelectedTopic(topic || null);
-                    fetchArtworkBite(topic);
-                  }}
-                  onShuffleTopics={() => {
-                    fetchSuggestedTopics(artworkId);
-                  }}
-                  onClose={handleBackPress}
-                  useBlurBackground={useBlurBackground}
-                  backgroundColor={backgroundColor}
-                  photoUri={photoUri}
-                  currentSelectedTopic={currentSelectedTopic}
-                />
-              </View>
+              <ImmersiveExplorationPanel
+                translateY={explorationTranslateY}
+                pulseAnim={pulseAnim}
+                isVisible={isExplorationVisible}
+                artwork={artwork}
+                artworkBites={artworkBites}
+                isBiteLoading={isBiteLoading}
+                isTopicLoading={isTopicLoading}
+                suggestedTopics={suggestedTopics}
+                onFetchBite={(topic) => {
+                  setCurrentSelectedTopic(topic || null);
+                  fetchArtworkBite(topic);
+                }}
+                onShuffleTopics={() => {
+                  fetchSuggestedTopics(artworkId);
+                }}
+                onClose={handleBackPress}
+                useBlurBackground={useBlurBackground}
+                backgroundColor={backgroundColor}
+                photoUri={photoUri}
+                currentSelectedTopic={currentSelectedTopic}
+              />
 
               {!isExplorationVisible && (
                 <View style={styles.scrollIndicatorContainer} pointerEvents="none">
@@ -292,8 +303,8 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
             </TouchableOpacity>
           </View>
         </Modal>
-      </Animated.View>
-    </View>
+      </Animated.View >
+    </View >
   );
 }
 

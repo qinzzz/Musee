@@ -48,59 +48,35 @@ export const ArtworkPlaceholder = ({ onPress, onImportFromAlbum, language }: Art
     >
       {/* Dashed Border Box */}
       <View style={styles.dashedBox}
-        >
+      >
         {/* Plus Icon */}
         <View style={styles.plusIconContainer}>
-          <PlusIcon size={66}/>
+          <PlusIcon size={66} />
         </View>
-          <TouchableOpacity
-            style={styles.importButton}
-            onPress={onPress}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.importButtonText}>Scan with camera</Text>
-          </TouchableOpacity>
-          {/* Import from Album Button */}
-          <TouchableOpacity
-            style={styles.importButton}
-            onPress={onImportFromAlbum}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.importButtonText}>Import from Album</Text>
-          </TouchableOpacity>
-
-          {/* Language Indicator */}
-          {language && (
-            <Text style={styles.languageIndicator}>
-              Current language: {languageLabels[language] || language}
-            </Text>
-          )}
-      </View>
-
-      {/* Horizontal Scrollable Lottie Carousel */}
-      <View style={styles.lottieContainer}>
-        <Text style={styles.subTitle}>Today's pick</Text>
-        <ScrollView
-          horizontal
-          pagingEnabled={false}
-          decelerationRate="fast"
-          snapToInterval={LOTTIE_ITEM_WIDTH}
-          snapToAlignment="center"
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.lottieScrollContent}
+        <TouchableOpacity
+          style={styles.importButton}
+          onPress={onPress}
+          activeOpacity={0.7}
         >
-          {Array.from({ length: NUM_LOTTIE_ITEMS }).map((_, index) => (
-            <View key={index} style={styles.lottieItem}>
-              <LottieView
-                source={{ uri: 'https://lottie.host/1bff431a-d19b-4138-aa0f-4715baf65d50/RDISFsxgIr.lottie'}}
-                autoPlay
-                loop
-                style={styles.lottieAnimation}
-              />
-            </View>
-          ))}
-        </ScrollView>
+          <Text style={styles.importButtonText}>Scan with camera</Text>
+        </TouchableOpacity>
+        {/* Import from Album Button */}
+        <TouchableOpacity
+          style={styles.importButton}
+          onPress={onImportFromAlbum}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.importButtonText}>Import from Album</Text>
+        </TouchableOpacity>
+
+        {/* Language Indicator */}
+        {language && (
+          <Text style={styles.languageIndicator}>
+            Current language: {languageLabels[language] || language}
+          </Text>
+        )}
       </View>
+
     </View>
   );
 };
@@ -108,12 +84,10 @@ export const ArtworkPlaceholder = ({ onPress, onImportFromAlbum, language }: Art
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    height: '80%',
     paddingHorizontal: spacing["2xl"],
-    position: 'relative',
+    paddingVertical: spacing.base,
     alignSelf: 'center',
     alignItems: 'center',
-    zIndex: 0,
   },
   lottieContainer: {
     position: 'absolute',
@@ -132,7 +106,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.darkGrey,
     flexDirection: 'row',
-    alignSelf:"flex-start",
+    alignSelf: "flex-start",
     paddingLeft: spacing.xl,
     marginTop: spacing.xl,
   },

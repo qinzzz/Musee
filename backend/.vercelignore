@@ -1,0 +1,10 @@
+venv/
+musee-env/
+__pycache__/
+*.pyc
+.gitignore
+.env
+musee.db
+.DS_Store
+testing/
+*.log

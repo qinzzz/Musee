@@ -5,6 +5,7 @@ import CameraScreen from '../screens/CameraScreen';
 import ArtworkAnalysisScreen from '../screens/ArtworkAnalysisScreen';
 import SummaryScreen from '../screens/SummaryScreen';
 import GalleryScreen from '../screens/GalleryScreen';
+import CollectionsScreen from '../screens/CollectionsScreen';
 import SavedArtworkDetailScreen from '../screens/SavedArtworkDetailScreen';
 
 export type RootStackParamList = {
@@ -19,6 +20,7 @@ export type RootStackParamList = {
         conversationHistory: any[]
     };
     Gallery: undefined;
+    Collections: undefined;
     ArtworkDetail: {
         artworkId: string;
         initialPhotoUri?: string;
@@ -43,6 +45,7 @@ export const AppNavigator = () => {
             <Stack.Screen name="ArtworkAnalysis" component={ArtworkAnalysisScreen} />
             <Stack.Screen name="Summary" component={SummaryScreen} />
             <Stack.Screen name="Gallery" component={GalleryScreen} />
+            <Stack.Screen name="Collections" component={CollectionsScreen} />
             <Stack.Screen name="ArtworkDetail" component={SavedArtworkDetailScreen} />
         </Stack.Navigator>
     );

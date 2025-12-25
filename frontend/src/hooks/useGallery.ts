@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
 import { savedArtworkApiService, SavedArtwork } from '../services/savedArtworkApi';
 import { historyCacheService } from '../services/historyCache';
@@ -15,7 +15,7 @@ export interface GalleryItem {
 }
 
 export const useGallery = (selectedTab: 'recognized' | 'unknown') => {
-    const [items, setItems] = useState<GalleryItem[]>([]);
+    const [allItems, setAllItems] = useState<GalleryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -31,25 +31,31 @@ export const useGallery = (selectedTab: 'recognized' | 'unknown') => {
         }));
     }, []);
 
+    // Filter items locally for zero-latency tab switching
+    const items = useMemo(() => {
+        return allItems.filter(item =>
+            selectedTab === 'recognized' ? item.isRecognized : !item.isRecognized
+        );
+    }, [allItems, selectedTab]);
+
     const fetchFromBackend = useCallback(async () => {
         try {
-            const recognizedOnly = selectedTab === 'recognized' ? true : false;
+            // Fetch ALL items to enable preloading and local filtering
             const response = await savedArtworkApiService.getSavedArtworks({
-                recognizedOnly,
                 limit: 100,
             });
 
             await historyCacheService.saveToCache(response.items);
-            const galleryItems = convertToGalleryItems(response.items);
-            setItems(galleryItems);
+            const convertedItems = convertToGalleryItems(response.items);
+            setAllItems(convertedItems);
 
-            const artworkIds = galleryItems.map(item => item.id);
+            const artworkIds = convertedItems.map(item => item.id);
             artworkCacheService.prefetch(artworkIds, (id) => savedArtworkApiService.getSavedArtwork(id));
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    }, [selectedTab, convertToGalleryItems]);
+    }, [convertToGalleryItems]);
 
     const loadData = useCallback(async () => {
         setIsLoading(true);
@@ -57,12 +63,8 @@ export const useGallery = (selectedTab: 'recognized' | 'unknown') => {
             const cachedData = await historyCacheService.getFromCache();
 
             if (cachedData) {
-                const filteredData = selectedTab === 'recognized'
-                    ? cachedData.filter(item => item.is_recognized === 1)
-                    : cachedData.filter(item => item.is_recognized === 0);
-
-                const convertedItems = convertToGalleryItems(filteredData);
-                setItems(convertedItems);
+                const convertedItems = convertToGalleryItems(cachedData);
+                setAllItems(convertedItems);
                 setIsLoading(false);
 
                 const artworkIds = convertedItems.map(item => item.id);
@@ -75,15 +77,15 @@ export const useGallery = (selectedTab: 'recognized' | 'unknown') => {
             }
         } catch (error) {
             console.error('[useGallery] Error loading photos:', error);
-            setItems([]);
+            setAllItems([]);
             setIsLoading(false);
         }
-    }, [selectedTab, convertToGalleryItems, fetchFromBackend]);
+    }, [convertToGalleryItems, fetchFromBackend]);
 
     const deleteItem = useCallback(async (itemId: string) => {
         try {
             await savedArtworkApiService.deleteSavedArtwork(itemId);
-            setItems(prev => prev.filter(item => item.id !== itemId));
+            setAllItems(prev => prev.filter(item => item.id !== itemId));
             return true;
         } catch (error) {
             console.error('[useGallery] Error deleting artwork:', error);
@@ -92,9 +94,10 @@ export const useGallery = (selectedTab: 'recognized' | 'unknown') => {
         }
     }, []);
 
+    // Initial load
     useEffect(() => {
         loadData();
-    }, [selectedTab, loadData]);
+    }, [loadData]);
 
     return {
         items,

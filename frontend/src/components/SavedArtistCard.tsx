@@ -9,9 +9,12 @@ interface ArtistCardProps {
   artistName: string;
   title: string;
   summary: string;
-  tags?: string[];
+  tags?: string;
   createdTime?: string;
   createdLocation?: string;
+  photoTime?: string;
+  location?: string;
+  analysis?: string;
   withShadow?: boolean;
   backgroundColor?: string;
   onPress: () => void;
@@ -24,6 +27,10 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
   artistName,
   title,
   summary,
+  tags,
+  location,
+  photoTime,
+  analysis,
   withShadow = false,
   backgroundColor,
   onPress,
@@ -163,6 +170,41 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
               </Text>
             )}
           </View>
+
+          {!isEditing && (location || photoTime || tags || analysis) && (
+            <View style={styles.metadataContainer}>
+              {location && (
+                <View style={styles.metadataRow}>
+                  <Text style={[styles.metadataLabel, { color: textColor }]}>Location:</Text>
+                  <Text style={[styles.metadataValue, { color: textColor }]}>{location}</Text>
+                </View>
+              )}
+              {photoTime && (
+                <View style={styles.metadataRow}>
+                  <Text style={[styles.metadataLabel, { color: textColor }]}>Captured:</Text>
+                  <Text style={[styles.metadataValue, { color: textColor }]}>{new Date(photoTime).toLocaleDateString()}</Text>
+                </View>
+              )}
+              {tags && (
+                <View style={styles.tagsSection}>
+                  <Text style={[styles.metadataLabel, { color: textColor, marginBottom: spacing.xs }]}>Tags:</Text>
+                  <View style={styles.tagsContainer}>
+                    {tags.split(',').map((tag, index) => (
+                      <View key={index} style={styles.tag}>
+                        <Text style={styles.tagText}>{tag.trim()}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+              {analysis && (
+                <View style={styles.analysisContainer}>
+                  <Text style={[styles.annotation, { color: textColor, marginBottom: spacing.xs }]}>Analysis</Text>
+                  <Text style={[styles.analysisText, { color: textColor }]}>{analysis}</Text>
+                </View>
+              )}
+            </View>
+          )}
 
           {isEditing && (
             <View style={styles.editButtons}>
@@ -307,5 +349,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: colors.darkGrey,
+  },
+  metadataContainer: {
+    marginTop: spacing.base,
+    gap: spacing.sm,
+  },
+  metadataRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  metadataLabel: {
+    fontFamily: 'PP Neue Montreal',
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.darkGrey,
+  },
+  metadataValue: {
+    fontFamily: 'PP Neue Montreal',
+    fontSize: 13,
+    fontWeight: '400',
+    color: colors.darkGrey,
+    flex: 1,
+  },
+  tagsSection: {
+    width: '100%',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    width: '100%',
+  },
+  tag: {
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.midGrey,
+  },
+  tagText: {
+    fontFamily: 'PP Neue Montreal',
+    fontSize: 12,
+    color: colors.darkGrey,
+  },
+  analysisContainer: {
+    marginTop: spacing.sm,
+  },
+  analysisText: {
+    fontFamily: 'PP Neue Montreal',
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.darkGrey,
+    lineHeight: 20,
   },
 });

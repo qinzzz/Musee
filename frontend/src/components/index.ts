@@ -26,4 +26,5 @@ export { GalleryEmptyState } from './GalleryEmptyState';
 export { SavedArtworkDetailHeader } from './SavedArtworkDetailHeader';
 export { ImmersiveExplorationPanel } from './ImmersiveExplorationPanel';
 export { ArtworkDetailCard } from './ArtworkDetailCard';
+export { TodaysPick } from './TodaysPick';
 export * from './icons';

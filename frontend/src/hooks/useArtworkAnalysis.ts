@@ -18,7 +18,7 @@ interface AnalysisResponse {
     tags?: string;
 }
 
-export const useArtworkAnalysis = (photoUri: string, identity: string = 'gamified', language: string = 'en', initialMetadata?: ArtworkMetadata) => {
+export const useArtworkAnalysis = (photoUri: string, identity: string = 'museum_narrator', language: string = 'en', initialMetadata?: ArtworkMetadata) => {
     const [artists, setArtists] = useState<Artist[]>([]);
     const [artworkAnalysis, setArtworkAnalysis] = useState<string>('');
     const [artworkTags, setArtworkTags] = useState<string[]>([]);
@@ -107,29 +107,10 @@ export const useArtworkAnalysis = (photoUri: string, identity: string = 'gamifie
             } else if (cached?.promise) {
                 data = await cached.promise;
             } else {
-                const compressed = await compressImageToSize(photoUri, 4 * 1024 * 1024);
-                const uploadUri = compressed.uri;
-
-                const formData = new FormData();
-                formData.append('image', {
-                    uri: uploadUri,
-                    type: 'image/jpeg',
-                    name: 'artwork.jpg',
-                } as any);
-                formData.append('identity', identity);
-                formData.append('language', language);
-
-                const analyze_url = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_ARTIST}`;
-                const response = await fetch(analyze_url, {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                if (!response.ok) {
-                    throw new Error(`API request failed with status ${response.status}`);
-                }
-
-                data = await response.json();
+                // No cached promise, start the identification process
+                const identificationPromise = savedArtworkApiService.identifyArtist(photoUri, identity, language);
+                artistAnalysisCache.set(photoUri, identificationPromise);
+                data = await identificationPromise;
             }
 
             let artistsData: Artist[];

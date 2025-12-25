@@ -5,6 +5,7 @@ import { savedArtworkApiService, SavedArtwork, ColorPalette } from '../services/
 import { artworkCacheService } from '../services/artworkCache';
 import { getColors } from 'react-native-image-colors';
 import { compressImage, getCompressionSettings, resolvePhUri } from '../utils/imageUtils';
+import { useIdentity } from '../contexts/IdentityContext';
 
 export const useSavedArtwork = (artworkId: string, initialPhotoUri?: string, initialBackgroundColor?: string) => {
     const [artwork, setArtwork] = useState<SavedArtwork | null>(null);
@@ -18,6 +19,7 @@ export const useSavedArtwork = (artworkId: string, initialPhotoUri?: string, ini
     const [isBiteLoading, setIsBiteLoading] = useState(false);
     const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
     const [isTopicLoading, setIsTopicLoading] = useState(false);
+    const { identity } = useIdentity();
 
     const extractDominantColor = useCallback(async (targetArtwork: SavedArtwork) => {
         try {
@@ -60,7 +62,7 @@ export const useSavedArtwork = (artworkId: string, initialPhotoUri?: string, ini
     const fetchSuggestedTopics = useCallback(async (id: string) => {
         try {
             setIsTopicLoading(true);
-            const topicUrl = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_TOPIC}?saved_artwork_id=${id}&identity=gamified`;
+            const topicUrl = `${API_BASE_URL}${API_ENDPOINTS.ANALYZE_TOPIC}?saved_artwork_id=${id}&identity=${encodeURIComponent(identity)}`;
             const response = await fetch(topicUrl);
             if (!response.ok) throw new Error('Failed to fetch topics');
             const data = await response.json();
@@ -70,7 +72,7 @@ export const useSavedArtwork = (artworkId: string, initialPhotoUri?: string, ini
         } finally {
             setIsTopicLoading(false);
         }
-    }, []);
+    }, [identity]);
 
     const fetchArtworkDetails = useCallback(async () => {
         try {
@@ -123,7 +125,7 @@ export const useSavedArtwork = (artworkId: string, initialPhotoUri?: string, ini
             } as any);
             formData.append('artist_name', artwork.artist_name);
             formData.append('artwork_name', artwork.artwork_name);
-            formData.append('identity', 'gamified');
+            formData.append('identity', identity);
             formData.append('saved_artwork_id', artworkId);
 
             if (topic) {
@@ -155,7 +157,7 @@ export const useSavedArtwork = (artworkId: string, initialPhotoUri?: string, ini
         } finally {
             setIsBiteLoading(false);
         }
-    }, [artwork, artworkId, fetchSuggestedTopics]);
+    }, [artwork, artworkId, identity, fetchSuggestedTopics]);
 
     useEffect(() => {
         fetchArtworkDetails();

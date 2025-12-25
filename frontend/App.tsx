@@ -5,11 +5,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { userApiService } from './src/services/userApi';
 import { LanguageProvider } from './src/contexts/LanguageContext';
+import { IdentityProvider } from './src/contexts/IdentityContext';
 
 function App() {
   return (
     <LanguageProvider>
-      <AppContent />
+      <IdentityProvider>
+        <AppContent />
+      </IdentityProvider>
     </LanguageProvider>
   );
 }

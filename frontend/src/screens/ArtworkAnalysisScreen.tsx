@@ -33,7 +33,7 @@ import { resolvePhUri } from '../utils/imageUtils';
 const { width, height } = Dimensions.get('window');
 
 export default function ArtworkAnalysisScreen({ route, navigation }: any) {
-  const { photoUri, identity = 'gamified', metadata } = route.params;
+  const { photoUri, identity = 'museum_narrator', metadata } = route.params;
   const safeAreaInsets = useSafeAreaInsets();
   const { language } = useLanguage();
 
@@ -77,6 +77,14 @@ export default function ArtworkAnalysisScreen({ route, navigation }: any) {
     extractDominantColor();
     fetchArtistIdentification();
   }, [fetchArtistIdentification]);
+
+  // Auto-select first artist when identification is finished
+  useEffect(() => {
+    if (!isLoading && artists.length > 0 && selectedArtistIndex === null && !manualInputSubmitted) {
+      setSelectedArtistIndex(0);
+      setExpandedArtistIndex(0);
+    }
+  }, [isLoading, artists, selectedArtistIndex, manualInputSubmitted]);
 
   const extractDominantColor = async () => {
     try {
