@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius, shadows } from '../constants/theme';
-import { Typography, LoadingProgressBar } from '../components';
+import { Typography, LoadingProgressBar, HistoryGridItem } from '../components';
+import { homeStyles } from './styles/HomeStyles';
 import { collectionApiService, Collection } from '../services/collectionApi';
-import { useGallery } from '../hooks/useGallery';
+import { useHistory } from '../hooks/useHistory';
+import { normalizeImageUri } from '../utils/imageUtils';
 
 export default function CollectionsScreen({ navigation }: any) {
     const safeAreaInsets = useSafeAreaInsets();
@@ -18,7 +20,7 @@ export default function CollectionsScreen({ navigation }: any) {
     const [selectedArtworkIds, setSelectedArtworkIds] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
 
-    const { items: allArtworks, isLoading: isLoadingArtworks } = useGallery('recognized');
+    const { items: allArtworks, isLoading: isLoadingArtworks } = useHistory('recognized');
 
     useEffect(() => {
         loadCollections();
@@ -28,6 +30,7 @@ export default function CollectionsScreen({ navigation }: any) {
         setIsLoading(true);
         try {
             const data = await collectionApiService.getCollections();
+            console.log('[CollectionsScreen] Loaded collections:', JSON.stringify(data, null, 2));
             setCollections(data);
         } catch (error) {
             console.error('Failed to load collections:', error);
@@ -93,25 +96,70 @@ export default function CollectionsScreen({ navigation }: any) {
             contentContainerStyle={styles.collectionsContent}
             showsVerticalScrollIndicator={false}
         >
-            {collections.map((collection) => (
-                <TouchableOpacity
-                    key={collection.id}
-                    style={styles.collectionCard}
-                    onPress={() => {
-                        navigation.navigate('Gallery', { collectionId: collection.id });
-                    }}
-                    activeOpacity={0.8}
-                >
-                    <View style={styles.collectionCover}>
-                        <Text style={styles.collectionCoverPlaceholder}>📚</Text>
+            {collections.map((collection, index) => (
+                <View key={collection.id} style={styles.collectionRowContainer}>
+                    <View style={styles.collectionHeaderRow}>
+                        <View style={styles.titleWithCount}>
+                            <Text style={styles.prefixText}>
+                                {(index + 40).toString().padStart(3, '0')}
+                            </Text>
+                            <Typography style={styles.rowTitle}>
+                                {collection.name.toUpperCase()}
+                            </Typography>
+                            <Typography style={styles.rowItemCount}>
+                                {collection.artwork_count}
+                            </Typography>
+                        </View>
+                        <TouchableOpacity
+                            onPress={() => {
+                                navigation.navigate('CollectionDetail', {
+                                    collectionId: collection.id,
+                                    collectionName: collection.name
+                                });
+                            }}
+                            activeOpacity={0.7}
+                            style={styles.seeAllButton}
+                        >
+                            <Typography style={styles.seeAllText}>→</Typography>
+                        </TouchableOpacity>
                     </View>
-                    <View style={styles.collectionInfo}>
-                        <Text style={styles.collectionName}>{collection.name}</Text>
-                        <Text style={styles.collectionCount}>
-                            {collection.artwork_count} {collection.artwork_count === 1 ? 'artwork' : 'artworks'}
-                        </Text>
-                    </View>
-                </TouchableOpacity>
+
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.horizontalListContent}
+                        style={styles.horizontalScrollView}
+                    >
+                        {(collection.artworks || []).map((item) => (
+                            <View key={item.id} style={{ alignItems: 'center' }}>
+                                <HistoryGridItem
+                                    item={{
+                                        id: item.id,
+                                        uri: normalizeImageUri(item.photo_uri),
+                                        artistName: item.artist_name,
+                                        artworkName: item.artwork_name,
+                                        backgroundColor: item.background_color,
+                                        isRecognized: Number(item.is_recognized) === 1,
+                                    }}
+                                    itemWidth={100}
+                                    hideMetadata={true}
+                                    isDeleting={false}
+                                    onConfirmDelete={() => { }}
+                                    onLongPress={() => { }}
+                                    onPress={() => {
+                                        const allIds = collection.artworks?.map(a => a.id) || [];
+                                        navigation.navigate('ArtworkDetail', {
+                                            artworkId: item.id,
+                                            initialPhotoUri: item.photo_uri,
+                                            initialBackgroundColor: item.background_color,
+                                            artworkIds: allIds,
+                                        });
+                                    }}
+                                />
+                            </View>
+                        ))}
+                    </ScrollView>
+                </View>
             ))}
         </ScrollView>
     );
@@ -138,6 +186,29 @@ export default function CollectionsScreen({ navigation }: any) {
                     <LoadingProgressBar />
                 </View>
             ) : collections.length === 0 ? renderEmptyState() : renderCollections()}
+
+            {/* Bottom Navigation */}
+            <View style={[homeStyles.bottomNav, { paddingBottom: Math.max(safeAreaInsets.bottom, 20) }]}>
+                <TouchableOpacity
+                    style={homeStyles.navButton}
+                    onPress={() => navigation.navigate('History')}
+                >
+                    <Typography style={homeStyles.navLabel}>History</Typography>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={homeStyles.navButton}
+                    onPress={() => navigation.navigate('Home')}
+                >
+                    <Typography style={homeStyles.navLabel}>Discover</Typography>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={homeStyles.navButton}
+                    onPress={() => { }}
+                    disabled={true}
+                >
+                    <Typography style={homeStyles.navLabelActive}>Gallery</Typography>
+                </TouchableOpacity>
+            </View>
 
             {/* Creation Modal */}
             <Modal
@@ -218,7 +289,7 @@ const ARTWORK_SIZE = (width - (GRID_PADDING * 4)) / 3;
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.lightGrey,
+        backgroundColor: colors.white,
     },
     header: {
         flexDirection: 'row',
@@ -289,44 +360,59 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     collectionsContent: {
-        paddingHorizontal: spacing.xl,
-        paddingBottom: spacing['2xl'],
-        gap: spacing.base,
+        paddingTop: spacing.base,
+        paddingBottom: 100, // Space for bottom nav
     },
-    collectionCard: {
+    collectionRowContainer: {
+        marginBottom: spacing['2xl'],
+    },
+    collectionHeaderRow: {
         flexDirection: 'row',
-        backgroundColor: colors.white,
-        borderRadius: borderRadius.lg,
-        padding: spacing.base,
-        ...shadows.sm,
-    },
-    collectionCover: {
-        width: 80,
-        height: 80,
-        borderRadius: borderRadius.md,
-        backgroundColor: colors.background,
-        justifyContent: 'center',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        marginRight: spacing.base,
+        paddingHorizontal: spacing.xl,
+        marginBottom: spacing.base,
     },
-    collectionCoverPlaceholder: {
-        fontSize: 32,
+    titleWithCount: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
     },
-    collectionInfo: {
-        flex: 1,
-        justifyContent: 'center',
-    },
-    collectionName: {
-        fontFamily: 'PP Neue Montreal',
-        fontSize: 18,
-        fontWeight: '600',
-        color: colors.black,
-        marginBottom: spacing.xs,
-    },
-    collectionCount: {
+    rowTitle: {
         fontFamily: 'PP Neue Montreal',
         fontSize: 14,
+        fontWeight: '500',
+        color: colors.black,
+        letterSpacing: 0.5,
+        paddingRight: 4,
+    },
+    rowItemCount: {
+        fontFamily: 'PP Neue Montreal Book',
+        fontSize: 12,
         color: colors.darkGrey,
+        marginTop: 1,  // Small visual adjustment
+    },
+    prefixText: {
+        fontFamily: 'PP Neue Montreal Book',
+        fontSize: 10,
+        color: colors.black,
+        marginTop: 1,
+        paddingRight: 2,
+    },
+    seeAllButton: {
+        padding: spacing.xs,
+    },
+    seeAllText: {
+        fontSize: 20,
+        color: colors.black,
+        fontWeight: '300',
+    },
+    horizontalListContent: {
+        paddingHorizontal: spacing.xl,
+        gap: spacing.base,
+    },
+    horizontalScrollView: {
+        minHeight: 160,
     },
     loaderContainer: {
         flex: 1,

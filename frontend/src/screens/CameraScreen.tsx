@@ -33,7 +33,7 @@ import { colors } from '../constants/colors';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useIdentity } from '../contexts/IdentityContext';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
-import { compressImage, getCompressionSettings } from '../utils/imageUtils';
+import { compressImage, getCompressionSettings, ensurePersistentImage } from '../utils/imageUtils';
 import { extractMetadataFromAsset } from '../utils/metadataUtils';
 
 export default function CameraScreen({ navigation }: any) {
@@ -49,10 +49,26 @@ export default function CameraScreen({ navigation }: any) {
   const position = 'back'
   const device = useCameraDevice(position);
   const camera = useRef<Camera>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    checkCameraPermission();
+    if (Platform.OS === 'web') {
+      setupWebCamera();
+    } else {
+      checkCameraPermission();
+    }
   }, []);
+
+  const setupWebCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error('Error accessing web camera:', err);
+    }
+  };
 
   const checkCameraPermission = async () => {
     if (!hasPermission) {
@@ -74,6 +90,24 @@ export default function CameraScreen({ navigation }: any) {
 
   const handleTakePhoto = async () => {
     try {
+      if (Platform.OS === 'web') {
+        if (!videoRef.current) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = videoRef.current.videoWidth;
+        canvas.height = videoRef.current.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(videoRef.current, 0, 0);
+        const dataUrl = canvas.toDataURL('image/jpeg');
+
+        // Pre-warm identification (web)
+        console.log('[CameraScreen] Pre-warming artist identification (web) for dataUrl');
+        const identificationPromise = savedArtworkApiService.identifyArtist(dataUrl, identity, language);
+        artistAnalysisCache.set(dataUrl, identificationPromise);
+
+        navigation.navigate('ArtworkAnalysis', { photoUri: dataUrl, identity });
+        return;
+      }
+
       if (camera.current == null) {
         throw new Error('Camera not available');
       }
@@ -104,7 +138,7 @@ export default function CameraScreen({ navigation }: any) {
 
     } catch (error) {
       console.error('Failed to take photo:', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
+      Alert.alert('Error', Platform.OS === 'web' ? 'Failed to access camera stream' : 'Failed to take photo. Please try again.');
     }
   };
 
@@ -141,13 +175,16 @@ export default function CameraScreen({ navigation }: any) {
         if (originalUri) {
           const metadata = extractMetadataFromAsset(asset);
 
+          // Ensure the image is stored permanently if it came from a temp folder
+          const persistentUri = await ensurePersistentImage(originalUri);
+
           // Pre-warm identification
-          console.log('[CameraScreen] Pre-warming artist identification (album) for:', originalUri, 'with identity:', identity);
-          const identificationPromise = savedArtworkApiService.identifyArtist(originalUri, identity, language);
-          artistAnalysisCache.set(originalUri, identificationPromise);
+          console.log('[CameraScreen] Pre-warming artist identification (album) for:', persistentUri, 'with identity:', identity);
+          const identificationPromise = savedArtworkApiService.identifyArtist(persistentUri, identity, language);
+          artistAnalysisCache.set(persistentUri, identificationPromise);
 
           navigation.navigate('ArtworkAnalysis', {
-            photoUri: originalUri,
+            photoUri: persistentUri,
             metadata,
             identity
           });
@@ -196,6 +233,17 @@ export default function CameraScreen({ navigation }: any) {
             </TouchableOpacity>
           )}
         </View>
+      );
+    }
+
+    if (Platform.OS === 'web') {
+      return (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
       );
     }
 

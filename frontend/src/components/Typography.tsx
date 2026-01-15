@@ -1,11 +1,10 @@
-import React from 'react';
-import { Text, TextStyle, StyleSheet } from 'react-native';
+import { Text, TextStyle, StyleSheet, StyleProp } from 'react-native';
 import { textStyles } from '../constants/theme';
 
 interface TypographyProps {
   children: React.ReactNode;
-  variant?: 'h1' | 'h2' | 'h3' | 'body' | 'bodyLight' | 'label' | 'caption' | 'badge';
-  style?: TextStyle;
+  variant?: 'h0' | 'h1' | 'h2' | 'h3' | 'body' | 'bodyLight' | 'label' | 'caption' | 'badge';
+  style?: StyleProp<TextStyle>;
   numberOfLines?: number;
   align?: 'left' | 'center' | 'right';
 }
@@ -20,6 +19,7 @@ export const Typography: React.FC<TypographyProps> = ({
   return (
     <Text
       style={[
+        { paddingRight: 4 }, // Defensive padding for font clipping
         textStyles[variant],
         align && { textAlign: align },
         style
@@ -32,6 +32,10 @@ export const Typography: React.FC<TypographyProps> = ({
 };
 
 // Convenience components
+export const Heading0: React.FC<Omit<TypographyProps, 'variant'>> = (props) => (
+  <Typography {...props} variant="h0" />
+);
+
 export const Heading1: React.FC<Omit<TypographyProps, 'variant'>> = (props) => (
   <Typography {...props} variant="h1" />
 );

@@ -3,7 +3,7 @@ import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
 import { artistAnalysisCache } from '../utils/artistAnalysisCache';
 import { artworkSummaryCache } from '../utils/artworkSummaryCache';
 import { savedArtworkApiService, SavedArtwork, ColorPalette } from '../services/savedArtworkApi';
-import { compressImageToSize } from '../utils/imageUtils';
+import { compressImageToSize, ensurePersistentImage } from '../utils/imageUtils';
 import { ArtworkMetadata } from '../utils/metadataUtils';
 
 export interface Artist {
@@ -55,8 +55,11 @@ export const useArtworkAnalysis = (photoUri: string, identity: string = 'museum_
             const finalTags = tags ? tags.join(', ') : (artworkTags.length > 0 ? artworkTags.join(', ') : undefined);
             const finalAnalysis = analysis || artworkAnalysis || undefined;
 
+            // Ensure the photo is stored permanently before saving to DB
+            const persistentUri = await ensurePersistentImage(photoUri);
+
             const result = await savedArtworkApiService.saveArtwork({
-                photoUri,
+                photoUri: persistentUri,
                 artistName: artist.artist_name,
                 artworkName: artist.artwork_name || 'Unknown',
                 conversationHistory: [],

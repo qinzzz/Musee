@@ -4,9 +4,10 @@ import HomePage from '../screens/HomePage';
 import CameraScreen from '../screens/CameraScreen';
 import ArtworkAnalysisScreen from '../screens/ArtworkAnalysisScreen';
 import SummaryScreen from '../screens/SummaryScreen';
-import GalleryScreen from '../screens/GalleryScreen';
+import HistoryScreen from '../screens/HistoryScreen';
 import CollectionsScreen from '../screens/CollectionsScreen';
 import SavedArtworkDetailScreen from '../screens/SavedArtworkDetailScreen';
+import CollectionDetailScreen from '../screens/CollectionDetailScreen';
 
 export type RootStackParamList = {
     Home: undefined;
@@ -19,13 +20,17 @@ export type RootStackParamList = {
         savedArtworkId: string;
         conversationHistory: any[]
     };
-    Gallery: undefined;
+    History: undefined;
     Collections: undefined;
     ArtworkDetail: {
         artworkId: string;
         initialPhotoUri?: string;
         initialBackgroundColor?: string;
         artworkIds?: string[];
+    };
+    CollectionDetail: {
+        collectionId: string;
+        collectionName: string;
     };
 };
 
@@ -44,9 +49,10 @@ export const AppNavigator = () => {
             <Stack.Screen name="Camera" component={CameraScreen} />
             <Stack.Screen name="ArtworkAnalysis" component={ArtworkAnalysisScreen} />
             <Stack.Screen name="Summary" component={SummaryScreen} />
-            <Stack.Screen name="Gallery" component={GalleryScreen} />
+            <Stack.Screen name="History" component={HistoryScreen} />
             <Stack.Screen name="Collections" component={CollectionsScreen} />
             <Stack.Screen name="ArtworkDetail" component={SavedArtworkDetailScreen} />
+            <Stack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
         </Stack.Navigator>
     );
 };

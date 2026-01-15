@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import RNFS from 'react-native-fs';
 
@@ -27,6 +28,12 @@ export async function compressImage(
   } = options;
 
   try {
+    if (Platform.OS === 'web') {
+      console.log('[ImageUtils] Web compression requested. Returning original URI for now.');
+      // Web implementation could use Canvas, but for now we return the original.
+      return { uri, width: 0, height: 0, size: 0 };
+    }
+
     // Ensure ph:// is resolved to a readable file://
     const resolvedUri = await resolvePhUri(uri);
 
@@ -149,7 +156,7 @@ export async function compressImageToSize(
  * Resolves a ph:// URI into a readable file:// URI for tools that don't support ph://
  */
 export async function resolvePhUri(uri: string): Promise<string> {
-  if (!uri.startsWith('ph://')) return uri;
+  if (Platform.OS === 'web' || !uri.startsWith('ph://')) return uri;
 
   try {
     console.log(`[ImageUtils] Resolving ph:// URI: ${uri}`);
@@ -167,44 +174,51 @@ export async function resolvePhUri(uri: string): Promise<string> {
       console.warn(`[ImageUtils] RNFS resolution failed for ${identifier}`, rnfsError);
     }
 
-    // Attempt 2: Fetch bridge (Special iOS workaround)
-    try {
-      console.log(`[ImageUtils] Attempting fetch resolution for ${uri}`);
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      // Read blob as base64 and write to file
-      const reader = new FileReader();
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => {
-          const base64 = (reader.result as string).split(',')[1];
-          resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-
-      await RNFS.writeFile(tempPath, base64Data, 'base64');
-      console.log(`[ImageUtils] Successfully resolved via fetch blob: file://${tempPath}`);
-      return `file://${tempPath}`;
-    } catch (fetchError) {
-      console.warn(`[ImageUtils] Fetch resolution failed for ${uri}`, fetchError);
-    }
-
-    // Attempt 3: ImageResizer (Last resort transformation)
+    // Attempt 2: ImageResizer (High reliability on iOS for ph://)
     try {
       console.log(`[ImageUtils] Attempting ImageResizer resolution for ${uri}`);
       const resized = await ImageResizer.createResizedImage(
         uri,
-        1200, // Reasonable max
-        1200,
+        2000, // High quality for resolution
+        2000,
         'JPEG',
-        80
+        90,
+        0,
+        undefined,
+        false,
+        { mode: 'contain', onlyScaleDown: true }
       );
-      console.log(`[ImageUtils] Successfully resolved via ImageResizer: ${resized.uri}`);
-      return resized.uri;
+      if (resized && resized.uri) {
+        console.log(`[ImageUtils] Successfully resolved via ImageResizer: ${resized.uri}`);
+        return resized.uri;
+      }
     } catch (resizerError) {
-      console.error(`[ImageUtils] All resolution attempts failed for ${uri}`, resizerError);
+      console.warn(`[ImageUtils] ImageResizer resolution failed for ${uri}`, resizerError);
+    }
+
+    // Attempt 3: Fetch bridge (Only as last resort, and not for ph:// if we can help it)
+    // Note: ph:// is NOT supported by standard fetch on most iOS RN versions
+    if (!uri.startsWith('ph://')) {
+      try {
+        console.log(`[ImageUtils] Attempting fetch resolution for ${uri}`);
+        const response = await fetch(uri);
+        const blob = await response.blob();
+
+        const reader = new FileReader();
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => {
+            const base64 = (reader.result as string).split(',')[1];
+            resolve(base64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+
+        await RNFS.writeFile(tempPath, base64Data, 'base64');
+        return `file://${tempPath}`;
+      } catch (fetchError) {
+        console.warn(`[ImageUtils] Fetch resolution failed for ${uri}`, fetchError);
+      }
     }
 
   } catch (globalError) {
@@ -212,4 +226,86 @@ export async function resolvePhUri(uri: string): Promise<string> {
   }
 
   return uri; // Fallback to original
+}
+
+/**
+ * Normalizes an image URI, especially for iOS local file paths that might have become invalid
+ * due to the App Container UUID changing after a new build/install.
+ */
+export function normalizeImageUri(uri: string): string {
+  if (!uri || Platform.OS === 'web') return uri;
+
+  // Only handle iOS absolute file paths in the app sandbox
+  if (!uri.startsWith('file:///var/mobile/Containers/Data/Application/')) {
+    return uri;
+  }
+
+  try {
+    // Find the segment after the UUID
+    // Example: file:///var/mobile/Containers/Data/Application/OLD-UUID/tmp/photo.jpg
+    const segments = uri.split('/');
+    const applicationIndex = segments.indexOf('Application');
+
+    if (applicationIndex === -1 || applicationIndex + 2 >= segments.length) {
+      return uri;
+    }
+
+    // The relative path starts after the UUID (segments[applicationIndex + 1])
+    const relativePart = segments.slice(applicationIndex + 2).join('/');
+
+    // Get the current app container root
+    // RNFS.DocumentDirectoryPath is usually .../Documents
+    // We want the parent of Documents
+    const currentDocPath = RNFS.DocumentDirectoryPath;
+    const currentAppRoot = currentDocPath.replace(/\/Documents$/, '');
+
+    const normalizedUri = `${currentAppRoot}/${relativePart}`;
+
+    // Log only once per session or sparingly to avoid noise
+    // console.log(`[ImageUtils] Normalized URI from ${segments[applicationIndex + 1].substring(0, 8)}... to current sandbox`);
+
+    return normalizedUri;
+  } catch (error) {
+    console.error('[ImageUtils] Error normalizing URI:', error);
+    return uri;
+  }
+}
+
+/**
+ * Ensures an image is stored in a permanent directory (Documents/Musee/Photos).
+ * If the image is currently in a temporary directory (tmp or Caches), it will be moved.
+ */
+export async function ensurePersistentImage(uri: string): Promise<string> {
+  if (!uri || Platform.OS === 'web' || !uri.startsWith('file://')) return uri;
+
+  try {
+    const isTemp = uri.includes('/tmp/') || uri.includes('/Caches/');
+    if (!isTemp) return uri;
+
+    const fileName = uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+    const photoDir = `${RNFS.DocumentDirectoryPath}/Musee/Photos`;
+    const destPath = `${photoDir}/${fileName}`;
+
+    // Create directory if it doesn't exist
+    const dirExists = await RNFS.exists(photoDir);
+    if (!dirExists) {
+      await RNFS.mkdir(photoDir);
+    }
+
+    // Copy the file to the permanent location
+    const sourcePath = uri.replace('file://', '');
+
+    // If destination already exists, return it (avoid redundant copies)
+    if (await RNFS.exists(destPath)) {
+      return `file://${destPath}`;
+    }
+
+    await RNFS.copyFile(sourcePath, destPath);
+    console.log(`[ImageUtils] Persisted image to: ${destPath}`);
+
+    return `file://${destPath}`;
+  } catch (error) {
+    console.error('[ImageUtils] Error persisting image:', error);
+    return uri; // Fallback to original
+  }
 }

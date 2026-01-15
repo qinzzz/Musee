@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Image, StyleSheet, ViewStyle, ImageStyle, TouchableOpacity } from 'react-native';
 import { borderRadius, shadows, spacing } from '../constants/theme';
+import { normalizeImageUri } from '../utils/imageUtils';
 
 interface ArtworkImageContainerProps {
   imageUri: string;
@@ -16,7 +17,7 @@ interface ArtworkImageContainerProps {
 export const ArtworkImageContainer: React.FC<ArtworkImageContainerProps> = ({
   imageUri,
   aspectRatio = 1,
-  borderRadiusSize = 'md',
+  borderRadiusSize = 'lg',
   withShadow = false,
   marginTop = spacing.md,
   containerStyle,
@@ -40,7 +41,7 @@ export const ArtworkImageContainer: React.FC<ArtworkImageContainerProps> = ({
   const imageContent = (
     <View style={[styles.imageContainer, imageContainerStyles]}>
       <Image
-        source={{ uri: imageUri }}
+        source={{ uri: normalizeImageUri(imageUri) }}
         style={[styles.artworkImage, imageStyle]}
         resizeMode="cover"
       />

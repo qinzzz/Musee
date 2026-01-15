@@ -8,12 +8,14 @@ import { Typography, MoreIcon, ArrowIcon } from './index';
 interface SavedArtworkDetailHeaderProps {
     onBack: () => void;
     onDelete: () => void;
+    onAddToCollection: () => void;
     isExplorationVisible: boolean;
 }
 
 export const SavedArtworkDetailHeader: React.FC<SavedArtworkDetailHeaderProps> = ({
     onBack,
     onDelete,
+    onAddToCollection,
     isExplorationVisible,
 }) => {
     const safeAreaInsets = useSafeAreaInsets();
@@ -46,10 +48,20 @@ export const SavedArtworkDetailHeader: React.FC<SavedArtworkDetailHeaderProps> =
                         style={styles.menuItem}
                         onPress={() => {
                             setShowMenu(false);
+                            onAddToCollection();
+                        }}
+                    >
+                        <Typography style={styles.menuItemText}>Add to Collection</Typography>
+                    </TouchableOpacity>
+                    <View style={styles.menuSeparator} />
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => {
+                            setShowMenu(false);
                             onDelete();
                         }}
                     >
-                        <Typography style={styles.menuItemText}>Delete</Typography>
+                        <Typography style={[styles.menuItemText, { color: colors.red || '#FF453A' }]}>Delete</Typography>
                     </TouchableOpacity>
                 </View>
             )}
@@ -111,5 +123,10 @@ const styles = StyleSheet.create({
         fontFamily: 'PP Neue Montreal',
         fontSize: 14,
         color: colors.darkGrey,
+    },
+    menuSeparator: {
+        height: 1,
+        backgroundColor: colors.lightGrey,
+        marginHorizontal: spacing.sm,
     },
 });

@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 
 from app.database.connection import get_db
-from app.database.models import SavedArtwork, Conversation
+from app.database.models import SavedArtwork, Conversation, Tag, ArtworkTag, User
 from sqlalchemy import func
 from app.models.artwork import AIProvider, UpdateArtworkRequest
 from app.services.ai_service import AIServiceFactory
@@ -427,6 +427,29 @@ async def remove_background(
         )
 
 
+def link_tags_to_artwork(db: Session, artwork: SavedArtwork, tags_str: str, user_id: str):
+    """Link tags from a comma-separated string to an artwork"""
+    if not tags_str or not user_id:
+        return
+
+    tag_names = [t.strip() for t in tags_str.split(',') if t.strip()]
+    
+    # Get current associations to avoid duplicates
+    current_tag_ids = {tag.id for tag in artwork.artwork_tags}
+    
+    for name in tag_names:
+        # Find or create tag
+        tag = db.query(Tag).filter(Tag.name == name, Tag.user_id == user_id).first()
+        if not tag:
+            tag = Tag(name=name, user_id=user_id)
+            db.add(tag)
+            db.flush()
+        
+        # Associate if not already associated
+        if tag.id not in current_tag_ids:
+            artwork.artwork_tags.append(tag)
+
+
 @router.post("/saved-artworks")
 async def save_artwork(
     photo_uri: str = Form(...),
@@ -489,8 +512,8 @@ async def save_artwork(
             saved_artwork.artist_name = artist_name
             saved_artwork.artwork_name = artwork_name
             saved_artwork.is_recognized = 1 if is_recognized else 0
-            if tags:
-                saved_artwork.tags = tags
+            if tags and user_id:
+                link_tags_to_artwork(db, saved_artwork, tags, user_id)
             if analysis:
                 saved_artwork.analysis = analysis
             if color_palette_data:
@@ -512,12 +535,14 @@ async def save_artwork(
                 location=location,
                 museum_name=museum_name,
                 is_recognized=1 if is_recognized else 0,
-                tags=tags,
                 analysis=analysis,
                 color_palette=color_palette_data,
                 photo_time=photo_time if photo_time else created_at
             )
             db.add(saved_artwork)
+            db.flush()
+            if tags and user_id:
+                link_tags_to_artwork(db, saved_artwork, tags, user_id)
 
         if created_at:
             try:
@@ -683,8 +708,8 @@ async def update_saved_artwork(
         if request.summary is not None:
             saved_artwork.summary = request.summary
 
-        if request.tags is not None:
-            saved_artwork.tags = request.tags
+        if request.tags is not None and saved_artwork.user_id:
+            link_tags_to_artwork(db, saved_artwork, request.tags, saved_artwork.user_id)
 
         if request.analysis is not None:
             saved_artwork.analysis = request.analysis
@@ -748,6 +773,38 @@ async def delete_saved_artwork(
             detail=f"Failed to delete saved artwork: {str(e)}"
         )
 
+@router.post("/saved-artworks/batch-delete")
+async def batch_delete_saved_artworks(
+    artwork_ids: list[str],
+    db: Session = Depends(get_db)
+):
+    """
+    Delete multiple saved artworks in a single transaction
+
+    - **artwork_ids**: List of IDs of the saved artworks to delete
+
+    Returns success message and count of deleted items
+    """
+    try:
+        # Using synchronize_session=False for efficiency in bulk delete
+        deleted_count = db.query(SavedArtwork).filter(
+            SavedArtwork.id.in_(artwork_ids)
+        ).delete(synchronize_session=False)
+
+        db.commit()
+
+        return {
+            "message": f"Successfully deleted {deleted_count} artworks",
+            "deleted_count": deleted_count
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Batch delete failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete artworks in batch: {str(e)}"
+        )
 
 @router.post("/artwork-summary")
 async def generate_artwork_summary(

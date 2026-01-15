@@ -1,6 +1,7 @@
 import { apiClient } from './apiClient';
 import { userApiService } from './userApi';
 import { compressImageToSize } from '../utils/imageUtils';
+import { Tag } from './tagApi';
 
 export interface ConversationMessage {
   role: 'user' | 'assistant';
@@ -32,6 +33,7 @@ export interface SavedArtwork {
   is_recognized: number;
   created_at: string;
   updated_at: string;
+  artwork_tags?: Tag[];
 }
 
 interface SaveArtworkParams {
@@ -118,13 +120,17 @@ class SavedArtworkApiService {
     artistName: string,
     artworkName: string,
     summary?: string,
-    colorPalette?: ColorPalette
+    colorPalette?: ColorPalette,
+    analysis?: string,
+    tags?: string
   ): Promise<SavedArtwork> {
     return apiClient.put<SavedArtwork>(`/api/saved-artworks/${artworkId}`, {
       artist_name: artistName,
       artwork_name: artworkName,
       ...(summary !== undefined && { summary }),
       ...(colorPalette !== undefined && { color_palette: colorPalette }),
+      ...(analysis !== undefined && { analysis }),
+      ...(tags !== undefined && { tags }),
     });
   }
 
@@ -133,6 +139,13 @@ class SavedArtworkApiService {
    */
   async deleteSavedArtwork(artworkId: string): Promise<void> {
     return apiClient.delete(`/api/saved-artworks/${artworkId}`);
+  }
+
+  /**
+   * Delete multiple saved artworks in a batch
+   */
+  async deleteSavedArtworksBatch(artwork_ids: string[]): Promise<{ message: string; deleted_count: number }> {
+    return apiClient.post('/api/saved-artworks/batch-delete', artwork_ids);
   }
 
   async generateArtworkSummary(artworkId: string, imageUri: string, language?: string): Promise<{ summary: string; saved_artwork_id: string; model_used: string }> {

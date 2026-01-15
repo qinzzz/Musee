@@ -123,7 +123,7 @@ export default function SummaryScreen({ route, navigation }: any) {
   };
 
   const handleDone = () => {
-    navigation.navigate('Gallery');
+    navigation.navigate('History');
   };
 
   return (

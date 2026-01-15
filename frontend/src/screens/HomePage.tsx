@@ -81,7 +81,7 @@ export default function HomePage({ navigation }: any) {
       >
         <View style={styles.headerSection}>
           <View style={localStyles.headerRow}>
-            <Typography variant="h1" style={styles.title}>DISCOVER</Typography>
+            <Typography variant="h0" style={styles.title}>DISCOVER</Typography>
             <TouchableOpacity
               style={localStyles.menuButton}
               onPress={() => setShowMenuDropdown(true)}
@@ -117,7 +117,7 @@ export default function HomePage({ navigation }: any) {
       <View style={[styles.bottomNav, { paddingBottom: safeAreaInsets.bottom }]}>
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => navigation.navigate('Gallery')}
+          onPress={() => navigation.navigate('History')}
         >
           <Text style={styles.navLabel}>History</Text>
         </TouchableOpacity>

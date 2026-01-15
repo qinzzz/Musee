@@ -166,6 +166,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.black,
     textAlign: 'center',
+    paddingHorizontal: 2, // Fix last letter cut off
   },
   languageIndicator: {
     marginTop: spacing.sm,

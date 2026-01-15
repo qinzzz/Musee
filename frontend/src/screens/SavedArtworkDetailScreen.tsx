@@ -22,12 +22,17 @@ import {
   ArrowIcon,
   SavedArtworkDetailHeader,
   ImmersiveExplorationPanel,
-  ArtworkDetailCard
+  ArtworkDetailCard,
+  TagManager
 } from '../components';
+import { normalizeImageUri } from '../utils/imageUtils';
 import { spacing, animations, borderRadius, shadows } from '../constants/theme';
 import { savedArtworkApiService } from '../services/savedArtworkApi';
 import { artworkCacheService } from '../services/artworkCache';
 import { useSavedArtwork } from '../hooks/useSavedArtwork';
+import { collectionApiService, Collection } from '../services/collectionApi';
+import { artistAnalysisCache } from '../utils/artistAnalysisCache';
+import { FlatList } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,7 +41,7 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
     artworkId,
     initialPhotoUri,
     initialBackgroundColor,
-    artworkIds = [],
+    artworkItems = [],
     useBlurBackground = true,
   } = route.params || {};
 
@@ -51,6 +56,7 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
     isTopicLoading,
     fetchArtworkBite,
     fetchSuggestedTopics,
+    refresh,
   } = useSavedArtwork(artworkId, initialPhotoUri, initialBackgroundColor);
 
   const [showToast, setShowToast] = useState(false);
@@ -59,6 +65,11 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isFullScreenImage, setIsFullScreenImage] = useState(false);
   const [currentSelectedTopic, setCurrentSelectedTopic] = useState<string | null>(null);
+  const [showCollectionModal, setShowCollectionModal] = useState(false);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [isAddingToCollection, setIsAddingToCollection] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [swipeDirection, setSwipeDirection] = useState<'next' | 'prev' | null>(null);
 
   // Animation values
   const swipeTranslateX = useRef(new Animated.Value(0)).current;
@@ -67,8 +78,11 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
   const explorationTranslateY = useRef(new Animated.Value(height - 100)).current;
   const screenSlideX = useRef(new Animated.Value(width)).current;
 
-  const artworkIdsRef = useRef(artworkIds);
-  artworkIdsRef.current = artworkIds;
+  const artworkIdRef = useRef(artworkId);
+  artworkIdRef.current = artworkId;
+
+  const artworkItemsRef = useRef(artworkItems);
+  artworkItemsRef.current = artworkItems;
 
   useEffect(() => {
     isExplorationVisibleRef.current = isExplorationVisible;
@@ -92,13 +106,20 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
   }, []);
 
   useEffect(() => {
-    screenSlideX.setValue(width);
+    // Reset positions for the new artwork entrance
+    const startValue = swipeDirection === 'prev' ? -width : width;
+    screenSlideX.setValue(startValue);
+    swipeTranslateX.setValue(0);
+
     Animated.spring(screenSlideX, {
       toValue: 0,
       useNativeDriver: true,
       tension: 65,
       friction: 10,
-    }).start();
+    }).start(() => {
+      // Clear direction after entrance
+      setSwipeDirection(null);
+    });
   }, [artworkId]);
 
   useEffect(() => {
@@ -108,6 +129,32 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
       fetchSuggestedTopics(artworkId);
     }
   }, [isExplorationVisible, artwork]);
+
+  const handleAddToCollection = async () => {
+    try {
+      const data = await collectionApiService.getCollections();
+      setCollections(data);
+      setShowCollectionModal(true);
+    } catch (error) {
+      console.error('Failed to load collections:', error);
+      Alert.alert('Error', 'Failed to load collections.');
+    }
+  };
+
+  const addArtworkToCollection = async (collectionId: string) => {
+    setIsAddingToCollection(true);
+    try {
+      await collectionApiService.addArtworkToCollection(collectionId, artworkId);
+      setShowCollectionModal(false);
+      // Optional: Show some feedback
+      Alert.alert('Success', 'Added to collection!');
+    } catch (error) {
+      console.error('Failed to add to collection:', error);
+      Alert.alert('Error', 'Failed to add to collection.');
+    } finally {
+      setIsAddingToCollection(false);
+    }
+  };
 
   const handleBackPress = () => {
     if (isExplorationVisible) {
@@ -137,6 +184,66 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
         }
       }
     ]);
+  };
+
+  const handleRegenerate = async () => {
+    if (isRegenerating) return;
+
+    setIsRegenerating(true);
+    try {
+      // Clear cache to force a fresh identification
+      artistAnalysisCache.clear(photoUri);
+
+      const data = await savedArtworkApiService.identifyArtist(photoUri);
+
+      let artistsData;
+      let analysisContent = '';
+      let tagsString = '';
+
+      let analysisText = data.analysis;
+      if (typeof analysisText === 'string') {
+        analysisText = analysisText.trim();
+        const codeBlockRegex = /^```(?:json)?\s*\n?([\s\S]*?)\n?```$/;
+        const match = analysisText.match(codeBlockRegex);
+        if (match) {
+          analysisText = match[1].trim();
+        }
+        artistsData = JSON.parse(analysisText);
+      } else {
+        artistsData = analysisText;
+      }
+
+      const lastItem = artistsData[artistsData.length - 1];
+      if (lastItem && 'analysis' in lastItem && !('artist_name' in lastItem)) {
+        analysisContent = lastItem.analysis || '';
+        tagsString = lastItem.tags || '';
+        artistsData = artistsData.slice(0, -1);
+      }
+
+      if (artistsData.length > 0) {
+        const topArtist = artistsData[0];
+
+        // Update the artwork in DB
+        const updated = await savedArtworkApiService.updateSavedArtwork(
+          artworkId,
+          topArtist.artist_name,
+          topArtist.artwork_name || 'Unknown',
+          undefined, // Keep existing summary for now
+          undefined, // Keep existing palette
+          analysisContent,
+          tagsString
+        );
+
+        artworkCacheService.set(artworkId, updated);
+        await refresh();
+        Alert.alert('Success', 'Artwork re-analyzed successfully!');
+      }
+    } catch (error) {
+      console.error('Failed to regenerate analysis:', error);
+      Alert.alert('Error', 'Failed to regenerate analysis.');
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   const panResponder = useRef(
@@ -195,15 +302,41 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
             Animated.timing(explorationTranslateY, { toValue: height - 100, duration: 200, useNativeDriver: true }),
           ]).start();
         } else {
-          const swipeThreshold = width / 3;
-          if (Math.abs(gestureState.dx) > swipeThreshold && !isExplorationVisibleRef.current && artworkIdsRef.current.length > 0) {
-            const index = artworkIdsRef.current.indexOf(artworkId);
+          const swipeThreshold = width / 4;
+          if (Math.abs(gestureState.dx) > swipeThreshold && !isExplorationVisibleRef.current && artworkItemsRef.current.length > 0) {
+            const index = artworkItemsRef.current.findIndex((item: any) => item.id === artworkIdRef.current);
+            let nextItem = null;
+            let direction: 'next' | 'prev' | null = null;
+
             if (gestureState.dx > 0 && index > 0) {
-              navigation.setParams({ artworkId: artworkIdsRef.current[index - 1] });
-            } else if (gestureState.dx < 0 && index < artworkIdsRef.current.length - 1) {
-              navigation.setParams({ artworkId: artworkIdsRef.current[index + 1] });
+              // Swipe right -> Previous artwork
+              nextItem = artworkItemsRef.current[index - 1];
+              direction = 'prev';
+            } else if (gestureState.dx < 0 && index < artworkItemsRef.current.length - 1) {
+              // Swipe left -> Next artwork
+              nextItem = artworkItemsRef.current[index + 1];
+              direction = 'next';
+            }
+
+            if (nextItem) {
+              setSwipeDirection(direction);
+              // Animate current screen out
+              Animated.timing(swipeTranslateX, {
+                toValue: direction === 'next' ? -width : width,
+                duration: 200,
+                useNativeDriver: true,
+              }).start(() => {
+                navigation.setParams({
+                  artworkId: nextItem.id,
+                  initialPhotoUri: nextItem.uri,
+                  initialBackgroundColor: nextItem.backgroundColor
+                });
+              });
+              return;
             }
           }
+
+          // Fallback: simple bounce back if no swipe happened
           Animated.spring(swipeTranslateX, { toValue: 0, useNativeDriver: true, ...animations.spring.stiff }).start();
           Animated.spring(explorationTranslateY, {
             toValue: isExplorationVisibleRef.current ? 0 : height - 100,
@@ -217,94 +350,165 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.overlayContainer, { transform: [{ translateX: Animated.add(swipeTranslateX, screenSlideX) }] }]}>
-        <SavedArtworkDetailHeader
-          onBack={handleBackPress}
-          onDelete={handleDelete}
-          isExplorationVisible={isExplorationVisible}
-        />
-
-        <View style={styles.backgroundContainer}>
-          <Animated.View style={styles.swipeOverlay} {...panResponder.panHandlers}>
-            <KeyboardAvoidingView
-              style={styles.keyboardAvoidView}
-              behavior="padding"
-              keyboardVerticalOffset={0}
+      {/* Background Container for Scroll Content - This part SWIPES */}
+      <Animated.View
+        style={[
+          styles.overlayContainer,
+          {
+            transform: [{ translateX: Animated.add(swipeTranslateX, screenSlideX) }]
+          }
+        ]}
+      >
+        <Animated.View style={styles.swipeOverlay} {...panResponder.panHandlers}>
+          <KeyboardAvoidingView
+            style={styles.keyboardAvoidView}
+            behavior="padding"
+            keyboardVerticalOffset={0}
+          >
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{
+                paddingTop: safeAreaInsets.top + 80, // Space for stationary header
+                alignItems: 'center',
+                paddingBottom: 150 // Space for stationary peek panel
+              }}
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+              scrollEnabled={!isExplorationVisible}
             >
-              <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={{ paddingTop: safeAreaInsets.top, alignItems: 'center', paddingBottom: spacing['2xl'] }}
-                showsVerticalScrollIndicator={false}
-                bounces={true}
-                scrollEnabled={!isExplorationVisible}
-              >
-                <ArtworkDetailCard
-                  artwork={artwork}
-                  photoUri={photoUri}
-                  backgroundColor={backgroundColor}
-                  cardOpacity={cardOpacity}
-                  onImagePress={() => setIsFullScreenImage(true)}
-                  onEdit={async (artist, title, summary) => {
-                    const updated = await savedArtworkApiService.updateSavedArtwork(artworkId, artist, title, summary);
-                    artworkCacheService.set(artworkId, updated);
-                  }}
-                />
-              </ScrollView>
-
-              <ImmersiveExplorationPanel
-                translateY={explorationTranslateY}
-                pulseAnim={pulseAnim}
-                isVisible={isExplorationVisible}
+              <ArtworkDetailCard
                 artwork={artwork}
-                artworkBites={artworkBites}
-                isBiteLoading={isBiteLoading}
-                isTopicLoading={isTopicLoading}
-                suggestedTopics={suggestedTopics}
-                onFetchBite={(topic) => {
-                  setCurrentSelectedTopic(topic || null);
-                  fetchArtworkBite(topic);
-                }}
-                onShuffleTopics={() => {
-                  fetchSuggestedTopics(artworkId);
-                }}
-                onClose={handleBackPress}
-                useBlurBackground={useBlurBackground}
-                backgroundColor={backgroundColor}
                 photoUri={photoUri}
-                currentSelectedTopic={currentSelectedTopic}
+                backgroundColor={backgroundColor}
+                cardOpacity={cardOpacity}
+                onImagePress={() => setIsFullScreenImage(true)}
+                onEdit={async (artist, title, summary) => {
+                  const updated = await savedArtworkApiService.updateSavedArtwork(artworkId, artist, title, summary);
+                  artworkCacheService.set(artworkId, updated);
+                }}
+                onRegenerate={handleRegenerate}
+                isRegenerating={isRegenerating}
+                onTagsUpdated={() => {
+                  artworkCacheService.invalidate(artworkId);
+                  refresh();
+                }}
               />
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </Animated.View>
+      </Animated.View>
 
-              {!isExplorationVisible && (
-                <View style={styles.scrollIndicatorContainer} pointerEvents="none">
-                  <Animated.View style={{ opacity: pulseAnim, alignItems: 'center' }}>
-                    <ArrowIcon size={32} color={colors.darkGrey} direction="down" />
-                  </Animated.View>
-                </View>
-              )}
-            </KeyboardAvoidingView>
+      {/* Stationary Top Navigation Bar */}
+      <SavedArtworkDetailHeader
+        onBack={handleBackPress}
+        onDelete={handleDelete}
+        onAddToCollection={handleAddToCollection}
+        isExplorationVisible={isExplorationVisible}
+      />
+
+      {/* Stationary Bottom Exploration Panel */}
+      <ImmersiveExplorationPanel
+        translateY={explorationTranslateY}
+        pulseAnim={pulseAnim}
+        isVisible={isExplorationVisible}
+        artwork={artwork}
+        artworkBites={artworkBites}
+        isBiteLoading={isBiteLoading}
+        isTopicLoading={isTopicLoading}
+        suggestedTopics={suggestedTopics}
+        onFetchBite={(topic) => {
+          setCurrentSelectedTopic(topic || null);
+          fetchArtworkBite(topic);
+        }}
+        onShuffleTopics={() => {
+          fetchSuggestedTopics(artworkId);
+        }}
+        onClose={handleBackPress}
+        useBlurBackground={useBlurBackground}
+        backgroundColor={backgroundColor}
+        photoUri={photoUri}
+        currentSelectedTopic={currentSelectedTopic}
+      />
+
+      {/* Stationary Scroll Indicator */}
+      {!isExplorationVisible && (
+        <View style={styles.scrollIndicatorContainer} pointerEvents="none">
+          <Animated.View style={{ opacity: pulseAnim, alignItems: 'center' }}>
+            <ArrowIcon size={32} color={colors.darkGrey} direction="down" />
           </Animated.View>
         </View>
+      )}
 
-        <Toast
-          message="Deleted successfully"
-          visible={showToast}
-          onHide={() => {
-            setShowToast(false);
-            navigation.goBack();
-          }}
-        />
+      <Toast
+        message="Deleted successfully"
+        visible={showToast}
+        onHide={() => {
+          setShowToast(false);
+          navigation.goBack();
+        }}
+      />
 
-        <Modal visible={isFullScreenImage} transparent={false} animationType="fade" onRequestClose={() => setIsFullScreenImage(false)}>
-          <View style={styles.fullScreenContainer}>
-            <StatusBar hidden />
-            <Image source={{ uri: photoUri }} style={styles.fullScreenImage} resizeMode="contain" />
-            <TouchableOpacity style={[styles.fullScreenCloseButton, { top: safeAreaInsets.top + 10 }]} onPress={() => setIsFullScreenImage(false)}>
-              <View style={styles.closeButtonCircle}><Typography style={styles.closeButtonText}>✕</Typography></View>
-            </TouchableOpacity>
+      <Modal visible={isFullScreenImage} transparent={false} animationType="fade" onRequestClose={() => setIsFullScreenImage(false)}>
+        <View style={styles.fullScreenContainer}>
+          <StatusBar hidden />
+          <Image source={{ uri: normalizeImageUri(photoUri) }} style={styles.fullScreenImage} resizeMode="contain" />
+          <TouchableOpacity style={[styles.fullScreenCloseButton, { top: safeAreaInsets.top + 10 }]} onPress={() => setIsFullScreenImage(false)}>
+            <View style={styles.closeButtonCircle}><Typography style={styles.closeButtonText}>✕</Typography></View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* Collection Selection Modal */}
+      <Modal
+        visible={showCollectionModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCollectionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.collectionModalContainer, { paddingBottom: safeAreaInsets.bottom + 20 }]}>
+            <View style={styles.modalHeader}>
+              <Typography variant="h2" style={styles.modalTitle}>Select Collection</Typography>
+              <TouchableOpacity onPress={() => setShowCollectionModal(false)}>
+                <Typography style={styles.closeButton}>Cancel</Typography>
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={collections}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.collectionItem}
+                  onPress={() => addArtworkToCollection(item.id)}
+                  disabled={isAddingToCollection}
+                >
+                  <Typography style={styles.collectionItemText}>{item.name}</Typography>
+                  <Typography variant="caption" style={styles.collectionCountText}>
+                    {item.artwork_count} items
+                  </Typography>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={() => (
+                <View style={styles.emptyContainer}>
+                  <Typography style={styles.emptyCollectionsText}>No collections found.</Typography>
+                  <TouchableOpacity
+                    style={styles.createCollectionButton}
+                    onPress={() => {
+                      setShowCollectionModal(false);
+                      navigation.navigate('Collections');
+                    }}
+                  >
+                    <Typography style={styles.createCollectionButtonText}>Create New Collection</Typography>
+                  </TouchableOpacity>
+                </View>
+              )}
+              contentContainerStyle={styles.collectionList}
+            />
           </View>
-        </Modal>
-      </Animated.View >
-    </View >
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -321,4 +525,72 @@ const styles = StyleSheet.create({
   fullScreenCloseButton: { position: 'absolute', right: 20 },
   closeButtonCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   closeButtonText: { fontSize: 24, color: colors.white, fontWeight: '300' },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  collectionModalContainer: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: height * 0.7,
+    padding: spacing.lg,
+    ...shadows.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.base,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGrey,
+  },
+  modalTitle: {
+    fontSize: 20,
+    color: colors.black,
+  },
+  closeButton: {
+    color: colors.techBlue || '#007AFF',
+    fontFamily: 'PP Neue Montreal Medium',
+  },
+  collectionList: {
+    paddingVertical: spacing.sm,
+  },
+  collectionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGrey,
+  },
+  collectionItemText: {
+    fontSize: 16,
+    color: colors.black,
+  },
+  collectionCountText: {
+    color: colors.darkGrey,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing['2xl'],
+  },
+  emptyCollectionsText: {
+    color: colors.darkGrey,
+    marginBottom: spacing.lg,
+  },
+  createCollectionButton: {
+    paddingVertical: spacing.base,
+    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.black,
+    borderRadius: borderRadius.base,
+  },
+  createCollectionButtonText: {
+    color: colors.white,
+    fontFamily: 'PP Neue Montreal Medium',
+  },
 });

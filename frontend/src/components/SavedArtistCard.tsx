@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, TextInput, ActivityIndicator } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius, shadows } from '../constants/theme';
 import { brightenColor, getContrastColorBW } from '../utils/colorUtils';
 import { MoreIcon } from './icons/MoreIcon';
+import { Tag } from '../services/tagApi';
+import { TagManager } from './TagManager';
 
 interface ArtistCardProps {
   artistName: string;
   title: string;
   summary: string;
-  tags?: string;
+  tags?: Tag[];
   createdTime?: string;
   createdLocation?: string;
   photoTime?: string;
@@ -19,6 +22,10 @@ interface ArtistCardProps {
   backgroundColor?: string;
   onPress: () => void;
   onEdit?: (artistName: string, title: string, summary: string) => void;
+  onRegenerate?: () => void;
+  isRegenerating?: boolean;
+  artworkId?: string;
+  onTagsUpdated?: () => void;
   onEditModeChange?: (isEditing: boolean) => void;
   style?: ViewStyle;
 }
@@ -35,6 +42,10 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
   backgroundColor,
   onPress,
   onEdit,
+  onRegenerate,
+  isRegenerating = false,
+  artworkId,
+  onTagsUpdated,
   onEditModeChange,
   style,
 }) => {
@@ -171,7 +182,7 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
             )}
           </View>
 
-          {!isEditing && (location || photoTime || tags || analysis) && (
+          {!isEditing && (location || photoTime || tags || analysis || onRegenerate) && (
             <View style={styles.metadataContainer}>
               {location && (
                 <View style={styles.metadataRow}>
@@ -185,22 +196,51 @@ export const SavedArtistCard: React.FC<ArtistCardProps> = ({
                   <Text style={[styles.metadataValue, { color: textColor }]}>{new Date(photoTime).toLocaleDateString()}</Text>
                 </View>
               )}
-              {tags && (
+              {artworkId && onTagsUpdated && (
                 <View style={styles.tagsSection}>
-                  <Text style={[styles.metadataLabel, { color: textColor, marginBottom: spacing.xs }]}>Tags:</Text>
-                  <View style={styles.tagsContainer}>
-                    {tags.split(',').map((tag, index) => (
-                      <View key={index} style={styles.tag}>
-                        <Text style={styles.tagText}>{tag.trim()}</Text>
-                      </View>
-                    ))}
-                  </View>
+                  <TagManager
+                    artworkId={artworkId}
+                    currentTags={tags || []}
+                    onTagsUpdated={onTagsUpdated}
+                    showTitle={false}
+                    style={styles.integratedTagManager}
+                  />
                 </View>
               )}
-              {analysis && (
+
+              {/* Analysis section or just Regenerate button if analysis is missing/summary is empty */}
+              {(analysis || (onRegenerate && (!summary || summary === 'Generating analysis...'))) && (
                 <View style={styles.analysisContainer}>
-                  <Text style={[styles.annotation, { color: textColor, marginBottom: spacing.xs }]}>Analysis</Text>
-                  <Text style={[styles.analysisText, { color: textColor }]}>{analysis}</Text>
+                  <View style={styles.analysisHeader}>
+                    <Text style={[styles.annotation, { color: textColor }]}>Analysis</Text>
+                    {onRegenerate && (
+                      <TouchableOpacity
+                        onPress={onRegenerate}
+                        disabled={isRegenerating}
+                        style={styles.regenerateBtn}
+                      >
+                        {isRegenerating ? (
+                          <ActivityIndicator size="small" color={textColor} />
+                        ) : (
+                          <Text style={[styles.regenerateText, { color: textColor }]}>REGENERATE</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {analysis ? (
+                    <Markdown
+                      style={{
+                        body: { ...styles.analysisText, color: textColor } as any,
+                        paragraph: { marginTop: 0, marginBottom: spacing.sm },
+                      }}
+                    >
+                      {analysis}
+                    </Markdown>
+                  ) : !isRegenerating && (
+                    <Text style={[styles.analysisText, { color: textColor, fontStyle: 'italic', opacity: 0.7 }]}>
+                      Analysis pending. Tap REGENERATE to identify this piece.
+                    </Text>
+                  )}
                 </View>
               )}
             </View>
@@ -230,7 +270,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     backgroundColor: colors.halfOpacityWhite,
-    borderRadius: borderRadius.base,
+    borderRadius: borderRadius.lg,
     justifyContent: 'center',
   },
   content: {
@@ -393,8 +433,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.darkGrey,
   },
+  integratedTagManager: {
+    borderTopWidth: 0,
+    paddingVertical: 0,
+  },
   analysisContainer: {
     marginTop: spacing.sm,
+  },
+  analysisHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  regenerateBtn: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  regenerateText: {
+    fontFamily: 'PP Neue Montreal',
+    fontSize: 9,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   analysisText: {
     fontFamily: 'PP Neue Montreal',

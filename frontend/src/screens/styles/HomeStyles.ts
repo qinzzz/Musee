@@ -91,6 +91,7 @@ export const homeStyles = StyleSheet.create({
     color: '#6D6D6D',
     textTransform: 'capitalize',
     lineHeight: 26,
+    paddingRight: 4,
   },
   navLabelActive: {
     fontSize: 16,
@@ -98,6 +99,7 @@ export const homeStyles = StyleSheet.create({
     fontWeight: '500',
     color: colors.black,
     textTransform: 'capitalize',
-    lineHeight: 26,
+    lineHeight: 18,
+    paddingRight: 4,
   },
 });

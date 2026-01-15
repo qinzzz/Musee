@@ -11,6 +11,9 @@ interface ArtworkDetailCardProps {
     cardOpacity: Animated.Value;
     onImagePress: () => void;
     onEdit: (artistName: string, title: string, summary: string) => Promise<void>;
+    onRegenerate?: () => void;
+    isRegenerating?: boolean;
+    onTagsUpdated?: () => void;
 }
 
 export const ArtworkDetailCard: React.FC<ArtworkDetailCardProps> = ({
@@ -20,13 +23,17 @@ export const ArtworkDetailCard: React.FC<ArtworkDetailCardProps> = ({
     cardOpacity,
     onImagePress,
     onEdit,
+    onRegenerate,
+    isRegenerating,
+    onTagsUpdated,
 }) => {
     return (
-        <Animated.View style={[styles.cardContainer, { backgroundColor: backgroundColor, opacity: cardOpacity }]}>
+        <Animated.View style={[styles.cardContainer, { opacity: cardOpacity }]}>
             <ArtworkImageContainer
                 imageUri={photoUri}
                 withShadow={true}
                 onPress={onImagePress}
+                marginTop={0}
             />
             <SavedArtistCard
                 artistName={artwork?.artist_name || 'Loading...'}
@@ -34,12 +41,16 @@ export const ArtworkDetailCard: React.FC<ArtworkDetailCardProps> = ({
                 summary={artwork?.summary || 'Generating analysis...'}
                 location={artwork?.location}
                 photoTime={artwork?.photo_time}
-                tags={artwork?.tags}
+                tags={artwork?.artwork_tags}
                 analysis={artwork?.analysis}
                 withShadow={true}
                 backgroundColor={backgroundColor}
                 onPress={() => { }}
                 onEdit={onEdit}
+                onRegenerate={onRegenerate}
+                isRegenerating={isRegenerating}
+                artworkId={artwork?.id}
+                onTagsUpdated={onTagsUpdated}
             />
         </Animated.View>
     );
@@ -47,12 +58,10 @@ export const ArtworkDetailCard: React.FC<ArtworkDetailCardProps> = ({
 
 const styles = StyleSheet.create({
     cardContainer: {
-        width: '92%',
-        borderRadius: borderRadius.lg,
-        paddingVertical: spacing['3xl'],
-        paddingHorizontal: spacing['xl'],
-        gap: spacing.xl,
+        width: '100%',
+        paddingVertical: spacing.lg,
+        paddingHorizontal: spacing.md,
+        gap: spacing.md,
         alignItems: 'stretch',
-        ...shadows.lg,
     },
 });

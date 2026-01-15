@@ -65,6 +65,38 @@ class CollectionApiService {
     async deleteCollection(collectionId: string): Promise<void> {
         return apiClient.delete(`/api/collections/${collectionId}`);
     }
+
+    /**
+     * Add an artwork to a collection
+     */
+    async addArtworkToCollection(collectionId: string, artworkId: string): Promise<Collection> {
+        const collection = await this.getCollection(collectionId);
+        const currentIds = collection.artworks?.map(a => a.id) || [];
+
+        if (currentIds.includes(artworkId)) {
+            return collection;
+        }
+
+        return this.updateCollection(collectionId, {
+            artwork_ids: [...currentIds, artworkId],
+        });
+    }
+
+    /**
+     * Remove an artwork from a collection
+     */
+    async removeArtworkFromCollection(collectionId: string, artworkId: string): Promise<Collection> {
+        const collection = await this.getCollection(collectionId);
+        const currentIds = collection.artworks?.map(a => a.id) || [];
+
+        if (!currentIds.includes(artworkId)) {
+            return collection;
+        }
+
+        return this.updateCollection(collectionId, {
+            artwork_ids: currentIds.filter(id => id !== artworkId),
+        });
+    }
 }
 
 export const collectionApiService = new CollectionApiService();

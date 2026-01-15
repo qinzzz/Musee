@@ -47,8 +47,17 @@ async def create_collection(request: CollectionCreate, db: Session = Depends(get
 async def get_collections(user_id: str, db: Session = Depends(get_db)):
     """Get all collections for a user"""
     try:
-        collections = db.query(Collection).filter(Collection.user_id == user_id).order_by(Collection.created_at.desc()).all()
-        return [c.to_dict() for c in collections]
+        from sqlalchemy.orm import selectinload
+        collections = db.query(Collection).options(selectinload(Collection.artworks)).filter(Collection.user_id == user_id).order_by(Collection.created_at.desc()).all()
+        
+        logger.info(f"Retrieved {len(collections)} collections for user {user_id}")
+        
+        results = []
+        for c in collections:
+            d = c.to_dict(include_artworks=True)
+            results.append(d)
+            
+        return results
     except Exception as e:
         logger.error(f"Failed to get collections: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get collections: {str(e)}")
@@ -58,7 +67,8 @@ async def get_collections(user_id: str, db: Session = Depends(get_db)):
 async def get_collection(collection_id: str, db: Session = Depends(get_db)):
     """Get a specific collection with artworks"""
     try:
-        collection = db.query(Collection).filter(Collection.id == collection_id).first()
+        from sqlalchemy.orm import selectinload
+        collection = db.query(Collection).options(selectinload(Collection.artworks)).filter(Collection.id == collection_id).first()
         if not collection:
             raise HTTPException(status_code=404, detail="Collection not found")
         return collection.to_dict(include_artworks=True)

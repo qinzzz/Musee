@@ -114,11 +114,17 @@ export const shadows = {
 
 // Common text styles
 export const textStyles = StyleSheet.create({
-  h1: {
+  h0: {
     fontSize: typography.sizes['4xl'],
     fontWeight: typography.weights.semibold,
     color: colors.black,
     letterSpacing: typography.letterSpacing.wider,
+  },
+  h1: {
+    fontSize: typography.sizes['3xl'],
+    fontWeight: typography.weights.medium,
+    color: colors.black,
+    letterSpacing: typography.letterSpacing.normal,
   },
   h2: {
     fontSize: typography.sizes['2xl'],

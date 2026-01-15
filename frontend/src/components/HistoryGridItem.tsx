@@ -2,24 +2,31 @@ import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Image, Text } from 'react-native';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius } from '../constants/theme';
-import { GalleryItem } from '../hooks/useGallery';
+import { HistoryItem } from '../hooks/useHistory';
+import { normalizeImageUri } from '../utils/imageUtils';
 
-interface GalleryGridItemProps {
-    item: GalleryItem;
+interface HistoryGridItemProps {
+    item: HistoryItem;
     onPress: () => void;
     onLongPress: () => void;
     isDeleting: boolean;
     onConfirmDelete: () => void;
     itemWidth: number;
+    hideMetadata?: boolean;
+    selectionModeActive?: boolean;
+    isSelected?: boolean;
 }
 
-export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
+export const HistoryGridItem: React.FC<HistoryGridItemProps> = ({
     item,
     onPress,
     onLongPress,
     isDeleting,
     onConfirmDelete,
     itemWidth,
+    hideMetadata = false,
+    selectionModeActive = false,
+    isSelected = false,
 }) => {
     return (
         <TouchableOpacity
@@ -31,10 +38,23 @@ export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
         >
             <View style={styles.imageContainer}>
                 <Image
-                    source={{ uri: item.uri }}
+                    source={{ uri: normalizeImageUri(item.uri) }}
                     style={styles.itemImage}
                     resizeMode="cover"
                 />
+                {selectionModeActive && (
+                    <View style={[
+                        styles.selectionOverlay,
+                        isSelected && styles.selectionOverlaySelected
+                    ]}>
+                        <View style={[
+                            styles.checkbox,
+                            isSelected && styles.checkboxSelected
+                        ]}>
+                            {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                        </View>
+                    </View>
+                )}
                 {isDeleting && (
                     <View style={styles.deleteOverlay}>
                         <TouchableOpacity
@@ -47,12 +67,16 @@ export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
                     </View>
                 )}
             </View>
-            <Text style={styles.titleText} numberOfLines={1}>
-                {item.artworkName}
-            </Text>
-            <Text style={styles.itemText} numberOfLines={1}>
-                {item.artistName}
-            </Text>
+            {!hideMetadata && (
+                <>
+                    <Text style={styles.titleText} numberOfLines={1}>
+                        {item.artworkName}
+                    </Text>
+                    <Text style={styles.itemText} numberOfLines={1}>
+                        {item.artistName}
+                    </Text>
+                </>
+            )}
         </TouchableOpacity>
     );
 };
@@ -116,5 +140,38 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         letterSpacing: 0.5,
         color: colors.black,
+    },
+    selectionOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        padding: spacing.xs,
+        justifyContent: 'flex-start',
+        alignItems: 'flex-end',
+    },
+    selectionOverlaySelected: {
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    },
+    checkbox: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        borderWidth: 1.5,
+        borderColor: colors.white,
+        backgroundColor: 'transparent',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    checkboxSelected: {
+        backgroundColor: colors.black,
+        borderColor: colors.black,
+    },
+    checkmark: {
+        color: colors.white,
+        fontSize: 12,
+        fontWeight: 'bold',
     },
 });

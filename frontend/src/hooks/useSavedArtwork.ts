@@ -4,7 +4,12 @@ import { colors } from '../constants/colors';
 import { savedArtworkApiService, SavedArtwork, ColorPalette } from '../services/savedArtworkApi';
 import { artworkCacheService } from '../services/artworkCache';
 import { getColors } from 'react-native-image-colors';
-import { compressImage, getCompressionSettings, resolvePhUri } from '../utils/imageUtils';
+import {
+    compressImage,
+    getCompressionSettings,
+    resolvePhUri,
+    normalizeImageUri
+} from '../utils/imageUtils';
 import { useIdentity } from '../contexts/IdentityContext';
 
 export const useSavedArtwork = (artworkId: string, initialPhotoUri?: string, initialBackgroundColor?: string) => {
@@ -12,7 +17,7 @@ export const useSavedArtwork = (artworkId: string, initialPhotoUri?: string, ini
     const [isLoading, setIsLoading] = useState(!initialPhotoUri);
     const [hasError, setHasError] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string>('');
-    const [photoUri, setPhotoUri] = useState(initialPhotoUri || '');
+    const [photoUri, setPhotoUri] = useState(normalizeImageUri(initialPhotoUri || ''));
     const [backgroundColor, setBackgroundColor] = useState(initialBackgroundColor || colors.background);
 
     const [artworkBites, setArtworkBites] = useState<Array<{ content: string; topic?: string; role?: 'user' | 'assistant' }>>([]);
@@ -74,9 +79,27 @@ export const useSavedArtwork = (artworkId: string, initialPhotoUri?: string, ini
         }
     }, [identity]);
 
+    useEffect(() => {
+        // When artworkId changes, reset the volatile details but keep initial visuals if provided
+        setArtwork(null);
+        setHasError(false);
+        setErrorMessage('');
+        setArtworkBites([]);
+        setIsLoading(true);
+
+        // Update photo and background from new props if available
+        if (initialPhotoUri) {
+            setPhotoUri(normalizeImageUri(initialPhotoUri));
+        }
+        if (initialBackgroundColor) {
+            setBackgroundColor(initialBackgroundColor);
+        }
+    }, [artworkId, initialPhotoUri, initialBackgroundColor]);
+
     const fetchArtworkDetails = useCallback(async () => {
         try {
-            if (!initialPhotoUri) setIsLoading(true);
+            // Only set loading to true if we don't already have an artwork (to avoid flickering during swipe)
+            // But if artworkId changed, useEffect already set it to null
             setHasError(false);
 
             const data = await artworkCacheService.getOrFetch(
@@ -85,7 +108,7 @@ export const useSavedArtwork = (artworkId: string, initialPhotoUri?: string, ini
             );
 
             setArtwork(data);
-            setPhotoUri(data.photo_uri);
+            setPhotoUri(normalizeImageUri(data.photo_uri));
             if (data.background_color && !initialBackgroundColor) {
                 setBackgroundColor(data.background_color);
             }

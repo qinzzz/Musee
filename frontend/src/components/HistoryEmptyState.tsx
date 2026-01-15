@@ -3,25 +3,25 @@ import { View, StyleSheet, Text, ActivityIndicator } from 'react-native';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/theme';
 
-interface GalleryEmptyStateProps {
+interface HistoryEmptyStateProps {
     isLoading: boolean;
 }
 
-export const GalleryEmptyState: React.FC<GalleryEmptyStateProps> = ({ isLoading }) => {
+export const HistoryEmptyState: React.FC<HistoryEmptyStateProps> = ({ isLoading }) => {
     if (isLoading) {
         return (
             <View style={styles.emptyContainer}>
                 <ActivityIndicator size="large" color={colors.black} />
-                <Text style={styles.loadingText}>Loading your collection...</Text>
+                <Text style={styles.loadingText}>Loading your history...</Text>
             </View>
         );
     }
 
     return (
         <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No saved artworks yet</Text>
+            <Text style={styles.emptyText}>No history yet</Text>
             <Text style={styles.emptySubtext}>
-                Start scanning artworks to build your collection
+                Start scanning artworks to build your history
             </Text>
         </View>
     );

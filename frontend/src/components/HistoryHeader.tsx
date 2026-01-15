@@ -4,20 +4,47 @@ import { Typography } from './Typography';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/theme';
 import { homeStyles } from '../screens/styles/HomeStyles';
+import { HistoryTab } from '../hooks/useHistory';
 
-interface GalleryHeaderProps {
-    selectedTab: 'recognized' | 'unknown';
-    onTabChange: (tab: 'recognized' | 'unknown') => void;
+interface HistoryHeaderProps {
+    selectedTab: HistoryTab;
+    onTabChange: (tab: HistoryTab) => void;
+    isSelectionMode?: boolean;
+    onToggleSelection?: () => void;
 }
 
-export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
+export const HistoryHeader: React.FC<HistoryHeaderProps> = ({
     selectedTab,
     onTabChange,
+    isSelectionMode = false,
+    onToggleSelection,
 }) => {
     return (
         <View style={homeStyles.headerSection}>
-            <Typography variant="h1" style={homeStyles.title}>HISTORY</Typography>
+            <View style={styles.topRow}>
+                <Typography variant="h0" style={homeStyles.title}>HISTORY</Typography>
+                <TouchableOpacity
+                    onPress={onToggleSelection}
+                    style={styles.batchButton}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.batchButtonText}>
+                        {isSelectionMode ? 'CANCEL' : 'SELECT'}
+                    </Text>
+                </TouchableOpacity>
+            </View>
             <View style={styles.tabContainer}>
+                <TouchableOpacity
+                    onPress={() => onTabChange('all')}
+                    activeOpacity={0.7}
+                >
+                    <Text style={[
+                        styles.tabText,
+                        selectedTab === 'all' && styles.tabTextActive
+                    ]}>
+                        All
+                    </Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                     onPress={() => onTabChange('recognized')}
                     activeOpacity={0.7}
@@ -62,5 +89,22 @@ const styles = StyleSheet.create({
     },
     tabTextActive: {
         color: colors.black,
+    },
+    topRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        width: '100%',
+    },
+    batchButton: {
+        paddingVertical: spacing.xs,
+        paddingHorizontal: spacing.sm,
+    },
+    batchButtonText: {
+        fontSize: 12,
+        fontFamily: 'PP Neue Montreal',
+        fontWeight: '500',
+        color: colors.black,
+        letterSpacing: 0.5,
     },
 });

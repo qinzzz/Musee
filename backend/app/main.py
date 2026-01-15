@@ -5,7 +5,7 @@ import logging
 import sys
 
 from app.config.settings import settings
-from app.routers import artwork, users, collection
+from app.routers import artwork, users, collection, tag
 
 # Configure logging to work with uvicorn
 # This ensures all Python logs are visible in uvicorn output
@@ -81,6 +81,7 @@ app.add_middleware(
 app.include_router(artwork.router, prefix="/api", tags=["artwork"])
 app.include_router(users.router, prefix="/api", tags=["users"])
 app.include_router(collection.router, prefix="/api", tags=["collection"])
+app.include_router(tag.router, prefix="/api", tags=["tag"])
 
 
 @app.get("/")

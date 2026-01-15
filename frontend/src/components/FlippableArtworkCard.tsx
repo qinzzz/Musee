@@ -3,6 +3,7 @@ import { View, Image, TouchableOpacity, StyleSheet, Animated, Dimensions, Easing
 import { Typography, Label } from './Typography';
 import { colors } from '../constants/colors';
 import { borderRadius, shadows, animations } from '../constants/theme';
+import { normalizeImageUri } from '../utils/imageUtils';
 
 const { width, height } = Dimensions.get('window');
 
@@ -80,7 +81,9 @@ export const FlippableArtworkCard: React.FC<FlippableArtworkCardProps> = ({
                     ]}
                 >
                     <Image
-                        source={{ uri: showBackgroundRemoved && photoUriNoBackground ? photoUriNoBackground : photoUri }}
+                        source={{
+                            uri: normalizeImageUri(showBackgroundRemoved && photoUriNoBackground ? photoUriNoBackground : photoUri)
+                        }}
                         style={styles.artworkImage}
                         resizeMode="cover"
                     />

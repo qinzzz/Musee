@@ -21,6 +21,7 @@ class User(Base):
     # Relationship to artworks
     artworks = relationship("SavedArtwork", back_populates="user", cascade="all, delete-orphan")
     collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
+    tags = relationship("Tag", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self):
         """Convert model to dictionary"""
@@ -48,7 +49,6 @@ class SavedArtwork(Base):
     photo_time = Column(String, nullable=True)  # Original capture time of the photo
     museum_name = Column(String, nullable=True)  # Museum or gallery name
     summary = Column(String, nullable=True)  # One-sentence fun summary of the artwork
-    tags = Column(String, nullable=True)  # Comma-separated tags describing the artwork (e.g., "pop art, late 90s, dadaism")
     analysis = Column(Text, nullable=True)  # Detailed artwork analysis from AI (markdown formatted)
     background_color = Column(String, nullable=True)  # Cached background color for UI
     color_palette = Column(JSON, nullable=True)  # Color palette extracted from image: {background, detail, primary, secondary}
@@ -62,6 +62,7 @@ class SavedArtwork(Base):
     user = relationship("User", back_populates="artworks")
     conversations = relationship("Conversation", back_populates="artwork", cascade="all, delete-orphan", order_by="Conversation.sequence_number")
     collections = relationship("Collection", secondary="collection_artworks", back_populates="artworks")
+    artwork_tags = relationship("Tag", secondary="artwork_tags", back_populates="artworks")
 
     def to_dict(self, include_conversations=True):
         """Convert model to dictionary
@@ -78,7 +79,6 @@ class SavedArtwork(Base):
             "photo_time": self.photo_time,
             "museum_name": self.museum_name,
             "summary": self.summary,
-            "tags": self.tags,
             "analysis": self.analysis,
             "background_color": self.background_color,
             "color_palette": self.color_palette,
@@ -86,7 +86,8 @@ class SavedArtwork(Base):
             "device_id": self.device_id,
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "artwork_tags": [tag.to_dict() for tag in self.artwork_tags] if hasattr(self, 'artwork_tags') else []
         }
 
         # Include conversation_history for backward compatibility with frontend
@@ -161,17 +162,69 @@ class Collection(Base):
 
     def to_dict(self, include_artworks=False):
         """Convert model to dictionary"""
-        result = {
+        try:
+            # Safely get artworks list to avoid lazy loading issues outside session
+            artwork_list = list(self.artworks) if self.artworks else []
+            
+            if include_artworks:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"[Model] to_dict for '{self.name}': artwork_list len = {len(artwork_list)}")
+            
+            result = {
+                "id": self.id,
+                "name": self.name,
+                "description": self.description,
+                "user_id": self.user_id,
+                "artwork_count": len(artwork_list),
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            }
+            
+            if include_artworks:
+                result["artworks"] = [artwork.to_dict(include_conversations=False) for artwork in artwork_list]
+                
+            return result
+        except Exception as e:
+            # Log error if possible, or at least return partial dict
+            return {
+                "id": self.id,
+                "name": self.name,
+                "error": str(e),
+                "artwork_count": 0
+            }
+
+
+class Tag(Base):
+    """Database model for tags"""
+
+    __tablename__ = "tags"
+    __table_args__ = (
+        UniqueConstraint('name', 'user_id', name='uq_tag_name_user'),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="tags")
+    artworks = relationship("SavedArtwork", secondary="artwork_tags", back_populates="artwork_tags")
+
+    def to_dict(self):
+        """Convert model to dictionary"""
+        return {
             "id": self.id,
             "name": self.name,
-            "description": self.description,
             "user_id": self.user_id,
-            "artwork_count": len(self.artworks),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "created_at": self.created_at.isoformat() if self.created_at else None
         }
-        
-        if include_artworks:
-            result["artworks"] = [artwork.to_dict(include_conversations=False) for artwork in self.artworks]
-            
-        return result
+
+
+class ArtworkTag(Base):
+    """Junction table for artworks and tags"""
+    __tablename__ = "artwork_tags"
+
+    artwork_id = Column(String, ForeignKey('saved_artworks.id', ondelete='CASCADE'), primary_key=True)
+    tag_id = Column(String, ForeignKey('tags.id', ondelete='CASCADE'), primary_key=True)

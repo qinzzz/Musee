@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { savedArtworkApiService } from '../services/savedArtworkApi';
 import { todaysPickCacheService } from '../services/todaysPickCache';
+import { normalizeImageUri } from '../utils/imageUtils';
 
 export interface TodaysPickItem {
     id: string;
@@ -44,7 +45,7 @@ export const useTodaysPick = () => {
 
             const pickItems: TodaysPickItem[] = selected.map(item => ({
                 id: item.id,
-                uri: item.photo_uri,
+                uri: normalizeImageUri(item.photo_uri),
                 artistName: item.artist_name,
                 artworkName: item.artwork_name,
                 backgroundColor: item.background_color,
