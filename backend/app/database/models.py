@@ -21,7 +21,6 @@ class User(Base):
     # Relationship to artworks
     artworks = relationship("SavedArtwork", back_populates="user", cascade="all, delete-orphan")
     collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
-    tags = relationship("Tag", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self):
         """Convert model to dictionary"""
@@ -50,8 +49,7 @@ class SavedArtwork(Base):
     museum_name = Column(String, nullable=True)  # Museum or gallery name
     summary = Column(String, nullable=True)  # One-sentence fun summary of the artwork
     analysis = Column(Text, nullable=True)  # Detailed artwork analysis from AI (markdown formatted)
-    background_color = Column(String, nullable=True)  # Cached background color for UI
-    color_palette = Column(JSON, nullable=True)  # Color palette extracted from image: {background, detail, primary, secondary}
+    params = Column(JSON, nullable=True)  # Additional parameters (colors, metadata, etc.)
     is_recognized = Column(Integer, default=1)  # 1 for recognized, 0 for unknown
     device_id = Column(String, nullable=True)  # Temporary: Persistent device identifier from Keychain UUID (for backwards compatibility)
     user_id = Column(String, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)  # Foreign key to users table
@@ -80,8 +78,7 @@ class SavedArtwork(Base):
             "museum_name": self.museum_name,
             "summary": self.summary,
             "analysis": self.analysis,
-            "background_color": self.background_color,
-            "color_palette": self.color_palette,
+            "params": self.params,
             "is_recognized": self.is_recognized,
             "device_id": self.device_id,
             "user_id": self.user_id,
@@ -196,20 +193,16 @@ class Collection(Base):
 
 
 class Tag(Base):
-    """Database model for tags"""
+    """Database model for global tags (not user-specific)"""
 
     __tablename__ = "tags"
-    __table_args__ = (
-        UniqueConstraint('name', 'user_id', name='uq_tag_name_user'),
-    )
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String, nullable=False)
-    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    name = Column(String, nullable=False, unique=True, index=True)  # Normalized tag name (lowercase, with #)
+    explanation = Column(Text, nullable=True)  # LLM-generated one-sentence explanation
     created_at = Column(DateTime, server_default=func.now())
 
     # Relationships
-    user = relationship("User", back_populates="tags")
     artworks = relationship("SavedArtwork", secondary="artwork_tags", back_populates="artwork_tags")
 
     def to_dict(self):
@@ -217,7 +210,7 @@ class Tag(Base):
         return {
             "id": self.id,
             "name": self.name,
-            "user_id": self.user_id,
+            "explanation": self.explanation,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
 

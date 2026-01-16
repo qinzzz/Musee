@@ -47,11 +47,6 @@ async def create_or_get_user(
         existing_user = db.query(User).filter(User.device_id == request.device_id).first()
 
         if existing_user:
-            # Update last_active timestamp
-            from sqlalchemy.sql import func
-            existing_user.last_active = func.now()
-            db.commit()
-            db.refresh(existing_user)
             return existing_user.to_dict()
 
         # Create new user
@@ -111,33 +106,18 @@ async def get_user_by_device(
     db: Session = Depends(get_db)
 ):
     """
-    Get a user by device_id
+    Get a user by device_id (read-only, no side effects)
 
     - **device_id**: Device ID from Keychain
 
     Returns the user object or 404 if not found
     """
-    try:
-        user = db.query(User).filter(User.device_id == device_id).first()
+    user = db.query(User).filter(User.device_id == device_id).first()
 
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-        # Update last_active timestamp
-        from sqlalchemy.sql import func
-        user.last_active = func.now()
-        db.commit()
-        db.refresh(user)
-
-        return user.to_dict()
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve user: {str(e)}"
-        )
+    return user.to_dict()
 
 
 @router.put("/users/{user_id}")

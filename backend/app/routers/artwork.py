@@ -1,15 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from typing import Optional
-import os
+from typing import Optional, List
 import json
 import logging
 from datetime import datetime
 
 from app.database.connection import get_db
-from app.database.models import SavedArtwork, Conversation, Tag, ArtworkTag, User
-from sqlalchemy import func
+from app.database.models import SavedArtwork, Conversation, Tag, User
 from app.models.artwork import AIProvider, UpdateArtworkRequest
 from app.services.ai_service import AIServiceFactory
 from app.services.openai_api_client import OpenAIAPIClient
@@ -22,6 +20,7 @@ from app.utils.conversation_storage import ConversationMessage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
 
 # Initialize and register AI clients
 def initialize_ai_services():
@@ -47,28 +46,13 @@ def initialize_ai_services():
     except Exception as e:
         logger.error(f"Failed to initialize Gemini: {e}")
 
+
 # Initialize services on module load
 initialize_ai_services()
 
 
 def determine_ai_provider(requested_model: Optional[AIProvider] = None) -> AIProvider:
-    """
-    Determine which AI provider to use based on configuration and request.
-
-    Priority:
-    1. AI_MODEL_OVERRIDE env variable (if set, always uses this)
-    2. requested_model parameter (from API request)
-    3. Default provider from available services
-
-    Args:
-        requested_model: Model requested via API parameter
-
-    Returns:
-        AIProvider: The AI provider to use
-
-    Raises:
-        HTTPException: If no AI services are available or selected provider is not available
-    """
+    """Determine which AI provider to use based on configuration and request."""
     available_providers = AIServiceFactory.get_available_providers()
 
     if not available_providers:
@@ -77,257 +61,337 @@ def determine_ai_provider(requested_model: Optional[AIProvider] = None) -> AIPro
             detail="No AI services available. Please check configuration."
         )
 
-    # Use requested model if provided and available
     if requested_model and requested_model in available_providers:
-        logger.info(f"Using requested model: {requested_model.value}")
         return requested_model
 
-    # Try to use configured default
     try:
         default_provider = AIProvider(settings.ai_provider)
         if default_provider in available_providers:
-            logger.info(f"Using default AI provider: {default_provider.value}")
             return default_provider
     except ValueError:
         pass
 
-    # Fallback to first available
-    fallback = available_providers[0]
-    logger.info(f"Using fallback provider: {fallback.value}")
-    return fallback
+    return available_providers[0]
 
 
-@router.post("/analyze-artist")
+def normalize_tag_name(tag: str) -> str:
+    """Normalize tag name to lowercase with # prefix"""
+    normalized = tag.strip().lower()
+    if not normalized.startswith('#'):
+        normalized = f'#{normalized}'
+    return normalized
+
+
+def batch_link_tags(db: Session, artwork: SavedArtwork, tags_str: str):
+    """Link tags from a comma-separated string to an artwork (batch query)
+
+    Tags are global (not user-specific). Creates new tags if they don't exist.
+    """
+    if not tags_str:
+        return
+
+    # Normalize all tag names
+    tag_names = [normalize_tag_name(t) for t in tags_str.split(',') if t.strip()]
+    if not tag_names:
+        return
+
+    # Batch query: get all existing tags at once
+    existing_tags = db.query(Tag).filter(Tag.name.in_(tag_names)).all()
+    existing_tag_map = {tag.name: tag for tag in existing_tags}
+
+    # Get current associations
+    current_tag_ids = {tag.id for tag in artwork.artwork_tags}
+
+    # Create missing tags and link all
+    for name in tag_names:
+        if name in existing_tag_map:
+            tag = existing_tag_map[name]
+        else:
+            tag = Tag(name=name)
+            db.add(tag)
+            db.flush()
+
+        if tag.id not in current_tag_ids:
+            artwork.artwork_tags.append(tag)
+
+
+# =============================================================================
+# AI Analysis Endpoints (Stateless - no DB writes)
+# =============================================================================
+
+@router.post("/artwork-analyze")
 async def analyze_artist(
     image: UploadFile = File(...),
     model: Optional[AIProvider] = Form(None),
     identity: Optional[str] = Form("default"),
-    language: Optional[str] = Form(None)
+    language: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    photo_uri: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
 ):
     """
-    Analyze uploaded artwork image to identify artist (non-streaming response)
+    Analyze artwork image to identify artist
 
     - **image**: Image file to analyze (JPG, PNG, WebP)
-    - **model**: Preferred AI model (openai, claude, gemini) - optional
-    - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
-    - **language**: Language code for response (e.g., "en", "es", "fr", "zh") - optional
-
-    Returns complete artist identification details
+    - **model**: Preferred AI model (openai, claude, gemini)
+    - **identity**: AI identity/persona
+    - **language**: Language code for response
+    - **user_id**: If provided, saves artwork to DB and returns artwork_id
+    - **photo_uri**: URI/path for the photo (required if user_id is provided)
     """
-
-    # Determine which AI service to use (with override support)
     ai_provider = determine_ai_provider(model)
-    logger.info(f"analyzing with model: {model}, identity: {identity}, language: {language}")
-    
-    try:
-        # Process the image (stateless - no file saving)
-        image_bytes = await process_image(image)
-        # Get AI service and analyze
-        ai_service = AIServiceFactory.get_service(ai_provider)
-        analysis_text = await ai_service.identify_artist(image_bytes, identity=identity, language=language)
 
-        return {
+    try:
+        image_bytes = await process_image(image)
+        ai_service = AIServiceFactory.get_service(ai_provider)
+        analysis_text = await ai_service.identify_artist(
+            image_bytes, identity=identity, language=language
+        )
+
+        response = {
             "analysis": analysis_text,
             "model_used": ai_provider.value
         }
 
+        # If user_id provided, save to DB
+        if user_id:
+            # Ensure user exists (auto-create if not)
+            user = db.query(User).filter(User.user_id == user_id).first()
+            if not user:
+                # Create user with specified user_id (overrides default UUID)
+                user = User(user_id=user_id, device_id=user_id)
+                db.add(user)
+                db.flush()
+                logger.info(f"Auto-created user: {user_id}")
+
+            # Parse analysis to extract artist/artwork info
+            artist_name = "Unknown Artist"
+            artwork_name = "Untitled"
+            tags_str = ""
+
+            # Try to parse the analysis JSON
+            try:
+                import re
+                # Extract JSON from markdown code blocks if present
+                json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', analysis_text)
+                if json_match:
+                    json_str = json_match.group(1).strip()
+                    parsed = json.loads(json_str)
+                    if isinstance(parsed, list) and len(parsed) > 0:
+                        artist_name = parsed[0].get('artist_name', artist_name)
+                        artwork_name = parsed[0].get('artwork_name', artwork_name)
+                        if len(parsed) > 1 and parsed[1].get('tags'):
+                            tags_str = parsed[1].get('tags', '')
+            except (json.JSONDecodeError, KeyError, IndexError) as e:
+                logger.warning(f"Failed to parse analysis for DB save: {e}")
+
+            # Generate photo_uri if not provided
+            import uuid
+            generated_photo_uri = photo_uri or f"artwork_{uuid.uuid4().hex[:12]}"
+
+            # Create artwork record
+            saved_artwork = SavedArtwork(
+                photo_uri=generated_photo_uri,
+                artist_name=artist_name,
+                artwork_name=artwork_name,
+                user_id=user_id,
+                is_recognized=1 if artist_name != "Unknown Artist" else 0,
+                analysis=analysis_text
+            )
+            db.add(saved_artwork)
+
+            # Link tags if parsed
+            if tags_str:
+                db.flush()  # Get the artwork ID
+                batch_link_tags(db, saved_artwork, tags_str)
+
+            db.commit()
+            db.refresh(saved_artwork)
+
+            response["artwork_id"] = str(saved_artwork.id)
+            response["artist_name"] = artist_name
+            response["artwork_name"] = artwork_name
+
+        return response
+
     except Exception as e:
         logger.error(f"Error in analyze_artist: {str(e)}", exc_info=True)
+        db.rollback()
         if "API error" in str(e):
             raise HTTPException(status_code=503, detail=str(e))
-        else:
-            raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
-@router.post("/analyze-bite")
+@router.post("/artwork-chat")
 async def analyze_bite(
-    image: UploadFile = File(...),
-    artist_name: str = Form(...),
-    artwork_name: str = Form("Unknown"),
-    topic: Optional[str] = Form(None),
-    saved_artwork_id: Optional[str] = Form(None),
+    query: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    artist_name: Optional[str] = Form(None),
+    artwork_name: Optional[str] = Form(None),
+    conversation_history: Optional[str] = Form(None),
+    artwork_id: Optional[str] = Form(None),
     model: Optional[AIProvider] = Form(None),
     identity: Optional[str] = Form("default"),
     language: Optional[str] = Form(None),
-    test_env: bool = Form(False),
     db: Session = Depends(get_db)
 ):
     """
-    Get a concise, interesting bite of information about the artwork
+    Get artwork insight based on query and context
 
-    - **image**: Image file to analyze (JPG, PNG, WebP)
-    - **artist_name**: Name of the artist
-    - **artwork_name**: Name of the artwork (optional, defaults to "Unknown")
-    - **topic**: Optional topic to focus on (e.g., "technique", "historical context", "symbolism")
-    - **saved_artwork_id**: Optional saved artwork ID for context-aware responses from saved artworks
-    - **model**: Preferred AI model (openai, claude, gemini) - optional
-    - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
-    - **language**: Language code for response (e.g., "en", "es", "fr", "zh") - optional
+    Two modes:
+    1. **artwork_id mode**: Pass artwork_id to read history from DB and persist messages
+    2. **stateless mode**: Pass conversation_history as JSON (no DB writes)
 
-    Returns a short, fascinating fact about the artwork (max 50 words) and saved_artwork_id if applicable
+    - **query**: User's question
+    - **image**: Image file (optional)
+    - **artist_name**: Artist name (used in stateless mode or as override)
+    - **artwork_name**: Artwork name (used in stateless mode or as override)
+    - **artwork_id**: If provided, reads/writes conversation from/to DB
+    - **conversation_history**: JSON array of [{role, content}, ...] for stateless mode
+    - **model**: AI model preference
+    - **identity**: AI persona
+    - **language**: Response language
     """
-
-    # Determine which AI service to use (with override support)
     ai_provider = determine_ai_provider(model)
 
     try:
-        # Process the image (stateless - no file saving)
-        image_bytes = await process_image(image)
+        user_message = query or "Tell me more about this artwork."
 
-        # Get conversation history from database if saved_artwork_id provided
+        image_bytes = None
+        if image:
+            image_bytes = await process_image(image)
+
         previous_messages = []
-        db_artwork = None
+        artwork = None
+        user_msg_record = None
 
-        if saved_artwork_id:
-            # Load saved artwork and its conversation history
-            db_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == saved_artwork_id).first()
+        # Mode 1: artwork_id provided - use DB for conversation history
+        if artwork_id:
+            artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+            if not artwork:
+                raise HTTPException(status_code=404, detail="Artwork not found")
 
-            if db_artwork:
-                logger.info(f"Found saved artwork: {db_artwork.id}")
-                # Get conversation history from Conversation table
-                conversations = db.query(Conversation).filter(
-                    Conversation.saved_artwork_id == db_artwork.id
-                ).order_by(Conversation.sequence_number).all()
+            # Use artwork's artist/artwork names unless overridden
+            if not artist_name:
+                artist_name = artwork.artist_name
+            if not artwork_name:
+                artwork_name = artwork.artwork_name
 
-                # Convert to message format expected by AI service
-                from app.utils.conversation_storage import ConversationMessage
+            # Load conversation history from DB
+            conversations = db.query(Conversation).filter(
+                Conversation.saved_artwork_id == artwork_id
+            ).order_by(Conversation.sequence_number).all()
+
+            previous_messages = [
+                ConversationMessage(role=c.role, content=c.content)
+                for c in conversations
+            ]
+
+            # Get next sequence number
+            next_seq = len(conversations)
+
+            # Write user message to DB FIRST (before LLM call)
+            user_msg_record = Conversation(
+                saved_artwork_id=artwork_id,
+                sequence_number=next_seq,
+                role="user",
+                content=user_message
+            )
+            db.add(user_msg_record)
+            db.flush()  # Persist user message immediately
+
+        # Mode 2: stateless mode - parse conversation_history from JSON
+        elif conversation_history:
+            try:
+                conv_data = json.loads(conversation_history)
                 previous_messages = [
-                    ConversationMessage(role=conv.role, content=conv.content)
-                    for conv in conversations
+                    ConversationMessage(role=msg.get('role', 'user'), content=msg.get('content', ''))
+                    for msg in conv_data if msg.get('content')
                 ]
-                logger.info(f"Loaded {len(previous_messages)} previous messages from database")
-            else:
-                logger.warning(f"saved_artwork_id {saved_artwork_id} not found in database")
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse conversation_history JSON")
 
-        followup_question = topic if topic else "Tell me one more thing about this artwork."
-
-        # Get AI service and analyze with conversation history
+        # Call LLM
         ai_service = AIServiceFactory.get_service(ai_provider)
         bite_text = await ai_service.get_artwork_bite(
             image_bytes,
-            artist_name,
-            artwork_name,
-            followup_question,
+            artist_name or "Unknown Artist",
+            artwork_name or "Unknown",
+            user_message,
             previous_messages,
             identity=identity,
             language=language
         )
 
-        # Update the database if this is a saved artwork
-        if db_artwork and not test_env:
-            try:
-                logger.info(f"Updating saved artwork conversation in database: {db_artwork.id}")
-
-                # Get the next sequence number
-                max_seq = db.query(Conversation.sequence_number).filter(
-                    Conversation.saved_artwork_id == db_artwork.id
-                ).order_by(Conversation.sequence_number.desc()).first()
-
-                next_seq = (max_seq[0] + 1) if max_seq else 0
-
-                # Add user message
-                user_conversation = Conversation(
-                    saved_artwork_id=db_artwork.id,
-                    sequence_number=next_seq,
-                    role="user",
-                    content=followup_question,
-                    message_metadata={"topic": topic} if topic else None
-                )
-                db.add(user_conversation)
-
-                # Add assistant message
-                assistant_conversation = Conversation(
-                    saved_artwork_id=db_artwork.id,
-                    sequence_number=next_seq + 1,
-                    role="assistant",
-                    content=bite_text
-                )
-                db.add(assistant_conversation)
-
-                db.commit()
-                logger.info(f"Successfully added 2 conversations to database (seq: {next_seq}, {next_seq + 1})")
-            except Exception as db_error:
-                logger.error(f"Failed to update database: {str(db_error)}")
-                db.rollback()
-                raise HTTPException(status_code=500, detail=f"Failed to save conversation: {str(db_error)}")
+        # If artwork_id mode, write assistant message to DB
+        if artwork_id and artwork:
+            next_seq = (user_msg_record.sequence_number + 1) if user_msg_record else len(previous_messages)
+            assistant_msg_record = Conversation(
+                saved_artwork_id=artwork_id,
+                sequence_number=next_seq,
+                role="assistant",
+                content=bite_text
+            )
+            db.add(assistant_msg_record)
+            db.commit()
 
         return {
-            "bite": bite_text,
-            "artist_name": artist_name,
-            "artwork_name": artwork_name,
-            "topic": topic,
-            "saved_artwork_id": saved_artwork_id,
-            "model_used": ai_provider.value
+            "response": bite_text,
+            "query": query,
+            "model_used": ai_provider.value,
+            "artwork_id": artwork_id
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
+        db.rollback()
         if "API error" in str(e):
             raise HTTPException(status_code=503, detail=str(e))
-        else:
-            raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
-@router.get("/analyze-topic")
+@router.post("/suggest-topic")
 async def suggest_topic(
-    saved_artwork_id: str,
-    model: Optional[AIProvider] = None,
-    identity: Optional[str] = "default",
-    language: Optional[str] = None,
-    db: Session = Depends(get_db)
+    artist_name: str = Form(...),
+    artwork_name: str = Form(...),
+    conversation_history: str = Form(...),
+    model: Optional[AIProvider] = Form(None),
+    identity: Optional[str] = Form("default"),
+    language: Optional[str] = Form(None)
 ):
     """
-    Suggest next topic to explore based on conversation history
+    Suggest next exploration topics (stateless)
 
-    - **saved_artwork_id**: ID of the saved artwork to analyze
-    - **model**: Preferred AI model (openai, claude, gemini) - optional
-    - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
-    - **language**: Language code for response (e.g., "en", "es", "fr", "zh") - optional
-
-    Returns suggested topics like "background", "technique", "color choices", etc.
+    - **artist_name**: Artist name
+    - **artwork_name**: Artwork name
+    - **conversation_history**: JSON array of previous messages
+    - **model**: AI model preference
+    - **identity**: AI persona
+    - **language**: Response language
     """
-
-    # Determine which AI service to use (with override support)
     ai_provider = determine_ai_provider(model)
     DEFAULT_TOPIC = "default topic"
 
     try:
-        # Load saved artwork and its conversation history from database
-        db_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == saved_artwork_id).first()
+        # Parse conversation history
+        try:
+            conv_data = json.loads(conversation_history)
+            previous_insights = [
+                msg.get('content', '')
+                for msg in conv_data
+                if msg.get('role') == 'assistant' and msg.get('content')
+            ]
+        except json.JSONDecodeError:
+            return {"suggested_topics": [DEFAULT_TOPIC], "error": "Invalid conversation history"}
 
-        if not db_artwork:
-            # Artwork not found, return default topics
-            logger.info(f"Saved artwork {saved_artwork_id} not found in database")
-            return {
-                "suggested_topics": [DEFAULT_TOPIC],
-                "saved_artwork_id": saved_artwork_id
-            }
-
-        logger.info(f"Found artwork in database: {db_artwork.artist_name} - {db_artwork.artwork_name}")
-
-        # Get conversation history from Conversation table
-        conversations = db.query(Conversation).filter(
-            Conversation.saved_artwork_id == db_artwork.id
-        ).order_by(Conversation.sequence_number).all()
-
-        # Extract previous insights from assistant messages
-        previous_insights = [
-            conv.content
-            for conv in conversations
-            if conv.role == "assistant"
-        ]
-
-        # If no previous insights, return default topics
         if not previous_insights:
-            return {
-                "suggested_topics": [DEFAULT_TOPIC],
-                "saved_artwork_id": saved_artwork_id
-            }
+            return {"suggested_topics": [DEFAULT_TOPIC]}
 
-        # Get AI service and call suggest_topics method
         ai_service = AIServiceFactory.get_service(ai_provider)
         suggested_topics = await ai_service.suggest_topics(
-            db_artwork.artist_name,
-            db_artwork.artwork_name,
+            artist_name,
+            artwork_name,
             previous_insights,
             identity=identity,
             language=language
@@ -335,33 +399,85 @@ async def suggest_topic(
 
         return {
             "suggested_topics": suggested_topics,
-            "saved_artwork_id": saved_artwork_id,
             "model_used": ai_provider.value
         }
 
-    except json.JSONDecodeError as e:
-        logger.error("Failed to parse topics JSON")
-        # Fallback to default topics
-        return {
-            "suggested_topics": [DEFAULT_TOPIC],
-            "saved_artwork_id": saved_artwork_id,
-            "error": "Failed to generate custom topics, using defaults"
-        }
     except Exception as e:
         logger.error(f"Topic suggestion failed: {str(e)}")
         if "API error" in str(e):
             raise HTTPException(status_code=503, detail=str(e))
-        else:
-            raise HTTPException(status_code=500, detail=f"Topic suggestion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Topic suggestion failed: {str(e)}")
 
+
+@router.post("/generate-summary")
+async def generate_summary(
+    image: UploadFile = File(...),
+    artist_name: str = Form(...),
+    artwork_name: str = Form(...),
+    conversation_history: Optional[str] = Form(None),
+    model: Optional[AIProvider] = Form(None),
+    identity: Optional[str] = Form("default"),
+    language: Optional[str] = Form(None)
+):
+    """
+    Generate a one-sentence summary (stateless)
+
+    - **image**: Image file
+    - **artist_name**: Artist name
+    - **artwork_name**: Artwork name
+    - **conversation_history**: JSON array of previous messages (optional)
+    - **model**: AI model preference
+    - **identity**: AI persona
+    - **language**: Response language
+    """
+    ai_provider = determine_ai_provider(model)
+
+    try:
+        image_bytes = await process_image(image)
+
+        # Parse conversation history
+        conv_messages = []
+        if conversation_history:
+            try:
+                conv_data = json.loads(conversation_history)
+                conv_messages = [
+                    ConversationMessage(role=msg.get('role', 'user'), content=msg.get('content', ''))
+                    for msg in conv_data if msg.get('content')
+                ]
+            except json.JSONDecodeError:
+                pass
+
+        ai_service = AIServiceFactory.get_service(ai_provider)
+        summary = await ai_service.generate_summary(
+            image_bytes,
+            artist_name,
+            artwork_name,
+            conv_messages,
+            identity=identity,
+            language=language
+        )
+
+        return {
+            "summary": summary,
+            "model_used": ai_provider.value
+        }
+
+    except Exception as e:
+        if "API error" in str(e):
+            raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")
+
+
+# =============================================================================
+# Configuration Endpoints
+# =============================================================================
 
 @router.get("/providers")
 async def get_available_providers():
     """Get list of available AI providers"""
-
     providers = AIServiceFactory.get_available_providers()
     return {
-        "available_providers": [provider.value for provider in providers],
+        "available_providers": [p.value for p in providers],
         "default_provider": settings.ai_provider,
         "total": len(providers)
     }
@@ -372,12 +488,9 @@ async def get_available_identities():
     """Get list of available AI identities/personas"""
     from app.utils.prompt_loader import get_available_identities, get_available_instructions
 
-    identities = get_available_identities()
-    instructions = get_available_instructions()
-
     return {
-        "available_identities": identities,
-        "available_instructions": instructions,
+        "available_identities": get_available_identities(),
+        "available_instructions": get_available_instructions(),
         "default_identities": {
             "artist_identification": "museum_narrator",
             "artwork_bite": "art_historian",
@@ -386,193 +499,112 @@ async def get_available_identities():
     }
 
 
+# =============================================================================
+# Image Processing Endpoints
+# =============================================================================
+
 @router.post("/remove-background")
-async def remove_background(
-    image: UploadFile = File(...)
-):
-    """
-    Remove background from an image using PhotoRoom API
-
-    - **image**: Image file to process (JPG, PNG, WebP)
-
-    Returns the image with transparent background as PNG
-    """
-
+async def remove_background(image: UploadFile = File(...)):
+    """Remove background from an image using PhotoRoom API"""
     try:
-        # Read image data
         image_data = await image.read()
-
-        # Call PhotoRoom service to remove background
         result_image = await photoroom_service.remove_background(image_data)
 
         if not result_image:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to remove background. Please check PhotoRoom API key configuration."
-            )
+            raise HTTPException(status_code=500, detail="Failed to remove background")
 
-        # Return the processed image
         return Response(
             content=result_image,
             media_type="image/png",
-            headers={
-                "Content-Disposition": "attachment; filename=no-background.png"
-            }
+            headers={"Content-Disposition": "attachment; filename=no-background.png"}
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Background removal failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Background removal failed: {str(e)}")
 
 
-def link_tags_to_artwork(db: Session, artwork: SavedArtwork, tags_str: str, user_id: str):
-    """Link tags from a comma-separated string to an artwork"""
-    if not tags_str or not user_id:
-        return
+# =============================================================================
+# Artwork CRUD Endpoints
+# =============================================================================
 
-    tag_names = [t.strip() for t in tags_str.split(',') if t.strip()]
-    
-    # Get current associations to avoid duplicates
-    current_tag_ids = {tag.id for tag in artwork.artwork_tags}
-    
-    for name in tag_names:
-        # Find or create tag
-        tag = db.query(Tag).filter(Tag.name == name, Tag.user_id == user_id).first()
-        if not tag:
-            tag = Tag(name=name, user_id=user_id)
-            db.add(tag)
-            db.flush()
-        
-        # Associate if not already associated
-        if tag.id not in current_tag_ids:
-            artwork.artwork_tags.append(tag)
-
-
-@router.post("/saved-artworks")
+@router.post("/save-artwork")
 async def save_artwork(
     photo_uri: str = Form(...),
     artist_name: str = Form(...),
     artwork_name: str = Form(...),
-    conversation_history: str = Form(...),  # JSON string
-    user_id: Optional[str] = Form(None),
-    device_id: Optional[str] = Form(None),
+    conversation_history: str = Form(...),
+    user_id: str = Form(...),
     location: Optional[str] = Form(None),
     museum_name: Optional[str] = Form(None),
     is_recognized: bool = Form(True),
-    tags: Optional[str] = Form(None),  # Comma-separated tags from AI
-    analysis: Optional[str] = Form(None),  # Detailed analysis text from AI
-    color_palette: Optional[str] = Form(None),  # JSON string of color palette
-    photo_time: Optional[str] = Form(None),  # Original capture time of the photo
-    created_at: Optional[str] = Form(None),  # ISO timestamp (deprecated for metadata)
+    tags: Optional[str] = Form(None),
+    analysis: Optional[str] = Form(None),
+    summary: Optional[str] = Form(None),
+    params: Optional[str] = Form(None),
+    photo_time: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
-    Save artwork with complete conversation history
+    Save a new artwork with conversation history
 
     - **photo_uri**: URI/path to the photo
     - **artist_name**: Name of the artist
     - **artwork_name**: Name of the artwork
-    - **conversation_history**: JSON string of complete conversation history
-    - **user_id**: User ID (foreign key to users table) - recommended
-    - **device_id**: Persistent device identifier from Keychain UUID (optional, legacy)
-    - **location**: Geographic location where photo was taken (optional)
-    - **museum_name**: Museum or gallery name (optional)
-    - **is_recognized**: Whether the artwork was recognized (default: True)
-
-    Returns the saved artwork entry
+    - **conversation_history**: JSON array of [{role, content}, ...]
+    - **user_id**: User ID (required)
+    - **location**: Geographic location (optional)
+    - **museum_name**: Museum name (optional)
+    - **is_recognized**: Whether artwork was recognized
+    - **tags**: Comma-separated tags
+    - **analysis**: AI analysis text
+    - **summary**: One-sentence summary
+    - **params**: JSON string of additional parameters
+    - **photo_time**: Original photo capture time
     """
     try:
-        # Parse conversation history JSON
+        # Parse JSON fields
         conversation_data = json.loads(conversation_history)
 
-        # Parse color_palette JSON if provided
-        color_palette_data = None
-        if color_palette:
+        params_data = None
+        if params:
             try:
-                color_palette_data = json.loads(color_palette)
+                params_data = json.loads(params)
             except json.JSONDecodeError:
-                logger.warning(f"Failed to parse color_palette JSON: {color_palette}")
-                color_palette_data = None
+                logger.warning("Failed to parse params JSON")
 
-        # Check if an artwork with this photo_uri already exists for this user
-        # This prevents duplicate records if the user navigates back and forth
-        existing_artwork = None
-        if user_id:
-            existing_artwork = db.query(SavedArtwork).filter(
-                SavedArtwork.photo_uri == photo_uri,
-                SavedArtwork.user_id == user_id
-            ).first()
-        
-        if existing_artwork:
-            logger.info(f"Updating existing artwork record: {existing_artwork.id}")
-            saved_artwork = existing_artwork
-            # Update fields with new data if provided
-            saved_artwork.artist_name = artist_name
-            saved_artwork.artwork_name = artwork_name
-            saved_artwork.is_recognized = 1 if is_recognized else 0
-            if tags and user_id:
-                link_tags_to_artwork(db, saved_artwork, tags, user_id)
-            if analysis:
-                saved_artwork.analysis = analysis
-            if color_palette_data:
-                saved_artwork.color_palette = color_palette_data
-            if location:
-                saved_artwork.location = location
-            if photo_time:
-                saved_artwork.photo_time = photo_time
-            elif created_at:
-                saved_artwork.photo_time = created_at
-        else:
-            # Create new SavedArtwork
-            saved_artwork = SavedArtwork(
-                photo_uri=photo_uri,
-                artist_name=artist_name,
-                artwork_name=artwork_name,
-                user_id=user_id,
-                device_id=device_id,
-                location=location,
-                museum_name=museum_name,
-                is_recognized=1 if is_recognized else 0,
-                analysis=analysis,
-                color_palette=color_palette_data,
-                photo_time=photo_time if photo_time else created_at
-            )
-            db.add(saved_artwork)
-            db.flush()
-            if tags and user_id:
-                link_tags_to_artwork(db, saved_artwork, tags, user_id)
-
-        if created_at:
-            try:
-                dt_str = created_at.replace('Z', '+00:00')
-                saved_artwork.created_at = datetime.fromisoformat(dt_str)
-            except Exception as e:
-                logger.warning(f"Failed to parse created_at: {created_at}, error: {e}")
-
+        # Create artwork
+        saved_artwork = SavedArtwork(
+            photo_uri=photo_uri,
+            artist_name=artist_name,
+            artwork_name=artwork_name,
+            user_id=user_id,
+            location=location,
+            museum_name=museum_name,
+            is_recognized=1 if is_recognized else 0,
+            analysis=analysis,
+            summary=summary,
+            params=params_data,
+            photo_time=photo_time
+        )
         db.add(saved_artwork)
-        db.flush()  # Get the artwork ID without committing
+        db.flush()
 
-        # Create Conversation records from conversation_history
+        # Link tags (batch operation)
+        if tags:
+            batch_link_tags(db, saved_artwork, tags)
+
+        # Create conversation records
         for idx, message in enumerate(conversation_data):
-            role = message.get('role', 'assistant')
             content = message.get('content', '')
-
             if not content:
                 continue
-
-            # Extract optional metadata
-            metadata = {}
-            if 'topic' in message:
-                metadata['topic'] = message['topic']
 
             conversation = Conversation(
                 saved_artwork_id=saved_artwork.id,
                 sequence_number=idx,
-                role=role,
+                role=message.get('role', 'assistant'),
                 content=content,
-                message_metadata=metadata if metadata else None
+                message_metadata={"topic": message['topic']} if 'topic' in message else None
             )
             db.add(conversation)
 
@@ -582,300 +614,146 @@ async def save_artwork(
         return saved_artwork.to_dict()
 
     except json.JSONDecodeError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid conversation history JSON: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to save artwork: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to save artwork: {str(e)}")
 
 
-@router.get("/saved-artworks")
-async def get_saved_artworks(
-    user_id: Optional[str] = None,
-    device_id: Optional[str] = None,
+@router.get("/save-artwork")
+async def get_artworks(
+    user_id: str = Query(...),
     recognized_only: Optional[bool] = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db)
 ):
     """
-    Get saved artworks with optional filtering
+    Get saved artworks for a user
 
-    - **user_id**: Filter by user ID (recommended)
-    - **device_id**: Filter by device ID (legacy, optional)
-    - **recognized_only**: Filter by recognition status (True/False/None for all)
-    - **limit**: Maximum number of entries to return (default: 50)
-    - **offset**: Number of entries to skip (default: 0)
-
-    Returns list of saved artworks sorted by most recent first
+    - **user_id**: User ID (required)
+    - **recognized_only**: Filter by recognition status
+    - **limit**: Max items (default 50, max 100)
+    - **offset**: Skip items (default 0)
     """
     try:
-        query = db.query(SavedArtwork)
+        query = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id)
 
-        # Filter by user_id if specified (preferred)
-        if user_id is not None:
-            query = query.filter(SavedArtwork.user_id == user_id)
-        # Fall back to device_id for backwards compatibility
-        elif device_id is not None:
-            query = query.filter(SavedArtwork.device_id == device_id)
-
-        # Filter by recognition status if specified
         if recognized_only is not None:
             query = query.filter(SavedArtwork.is_recognized == (1 if recognized_only else 0))
 
-        # Order by most recent first and apply pagination
-        saved_artworks = query.order_by(SavedArtwork.created_at.desc()).offset(offset).limit(limit).all()
+        artworks = query.order_by(SavedArtwork.created_at.desc()).offset(offset).limit(limit).all()
 
         return {
-            "items": [artwork.to_dict() for artwork in saved_artworks],
-            "count": len(saved_artworks),
+            "items": [a.to_dict(include_conversations=False) for a in artworks],
+            "count": len(artworks),
             "offset": offset,
             "limit": limit
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve saved artworks: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve artworks: {str(e)}")
 
 
-@router.get("/saved-artworks/{artwork_id}")
-async def get_saved_artwork(
-    artwork_id: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Get a specific saved artwork with full conversation history
+@router.get("/save-artwork/{artwork_id}")
+async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
+    """Get a specific artwork with full conversation history"""
+    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
 
-    - **artwork_id**: ID of the saved artwork
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found")
 
-    Returns the saved artwork with complete conversation history
-    """
-    try:
-        saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
-
-        if not saved_artwork:
-            raise HTTPException(status_code=404, detail="Saved artwork not found")
-
-        return saved_artwork.to_dict()
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve saved artwork: {str(e)}"
-        )
+    return artwork.to_dict()
 
 
-@router.put("/saved-artworks/{artwork_id}")
-async def update_saved_artwork(
+@router.put("/save-artwork/{artwork_id}")
+async def update_artwork(
     artwork_id: str,
     request: UpdateArtworkRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Update saved artwork details (artist name, artwork name, and/or background color)
+    Update artwork details
 
-    - **artwork_id**: ID of the saved artwork to update
-    - **request**: JSON body with optional artist_name, artwork_name, and background_color
-
-    This will also update the is_recognized field based on the new values:
-    - If artist_name is not "Unknown Artist" and artwork_name is not "Unknown", is_recognized is True
-    - Otherwise, is_recognized is False
-
-    Returns the updated artwork entry
+    - **artwork_id**: Artwork ID
+    - **request**: JSON body with optional fields to update
     """
     try:
-        logger.info(f"Updating artwork {artwork_id} with request: {request}")
+        artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
 
-        saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+        if not artwork:
+            raise HTTPException(status_code=404, detail="Artwork not found")
 
-        if not saved_artwork:
-            raise HTTPException(status_code=404, detail="Saved artwork not found")
-
-        # Update fields if provided
         if request.artist_name is not None:
-            saved_artwork.artist_name = request.artist_name.strip()
-
+            artwork.artist_name = request.artist_name.strip()
         if request.artwork_name is not None:
-            saved_artwork.artwork_name = request.artwork_name.strip()
-
+            artwork.artwork_name = request.artwork_name.strip()
         if request.summary is not None:
-            saved_artwork.summary = request.summary
-
-        if request.tags is not None and saved_artwork.user_id:
-            link_tags_to_artwork(db, saved_artwork, request.tags, saved_artwork.user_id)
-
+            artwork.summary = request.summary
         if request.analysis is not None:
-            saved_artwork.analysis = request.analysis
+            artwork.analysis = request.analysis
+        if request.params is not None:
+            artwork.params = request.params
+        if request.tags is not None:
+            batch_link_tags(db, artwork, request.tags)
 
-        if request.background_color is not None:
-            saved_artwork.background_color = request.background_color
-
-        if request.color_palette is not None:
-            logger.info(f"Setting color_palette: {request.color_palette}")
-            saved_artwork.color_palette = request.color_palette
-
-        # Recalculate is_recognized based on current values
-        # Consider artwork as recognized if both artist and artwork names are meaningful
-        is_recognized = (
-            saved_artwork.artist_name.lower() != "unknown artist" and
-            saved_artwork.artwork_name.lower() != "unknown"
-        )
-        saved_artwork.is_recognized = 1 if is_recognized else 0
+        # Recalculate is_recognized
+        artwork.is_recognized = 1 if (
+            artwork.artist_name.lower() != "unknown artist" and
+            artwork.artwork_name.lower() != "unknown"
+        ) else 0
 
         db.commit()
-        db.refresh(saved_artwork)
+        db.refresh(artwork)
 
-        logger.info(f"Successfully updated artwork. Color palette in DB: {saved_artwork.color_palette}")
-        return saved_artwork.to_dict()
+        return artwork.to_dict()
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to update saved artwork: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to update artwork: {str(e)}")
 
 
-@router.delete("/saved-artworks/{artwork_id}")
-async def delete_saved_artwork(
-    artwork_id: str,
+@router.delete("/save-artwork/{artwork_id}")
+async def delete_artwork(artwork_id: str, db: Session = Depends(get_db)):
+    """Delete a saved artwork"""
+    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+    db.delete(artwork)
+    db.commit()
+
+    return {"message": "Artwork deleted successfully"}
+
+
+@router.post("/save-artwork/batch-delete")
+async def batch_delete_artworks(
+    artwork_ids: List[str],
+    user_id: str,
     db: Session = Depends(get_db)
 ):
     """
-    Delete a saved artwork
+    Delete multiple artworks (with ownership check)
 
-    - **artwork_id**: ID of the saved artwork to delete
-
-    Returns success message
+    - **artwork_ids**: List of artwork IDs
+    - **user_id**: User ID (for ownership verification)
     """
     try:
-        saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
-
-        if not saved_artwork:
-            raise HTTPException(status_code=404, detail="Saved artwork not found")
-
-        db.delete(saved_artwork)
-        db.commit()
-
-        return {"message": "Saved artwork deleted successfully"}
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete saved artwork: {str(e)}"
-        )
-
-@router.post("/saved-artworks/batch-delete")
-async def batch_delete_saved_artworks(
-    artwork_ids: list[str],
-    db: Session = Depends(get_db)
-):
-    """
-    Delete multiple saved artworks in a single transaction
-
-    - **artwork_ids**: List of IDs of the saved artworks to delete
-
-    Returns success message and count of deleted items
-    """
-    try:
-        # Using synchronize_session=False for efficiency in bulk delete
         deleted_count = db.query(SavedArtwork).filter(
-            SavedArtwork.id.in_(artwork_ids)
+            SavedArtwork.id.in_(artwork_ids),
+            SavedArtwork.user_id == user_id
         ).delete(synchronize_session=False)
 
         db.commit()
 
         return {
-            "message": f"Successfully deleted {deleted_count} artworks",
+            "message": f"Deleted {deleted_count} artworks",
             "deleted_count": deleted_count
         }
 
     except Exception as e:
         db.rollback()
-        logger.error(f"Batch delete failed: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete artworks in batch: {str(e)}"
-        )
-
-@router.post("/artwork-summary")
-async def generate_artwork_summary(
-    image: UploadFile = File(...),
-    saved_artwork_id: str = Form(...),
-    model: Optional[AIProvider] = Form(None),
-    identity: Optional[str] = Form("default"),
-    language: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
-):
-    """
-    Generate a fun, one-sentence summary of the artwork based on the image and conversation history
-
-    - **image**: Image file to analyze (JPG, PNG, WebP)
-    - **saved_artwork_id**: ID of the saved artwork
-    - **model**: Preferred AI model (openai, claude, gemini) - optional
-    - **identity**: AI identity/persona (museum_narrator, art_historian) - optional
-    - **language**: Language code for response (e.g., "en", "es", "fr", "zh") - optional
-
-    Returns the generated summary and updates the database
-    """
-
-    # Determine which AI service to use
-    ai_provider = determine_ai_provider(model)
-
-    try:
-        # Process the image
-        image_bytes = await process_image(image)
-
-        # Load saved artwork from database
-        db_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == saved_artwork_id).first()
-
-        if not db_artwork:
-            raise HTTPException(status_code=404, detail="Saved artwork not found")
-
-        # Get conversation history from Conversation table
-        conversations = db.query(Conversation).filter(
-            Conversation.saved_artwork_id == db_artwork.id
-        ).order_by(Conversation.sequence_number).all()
-
-        # Convert to message format expected by AI service
-        conversation_history = [
-            ConversationMessage(role=conv.role, content=conv.content)
-            for conv in conversations
-        ]
-
-        # Get AI service and generate summary (even if no conversation history)
-        ai_service = AIServiceFactory.get_service(ai_provider)
-        summary = await ai_service.generate_summary(
-            image_bytes,
-            db_artwork.artist_name,
-            db_artwork.artwork_name,
-            conversation_history,
-            identity=identity,
-            language=language
-        )
-
-        # Update the database with the summary
-        db_artwork.summary = summary
-        db.commit()
-        db.refresh(db_artwork)
-
-        return {
-            "summary": summary,
-            "saved_artwork_id": saved_artwork_id,
-            "model_used": ai_provider.value
-        }
-
-    except Exception as e:
-        db.rollback()
-        if "API error" in str(e):
-            raise HTTPException(status_code=503, detail=str(e))
-        else:
-            raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Batch delete failed: {str(e)}")

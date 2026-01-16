@@ -128,7 +128,7 @@ class APITester:
         try:
             start_time = time.time()
             async with self.session.get(
-                f"{self.config.base_url}/api/saved-artworks?limit=100"
+                f"{self.config.base_url}/api/save-artwork?limit=100"
             ) as response:
                 latency = time.time() - start_time
                 if response.status == 200:
@@ -259,11 +259,11 @@ class APITester:
             latency = time.time() - start_time if 'start_time' in locals() else 0
             self.log_test("GET /api/identities", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
-    async def test_analyze_artist(self, language: str = "english"):
-        """Test POST /api/analyze-artist endpoint"""
+    async def test_artwork_analyze(self, language: str = "english"):
+        """Test POST /api/artwork-analyze endpoint"""
         # Use the consistent test image selected at the start
         image_path = self.test_image_path
-        test_name = f"POST /api/analyze-artist [{language}]" if self.config.grid_test else "POST /api/analyze-artist"
+        test_name = f"POST /api/artwork-analyze [{language}]" if self.config.grid_test else "POST /api/artwork-analyze"
 
         if not image_path:
             self.log_test(test_name, "SKIP", "No images available")
@@ -277,7 +277,7 @@ class APITester:
 
             start_time = time.time()
             async with self.session.post(
-                f"{self.config.base_url}/api/analyze-artist",
+                f"{self.config.base_url}/api/artwork-analyze",
                 data=data
             ) as response:
                 result = await response.json()
@@ -448,12 +448,12 @@ class APITester:
             self.log_test("PUT /api/users/{user_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_save_artwork(self):
-        """Test POST /api/saved-artworks endpoint"""
-        if self.should_skip_non_llm_test("POST /api/saved-artworks"):
+        """Test POST /api/save-artwork endpoint"""
+        if self.should_skip_non_llm_test("POST /api/save-artwork"):
             return
 
         if not self.test_user_id:
-            self.log_test("POST /api/saved-artworks", "SKIP", "No test user created")
+            self.log_test("POST /api/save-artwork", "SKIP", "No test user created")
             return
 
         try:
@@ -463,11 +463,10 @@ class APITester:
                 {"role": "assistant", "content": "The colors are vibrant..."}
             ]
 
-            color_palette = [
-                {"color": "#FF5733", "percentage": 0.4},
-                {"color": "#33FF57", "percentage": 0.3},
-                {"color": "#3357FF", "percentage": 0.3}
-            ]
+            params = {
+                "colors": ["#FF5733", "#33FF57", "#3357FF"],
+                "source": "test"
+            }
 
             data = aiohttp.FormData()
             data.add_field('photo_uri', 'file:///test/path/image.jpg')
@@ -475,15 +474,14 @@ class APITester:
             data.add_field('artwork_name', 'Test Artwork')
             data.add_field('conversation_history', json.dumps(conversation_history))
             data.add_field('user_id', self.test_user_id)
-            data.add_field('device_id', self.test_device_id)
             data.add_field('location', 'Test Museum')
             data.add_field('museum_name', 'Museum of Testing')
             data.add_field('is_recognized', 'true')
-            data.add_field('color_palette', json.dumps(color_palette))
+            data.add_field('params', json.dumps(params))
 
             start_time = time.time()
             async with self.session.post(
-                f"{self.config.base_url}/api/saved-artworks",
+                f"{self.config.base_url}/api/save-artwork",
                 data=data
             ) as response:
                 result = await response.json()
@@ -494,27 +492,27 @@ class APITester:
                 # Store for later tests
                 self.test_artwork_id = result['id']
                 self.log_test(
-                    "POST /api/saved-artworks",
+                    "POST /api/save-artwork",
                     "PASS",
                     f"Saved artwork: {self.test_artwork_id} | Latency: {latency:.3f}s"
                 )
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test("POST /api/saved-artworks", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+            self.log_test("POST /api/save-artwork", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_get_saved_artworks(self):
-        """Test GET /api/saved-artworks endpoint"""
-        if self.should_skip_non_llm_test("GET /api/saved-artworks"):
+        """Test GET /api/save-artwork endpoint"""
+        if self.should_skip_non_llm_test("GET /api/save-artwork"):
             return
 
         if not self.test_user_id:
-            self.log_test("GET /api/saved-artworks", "SKIP", "No test user created")
+            self.log_test("GET /api/save-artwork", "SKIP", "No test user created")
             return
 
         try:
             start_time = time.time()
             async with self.session.get(
-                f"{self.config.base_url}/api/saved-artworks?user_id={self.test_user_id}"
+                f"{self.config.base_url}/api/save-artwork?user_id={self.test_user_id}"
             ) as response:
                 data = await response.json()
                 latency = time.time() - start_time
@@ -522,173 +520,195 @@ class APITester:
                 assert 'items' in data
                 assert isinstance(data['items'], list)
                 self.log_test(
-                    "GET /api/saved-artworks",
+                    "GET /api/save-artwork",
                     "PASS",
                     f"Found {data['count']} artworks | Latency: {latency:.3f}s"
                 )
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test("GET /api/saved-artworks", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+            self.log_test("GET /api/save-artwork", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_get_saved_artwork(self):
-        """Test GET /api/saved-artworks/{artwork_id} endpoint"""
-        if self.should_skip_non_llm_test("GET /api/saved-artworks/{artwork_id}"):
+        """Test GET /api/save-artwork/{artwork_id} endpoint"""
+        if self.should_skip_non_llm_test("GET /api/save-artwork/{artwork_id}"):
             return
 
         if not self.test_artwork_id:
-            self.log_test("GET /api/saved-artworks/{artwork_id}", "SKIP", "No test artwork created")
+            self.log_test("GET /api/save-artwork/{artwork_id}", "SKIP", "No test artwork created")
             return
 
         try:
             start_time = time.time()
             async with self.session.get(
-                f"{self.config.base_url}/api/saved-artworks/{self.test_artwork_id}"
+                f"{self.config.base_url}/api/save-artwork/{self.test_artwork_id}"
             ) as response:
                 data = await response.json()
                 latency = time.time() - start_time
                 assert response.status == 200
                 assert data['id'] == self.test_artwork_id
                 assert 'conversation_history' in data
-                self.log_test("GET /api/saved-artworks/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
+                self.log_test("GET /api/save-artwork/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test("GET /api/saved-artworks/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+            self.log_test("GET /api/save-artwork/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_update_saved_artwork(self):
-        """Test PUT /api/saved-artworks/{artwork_id} endpoint"""
-        if self.should_skip_non_llm_test("PUT /api/saved-artworks/{artwork_id}"):
+        """Test PUT /api/save-artwork/{artwork_id} endpoint"""
+        if self.should_skip_non_llm_test("PUT /api/save-artwork/{artwork_id}"):
             return
 
         if not self.test_artwork_id:
-            self.log_test("PUT /api/saved-artworks/{artwork_id}", "SKIP", "No test artwork created")
+            self.log_test("PUT /api/save-artwork/{artwork_id}", "SKIP", "No test artwork created")
             return
 
         try:
             payload = {
                 "artist_name": "Updated Artist",
                 "artwork_name": "Updated Artwork",
-                "background_color": "#FFFFFF"
+                "params": {"updated": True}
             }
 
             start_time = time.time()
             async with self.session.put(
-                f"{self.config.base_url}/api/saved-artworks/{self.test_artwork_id}",
+                f"{self.config.base_url}/api/save-artwork/{self.test_artwork_id}",
                 json=payload
             ) as response:
                 data = await response.json()
                 latency = time.time() - start_time
                 assert response.status == 200
                 assert data['artist_name'] == "Updated Artist"
-                self.log_test("PUT /api/saved-artworks/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
+                self.log_test("PUT /api/save-artwork/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test("PUT /api/saved-artworks/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+            self.log_test("PUT /api/save-artwork/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
-    async def test_analyze_bite(self, language: str = "english"):
-        """Test POST /api/analyze-bite endpoint"""
-        # Use the consistent test image selected at the start
+    async def test_artwork_chat(self, language: str = "english"):
+        """Test POST /api/artwork-chat endpoint (stateless)"""
         image_path = self.test_image_path
-        test_name = f"POST /api/analyze-bite [{language}]" if self.config.grid_test else "POST /api/analyze-bite"
+        test_name = f"POST /api/artwork-chat [{language}]" if self.config.grid_test else "POST /api/artwork-chat"
 
         if not image_path:
             self.log_test(test_name, "SKIP", "No images available")
             return
 
+        # Use artwork info from test data or defaults
+        artist_name = self.test_artwork_info.get('artist_name', 'Test Artist') if self.test_artwork_info else 'Test Artist'
+        artwork_name = self.test_artwork_info.get('artwork_name', 'Test Artwork') if self.test_artwork_info else 'Test Artwork'
+
         try:
+                 = [
+                {"role": "assistant", "content": "This is a beautiful painting."},
+                {"role": "user", "content": "What technique did the artist use?"}
+            ]
+
             data = aiohttp.FormData()
             data.add_field('image', open(image_path, 'rb'), filename=image_path.name)
-            data.add_field('artist_name', 'Test Artist')
-            data.add_field('artwork_name', 'Test Artwork')
-            data.add_field('topic', 'technique')
-            data.add_field('test_env', 'true')
+            data.add_field('artist_name', artist_name)
+            data.add_field('artwork_name', artwork_name)
+            data.add_field('query', 'Tell me about the brushwork technique.')
+            data.add_field('conversation_history', json.dumps(conversation_history))
             if self.config.grid_test:
                 data.add_field('language', language)
-            if self.test_artwork_id:
-                data.add_field('saved_artwork_id', self.test_artwork_id)
 
             start_time = time.time()
             async with self.session.post(
-                f"{self.config.base_url}/api/analyze-bite",
+                f"{self.config.base_url}/api/artwork-chat",
                 data=data
             ) as response:
                 result = await response.json()
                 latency = time.time() - start_time
                 assert response.status == 200
-                assert 'bite' in result
+                assert 'response' in result
                 assert 'model_used' in result
 
                 self.log_test(
                     test_name,
                     "PASS",
-                    f"Got bite (model: {result.get('model_used')}) | Latency: {latency:.3f}s"
+                    f"Got response (model: {result.get('model_used')}) | Latency: {latency:.3f}s"
                 )
                 # Print LLM response in verbose mode
-                self.log_llm_response(result.get('bite', ''))
+                self.log_llm_response(result.get('response', ''))
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
             self.log_test(test_name, "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
-    async def test_analyze_topic(self, language: str = "english"):
-        """Test GET /api/analyze-topic endpoint"""
-        test_name = f"GET /api/analyze-topic [{language}]" if self.config.grid_test else "GET /api/analyze-topic"
+    async def test_suggest_topic(self, language: str = "english"):
+        """Test POST /api/suggest-topic endpoint (stateless)"""
+        test_name = f"POST /api/suggest-topic [{language}]" if self.config.grid_test else "POST /api/suggest-topic"
 
-        if not self.test_artwork_id:
-            self.log_test(test_name, "SKIP", "No test artwork created")
-            return
-
-        try:
-            params = {'saved_artwork_id': self.test_artwork_id}
-            if self.config.grid_test:
-                params['language'] = language
-
-            start_time = time.time()
-            async with self.session.get(
-                f"{self.config.base_url}/api/analyze-topic",
-                params=params
-            ) as response:
-                data = await response.json()
-                latency = time.time() - start_time
-                assert response.status == 200
-                assert 'suggested_topics' in data
-                assert isinstance(data['suggested_topics'], list)
-
-                topics_str = ', '.join(data['suggested_topics'])
-                self.log_test(
-                    test_name,
-                    "PASS",
-                    f"Topics: {', '.join(data['suggested_topics'][:3])} | Latency: {latency:.3f}s"
-                )
-                # Print full topic list in verbose mode
-                if self.config.verbose and len(data['suggested_topics']) > 3:
-                    self.log_llm_response(f"All topics: {topics_str}")
-        except Exception as e:
-            latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test(test_name, "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
-
-    async def test_artwork_summary(self, language: str = "english"):
-        """Test POST /api/artwork-summary endpoint"""
-        # Use the consistent test image selected at the start
-        image_path = self.test_image_path
-        test_name = f"POST /api/artwork-summary [{language}]" if self.config.grid_test else "POST /api/artwork-summary"
-
-        if not image_path or not self.test_artwork_id:
-            self.log_test(
-                test_name,
-                "SKIP",
-                "No images or test artwork available"
-            )
-            return
+        # Use artwork info from test data or existing artwork
+        artist_name = self.test_artwork_info.get('artist_name', 'Test Artist') if self.test_artwork_info else 'Test Artist'
+        artwork_name = self.test_artwork_info.get('artwork_name', 'Test Artwork') if self.test_artwork_info else 'Test Artwork'
 
         try:
+            conversation_history = [
+                {"role": "assistant", "content": "This is a beautiful artwork with vibrant colors."},
+                {"role": "user", "content": "Tell me more about the technique."},
+                {"role": "assistant", "content": "The artist used impasto technique with thick brushstrokes."}
+            ]
+
             data = aiohttp.FormData()
-            data.add_field('image', open(image_path, 'rb'), filename=image_path.name)
-            data.add_field('saved_artwork_id', self.test_artwork_id)
+            data.add_field('artist_name', artist_name)
+            data.add_field('artwork_name', artwork_name)
+            data.add_field('conversation_history', json.dumps(conversation_history))
             if self.config.grid_test:
                 data.add_field('language', language)
 
             start_time = time.time()
             async with self.session.post(
-                f"{self.config.base_url}/api/artwork-summary",
+                f"{self.config.base_url}/api/suggest-topic",
+                data=data
+            ) as response:
+                result = await response.json()
+                latency = time.time() - start_time
+                assert response.status == 200
+                assert 'suggested_topics' in result
+                assert isinstance(result['suggested_topics'], list)
+
+                topics_str = ', '.join(result['suggested_topics'])
+                self.log_test(
+                    test_name,
+                    "PASS",
+                    f"Topics: {', '.join(result['suggested_topics'][:3])} | Latency: {latency:.3f}s"
+                )
+                # Print full topic list in verbose mode
+                if self.config.verbose and len(result['suggested_topics']) > 3:
+                    self.log_llm_response(f"All topics: {topics_str}")
+        except Exception as e:
+            latency = time.time() - start_time if 'start_time' in locals() else 0
+            self.log_test(test_name, "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+
+    async def test_generate_summary(self, language: str = "english"):
+        """Test POST /api/generate-summary endpoint (stateless)"""
+        image_path = self.test_image_path
+        test_name = f"POST /api/generate-summary [{language}]" if self.config.grid_test else "POST /api/generate-summary"
+
+        if not image_path:
+            self.log_test(test_name, "SKIP", "No images available")
+            return
+
+        # Use artwork info from test data or defaults
+        artist_name = self.test_artwork_info.get('artist_name', 'Test Artist') if self.test_artwork_info else 'Test Artist'
+        artwork_name = self.test_artwork_info.get('artwork_name', 'Test Artwork') if self.test_artwork_info else 'Test Artwork'
+
+        try:
+            conversation_history = [
+                {"role": "assistant", "content": "This artwork shows beautiful use of color."},
+                {"role": "user", "content": "What makes it special?"},
+                {"role": "assistant", "content": "The composition creates a sense of movement."}
+            ]
+
+            data = aiohttp.FormData()
+            data.add_field('image', open(image_path, 'rb'), filename=image_path.name)
+            data.add_field('artist_name', artist_name)
+            data.add_field('artwork_name', artwork_name)
+            data.add_field('conversation_history', json.dumps(conversation_history))
+            if self.config.grid_test:
+                data.add_field('language', language)
+
+            start_time = time.time()
+            async with self.session.post(
+                f"{self.config.base_url}/api/generate-summary",
                 data=data
             ) as response:
                 result = await response.json()
@@ -709,34 +729,34 @@ class APITester:
             self.log_test(test_name, "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_delete_saved_artwork(self):
-        """Test DELETE /api/saved-artworks/{artwork_id} endpoint"""
-        if self.should_skip_non_llm_test("DELETE /api/saved-artworks/{artwork_id}"):
+        """Test DELETE /api/save-artwork/{artwork_id} endpoint"""
+        if self.should_skip_non_llm_test("DELETE /api/save-artwork/{artwork_id}"):
             return
 
         if not self.test_artwork_id:
-            self.log_test("DELETE /api/saved-artworks/{artwork_id}", "SKIP", "No test artwork created")
+            self.log_test("DELETE /api/save-artwork/{artwork_id}", "SKIP", "No test artwork created")
             return
 
         # Don't delete if we're using an existing artwork from the database
         if self.using_existing_artwork:
-            self.log_test("DELETE /api/saved-artworks/{artwork_id}", "SKIP", "Using existing artwork (not deleting)")
+            self.log_test("DELETE /api/save-artwork/{artwork_id}", "SKIP", "Using existing artwork (not deleting)")
             return
 
         try:
             start_time = time.time()
             async with self.session.delete(
-                f"{self.config.base_url}/api/saved-artworks/{self.test_artwork_id}"
+                f"{self.config.base_url}/api/save-artwork/{self.test_artwork_id}"
             ) as response:
                 data = await response.json()
                 latency = time.time() - start_time
                 assert response.status == 200
                 assert 'message' in data
-                self.log_test("DELETE /api/saved-artworks/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
+                self.log_test("DELETE /api/save-artwork/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
                 # Clear the ID so we don't try to use it again
                 self.test_artwork_id = None
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test("DELETE /api/saved-artworks/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+            self.log_test("DELETE /api/save-artwork/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_delete_user(self):
         """Test DELETE /api/users/{user_id} endpoint"""
@@ -820,7 +840,7 @@ class APITester:
             ("Update User", self.test_update_user, False),
 
             # Artwork analysis endpoints (LLM)
-            ("Analyze Artist", self.test_analyze_artist, True),
+            ("Artwork Analyze", self.test_artwork_analyze, True),
             ("Remove Background", self.test_remove_background, False),
 
             # Saved artworks (create before operating)
@@ -828,9 +848,9 @@ class APITester:
             ("Get Saved Artworks", self.test_get_saved_artworks, False),
             ("Get Saved Artwork", self.test_get_saved_artwork, False),
             ("Update Saved Artwork", self.test_update_saved_artwork, False),
-            ("Analyze Bite", self.test_analyze_bite, True),
-            ("Analyze Topic", self.test_analyze_topic, True),
-            ("Artwork Summary", self.test_artwork_summary, True),
+            ("Artwork Chat", self.test_artwork_chat, True),
+            ("Suggest Topic", self.test_suggest_topic, True),
+            ("Generate Summary", self.test_generate_summary, True),
 
             # Cleanup (delete last)
             ("Delete Saved Artwork", self.test_delete_saved_artwork, False),
@@ -929,7 +949,7 @@ Examples:
     parser.add_argument(
         '--llm',
         action='store_true',
-        help='Only run LLM-calling tests (analyze-artist, analyze-bite, analyze-topic, artwork-summary)'
+        help='Only run LLM-calling tests (artwork-analyze, artwork-chat, suggest-topic, generate-summary)'
     )
 
     parser.add_argument(

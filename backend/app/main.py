@@ -52,6 +52,17 @@ if settings.openai_reasoning_effort:
 if settings.openai_verbosity:
     logger.info(f"OPENAI_VERBOSITY is set to: {settings.openai_verbosity}")
 
+# Log environment and database configuration
+logger.info(f"=" * 50)
+logger.info(f"ENVIRONMENT: {settings.env.upper()}")
+if settings.use_database:
+    db_url = settings.effective_database_url
+    # Mask password in URL for logging
+    import re
+    masked_url = re.sub(r'://([^:]+):([^@]+)@', r'://\1:****@', db_url)
+    logger.info(f"DATABASE: {masked_url}")
+logger.info(f"=" * 50)
+
 # Initialize database only if enabled
 if settings.use_database:
     from app.database.connection import engine, Base

@@ -16,5 +16,4 @@ class UpdateArtworkRequest(BaseModel):
     summary: Optional[str] = None
     tags: Optional[str] = None
     analysis: Optional[str] = None
-    background_color: Optional[str] = None
-    color_palette: Optional[Dict[str, Any]] = None
+    params: Optional[Dict[str, Any]] = None

@@ -16,14 +16,25 @@ class Settings(BaseSettings):
     claude_api_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
 
-    # Database - Always use Neon PostgreSQL for both dev and production
+    # Environment: "dev" or "prod"
+    env: str = "dev"
+
+    # Database - Neon PostgreSQL
     use_database: bool = True
-    neon_database_url: str  # Required - no fallback
+    neon_database_url: Optional[str] = None      # Default (used if env-specific not set)
+    neon_database_url_dev: Optional[str] = None  # Dev database
+    neon_database_url_prod: Optional[str] = None # Prod database
 
     @property
     def effective_database_url(self) -> str:
-        """Return NEON_DATABASE_URL"""
-        return self.neon_database_url
+        """Return appropriate database URL based on environment"""
+        if self.env == "prod" and self.neon_database_url_prod:
+            return self.neon_database_url_prod
+        if self.env == "dev" and self.neon_database_url_dev:
+            return self.neon_database_url_dev
+        if self.neon_database_url:
+            return self.neon_database_url
+        raise ValueError("No database URL configured. Set NEON_DATABASE_URL or NEON_DATABASE_URL_DEV/PROD")
 
     # Server Configuration
     host: str = "0.0.0.0"

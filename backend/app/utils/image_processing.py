@@ -56,13 +56,25 @@ async def process_image(file: UploadFile) -> Tuple[bytes, Dict[str, Any]]:
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
 
-    # Resize image if too large (max 2048px on longest side)
-    max_dimension = 2048
+    # Resize image if too large (max 1024px on longest side for AI service limits)
+    max_dimension = 1024
+    output = BytesIO()
+
+    # Convert to RGB if necessary (for PNG with transparency, etc.)
+    if image.mode in ('RGBA', 'P'):
+        image = image.convert('RGB')
+
     if max(image.size) > max_dimension:
         image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
-        # Convert resized image back to bytes
+
+    # Always re-encode to ensure proper compression
+    image.save(output, format='JPEG', optimize=True, quality=80)
+    image_bytes = output.getvalue()
+
+    # If still too large (>900KB), reduce quality further
+    if len(image_bytes) > 900 * 1024:
         output = BytesIO()
-        image.save(output, format=image.format or 'JPEG', optimize=True, quality=85)
+        image.save(output, format='JPEG', optimize=True, quality=60)
         image_bytes = output.getvalue()
 
     return image_bytes

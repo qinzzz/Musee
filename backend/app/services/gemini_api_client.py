@@ -185,21 +185,65 @@ class GeminiAPIClient(AIClientInterface):
         previous_messages: Optional[list],
         current_question: str
     ) -> list:
-        """Build conversation messages in Gemini format"""
-        # Gemini uses a simpler format - just add context to the prompt
-        prompt = initial_prompt
-
-        # Add previous conversation context if available
+        """Build conversation messages in Gemini format with proper multi-turn structure
+        
+        Note: Gemini only supports 'user' and 'model' roles, no 'system' role.
+        We structure the conversation to put system instructions first.
+        """
+        contents = []
+        
+        # Gemini doesn't have a system role, so we use an initial user/model exchange
+        # to set the context and instructions
+        contents.append({
+            "role": "user",
+            "parts": [
+                {"text": initial_prompt}
+            ]
+        })
+        
+        # Now add the image with the actual analysis request
+        # Convert PIL Image to base64 for Gemini's multi-turn format
+        import base64
+        import io
+        
+        # Convert PIL Image to bytes
+        img_byte_arr = io.BytesIO()
+        image_data.save(img_byte_arr, format='JPEG')
+        img_byte_arr = img_byte_arr.getvalue()
+        
+        # Encode to base64
+        img_base64 = base64.b64encode(img_byte_arr).decode('utf-8')
+        
+        contents.append({
+            "role": "user",
+            "parts": [
+                {"text": "Here is the artwork to analyze:"},
+                {
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": img_base64
+                    }
+                }
+            ]
+        })
+        
+        # Add previous conversation messages if available
         if previous_messages:
-            previous_insights = [msg.content for msg in previous_messages if msg.role == "assistant"]
-            if previous_insights:
-                prompt += f"\n\nPrevious insights shared:\n" + "\n".join([f"- {insight}" for insight in previous_insights])
-
-        # Add current question
-        prompt += f"\n\n{current_question}"
-
-        # Return content list with prompt and image
-        return [prompt, image_data]
+            for msg in previous_messages:
+                # Map roles: "user" stays "user", "assistant" becomes "model" for Gemini
+                role = "model" if msg.role == "assistant" else "user"
+                contents.append({
+                    "role": role,
+                    "parts": [{"text": msg.content}]
+                })
+        
+        # Add current question as the latest user message
+        contents.append({
+            "role": "user",
+            "parts": [{"text": current_question}]
+        })
+        
+        return contents
 
     def get_provider_name(self) -> AIProvider:
         return AIProvider.GEMINI
