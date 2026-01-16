@@ -596,7 +596,7 @@ class APITester:
         artwork_name = self.test_artwork_info.get('artwork_name', 'Test Artwork') if self.test_artwork_info else 'Test Artwork'
 
         try:
-                 = [
+            conversation_history = [
                 {"role": "assistant", "content": "This is a beautiful painting."},
                 {"role": "user", "content": "What technique did the artist use?"}
             ]

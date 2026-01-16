@@ -2,7 +2,13 @@
 import { GoogleGenAI, Type, Chat, Modality } from "@google/genai";
 import { AestheticVibe, Message, GalleryItem, TagCoordinate } from "./types";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY;
+
+if (!GEMINI_API_KEY) {
+  console.warn("CRITICAL: GEMINI_API_KEY is not set in environment variables! Direct AI features will fail.");
+}
+
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY || "MISSING_KEY" });
 
 /**
  * Utility to handle API calls with robust exponential backoff for rate limits (429)
