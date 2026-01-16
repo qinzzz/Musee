@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Animated, ScrollView, ImageBackground, TouchableOpacity } from 'react-native';
-import { BlurView } from '@react-native-community/blur';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius, shadows } from '../constants/theme';
@@ -157,8 +157,8 @@ export const ImmersiveExplorationPanel: React.FC<ImmersiveExplorationPanelProps>
                     >
                         <BlurView
                             style={styles.blurOverlay}
-                            blurType="thinMaterialLight"
-                            blurAmount={200}>
+                            intensity={80}
+                            tint="light">
                             {content}
                         </BlurView>
                     </ImageBackground>

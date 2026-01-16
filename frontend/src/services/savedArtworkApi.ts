@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { apiClient } from './apiClient';
 import { userApiService } from './userApi';
 import { compressImageToSize } from '../utils/imageUtils';
@@ -157,11 +158,17 @@ class SavedArtworkApiService {
     console.log('[savedArtworkApiService] Compressing image for summary generation:', imageUri);
     const compressedImage = await compressImageToSize(imageUri, 4 * 1024 * 1024);
 
-    formData.append('image', {
-      uri: compressedImage.uri,
-      type: 'image/jpeg',
-      name: 'artwork.jpg',
-    } as any);
+    if (Platform.OS === 'web') {
+      const response = await fetch(compressedImage.uri);
+      const blob = await response.blob();
+      formData.append('image', blob, 'artwork.jpg');
+    } else {
+      formData.append('image', {
+        uri: compressedImage.uri,
+        type: 'image/jpeg',
+        name: 'artwork.jpg',
+      } as any);
+    }
 
     if (language) formData.append('language', language);
 
@@ -190,11 +197,18 @@ class SavedArtworkApiService {
 
     // 2. Prepare Form Data
     const formData = new FormData();
-    formData.append('image', {
-      uri: uploadUri,
-      type: 'image/jpeg',
-      name: 'artwork.jpg',
-    } as any);
+    if (Platform.OS === 'web') {
+      const resp = await fetch(uploadUri);
+      const blob = await resp.blob();
+      const jpegBlob = new Blob([blob], { type: 'image/jpeg' });
+      formData.append('image', jpegBlob, 'artwork.jpg');
+    } else {
+      formData.append('image', {
+        uri: uploadUri,
+        type: 'image/jpeg',
+        name: 'artwork.jpg',
+      } as any);
+    }
     formData.append('identity', identity);
     formData.append('language', language);
 

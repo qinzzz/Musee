@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle, Platform } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { colors } from '../constants/colors';
 import { Typography } from './Typography';
@@ -26,12 +26,16 @@ export const LoadingProgressBar: React.FC<LoadingProgressBarProps> = ({
           {message}
         </Typography>
       )}
-      <LottieView
-        source={{ uri: 'https://lottie.host/336b07be-89fa-4bb2-92a3-ff4241dc801b/97gZTsxMdf.lottie' }}
-        autoPlay
-        loop
-        style={styles.lottie}
-      />
+      {Platform.OS !== 'web' ? (
+        <LottieView
+          source={{ uri: 'https://lottie.host/336b07be-89fa-4bb2-92a3-ff4241dc801b/97gZTsxMdf.lottie' }}
+          autoPlay
+          loop
+          style={styles.lottie}
+        />
+      ) : (
+        <View style={styles.lottiePlaceholder} />
+      )}
     </View>
   );
 };
@@ -53,5 +57,11 @@ const styles = StyleSheet.create({
   lottie: {
     width: 100,
     height: 100,
+  },
+  lottiePlaceholder: {
+    width: 100,
+    height: 100,
+    backgroundColor: '#eee',
+    borderRadius: 50,
   },
 });

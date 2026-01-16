@@ -20,7 +20,7 @@ export const cameraStyles = StyleSheet.create({
     ...shadows.md,
   },
   cameraViewfinder: {
-    width: width,
+    width: '100%',
     flex: 1,
     overflow: 'hidden',
     position: 'relative',

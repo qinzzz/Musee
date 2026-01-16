@@ -13,6 +13,7 @@ import {
   Image,
   StatusBar,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
@@ -97,11 +98,12 @@ export default function SavedArtworkDetailScreen({ route, navigation }: any) {
       ])
     ).start();
 
-    const showSub = Keyboard.addListener('keyboardWillShow', () => setIsKeyboardVisible(true));
-    const hideSub = Keyboard.addListener('keyboardWillHide', () => setIsKeyboardVisible(false));
+    const showSub = Platform.OS === 'ios' ? Keyboard.addListener('keyboardWillShow', () => setIsKeyboardVisible(true)) : null;
+    const hideSub = Platform.OS === 'ios' ? Keyboard.addListener('keyboardWillHide', () => setIsKeyboardVisible(false)) : null;
+
     return () => {
-      showSub.remove();
-      hideSub.remove();
+      showSub?.remove();
+      hideSub?.remove();
     };
   }, []);
 

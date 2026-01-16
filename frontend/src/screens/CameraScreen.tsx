@@ -17,13 +17,17 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { cameraStyles as styles } from './styles/CameraStyles';
-import {
+const {
   Camera,
   useCameraDevice,
   useCameraPermission,
-  PhotoFile,
-  TakePhotoOptions
-} from 'react-native-vision-camera';
+} = Platform.OS === 'web'
+    ? {
+      Camera: ({ children }: any) => <>{children}</>,
+      useCameraDevice: () => null,
+      useCameraPermission: () => ({ hasPermission: true, requestPermission: async () => true }),
+    }
+    : require('react-native-vision-camera');
 import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
 import { artistAnalysisCache } from '../utils/artistAnalysisCache';
 import { ScanlinesEffect, ActionButton } from '../components';

@@ -79,37 +79,39 @@ export default function HomePage({ navigation }: any) {
         contentContainerStyle={{ alignItems: 'center', paddingBottom: spacing.xl }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerSection}>
-          <View style={localStyles.headerRow}>
-            <Typography variant="h0" style={styles.title}>DISCOVER</Typography>
-            <TouchableOpacity
-              style={localStyles.menuButton}
-              onPress={() => setShowMenuDropdown(true)}
-            >
-              <MenuIcon size={24} color={colors.black} />
-            </TouchableOpacity>
+        <View style={styles.contentWrapper}>
+          <View style={styles.headerSection}>
+            <View style={localStyles.headerRow}>
+              <Typography variant="h0" style={styles.title}>DISCOVER</Typography>
+              <TouchableOpacity
+                style={localStyles.menuButton}
+                onPress={() => setShowMenuDropdown(true)}
+              >
+                <MenuIcon size={24} color={colors.black} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.secondaryTitle}>Musee is... </Text>
+            <Text style={[styles.normalText, { alignSelf: 'flex-end' }]}>Your personal collection / your museum guide / your art journey </Text>
           </View>
-          <Text style={styles.secondaryTitle}>Musee is... </Text>
-          <Text style={[styles.normalText, { alignSelf: 'flex-end' }]}>Your personal collection / your museum guide / your art journey </Text>
+
+          <ArtworkPlaceholder
+            onPress={() => navigation.navigate('Camera')}
+            onImportFromAlbum={handleImportFromAlbum}
+            language={language}
+          />
+
+          <TodaysPick
+            picks={picks}
+            isLoading={isPicksLoading}
+            onPickPress={(pick) => {
+              navigation.navigate('ArtworkDetail', {
+                artworkId: pick.id,
+                initialPhotoUri: pick.uri,
+                initialBackgroundColor: pick.backgroundColor,
+              });
+            }}
+          />
         </View>
-
-        <ArtworkPlaceholder
-          onPress={() => navigation.navigate('Camera')}
-          onImportFromAlbum={handleImportFromAlbum}
-          language={language}
-        />
-
-        <TodaysPick
-          picks={picks}
-          isLoading={isPicksLoading}
-          onPickPress={(pick) => {
-            navigation.navigate('ArtworkDetail', {
-              artworkId: pick.id,
-              initialPhotoUri: pick.uri,
-              initialBackgroundColor: pick.backgroundColor,
-            });
-          }}
-        />
 
 
       </ScrollView>

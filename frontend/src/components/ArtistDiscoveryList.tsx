@@ -79,7 +79,7 @@ export const ArtistDiscoveryList: React.FC<ArtistDiscoveryListProps> = ({
                     })}
                 </View>
 
-                {(artworkTags.length > 0 || artworkAnalysis) && (
+                {!!(artworkTags.length > 0 || artworkAnalysis) && (
                     <>
                         <View style={styles.sectionDivider} />
 
@@ -95,7 +95,7 @@ export const ArtistDiscoveryList: React.FC<ArtistDiscoveryListProps> = ({
                             </View>
                         )}
 
-                        {artworkAnalysis && (
+                        {!!artworkAnalysis && (
                             <View style={styles.analysisContainer}>
                                 <ArtworkBite content={artworkAnalysis} />
                             </View>
@@ -104,7 +104,7 @@ export const ArtistDiscoveryList: React.FC<ArtistDiscoveryListProps> = ({
                 )}
             </View>
 
-            {isUnknownArtist && !manualInputSubmitted && (
+            {!!isUnknownArtist && !manualInputSubmitted && (
                 <View style={styles.manualInputPrompt}>
                     <ActionButton label="Manual Input" onPress={onManualInputPress} />
                 </View>

@@ -11,6 +11,12 @@ export const homeStyles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    width: '100%',
+    alignItems: 'center',
+  },
+  contentWrapper: {
+    width: '100%',
+    maxWidth: 600,
     alignItems: 'center',
   },
   // Header Section
@@ -45,8 +51,10 @@ export const homeStyles = StyleSheet.create({
   },
   // Artwork Image Placeholder
   artworkImagePlaceholder: {
-    width: width * 0.85,
-    height: 532,
+    width: '90%',
+    maxWidth: 400,
+    aspectRatio: 3 / 4,
+    height: undefined, // Let aspectRatio take over
     backgroundColor: colors.midGrey,
     borderRadius: 12,
     marginTop: 10,

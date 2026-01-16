@@ -5,7 +5,9 @@
  * The device ID persists across app reinstalls and device backups.
  */
 
+import { Platform } from 'react-native';
 import * as Keychain from 'react-native-keychain';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DEVICE_ID_SERVICE = 'com.musee.deviceId';
 const DEVICE_ID_USERNAME = 'deviceId';
@@ -28,6 +30,15 @@ function generateUUID(): string {
  * @returns Promise<string> The device ID
  */
 export async function getDeviceId(): Promise<string> {
+  if (Platform.OS === 'web') {
+    const webDeviceId = await AsyncStorage.getItem(DEVICE_ID_SERVICE);
+    if (webDeviceId) return webDeviceId;
+
+    const newId = generateUUID();
+    await AsyncStorage.setItem(DEVICE_ID_SERVICE, newId);
+    return newId;
+  }
+
   try {
     // Try to retrieve existing device ID from Keychain
     const credentials = await Keychain.getGenericPassword({
@@ -52,7 +63,7 @@ export async function getDeviceId(): Promise<string> {
       newDeviceId,
       {
         service: DEVICE_ID_SERVICE,
-        accessible: Keychain.ACCESSIBLE.ALWAYS_THIS_DEVICE_ONLY,
+        accessible: Keychain.ACCESSIBLE.ALWAYS,
       }
     );
     console.log('[DeviceID] Saved new device ID to Keychain');
@@ -68,6 +79,11 @@ export async function getDeviceId(): Promise<string> {
  * WARNING: This will clear the device's identification and cannot be undone
  */
 export async function resetDeviceId(): Promise<void> {
+  if (Platform.OS === 'web') {
+    await AsyncStorage.removeItem(DEVICE_ID_SERVICE);
+    return;
+  }
+
   try {
     await Keychain.resetGenericPassword({ service: DEVICE_ID_SERVICE });
     console.log('[DeviceID] Device ID has been reset');

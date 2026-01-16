@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 import { colors } from './colors';
 
 // Typography scale
@@ -74,6 +74,7 @@ export const shadows = {
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    ...(Platform.OS === 'web' && { boxShadow: '0px 2px 4px rgba(0,0,0,0.1)' }),
   },
   md: {
     shadowColor: '#000',
@@ -81,6 +82,7 @@ export const shadows = {
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
+    ...(Platform.OS === 'web' && { boxShadow: '0px 4px 8px rgba(0,0,0,0.15)' }),
   },
   lg: {
     shadowColor: '#000',
@@ -88,6 +90,7 @@ export const shadows = {
     shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 10,
+    ...(Platform.OS === 'web' && { boxShadow: '0px 10px 10px rgba(0,0,0,0.25)' }),
   },
   xl: {
     shadowColor: '#000',
@@ -95,6 +98,7 @@ export const shadows = {
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 10,
+    ...(Platform.OS === 'web' && { boxShadow: '0px 10px 10px rgba(0,0,0,0.3)' }),
   },
   cardDarkShadow: {
     shadowColor: 'rgba(13, 39, 80, 0.25)',
@@ -102,6 +106,7 @@ export const shadows = {
     shadowOpacity: 1,
     shadowRadius: 10,
     elevation: 8,
+    ...(Platform.OS === 'web' && { boxShadow: '10px 10px 10px rgba(13, 39, 80, 0.25)' }),
   },
   cardLightShadow: {
     shadowColor: 'rgb(255, 255, 255, 0.85)',
@@ -109,6 +114,7 @@ export const shadows = {
     shadowOpacity: 1,
     shadowRadius: 10,
     elevation: 8,
+    ...(Platform.OS === 'web' && { boxShadow: '-10px -10px 10px rgba(255, 255, 255, 0.85)' }),
   },
 };
 

@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
-import ImageResizer from '@bam.tech/react-native-image-resizer';
-import RNFS from 'react-native-fs';
+const ImageResizer = Platform.OS === 'web' ? null : require('@bam.tech/react-native-image-resizer').default;
+const RNFS = Platform.OS === 'web' ? null : require('react-native-fs');
 
 interface CompressImageOptions {
   maxWidth?: number;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, FlatList, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, FlatList, Image, Dimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius, shadows } from '../constants/theme';
@@ -96,71 +96,73 @@ export default function CollectionsScreen({ navigation }: any) {
             contentContainerStyle={styles.collectionsContent}
             showsVerticalScrollIndicator={false}
         >
-            {collections.map((collection, index) => (
-                <View key={collection.id} style={styles.collectionRowContainer}>
-                    <View style={styles.collectionHeaderRow}>
-                        <View style={styles.titleWithCount}>
-                            <Text style={styles.prefixText}>
-                                {(index + 40).toString().padStart(3, '0')}
-                            </Text>
-                            <Typography style={styles.rowTitle}>
-                                {collection.name.toUpperCase()}
-                            </Typography>
-                            <Typography style={styles.rowItemCount}>
-                                {collection.artwork_count}
-                            </Typography>
-                        </View>
-                        <TouchableOpacity
-                            onPress={() => {
-                                navigation.navigate('CollectionDetail', {
-                                    collectionId: collection.id,
-                                    collectionName: collection.name
-                                });
-                            }}
-                            activeOpacity={0.7}
-                            style={styles.seeAllButton}
-                        >
-                            <Typography style={styles.seeAllText}>→</Typography>
-                        </TouchableOpacity>
-                    </View>
-
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.horizontalListContent}
-                        style={styles.horizontalScrollView}
-                    >
-                        {(collection.artworks || []).map((item) => (
-                            <View key={item.id} style={{ alignItems: 'center' }}>
-                                <HistoryGridItem
-                                    item={{
-                                        id: item.id,
-                                        uri: normalizeImageUri(item.photo_uri),
-                                        artistName: item.artist_name,
-                                        artworkName: item.artwork_name,
-                                        backgroundColor: item.background_color,
-                                        isRecognized: Number(item.is_recognized) === 1,
-                                    }}
-                                    itemWidth={100}
-                                    hideMetadata={true}
-                                    isDeleting={false}
-                                    onConfirmDelete={() => { }}
-                                    onLongPress={() => { }}
-                                    onPress={() => {
-                                        const allIds = collection.artworks?.map(a => a.id) || [];
-                                        navigation.navigate('ArtworkDetail', {
-                                            artworkId: item.id,
-                                            initialPhotoUri: item.photo_uri,
-                                            initialBackgroundColor: item.background_color,
-                                            artworkIds: allIds,
-                                        });
-                                    }}
-                                />
+            <View style={homeStyles.contentWrapper}>
+                {collections.map((collection, index) => (
+                    <View key={collection.id} style={styles.collectionRowContainer}>
+                        <View style={styles.collectionHeaderRow}>
+                            <View style={styles.titleWithCount}>
+                                <Text style={styles.prefixText}>
+                                    {(index + 40).toString().padStart(3, '0')}
+                                </Text>
+                                <Typography style={styles.rowTitle}>
+                                    {collection.name.toUpperCase()}
+                                </Typography>
+                                <Typography style={styles.rowItemCount}>
+                                    {collection.artwork_count}
+                                </Typography>
                             </View>
-                        ))}
-                    </ScrollView>
-                </View>
-            ))}
+                            <TouchableOpacity
+                                onPress={() => {
+                                    navigation.navigate('CollectionDetail', {
+                                        collectionId: collection.id,
+                                        collectionName: collection.name
+                                    });
+                                }}
+                                activeOpacity={0.7}
+                                style={styles.seeAllButton}
+                            >
+                                <Typography style={styles.seeAllText}>→</Typography>
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.horizontalListContent}
+                            style={styles.horizontalScrollView}
+                        >
+                            {(collection.artworks || []).map((item) => (
+                                <View key={item.id} style={{ alignItems: 'center' }}>
+                                    <HistoryGridItem
+                                        item={{
+                                            id: item.id,
+                                            uri: normalizeImageUri(item.photo_uri),
+                                            artistName: item.artist_name,
+                                            artworkName: item.artwork_name,
+                                            backgroundColor: item.background_color,
+                                            isRecognized: Number(item.is_recognized) === 1,
+                                        }}
+                                        itemWidth={100}
+                                        hideMetadata={true}
+                                        isDeleting={false}
+                                        onConfirmDelete={() => { }}
+                                        onLongPress={() => { }}
+                                        onPress={() => {
+                                            const allIds = collection.artworks?.map(a => a.id) || [];
+                                            navigation.navigate('ArtworkDetail', {
+                                                artworkId: item.id,
+                                                initialPhotoUri: item.photo_uri,
+                                                initialBackgroundColor: item.background_color,
+                                                artworkIds: allIds,
+                                            });
+                                        }}
+                                    />
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </View>
+                ))}
+            </View>
         </ScrollView>
     );
 
@@ -282,7 +284,8 @@ export default function CollectionsScreen({ navigation }: any) {
     );
 }
 
-const { width } = Dimensions.get('window');
+const { width: windowWidth } = Dimensions.get('window');
+const width = Math.min(windowWidth, 600);
 const GRID_PADDING = spacing.base;
 const ARTWORK_SIZE = (width - (GRID_PADDING * 4)) / 3;
 

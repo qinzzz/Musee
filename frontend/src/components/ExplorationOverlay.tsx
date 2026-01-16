@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native';
-import { BlurView } from '@react-native-community/blur';
+import { BlurView } from 'expo-blur';
 import { Typography, Heading2, LoadingProgressBar, ActionButton, TopicChip, ArtworkBite } from './index';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius } from '../constants/theme';
@@ -39,9 +39,8 @@ export const ExplorationOverlay: React.FC<ExplorationOverlayProps> = ({
             <View style={styles.explorationOverlay}>
                 <BlurView
                     style={styles.explorationContent}
-                    blurType="ultraThinMaterialLight"
-                    blurAmount={10}
-                    reducedTransparencyFallbackColor={colors.white}
+                    intensity={80}
+                    tint="light"
                 >
                     <View style={styles.explorationHeader}>
                         <Heading2>Explore this piece</Heading2>

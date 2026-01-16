@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Dimensions, Platform } from 'react-native';
 import { colors } from '../constants/colors';
 import { spacing, borderRadius, shadows } from '../constants/theme';
 import { TodaysPickItem } from '../hooks/useTodaysPick';
@@ -10,7 +10,8 @@ interface TodaysPickProps {
     onPickPress: (pick: TodaysPickItem) => void;
 }
 
-const { width } = Dimensions.get('window');
+const { width: windowWidth } = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(windowWidth, 480) : windowWidth;
 const ITEM_SIZE = (width - spacing.lg * 3) / 2.5;
 
 export const TodaysPick: React.FC<TodaysPickProps> = ({ picks, isLoading, onPickPress }) => {

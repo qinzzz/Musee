@@ -21,8 +21,13 @@ import {
   ExplorationOverlay
 } from '../components';
 import { spacing, borderRadius, shadows } from '../constants/theme';
-import { removeBackground } from 'react-native-background-remover';
-import { getColors } from 'react-native-image-colors';
+const { removeBackground } = Platform.OS === 'web'
+  ? { removeBackground: async () => ({ uri: '' }) }
+  : require('react-native-background-remover');
+
+const { getColors } = Platform.OS === 'web'
+  ? { getColors: async () => ({ platform: 'web', background: '#ffffff', detail: '#000000', primary: '#cccccc', secondary: '#999999' }) }
+  : require('react-native-image-colors');
 import { softenColor } from '../utils/colorUtils';
 import { savedArtworkApiService, ColorPalette } from '../services/savedArtworkApi';
 import { artworkSummaryCache } from '../utils/artworkSummaryCache';
