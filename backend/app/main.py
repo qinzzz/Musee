@@ -83,21 +83,20 @@ app = FastAPI(
     redoc_url="/redoc" if settings.debug else None
 )
 
-# Configure CORS
-origins = [
+allowed_origins = [
     "https://musee-web.vercel.app",
-    "https://musee.qinzzz.com",
-    "http://localhost:5173",
     "http://localhost:3000",
-    "*", # Keep wildcard but usually overridden by specific origins if credentials=True
+    "http://localhost:5173",
 ]
 
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers
@@ -107,10 +106,14 @@ app.include_router(collection.router, prefix="/api", tags=["collection"])
 app.include_router(tag.router, prefix="/api", tags=["tag"])
 
 # Mount uploads directory for serving stored images (web clients)
-uploads_path = os.path.join(os.getcwd(), settings.uploads_dir)
-os.makedirs(uploads_path, exist_ok=True)
-app.mount(f"/{settings.uploads_dir}", StaticFiles(directory=uploads_path), name="uploads")
-logger.info(f"Mounted uploads directory: {uploads_path}")
+# Only if NOT in production, as Vercel has a read-only filesystem
+if settings.env.lower() != "prod":
+    uploads_path = os.path.join(os.getcwd(), settings.uploads_dir)
+    os.makedirs(uploads_path, exist_ok=True)
+    app.mount(f"/{settings.uploads_dir}", StaticFiles(directory=uploads_path), name="uploads")
+    logger.info(f"Mounted uploads directory: {uploads_path}")
+else:
+    logger.info("Skipping uploads directory initialization in production environment (read-only filesystem)")
 
 
 @app.get("/")
