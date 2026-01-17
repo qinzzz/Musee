@@ -8,6 +8,7 @@ export interface ArtworkAnalysisResult {
   tags: string[];
   model_used: string;
   artwork_id?: string;  // Returned if user_id was provided
+  photo_uri?: string;   // Server path to stored image (web clients)
 }
 
 /**
@@ -24,6 +25,7 @@ export async function analyzeArtwork(
 ): Promise<ArtworkAnalysisResult> {
   const formData = new FormData();
   formData.append('image', imageFile);
+  formData.append('client_type', 'web');  // Tell backend to store image on server
 
   if (userId) {
     formData.append('user_id', userId);
@@ -64,10 +66,15 @@ export async function analyzeArtwork(
       const parsed = JSON.parse(jsonStr);
       console.log('Parsed analysis:', parsed);
 
-      // Handle array format from backend (first item has artist info, second has analysis/tags)
-      if (Array.isArray(parsed)) {
-        const artistInfo = parsed[0] || {};
-        const analysisInfo = parsed[1] || {};
+      // Handle array format from backend
+      // Structure: [artistGuess1, artistGuess2, ..., {analysis, tags}]
+      // First items have artist_name/artwork_name/score, last item has analysis/tags
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Find the best artist guess (first item with artist_name, usually highest score)
+        const artistInfo = parsed.find((item: any) => item.artist_name && item.score !== undefined) || parsed[0] || {};
+
+        // Find the analysis info (item with 'analysis' and 'tags' properties)
+        const analysisInfo = parsed.find((item: any) => item.analysis !== undefined) || {};
 
         // Parse tags from comma-separated string
         let tags: string[] = [];
@@ -75,13 +82,18 @@ export async function analyzeArtwork(
           tags = analysisInfo.tags.split(',').map((t: string) => `#${t.trim().toLowerCase().replace(/\s+/g, '-')}`);
         }
 
+        // Prefer parsed values over backend's top-level values (which may be defaults)
+        const artist_name = artistInfo.artist_name || data.artist_name || 'Unknown Artist';
+        const artwork_name = artistInfo.artwork_name || data.artwork_name || 'Untitled';
+
         return {
-          artist_name: data.artist_name || artistInfo.artist_name || 'Unknown Artist',
-          artwork_name: data.artwork_name || artistInfo.artwork_name || 'Untitled',
+          artist_name,
+          artwork_name,
           description: analysisInfo.analysis || '',
           tags: tags,
           model_used: data.model_used || 'unknown',
           artwork_id: data.artwork_id,
+          photo_uri: data.photo_uri,
         };
       }
 
@@ -110,7 +122,144 @@ export async function analyzeArtwork(
     tags: tags,
     model_used: data.model_used || 'unknown',
     artwork_id: data.artwork_id,
+    photo_uri: data.photo_uri,
   };
+}
+
+/**
+ * Metrics from streaming analysis
+ */
+export interface StreamingMetrics {
+  request_id: string;
+  timings: {
+    image_processing_ms: number;
+    time_to_ai_call_ms: number | null;
+    time_to_first_chunk_ms: number | null;
+    ai_first_chunk_latency_ms: number | null;
+    streaming_duration_ms: number | null;
+    total_duration_ms: number;
+  };
+  model: string;
+}
+
+/**
+ * Streaming artwork analysis using SSE (Server-Sent Events)
+ * Provides real-time text updates as the AI generates the analysis
+ *
+ * @param imageFile - The image file to analyze
+ * @param userId - Optional user ID to save artwork to DB
+ * @param onChunk - Callback for each text chunk received
+ * @param onComplete - Callback when analysis is complete with full result
+ * @param onError - Callback for errors
+ * @param onMetrics - Optional callback for timing metrics (for Vercel Speed Insights)
+ */
+export async function analyzeArtworkStream(
+  imageFile: File,
+  userId: string | undefined,
+  onChunk: (text: string) => void,
+  onComplete: (result: ArtworkAnalysisResult) => void,
+  onError: (error: Error) => void,
+  onMetrics?: (metrics: StreamingMetrics) => void
+): Promise<void> {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+  formData.append('client_type', 'web');
+
+  if (userId) {
+    formData.append('user_id', userId);
+  }
+
+  console.log('Starting streaming analysis to:', `${API_BASE_URL}/artwork-analyze-stream`);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/artwork-analyze-stream`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error (${response.status}): ${errorText}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Response body is not readable');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Process complete SSE events (separated by \n\n)
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || ''; // Keep incomplete event in buffer
+
+      for (const event of events) {
+        if (!event.trim()) continue;
+
+        const lines = event.split('\n');
+        let eventType = '';
+        let eventData = '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7);
+          } else if (line.startsWith('data: ')) {
+            eventData = line.slice(6);
+          }
+        }
+
+        if (!eventData) continue;
+
+        try {
+          const data = JSON.parse(eventData);
+
+          if (eventType === 'chunk' && data.type === 'text') {
+            onChunk(data.content);
+          } else if (eventType === 'complete' && data.type === 'result') {
+            // Parse tags from comma-separated string
+            let tags: string[] = [];
+            if (data.tags) {
+              tags = data.tags.split(',').map((t: string) =>
+                `#${t.trim().toLowerCase().replace(/\s+/g, '-')}`
+              );
+            }
+
+            const result: ArtworkAnalysisResult = {
+              artist_name: data.artist_name || 'Unknown Artist',
+              artwork_name: data.artwork_name || 'Untitled',
+              description: data.description || '',
+              tags: tags,
+              model_used: data.model_used || 'unknown',
+              artwork_id: data.artwork_id,
+              photo_uri: data.photo_uri,
+            };
+
+            onComplete(result);
+          } else if (eventType === 'metrics' && data.type === 'metrics') {
+            // Handle metrics event
+            console.log('Streaming metrics:', data);
+            if (onMetrics) {
+              onMetrics(data as StreamingMetrics);
+            }
+          } else if (eventType === 'error') {
+            throw new Error(data.message || 'Unknown streaming error');
+          }
+        } catch (parseError) {
+          console.error('Failed to parse SSE event:', parseError, eventData);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Streaming analysis failed:', error);
+    onError(error instanceof Error ? error : new Error(String(error)));
+  }
 }
 
 export interface ChatMessage {
@@ -169,10 +318,19 @@ export async function chatWithArtwork(
     formData.append('conversation_history', JSON.stringify(historyForBackend));
   }
   if (imageFile) {
-    formData.append('image', imageFile);
+    console.log('Image file being sent:', {
+      name: imageFile.name,
+      size: imageFile.size,
+      type: imageFile.type
+    });
+    if (imageFile.size > 0) {
+      formData.append('image', imageFile);
+    } else {
+      console.warn('Image file is empty, not sending');
+    }
   }
 
-  console.log('Sending chat request:', { query, artworkId, artistName, artworkName });
+  console.log('Sending chat request:', { query, artworkId, artistName, artworkName, hasImage: !!imageFile && imageFile.size > 0 });
 
   const response = await fetch(`${API_BASE_URL}/artwork-chat`, {
     method: 'POST',
@@ -194,11 +352,27 @@ export async function chatWithArtwork(
  * Convert a base64 data URL to a File object
  */
 export function base64ToFile(base64: string, filename: string = 'image.jpg'): File {
+  if (!base64 || !base64.includes(',')) {
+    console.error('Invalid base64 data URL format');
+    throw new Error('Invalid base64 data URL format');
+  }
+
   const arr = base64.split(',');
+  if (arr.length < 2 || !arr[1]) {
+    console.error('Base64 data URL missing content');
+    throw new Error('Base64 data URL missing content');
+  }
+
   const mimeMatch = arr[0].match(/:(.*?);/);
   const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
+  console.log('base64ToFile: MIME type detected:', mime);
+
   const bstr = atob(arr[1]);
   let n = bstr.length;
+
+  console.log('base64ToFile: Decoded length:', n, 'bytes');
+
   const u8arr = new Uint8Array(n);
   while (n--) {
     u8arr[n] = bstr.charCodeAt(n);

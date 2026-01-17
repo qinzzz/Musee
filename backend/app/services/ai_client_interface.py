@@ -4,7 +4,7 @@ These clients only handle the actual API calls to external LLM providers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, AsyncGenerator
 from app.models.artwork import AIProvider
 
 
@@ -116,4 +116,26 @@ class AIClientInterface(ABC):
     @abstractmethod
     def get_model_name(self) -> str:
         """Return the model name being used"""
+        pass
+
+    @abstractmethod
+    async def stream_with_image_and_text(
+        self,
+        prompt: str,
+        image_data: Any,
+        max_tokens: int,
+        temperature: float
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream API call with image and text prompt
+
+        Args:
+            prompt: Text prompt
+            image_data: Provider-specific image format (base64 string, PIL Image, etc.)
+            max_tokens: Maximum tokens for response
+            temperature: Temperature parameter
+
+        Yields:
+            str: Text chunks as they arrive from the API
+        """
         pass

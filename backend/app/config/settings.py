@@ -1,9 +1,29 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 import os
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Determine env file path - prefer project root .env.development.local
+def _find_env_file() -> str:
+    """Find the best env file to use."""
+    # When running from backend/, the project root is ../
+    possible_paths = [
+        Path(".env"),
+        Path("../.env.development.local"),  # Project root (preferred)
+        Path("../.env.local"),
+        Path("../.env"),
+    ]
+
+    for path in possible_paths:
+        if path.exists():
+            logger.info(f"Using env file: {path.resolve()}")
+            return str(path)
+
+    logger.warning("No .env file found")
+    return ".env"
 
 
 class Settings(BaseSettings):
@@ -41,8 +61,11 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = True
 
-    # File Upload
+    # File Upload & Storage
     max_file_size_mb: int = 10
+    uploads_dir: str = "uploads"  # Directory for local storage
+    storage_type: str = "local"   # "local" or "vercel_blob"
+    blob_read_write_token: Optional[str] = None  # Vercel Blob token
 
     # Security
     secret_key: str = "your-secret-key-change-this-in-production"
@@ -52,13 +75,20 @@ class Settings(BaseSettings):
     # PhotoRoom API
     photoroom_api_key: Optional[str] = None
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        # Load from multiple env files - later ones override earlier ones
+        env_file=("../.env", "../.env.local", "../.env.development.local", ".env"),
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",  # Ignore extra fields in env file
+    )
 
+
+# Find and log which env file is being used
+_env_file = _find_env_file()
 
 # Global settings instance
-settings = Settings()
+settings = Settings(_env_file=_env_file)
 
 
 def get_ai_provider(requested_model: Optional[str] = None) -> str:

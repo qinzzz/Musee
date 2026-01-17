@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { GalleryItem, ViewMode, NeighborItem, Message, Visit, TagCoordinate, Annotation } from './types';
-import { analyzeArtwork } from './apiService';
+import { analyzeArtworkStream, ArtworkAnalysisResult, StreamingMetrics } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
 import TopographyView from './components/TopographyView';
@@ -10,6 +10,38 @@ import Controls from './components/Controls';
 import InterpretationModal from './components/InterpretationModal';
 import ExhibitionHall from './components/ExhibitionHall';
 import EmptyWall from './components/EmptyWall';
+
+// Helper to report metrics (can integrate with @vercel/speed-insights or custom analytics)
+const reportStreamingMetrics = (metrics: StreamingMetrics) => {
+  console.log('=== Streaming Analysis Metrics ===');
+  console.log(`Request ID: ${metrics.request_id}`);
+  console.log(`Model: ${metrics.model}`);
+  console.log(`Image Processing: ${metrics.timings.image_processing_ms}ms`);
+  console.log(`Time to AI Call: ${metrics.timings.time_to_ai_call_ms}ms`);
+  console.log(`Time to First Chunk: ${metrics.timings.time_to_first_chunk_ms}ms`);
+  console.log(`AI First Chunk Latency: ${metrics.timings.ai_first_chunk_latency_ms}ms`);
+  console.log(`Streaming Duration: ${metrics.timings.streaming_duration_ms}ms`);
+  console.log(`Total Duration: ${metrics.timings.total_duration_ms}ms`);
+  console.log('==================================');
+
+  // If @vercel/speed-insights is installed, report custom metrics:
+  // import { track } from '@vercel/speed-insights';
+  // track('artwork-analysis', {
+  //   ttfc: metrics.timings.time_to_first_chunk_ms,
+  //   total: metrics.timings.total_duration_ms,
+  //   model: metrics.model
+  // });
+
+  // Or send to Google Analytics if available
+  if (typeof window !== 'undefined' && (window as any).gtag) {
+    (window as any).gtag('event', 'artwork_analysis_timing', {
+      event_category: 'performance',
+      time_to_first_chunk: metrics.timings.time_to_first_chunk_ms,
+      total_duration: metrics.timings.total_duration_ms,
+      model: metrics.model
+    });
+  }
+};
 
 const downscaleImage = (dataUrl: string, maxWidth = 1600): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -194,79 +226,120 @@ const App: React.FC = () => {
         id: newItemId,
         conversation: [],
         annotations: [],
-        isAnalyzing: true  // Loading state
+        isAnalyzing: true,  // Loading state
+        streamingText: ''   // Track streaming text
       });
 
-      // Now call the API
-      console.log('Calling backend API with file:', file.name, file.size, 'bytes');
+      // Now call the streaming API
+      console.log('Starting streaming analysis for file:', file.name, file.size, 'bytes');
       setIsAnalyzing(true);
 
-      try {
-        const analysis = await analyzeArtwork(file, DEMO_USER_ID);
-        console.log('Analysis result:', analysis);
+      // Track the accumulated streaming text
+      let accumulatedText = '';
 
-        // Convert tags array to keywords format (with #)
-        const keywords = analysis.tags.map((tag: string) =>
-          tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
-        );
+      // Helper to extract just the "analysis" field content from partial JSON
+      const extractAnalysisText = (text: string): string => {
+        // Look for "analysis": "..." pattern and extract the content
+        const analysisMatch = text.match(/"analysis"\s*:\s*"([\s\S]*?)(?:"|$)/);
+        if (analysisMatch) {
+          // Unescape JSON string escapes
+          return analysisMatch[1]
+            .replace(/\\n/g, '\n')
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, '\\');
+        }
+        return '';
+      };
 
-        // Generate random coordinates for tags
-        const newTagPositions: Record<string, TagCoordinate> = { ...tagPositions };
-        keywords.forEach((tag: string) => {
-          if (!newTagPositions[tag]) {
-            newTagPositions[tag] = {
-              x: (Math.random() * 2 - 1),
-              y: (Math.random() * 2 - 1)
-            };
-          }
-        });
-        setTagPositions(newTagPositions);
+      await analyzeArtworkStream(
+        file,
+        DEMO_USER_ID,
+        // onChunk - called for each text chunk
+        (chunk: string) => {
+          accumulatedText += chunk;
+          // Extract only the analysis text for display
+          const analysisOnly = extractAnalysisText(accumulatedText);
+          // Update the modal with streaming text (still analyzing)
+          setInterpretingItem(prev => prev ? {
+            ...prev,
+            streamingText: analysisOnly,
+            isAnalyzing: true
+          } : null);
+        },
+        // onComplete - called when analysis is complete
+        (analysis: ArtworkAnalysisResult) => {
+          console.log('Streaming analysis complete:', analysis);
 
-        // Create the full gallery item
-        const newItem: GalleryItem = {
-          id: newItemId,
-          url: base64,
-          keywords: keywords,
-          vibe: {
-            backgroundColor: '#ffffff',
-            padding: 4,
-            borderRadius: '12px',
-            borderType: 'solid',
-            accentColor: '#000000'
-          },
-          timestamp: Date.now(),
-          conversation: [],
-          annotations: [],
-          visitId: visit.active ? visit.id : undefined,
-          artistName: analysis.artist_name,
-          artworkName: analysis.artwork_name,
-          description: analysis.description,
-          artworkId: analysis.artwork_id
-        };
+          // Convert tags array to keywords format (with #)
+          const keywords = analysis.tags.map((tag: string) =>
+            tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
+          );
 
-        // Add to items list
-        setItems(prev => [...prev, newItem]);
-        if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+          // Generate random coordinates for tags
+          const newTagPositions: Record<string, TagCoordinate> = { ...tagPositions };
+          keywords.forEach((tag: string) => {
+            if (!newTagPositions[tag]) {
+              newTagPositions[tag] = {
+                x: (Math.random() * 2 - 1),
+                y: (Math.random() * 2 - 1)
+              };
+            }
+          });
+          setTagPositions(newTagPositions);
 
-        // Update the modal with analysis results (no longer loading)
-        setInterpretingItem({
-          url: base64,
-          id: newItemId,
-          conversation: [],
-          annotations: [],
-          artistName: analysis.artist_name,
-          artworkName: analysis.artwork_name,
-          description: analysis.description,
-          keywords: keywords,
-          artworkId: analysis.artwork_id,
-          isAnalyzing: false
-        });
+          // Create the full gallery item
+          const newItem: GalleryItem = {
+            id: newItemId,
+            url: base64,
+            keywords: keywords,
+            vibe: {
+              backgroundColor: '#ffffff',
+              padding: 4,
+              borderRadius: '12px',
+              borderType: 'solid',
+              accentColor: '#000000'
+            },
+            timestamp: Date.now(),
+            conversation: [],
+            annotations: [],
+            visitId: visit.active ? visit.id : undefined,
+            artistName: analysis.artist_name,
+            artworkName: analysis.artwork_name,
+            description: analysis.description,
+            artworkId: analysis.artwork_id
+          };
 
-      } catch (err: any) {
-        console.error(`Failed to analyze ${file.name}:`, err.message || err);
-        // Update modal to show error state
-        setInterpretingItem(prev => prev ? { ...prev, isAnalyzing: false } : null);
-      }
+          // Add to items list
+          setItems(prev => [...prev, newItem]);
+          if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+
+          // Update the modal with final analysis results (no longer loading)
+          setInterpretingItem({
+            url: base64,
+            id: newItemId,
+            conversation: [],
+            annotations: [],
+            artistName: analysis.artist_name,
+            artworkName: analysis.artwork_name,
+            description: analysis.description,
+            keywords: keywords,
+            artworkId: analysis.artwork_id,
+            isAnalyzing: false,
+            streamingText: undefined
+          });
+
+          setIsAnalyzing(false);
+        },
+        // onError - called on error
+        (error: Error) => {
+          console.error(`Failed to analyze ${file.name}:`, error.message);
+          // Update modal to show error state
+          setInterpretingItem(prev => prev ? { ...prev, isAnalyzing: false, streamingText: undefined } : null);
+          setIsAnalyzing(false);
+        },
+        // onMetrics - called with timing metrics
+        reportStreamingMetrics
+      );
 
       // Scroll to the last item added
       setTimeout(() => {
@@ -277,8 +350,8 @@ const App: React.FC = () => {
 
     } catch (error) {
       console.error("File upload failed:", error);
-    } finally {
       setIsAnalyzing(false);
+    } finally {
       event.target.value = '';
     }
   };

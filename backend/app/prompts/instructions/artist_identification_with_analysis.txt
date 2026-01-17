@@ -22,6 +22,10 @@ Respond with ONLY valid JSON, no additional text. Use this exact structure:
 
 [
   {
+    "analysis": "As a museum narrator, tell me more about the artwork. (you can use markdown syntax here)",
+    "tags": "pop art, late 90s, dadaism"
+  },
+  {
     "artist_name": "Artist Name 1",
     "artwork_name": "Artwork name 1",
     "score": 8,
@@ -38,9 +42,5 @@ Respond with ONLY valid JSON, no additional text. Use this exact structure:
     "artwork_name": "Artwork name 3",
     "score": 4,
     "reason": "Brief reason for attribution"
-  },
-  {
-    "analysis": "As a museum narrator, tell me more about the artwork. (you can use markdown syntax here)",
-    "tags": "pop art, late 90s, dadaism"
   }
 ]

@@ -1,8 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 import logging
 import sys
+import os
 
 from app.config.settings import settings
 from app.routers import artwork, users, collection, tag
@@ -61,6 +63,8 @@ if settings.use_database:
     import re
     masked_url = re.sub(r'://([^:]+):([^@]+)@', r'://\1:****@', db_url)
     logger.info(f"DATABASE: {masked_url}")
+logger.info(f"STORAGE: {settings.storage_type}")
+logger.info("Token: Vercel Blob read-write token configured" if settings.blob_read_write_token else "Token not found. Using local filesystem")
 logger.info(f"=" * 50)
 
 # Initialize database only if enabled
@@ -93,6 +97,12 @@ app.include_router(artwork.router, prefix="/api", tags=["artwork"])
 app.include_router(users.router, prefix="/api", tags=["users"])
 app.include_router(collection.router, prefix="/api", tags=["collection"])
 app.include_router(tag.router, prefix="/api", tags=["tag"])
+
+# Mount uploads directory for serving stored images (web clients)
+uploads_path = os.path.join(os.getcwd(), settings.uploads_dir)
+os.makedirs(uploads_path, exist_ok=True)
+app.mount(f"/{settings.uploads_dir}", StaticFiles(directory=uploads_path), name="uploads")
+logger.info(f"Mounted uploads directory: {uploads_path}")
 
 
 @app.get("/")

@@ -25,4 +25,4 @@ Provide a concise, and insightful piece of information specific to this artwork.
 - Write in a warm, conversational tone as if sharing with a friend
 
 # Output Format
-Return ONLY a short title and the bite-sized information, no additional text, no introduction, no conclusion.
+Return ONLY a short title and the bite-sized information, no additional text, no introduction, no conclusion. Do not use JSON format.

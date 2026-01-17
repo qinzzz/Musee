@@ -101,7 +101,7 @@ export async function analyzeAesthetic(
 
   return callWithRetry(async () => {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: {
         parts: [
           imagePart,
@@ -245,7 +245,7 @@ async function decodeAudioData(
 export async function defineAestheticTerm(tag: string): Promise<{ definition: string, externalResonances: string[] }> {
   return callWithRetry(async () => {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: `Explain the aesthetic concept of "${tag}". Provide a concise, poetic definition and 3 examples of famous art movements, architects, or designers associated with this style. Return as JSON.`,
       config: {
         responseMimeType: "application/json",
@@ -270,7 +270,7 @@ export async function defineAestheticTerm(tag: string): Promise<{ definition: st
 export async function chatWithArt(imageUrl: string, history: Message[], newMessage: string): Promise<string> {
   const imagePart = await getImagePart(imageUrl);
   const chat = ai.chats.create({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     history: history.map(m => ({
       role: m.role,
       parts: [{ text: m.text }]
@@ -292,7 +292,7 @@ export async function chatWithExhibition(items: GalleryItem[], history: Message[
   const summary = items.map(item => `- Item (keywords: ${item.keywords.join(', ')})`).join('\n');
 
   const chat: Chat = ai.chats.create({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     history: history.map(m => ({
       role: m.role,
       parts: [{ text: m.text }]
@@ -324,7 +324,7 @@ export async function getSuggestions(imageUrl: string): Promise<string[]> {
   const imagePart = await getImagePart(imageUrl);
   return callWithRetry(async () => {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: {
         parts: [
           imagePart,

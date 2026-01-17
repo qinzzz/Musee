@@ -51,6 +51,8 @@ venv/
 
 # Backend
 backend/.env
+backend/.env.*
+!backend/.env.example
 backend/musee.db
 backend/uploads/*
 !backend/uploads/.gitkeep
@@ -58,5 +60,7 @@ backend/uploads/*
 # Environment
 .env
 .env.local
+.env.development.local
 .vercel
 logo/
+.env.*!.env.example

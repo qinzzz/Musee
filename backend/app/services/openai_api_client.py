@@ -4,7 +4,7 @@ All business logic, prompt loading, and request construction is handled by AISer
 """
 
 import base64
-from typing import Optional, Any
+from typing import Optional, Any, AsyncGenerator
 from openai import AsyncOpenAI
 from app.services.ai_client_interface import AIClientInterface
 from app.models.artwork import AIProvider
@@ -162,3 +162,42 @@ class OpenAIAPIClient(AIClientInterface):
 
     def get_model_name(self) -> str:
         return self.model
+
+    async def stream_with_image_and_text(
+        self,
+        prompt: str,
+        image_data: Any,
+        max_tokens: int,
+        temperature: float
+    ) -> AsyncGenerator[str, None]:
+        """Stream OpenAI API call with image and text"""
+        logger.info(f"OpenAI streaming API call: model={self.model}, max_tokens={max_tokens}")
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_data}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                stream=True,
+                **self._get_common_params()
+            )
+            async for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        except Exception as e:
+            raise Exception(f"OpenAI streaming API error: {str(e)}")

@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 import json
 import logging
+import re
+import time
 from datetime import datetime
 
 from app.database.connection import get_db
@@ -15,6 +17,7 @@ from app.services.claude_api_client import ClaudeAPIClient
 from app.services.gemini_api_client import GeminiAPIClient
 from app.services.photoroom_service import photoroom_service
 from app.utils.image_processing import process_image
+from app.services.storage import get_storage_service, StorageFactory
 from app.config.settings import settings
 from app.utils.conversation_storage import ConversationMessage
 
@@ -127,6 +130,7 @@ async def analyze_artist(
     language: Optional[str] = Form(None),
     user_id: Optional[str] = Form(None),
     photo_uri: Optional[str] = Form(None),
+    client_type: Optional[str] = Form(None),  # "web" or "ios" - helps determine storage strategy
     db: Session = Depends(get_db)
 ):
     """
@@ -137,7 +141,8 @@ async def analyze_artist(
     - **identity**: AI identity/persona
     - **language**: Language code for response
     - **user_id**: If provided, saves artwork to DB and returns artwork_id
-    - **photo_uri**: URI/path for the photo (required if user_id is provided)
+    - **photo_uri**: URI/path for the photo (iOS clients provide local path)
+    - **client_type**: "web" or "ios" - web clients will have images stored on server
     """
     ai_provider = determine_ai_provider(model)
 
@@ -172,22 +177,49 @@ async def analyze_artist(
             # Try to parse the analysis JSON
             try:
                 import re
+                json_str = analysis_text
+
                 # Extract JSON from markdown code blocks if present
                 json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', analysis_text)
                 if json_match:
                     json_str = json_match.group(1).strip()
-                    parsed = json.loads(json_str)
-                    if isinstance(parsed, list) and len(parsed) > 0:
-                        artist_name = parsed[0].get('artist_name', artist_name)
-                        artwork_name = parsed[0].get('artwork_name', artwork_name)
-                        if len(parsed) > 1 and parsed[1].get('tags'):
-                            tags_str = parsed[1].get('tags', '')
-            except (json.JSONDecodeError, KeyError, IndexError) as e:
+
+                parsed = json.loads(json_str)
+
+                # Handle array format: [artistGuess1, artistGuess2, ..., {analysis, tags}]
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    # Find best artist guess (first item with artist_name and score)
+                    artist_info = next(
+                        (item for item in parsed if isinstance(item, dict) and 'artist_name' in item and 'score' in item),
+                        parsed[0] if isinstance(parsed[0], dict) else {}
+                    )
+                    artist_name = artist_info.get('artist_name', artist_name)
+                    artwork_name = artist_info.get('artwork_name', artwork_name)
+
+                    # Find analysis info (item with 'analysis' and 'tags')
+                    analysis_info = next(
+                        (item for item in parsed if isinstance(item, dict) and 'analysis' in item),
+                        {}
+                    )
+                    tags_str = analysis_info.get('tags', '')
+
+                    logger.info(f"Parsed artwork: {artist_name} - {artwork_name}, tags: {tags_str}")
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 logger.warning(f"Failed to parse analysis for DB save: {e}")
 
-            # Generate photo_uri if not provided
-            import uuid
-            generated_photo_uri = photo_uri or f"artwork_{uuid.uuid4().hex[:12]}"
+            # Generate photo_uri based on client type
+            if photo_uri:
+                # iOS client provided local path
+                generated_photo_uri = photo_uri
+            elif client_type == "web" or not photo_uri:
+                # Web client or no photo_uri - save image using configured storage
+                storage = get_storage_service()
+                generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
+                logger.info(f"Saved web upload to: {generated_photo_uri}")
+            else:
+                # Fallback: generate placeholder URI
+                import uuid as uuid_mod
+                generated_photo_uri = f"artwork_{uuid_mod.uuid4().hex[:12]}"
 
             # Create artwork record
             saved_artwork = SavedArtwork(
@@ -211,6 +243,7 @@ async def analyze_artist(
             response["artwork_id"] = str(saved_artwork.id)
             response["artist_name"] = artist_name
             response["artwork_name"] = artwork_name
+            response["photo_uri"] = generated_photo_uri  # For web clients, this is the server path
 
         return response
 
@@ -220,6 +253,217 @@ async def analyze_artist(
         if "API error" in str(e):
             raise HTTPException(status_code=503, detail=str(e))
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@router.post("/artwork-analyze-stream")
+async def analyze_artist_stream(
+    image: UploadFile = File(...),
+    model: Optional[AIProvider] = Form(None),
+    identity: Optional[str] = Form("default"),
+    language: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    photo_uri: Optional[str] = Form(None),
+    client_type: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Stream artwork analysis with SSE (Server-Sent Events)
+
+    Returns streaming text chunks as 'chunk' events, followed by a 'complete' event
+    with the full result including artwork_id if user_id was provided.
+
+    SSE Format:
+    - event: chunk, data: {"type": "text", "content": "..."}
+    - event: complete, data: {"type": "result", "artist_name": "...", ...}
+    - event: metrics, data: {"type": "metrics", ...}
+    """
+    # TIMING: Request received
+    t_request_received = time.time()
+    request_id = f"stream_{int(t_request_received * 1000)}"
+    logger.info(f"[{request_id}] METRIC: request_received")
+
+    ai_provider = determine_ai_provider(model)
+
+    try:
+        image_bytes = await process_image(image)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
+
+    # TIMING: Image processed
+    t_image_processed = time.time()
+    logger.info(f"[{request_id}] METRIC: image_processed, elapsed={(t_image_processed - t_request_received)*1000:.0f}ms")
+
+    async def event_generator():
+        nonlocal t_request_received, t_image_processed, request_id
+
+        full_text = ""
+        ai_service = AIServiceFactory.get_service(ai_provider)
+        first_chunk_received = False
+        t_ai_call = None
+        t_first_chunk = None
+        t_streaming_done = None
+
+        try:
+            # TIMING: Call AI service
+            t_ai_call = time.time()
+            logger.info(f"[{request_id}] METRIC: ai_service_called, elapsed={(t_ai_call - t_request_received)*1000:.0f}ms")
+
+            # Stream the analysis text
+            async for chunk in ai_service.identify_artist_stream(
+                image_bytes, identity=identity, language=language
+            ):
+                # TIMING: First chunk received
+                if not first_chunk_received:
+                    t_first_chunk = time.time()
+                    first_chunk_received = True
+                    time_to_first_chunk = (t_first_chunk - t_ai_call) * 1000
+                    logger.info(f"[{request_id}] METRIC: first_chunk_received, ttfc={time_to_first_chunk:.0f}ms, total_elapsed={(t_first_chunk - t_request_received)*1000:.0f}ms")
+
+                full_text += chunk
+                # Send chunk as SSE event
+                event_data = json.dumps({"type": "text", "content": chunk})
+                yield f"event: chunk\ndata: {event_data}\n\n"
+
+            # TIMING: Streaming finished
+            t_streaming_done = time.time()
+            streaming_duration = (t_streaming_done - t_first_chunk) * 1000 if t_first_chunk else 0
+            logger.info(f"[{request_id}] METRIC: streaming_finished, streaming_duration={streaming_duration:.0f}ms, total_elapsed={(t_streaming_done - t_request_received)*1000:.0f}ms")
+
+            # Parse the full response to extract metadata
+            artist_name = "Unknown Artist"
+            artwork_name = "Untitled"
+            tags_str = ""
+            description = ""
+
+            try:
+                json_str = full_text
+
+                # Extract JSON from markdown code blocks if present
+                json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', full_text)
+                if json_match:
+                    json_str = json_match.group(1).strip()
+
+                parsed = json.loads(json_str)
+
+                # Handle array format: [artistGuess1, artistGuess2, ..., {analysis, tags}]
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    # Find best artist guess
+                    artist_info = next(
+                        (item for item in parsed if isinstance(item, dict) and 'artist_name' in item and 'score' in item),
+                        parsed[0] if isinstance(parsed[0], dict) else {}
+                    )
+                    artist_name = artist_info.get('artist_name', artist_name)
+                    artwork_name = artist_info.get('artwork_name', artwork_name)
+
+                    # Find analysis info
+                    analysis_info = next(
+                        (item for item in parsed if isinstance(item, dict) and 'analysis' in item),
+                        {}
+                    )
+                    tags_str = analysis_info.get('tags', '')
+                    description = analysis_info.get('analysis', '')
+
+                    logger.info(f"[{request_id}] Parsed streaming artwork: {artist_name} - {artwork_name}")
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+                logger.warning(f"[{request_id}] Failed to parse streaming analysis: {e}")
+
+            # Build result
+            result = {
+                "type": "result",
+                "artist_name": artist_name,
+                "artwork_name": artwork_name,
+                "description": description,
+                "tags": tags_str,
+                "analysis": full_text,
+                "model_used": ai_provider.value
+            }
+
+            # If user_id provided, save to DB
+            if user_id:
+                try:
+                    # Ensure user exists
+                    user = db.query(User).filter(User.user_id == user_id).first()
+                    if not user:
+                        user = User(user_id=user_id, device_id=user_id)
+                        db.add(user)
+                        db.flush()
+                        logger.info(f"Auto-created user: {user_id}")
+
+                    # Generate photo_uri based on client type
+                    if photo_uri:
+                        generated_photo_uri = photo_uri
+                    elif client_type == "web" or not photo_uri:
+                        storage = get_storage_service()
+                        generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
+                        logger.info(f"Saved web upload to: {generated_photo_uri}")
+                    else:
+                        import uuid as uuid_mod
+                        generated_photo_uri = f"artwork_{uuid_mod.uuid4().hex[:12]}"
+
+                    # Create artwork record
+                    saved_artwork = SavedArtwork(
+                        photo_uri=generated_photo_uri,
+                        artist_name=artist_name,
+                        artwork_name=artwork_name,
+                        user_id=user_id,
+                        is_recognized=1 if artist_name != "Unknown Artist" else 0,
+                        analysis=full_text
+                    )
+                    db.add(saved_artwork)
+
+                    # Link tags if parsed
+                    if tags_str:
+                        db.flush()
+                        batch_link_tags(db, saved_artwork, tags_str)
+
+                    db.commit()
+                    db.refresh(saved_artwork)
+
+                    result["artwork_id"] = str(saved_artwork.id)
+                    result["photo_uri"] = generated_photo_uri
+                except Exception as e:
+                    logger.error(f"Failed to save artwork to DB: {e}")
+                    db.rollback()
+
+            # Send complete event
+            yield f"event: complete\ndata: {json.dumps(result)}\n\n"
+
+            # TIMING: Request finished
+            t_request_done = time.time()
+            total_duration = (t_request_done - t_request_received) * 1000
+            logger.info(f"[{request_id}] METRIC: request_finished, total_duration={total_duration:.0f}ms")
+
+            # Build and send metrics event for frontend consumption
+            metrics = {
+                "type": "metrics",
+                "request_id": request_id,
+                "timings": {
+                    "image_processing_ms": round((t_image_processed - t_request_received) * 1000),
+                    "time_to_ai_call_ms": round((t_ai_call - t_request_received) * 1000) if t_ai_call else None,
+                    "time_to_first_chunk_ms": round((t_first_chunk - t_request_received) * 1000) if t_first_chunk else None,
+                    "ai_first_chunk_latency_ms": round((t_first_chunk - t_ai_call) * 1000) if t_first_chunk and t_ai_call else None,
+                    "streaming_duration_ms": round((t_streaming_done - t_first_chunk) * 1000) if t_streaming_done and t_first_chunk else None,
+                    "total_duration_ms": round(total_duration)
+                },
+                "model": ai_provider.value
+            }
+            logger.info(f"[{request_id}] METRIC_SUMMARY: {json.dumps(metrics['timings'])}")
+            yield f"event: metrics\ndata: {json.dumps(metrics)}\n\n"
+
+        except Exception as e:
+            logger.error(f"[{request_id}] Streaming error: {str(e)}", exc_info=True)
+            error_data = json.dumps({"type": "error", "message": str(e)})
+            yield f"event: error\ndata: {error_data}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @router.post("/artwork-chat")
@@ -257,6 +501,13 @@ async def analyze_bite(
     try:
         user_message = query or "Tell me more about this artwork."
 
+        # Fail if both image and artwork_id are missing
+        if not image and not artwork_id:
+            raise HTTPException(
+                status_code=400, 
+                detail="Must provide either an image or an artwork_id (session context)"
+            )
+
         image_bytes = None
         if image:
             image_bytes = await process_image(image)
@@ -286,6 +537,20 @@ async def analyze_bite(
                 ConversationMessage(role=c.role, content=c.content)
                 for c in conversations
             ]
+
+            # Load image from storage if not provided in request
+            if not image_bytes and artwork.photo_uri:
+                try:
+                    # Find the appropriate storage service for this URI
+                    storage = StorageFactory.get_service_for_uri(artwork.photo_uri)
+                    if storage:
+                        image_bytes = await storage.load(artwork.photo_uri)
+                        logger.info(f"Loaded image from storage: {artwork.photo_uri}")
+                    else:
+                        # For iOS local paths, we can't load on server
+                        logger.warning(f"Cannot load image - no storage handler for URI: {artwork.photo_uri}")
+                except Exception as e:
+                    logger.error(f"Failed to load image from storage {artwork.photo_uri}: {e}")
 
             # Get next sequence number
             next_seq = len(conversations)

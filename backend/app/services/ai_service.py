@@ -4,7 +4,7 @@ This service handles all common logic (prompt loading, image encoding, request c
 and delegates only the actual API calls to provider-specific clients.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, AsyncGenerator
 import json
 from app.models.artwork import AIProvider
 from app.utils.prompt_loader import (
@@ -142,6 +142,38 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         )
 
         return response
+
+    async def identify_artist_stream(
+        self,
+        image_bytes: bytes,
+        identity: str = "default",
+        language: Optional[str] = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream identify the artist and artwork details
+
+        Args:
+            image_bytes: Raw image data
+            identity: AI identity/persona to use
+            language: Language code for response
+
+        Yields:
+            str: Text chunks as they arrive
+        """
+        # Prepare image in provider-specific format
+        image_data = self.ai_client.prepare_image(image_bytes)
+
+        # Load prompt
+        prompt = get_artist_identification_prompt_v2(identity, language=language)
+
+        # Stream API through client
+        async for chunk in self.ai_client.stream_with_image_and_text(
+            prompt=prompt,
+            image_data=image_data,
+            max_tokens=2000,
+            temperature=0.7
+        ):
+            yield chunk
 
     async def get_artwork_bite(
         self,

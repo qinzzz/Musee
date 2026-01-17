@@ -4,7 +4,7 @@ All business logic, prompt loading, and request construction is handled by AISer
 """
 
 import base64
-from typing import Optional, Any
+from typing import Optional, Any, AsyncGenerator
 from anthropic import AsyncAnthropic
 from app.services.ai_client_interface import AIClientInterface
 from app.models.artwork import AIProvider
@@ -155,3 +155,41 @@ class ClaudeAPIClient(AIClientInterface):
 
     def get_model_name(self) -> str:
         return self.model
+
+    async def stream_with_image_and_text(
+        self,
+        prompt: str,
+        image_data: Any,
+        max_tokens: int,
+        temperature: float
+    ) -> AsyncGenerator[str, None]:
+        """Stream Claude API call with image and text"""
+        try:
+            async with self.client.messages.stream(
+                model=self.model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": image_data
+                                }
+                            }
+                        ]
+                    }
+                ]
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield text
+        except Exception as e:
+            raise Exception(f"Claude streaming API error: {str(e)}")

@@ -16,6 +16,7 @@ interface Props {
     keywords?: string[];
     artworkId?: string;  // Backend DB artwork ID for persistent conversations
     isAnalyzing?: boolean;  // Loading state while analyzing
+    streamingText?: string;  // Real-time streaming text during analysis
   };
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
@@ -146,10 +147,25 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setIsTyping(true);
 
     try {
-      // Convert base64 URL to File for the API (only needed if no artworkId)
+      // Convert image URL to File for the API
       let imageFile: File | undefined;
-      if (!item.artworkId && item.url.startsWith('data:')) {
+      console.log('Image URL type:', item.url.substring(0, 50) + '...');
+
+      if (item.url.startsWith('data:')) {
         imageFile = base64ToFile(item.url, 'artwork.jpg');
+        console.log('Created file from base64:', { size: imageFile.size, type: imageFile.type });
+      } else if (item.url.startsWith('blob:')) {
+        // Handle blob URLs - fetch and convert to File
+        try {
+          const response = await fetch(item.url);
+          const blob = await response.blob();
+          imageFile = new File([blob], 'artwork.jpg', { type: blob.type || 'image/jpeg' });
+          console.log('Created file from blob:', { size: imageFile.size, type: imageFile.type });
+        } catch (e) {
+          console.error('Failed to fetch blob URL:', e);
+        }
+      } else {
+        console.log('Unsupported URL type, not sending image');
       }
 
       // Use artworkId mode if available (DB-backed, reliable)
@@ -193,34 +209,46 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setAnnotationInput('');
   };
 
-  // Calculate modal dimensions based on image aspect ratio
-  // For portrait images: taller modal, for landscape: wider modal
+  // Calculate modal dimensions based on image aspect ratio and screen size
   const getModalStyle = () => {
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    const isMobile = viewportWidth < 640; // sm breakpoint
+
+    if (!imageLoaded) {
+      // Loading placeholder - responsive
+      if (isMobile) {
+        return { width: '95vw', height: '90vh' };
+      }
+      return { width: '600px', height: '400px' };
+    }
+
+    // Mobile: full screen modal with vertical layout
+    if (isMobile) {
+      return {
+        width: '95vw',
+        height: '90vh',
+      };
+    }
+
+    // Desktop: side-by-side layout, size based on image
     const maxHeight = 85; // vh
     const maxWidth = 90; // vw
     const chatPanelWidth = 380; // px - fixed width for chat panel
 
-    if (!imageLoaded) {
-      return { width: '600px', height: '400px' }; // Loading placeholder
-    }
-
-    // Calculate image display size that fits within constraints
-    const viewportHeight = window.innerHeight;
-    const viewportWidth = window.innerWidth;
-    const maxImageHeight = (maxHeight / 100) * viewportHeight - 64; // minus padding
+    const maxImageHeight = (maxHeight / 100) * viewportHeight - 64;
     const maxImageWidth = (maxWidth / 100) * viewportWidth - chatPanelWidth - 64;
 
     let imageHeight = maxImageHeight;
     let imageWidth = imageHeight * imageAspect;
 
-    // If image width exceeds max, scale down
     if (imageWidth > maxImageWidth) {
       imageWidth = maxImageWidth;
       imageHeight = imageWidth / imageAspect;
     }
 
-    const totalWidth = imageWidth + chatPanelWidth + 64; // image + chat + padding
-    const totalHeight = imageHeight + 64; // image + padding
+    const totalWidth = imageWidth + chatPanelWidth + 64;
+    const totalHeight = imageHeight + 64;
 
     return {
       width: `${Math.min(totalWidth, (maxWidth / 100) * viewportWidth)}px`,
@@ -229,7 +257,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 sm:p-12">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-12">
       <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xl" onClick={onClose} />
 
       {/* Loading spinner */}
@@ -241,23 +269,23 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
       )}
 
       <div
-        className={`relative bg-white rounded-[2rem] shadow-2xl overflow-hidden flex flex-col sm:flex-row animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`relative bg-white rounded-2xl sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col sm:flex-row animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         style={getModalStyle()}
       >
         {/* Visual Reference & Annotation Canvas */}
-        <div className="flex-1 bg-neutral-50 flex items-center justify-center p-8 overflow-hidden relative group/canvas">
-          <div className="relative inline-block cursor-crosshair">
+        <div className="h-[40vh] sm:h-auto sm:flex-1 bg-neutral-50 flex items-center justify-center p-4 sm:p-8 overflow-hidden relative group/canvas shrink-0">
+          <div className="relative inline-block cursor-crosshair max-h-full">
             <img
               ref={imageRef}
               src={item.url}
               onClick={handleImageClick}
-              className="max-w-full max-h-full object-contain shadow-xl rounded-lg"
+              className="max-w-full max-h-[35vh] sm:max-h-full object-contain shadow-xl rounded-lg"
               alt="Interpretation target"
             />
-            
+
             {/* Existing Annotations */}
             {item.annotations.map(an => (
-              <div 
+              <div
                 key={an.id}
                 className="absolute group/an -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
                 style={{ left: `${an.x}%`, top: `${an.y}%` }}
@@ -271,7 +299,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
             {/* New Annotation Indicator */}
             {newAnnotationPos && (
-              <div 
+              <div
                 className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
                 style={{ left: `${newAnnotationPos.x}%`, top: `${newAnnotationPos.y}%` }}
               >
@@ -295,32 +323,43 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               </div>
             )}
           </div>
-          <div className="absolute bottom-8 left-8 text-[9px] tracking-[0.4em] uppercase text-neutral-300 pointer-events-none">
+          <div className="hidden sm:block absolute bottom-8 left-8 text-[9px] tracking-[0.4em] uppercase text-neutral-300 pointer-events-none">
             Click to Annotate Area of Interest
           </div>
         </div>
 
         {/* Chat Interface */}
-        <div className="w-full sm:w-[380px] flex flex-col h-full bg-white border-l border-neutral-100 shrink-0">
-          <div className="p-6 border-b border-neutral-50 flex justify-between items-center">
-            <h3 className="text-[10px] tracking-[0.5em] uppercase text-neutral-400 font-bold">Spatial Dialogue</h3>
+        <div className="flex-1 sm:flex-none w-full sm:w-[380px] flex flex-col bg-white border-t sm:border-t-0 sm:border-l border-neutral-100 shrink-0 min-h-0">
+          <div className="p-4 sm:p-6 border-b border-neutral-50 flex justify-between items-center shrink-0">
+            <h3 className="text-[9px] sm:text-[10px] tracking-[0.4em] sm:tracking-[0.5em] uppercase text-neutral-400 font-bold">curator dialogue</h3>
             <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-xl">✕</button>
           </div>
 
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
-            {/* Loading State while analyzing */}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0">
+            {/* Loading State while analyzing - shows streaming text */}
             {item.isAnalyzing && (
-              <div className="flex flex-col items-center justify-center py-16 space-y-6">
-                <div className="relative">
-                  <div className="w-16 h-16 border-2 border-neutral-100 rounded-full"></div>
-                  <div className="absolute inset-0 w-16 h-16 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
+              <div className="pb-6 border-b border-neutral-100 space-y-4">
+                <div className="flex items-center space-x-3">
+                  <div className="relative shrink-0">
+                    <div className="w-8 h-8 border-2 border-neutral-100 rounded-full"></div>
+                    <div className="absolute inset-0 w-8 h-8 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
+                  </div>
+                  <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 font-bold">
+                    Analyzing Artwork
+                  </p>
                 </div>
-                <div className="text-center space-y-2">
-                  <p className="text-[10px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Analyzing Artwork</p>
+                {item.streamingText ? (
+                  <div className="text-[12px] leading-relaxed text-neutral-600 font-serif animate-in fade-in duration-300">
+                    <ReactMarkdown components={markdownComponents}>
+                      {item.streamingText}
+                    </ReactMarkdown>
+                    <span className="inline-block w-2 h-4 bg-neutral-400 animate-pulse ml-0.5"></span>
+                  </div>
+                ) : (
                   <p className="text-[11px] text-neutral-400 italic font-serif">
                     The curator is examining your piece...
                   </p>
-                </div>
+                )}
               </div>
             )}
 
@@ -372,11 +411,10 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             )}
             {messages.map((m, idx) => (
               <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-4 text-[13px] leading-relaxed tracking-wide ${
-                  m.role === 'user' 
-                  ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-none' 
-                  : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-none font-serif'
-                }`}>
+                <div className={`max-w-[85%] p-4 text-[13px] leading-relaxed tracking-wide ${m.role === 'user'
+                    ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-none'
+                    : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-none font-serif'
+                  }`}>
                   {m.text}
                 </div>
               </div>
@@ -398,7 +436,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !item.isAnalyzing && handleSend(input)}
-                placeholder={item.isAnalyzing ? "Analyzing artwork..." : "Consult the architectural void..."}
+                placeholder={item.isAnalyzing ? "Analyzing artwork..." : "ask anything..."}
                 disabled={item.isAnalyzing}
                 className={`flex-1 text-[13px] bg-neutral-50 p-3 px-5 rounded-full outline-none focus:ring-1 focus:ring-neutral-200 transition-all border border-neutral-100 ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
               />

@@ -5,7 +5,7 @@ All business logic, prompt loading, and request construction is handled by AISer
 
 from google import genai
 from google.genai import types
-from typing import Optional, Any
+from typing import Optional, Any, AsyncGenerator
 from PIL import Image
 import io
 from app.services.ai_client_interface import AIClientInterface
@@ -31,9 +31,9 @@ class GeminiAPIClient(AIClientInterface):
         else:
             logger.info(f"Gemini using default model: {self.model_name}")
 
-    def prepare_image(self, image_bytes: bytes) -> Image.Image:
-        """Prepare image as PIL Image for Gemini"""
-        return Image.open(io.BytesIO(image_bytes))
+    def prepare_image(self, image_bytes: bytes) -> bytes:
+        """Pass image bytes directly for Gemini"""
+        return image_bytes
 
     async def call_with_image_and_text(
         self,
@@ -48,9 +48,13 @@ class GeminiAPIClient(AIClientInterface):
         try:
             response = await self.client.aio.models.generate_content(
                 model=self.model_name,
-                contents=[prompt, image_data],
+                contents=[
+                    prompt, 
+                    types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
+                ],
                 config=types.GenerateContentConfig(
-                    temperature=temperature
+                    temperature=temperature,
+                    response_mime_type="application/json"
                 )
             )
 
@@ -98,7 +102,8 @@ class GeminiAPIClient(AIClientInterface):
                 model=self.model_name,
                 contents=messages,  # Pass the prepared content list
                 config=types.GenerateContentConfig(
-                    temperature=temperature
+                    temperature=temperature,
+                    response_mime_type="application/json"
                 )
             )
 
@@ -144,7 +149,8 @@ class GeminiAPIClient(AIClientInterface):
                 model=self.model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=temperature
+                    temperature=temperature,
+                    response_mime_type="application/json"
                 )
             )
 
@@ -194,54 +200,36 @@ class GeminiAPIClient(AIClientInterface):
         
         # Gemini doesn't have a system role, so we use an initial user/model exchange
         # to set the context and instructions
-        contents.append({
-            "role": "user",
-            "parts": [
-                {"text": initial_prompt}
-            ]
-        })
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=initial_prompt)]
+        ))
         
         # Now add the image with the actual analysis request
-        # Convert PIL Image to base64 for Gemini's multi-turn format
-        import base64
-        import io
-        
-        # Convert PIL Image to bytes
-        img_byte_arr = io.BytesIO()
-        image_data.save(img_byte_arr, format='JPEG')
-        img_byte_arr = img_byte_arr.getvalue()
-        
-        # Encode to base64
-        img_base64 = base64.b64encode(img_byte_arr).decode('utf-8')
-        
-        contents.append({
-            "role": "user",
-            "parts": [
-                {"text": "Here is the artwork to analyze:"},
-                {
-                    "inline_data": {
-                        "mime_type": "image/jpeg",
-                        "data": img_base64
-                    }
-                }
+        # image_data is now bytes
+        contents.append(types.Content(
+            role="user",
+            parts=[
+                types.Part.from_text(text="Here is the artwork to analyze:"),
+                types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
             ]
-        })
+        ))
         
         # Add previous conversation messages if available
         if previous_messages:
             for msg in previous_messages:
                 # Map roles: "user" stays "user", "assistant" becomes "model" for Gemini
                 role = "model" if msg.role == "assistant" else "user"
-                contents.append({
-                    "role": role,
-                    "parts": [{"text": msg.content}]
-                })
+                contents.append(types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=msg.content)]
+                ))
         
         # Add current question as the latest user message
-        contents.append({
-            "role": "user",
-            "parts": [{"text": current_question}]
-        })
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=current_question)]
+        ))
         
         return contents
 
@@ -250,3 +238,30 @@ class GeminiAPIClient(AIClientInterface):
 
     def get_model_name(self) -> str:
         return self.model_name
+
+    async def stream_with_image_and_text(
+        self,
+        prompt: str,
+        image_data: Any,
+        max_tokens: int,
+        temperature: float
+    ) -> AsyncGenerator[str, None]:
+        """Stream Gemini API call with image and text"""
+        logger.debug(f"Gemini streaming call: {prompt[:100]}...")
+        try:
+            response = await self.client.aio.models.generate_content_stream(
+                model=self.model_name,
+                contents=[
+                    prompt, 
+                    types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
+                ],
+                config=types.GenerateContentConfig(
+                    temperature=temperature,
+                    response_mime_type="application/json"
+                )
+            )
+            async for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            raise Exception(f"Gemini streaming API error: {str(e)}")
