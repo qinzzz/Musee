@@ -83,10 +83,18 @@ app = FastAPI(
     redoc_url="/redoc" if settings.debug else None
 )
 
-# Configure CORS for React Native
+# Configure CORS
+origins = [
+    "https://musee-web.vercel.app",
+    "https://musee.qinzzz.com",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "*", # Keep wildcard but usually overridden by specific origins if credentials=True
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
