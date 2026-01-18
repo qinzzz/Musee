@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Q
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional, List, Union
 import json
 import logging
 import re
@@ -86,16 +86,20 @@ def normalize_tag_name(tag: str) -> str:
     return normalized
 
 
-def batch_link_tags(db: Session, artwork: SavedArtwork, tags_str: str):
-    """Link tags from a comma-separated string to an artwork (batch query)
+def batch_link_tags(db: Session, artwork: SavedArtwork, tags_input: Union[str, List[str]]):
+    """Link tags from a comma-separated string or list to an artwork (batch query)
 
     Tags are global (not user-specific). Creates new tags if they don't exist.
     """
-    if not tags_str:
+    if not tags_input:
         return
 
     # Normalize all tag names
-    tag_names = [normalize_tag_name(t) for t in tags_str.split(',') if t.strip()]
+    if isinstance(tags_input, str):
+        tag_names = [normalize_tag_name(t) for t in tags_input.split(',') if t.strip()]
+    else:
+        tag_names = [normalize_tag_name(t) for t in tags_input if t.strip()]
+        
     if not tag_names:
         return
 
@@ -173,9 +177,10 @@ async def analyze_artist(
             # Parse analysis to extract artist/artwork info
             artist_name = "Unknown Artist"
             artwork_name = "Untitled"
-            tags_str = ""
+            extracted_tags = []
 
             # Try to parse the analysis JSON
+            extracted_analysis = None
             try:
                 import re
                 json_str = analysis_text
@@ -202,11 +207,16 @@ async def analyze_artist(
                         (item for item in parsed if isinstance(item, dict) and 'analysis' in item),
                         {}
                     )
-                    tags_str = analysis_info.get('tags', '')
+                    extracted_tags = analysis_info.get('tags', [])
+                    extracted_analysis = analysis_info.get('analysis', '')
 
-                    logger.info(f"Parsed artwork: {artist_name} - {artwork_name}, tags: {tags_str}")
+                    logger.info(f"Parsed artwork: {artist_name} - {artwork_name}, tags: {extracted_tags}")
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 logger.warning(f"Failed to parse analysis for DB save: {e}")
+
+            # Fallback to full text if extraction failed
+            if not extracted_analysis:
+                extracted_analysis = analysis_text
 
             # Generate photo_uri based on client type
             if photo_uri:
@@ -229,14 +239,14 @@ async def analyze_artist(
                 artwork_name=artwork_name,
                 user_id=user_id,
                 is_recognized=1 if artist_name != "Unknown Artist" else 0,
-                analysis=analysis_text
+                analysis=extracted_analysis
             )
             db.add(saved_artwork)
 
             # Link tags if parsed
-            if tags_str:
+            if extracted_tags:
                 db.flush()  # Get the artwork ID
-                batch_link_tags(db, saved_artwork, tags_str)
+                batch_link_tags(db, saved_artwork, extracted_tags)
 
             db.commit()
             db.refresh(saved_artwork)
@@ -361,10 +371,10 @@ async def analyze_artist_stream(
                         (item for item in parsed if isinstance(item, dict) and 'analysis' in item),
                         {}
                     )
-                    tags_str = analysis_info.get('tags', '')
+                    extracted_tags = analysis_info.get('tags', [])
                     description = analysis_info.get('analysis', '')
 
-                    logger.info(f"[{request_id}] Parsed streaming artwork: {artist_name} - {artwork_name}")
+                    logger.info(f"[{request_id}] Parsed streaming artwork: {artist_name} - {artwork_name}, tags: {extracted_tags}")
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 logger.warning(f"[{request_id}] Failed to parse streaming analysis: {e}")
 
@@ -374,7 +384,7 @@ async def analyze_artist_stream(
                 "artist_name": artist_name,
                 "artwork_name": artwork_name,
                 "description": description,
-                "tags": tags_str,
+                "tags": extracted_tags,
                 "analysis": full_text,
                 "model_used": ai_provider.value
             }
@@ -408,14 +418,14 @@ async def analyze_artist_stream(
                         artwork_name=artwork_name,
                         user_id=user_id,
                         is_recognized=1 if artist_name != "Unknown Artist" else 0,
-                        analysis=full_text
+                        analysis=description or full_text  # Store plain text if available
                     )
                     db.add(saved_artwork)
 
                     # Link tags if parsed
-                    if tags_str:
+                    if extracted_tags:
                         db.flush()
-                        batch_link_tags(db, saved_artwork, tags_str)
+                        batch_link_tags(db, saved_artwork, extracted_tags)
 
                     db.commit()
                     db.refresh(saved_artwork)
@@ -1062,7 +1072,7 @@ async def get_artworks(
         artworks = query.order_by(SavedArtwork.created_at.desc()).offset(offset).limit(limit).all()
 
         return {
-            "items": [a.to_dict(include_conversations=False) for a in artworks],
+            "items": [a.to_dict(include_conversations=True) for a in artworks],
             "count": len(artworks),
             "offset": offset,
             "limit": limit

@@ -7,7 +7,9 @@ from app.config.settings import settings
 effective_url = settings.effective_database_url
 engine = create_engine(
     effective_url,
-    connect_args={"check_same_thread": False} if "sqlite" in effective_url else {}
+    connect_args={"check_same_thread": False} if "sqlite" in effective_url else {},
+    pool_pre_ping=True,
+    pool_recycle=300
 )
 
 # Create SessionLocal class

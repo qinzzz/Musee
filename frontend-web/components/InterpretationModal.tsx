@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Message, Annotation } from '../types';
-import { chatWithArtwork, chatWithArtworkStream, base64ToFile, getTagExplanation } from '../apiService';
+import { chatWithArtwork, chatWithArtworkStream, base64ToFile, getTagExplanation, suggestTopics } from '../apiService';
 
 interface Props {
   item: {
@@ -21,6 +21,7 @@ interface Props {
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
   onUpdateAnnotations: (annotations: Annotation[]) => void;
+  onDelete?: (id: string) => void;
 }
 
 // Tag component with explanation tooltip on hover
@@ -38,7 +39,7 @@ const HoverTag: React.FC<{
       setIsLoading(true);
       try {
         const result = await getTagExplanation(tag, artworkId);
-        setExplanation(result.explanation);
+        setExplanation(result);
       } catch (e) {
         console.error('Failed to get tag explanation:', e);
         setExplanation('Unable to load explanation.');
@@ -77,7 +78,7 @@ const HoverTag: React.FC<{
   );
 };
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onDelete }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -85,6 +86,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [annotationInput, setAnnotationInput] = useState('');
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1); // width/height ratio
+  const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [showMetadata, setShowMetadata] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
@@ -137,12 +141,39 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, suggestedTopics]);
+
+  const fetchSuggestions = async (currentMessages: Message[]) => {
+    if (!item.artistName || !item.artworkName) return;
+    setIsSuggesting(true);
+    setSuggestedTopics([]); // Clear existing suggestions immediately
+    try {
+      // Include the initial description if messages are empty to provide context
+      const historyToSuggest = currentMessages.length > 0
+        ? currentMessages
+        : (item.description ? [{ role: 'model', text: item.description }] as Message[] : []);
+
+      const topics = await suggestTopics(item.artistName, item.artworkName, historyToSuggest);
+      setSuggestedTopics(topics);
+    } catch (e) {
+      console.error('Failed to fetch topics:', e);
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
+  // Fetch initial suggestions when analysis is complete or when opening an existing item
+  useEffect(() => {
+    if (!item.isAnalyzing && item.artistName && item.artworkName && suggestedTopics.length === 0) {
+      fetchSuggestions(messages);
+    }
+  }, [item.isAnalyzing, item.artistName, item.artworkName]);
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
     const userMsg: Message = { role: 'user', text };
     setMessages(prev => [...prev, userMsg]);
+    setSuggestedTopics([]); // Hide obsolete suggestions immediately
     setInput('');
     setIsTyping(true);
 
@@ -188,7 +219,11 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         },
         (fullResponse) => {
           // Final response received
+          const updatedMessages: Message[] = [...messages, userMsg, { role: 'model' as const, text: fullResponse }];
           onUpdateConversation(item.id, [userMsg, { role: 'model', text: fullResponse }]);
+
+          // Fetch new suggestions based on the updated conversation
+          fetchSuggestions(updatedMessages);
         },
         (error) => {
           console.error('Chat error:', error);
@@ -254,7 +289,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     // Desktop: side-by-side layout, size based on image
     const maxHeight = 85; // vh
     const maxWidth = 90; // vw
-    const chatPanelWidth = 380; // px - fixed width for chat panel
+    const chatPanelWidth = 500; // px - fixed width for chat panel (increased from 380)
 
     const maxImageHeight = (maxHeight / 100) * viewportHeight - 64;
     const maxImageWidth = (maxWidth / 100) * viewportWidth - chatPanelWidth - 64;
@@ -342,6 +377,91 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 </div>
               </div>
             )}
+
+            {/* Overlay Toggle Button */}
+            {!item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMetadata(!showMetadata);
+                }}
+                className={`absolute top-6 left-6 z-20 w-8 h-8 rounded-full border border-white/20 flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-lg ${showMetadata
+                    ? 'bg-neutral-900/10 text-neutral-800'
+                    : 'bg-white/80 text-neutral-900'
+                  }`}
+                title={showMetadata ? "Hide Details" : "Show Details"}
+              >
+                {showMetadata ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                )}
+              </button>
+            )}
+
+            {/* Metadata Overlay Card */}
+            {showMetadata && !item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
+              <div className="absolute inset-4 sm:inset-10 bg-white/90 backdrop-blur-md p-6 sm:p-10 rounded-2xl shadow-2xl border border-white/20 overflow-y-auto z-10 invisible sm:visible scrollbar-hide animate-in zoom-in-95 duration-500">
+                <div className="space-y-8">
+                  {item.artistName && (
+                    <div>
+                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Artist</p>
+                      <p className="text-[18px] font-medium text-neutral-900 tracking-tight leading-tight">{item.artistName}</p>
+                    </div>
+                  )}
+                  {item.artworkName && (
+                    <div>
+                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Title</p>
+                      <p className="text-[16px] font-serif italic text-neutral-700 leading-tight">{item.artworkName}</p>
+                    </div>
+                  )}
+                  {item.description && (
+                    <div>
+                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Description</p>
+                      <div className="text-[12px] leading-relaxed text-neutral-600 font-serif">
+                        <ReactMarkdown components={markdownComponents}>
+                          {item.description}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                  {item.keywords && item.keywords.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      {item.keywords.map((tag, idx) => (
+                        <HoverTag
+                          key={idx}
+                          tag={tag}
+                          artworkId={item.artworkId}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Loading/Streaming Overlay for Metadata */}
+            {item.isAnalyzing && (
+              <div className="absolute top-8 left-8 w-72 bg-white/90 backdrop-blur-md p-8 rounded-2xl shadow-2xl border border-white/20 z-10 hidden sm:block animate-in fade-in duration-500">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="relative shrink-0">
+                    <div className="w-6 h-6 border-2 border-neutral-100 rounded-full"></div>
+                    <div className="absolute inset-0 w-6 h-6 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
+                  </div>
+                  <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold">
+                    Analyzing Material
+                  </p>
+                </div>
+                {item.streamingText && (
+                  <div className="text-[11px] leading-relaxed text-neutral-600 font-serif line-clamp-[12]">
+                    <ReactMarkdown components={markdownComponents}>
+                      {item.streamingText}
+                    </ReactMarkdown>
+                    <span className="inline-block w-1.5 h-3 bg-neutral-400 animate-pulse ml-0.5"></span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="hidden sm:block absolute bottom-8 left-8 text-[9px] tracking-[0.4em] uppercase text-neutral-300 pointer-events-none">
             Click to Annotate Area of Interest
@@ -349,81 +469,27 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         </div>
 
         {/* Chat Interface */}
-        <div className="flex-1 sm:flex-none w-full sm:w-[380px] flex flex-col bg-white border-t sm:border-t-0 sm:border-l border-neutral-100 shrink-0 min-h-0">
+        <div className="flex-1 sm:flex-none w-full sm:w-[500px] flex flex-col bg-white border-t sm:border-t-0 sm:border-l border-neutral-100 shrink-0 min-h-0">
           <div className="p-4 sm:p-6 border-b border-neutral-50 flex justify-between items-center shrink-0">
             <h3 className="text-[9px] sm:text-[10px] tracking-[0.4em] sm:tracking-[0.5em] uppercase text-neutral-400 font-bold">curator dialogue</h3>
-            <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-xl">✕</button>
+            <div className="flex items-center space-x-4">
+              {onDelete && !item.isAnalyzing && (
+                <button
+                  onClick={() => onDelete(item.id)}
+                  className="text-neutral-300 hover:text-red-500 transition-colors"
+                  title="Remove from Musee"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                </button>
+              )}
+              <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-xl">✕</button>
+            </div>
           </div>
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0">
-            {/* Loading State while analyzing - shows streaming text */}
-            {item.isAnalyzing && (
-              <div className="pb-6 border-b border-neutral-100 space-y-4">
-                <div className="flex items-center space-x-3">
-                  <div className="relative shrink-0">
-                    <div className="w-8 h-8 border-2 border-neutral-100 rounded-full"></div>
-                    <div className="absolute inset-0 w-8 h-8 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
-                  </div>
-                  <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-400 font-bold">
-                    Analyzing Artwork
-                  </p>
-                </div>
-                {item.streamingText ? (
-                  <div className="text-[12px] leading-relaxed text-neutral-600 font-serif animate-in fade-in duration-300">
-                    <ReactMarkdown components={markdownComponents}>
-                      {item.streamingText}
-                    </ReactMarkdown>
-                    <span className="inline-block w-2 h-4 bg-neutral-400 animate-pulse ml-0.5"></span>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-neutral-400 italic font-serif">
-                    The curator is examining your piece...
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Artwork Info Section */}
-            {!item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
-              <div className="pb-6 border-b border-neutral-100 space-y-4">
-                {item.artistName && (
-                  <div>
-                    <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 mb-1">Artist</p>
-                    <p className="text-[15px] font-medium text-neutral-800">{item.artistName}</p>
-                  </div>
-                )}
-                {item.artworkName && (
-                  <div>
-                    <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 mb-1">Title</p>
-                    <p className="text-[14px] font-serif italic text-neutral-700">{item.artworkName}</p>
-                  </div>
-                )}
-                {item.description && (
-                  <div>
-                    <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 mb-1">Description</p>
-                    <div className="text-[12px] leading-relaxed text-neutral-600 font-serif">
-                      <ReactMarkdown components={markdownComponents}>
-                        {item.description}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
-                )}
-                {item.keywords && item.keywords.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {item.keywords.map((tag, idx) => (
-                      <HoverTag
-                        key={idx}
-                        tag={tag}
-                        artworkId={item.artworkId}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!item.isAnalyzing && messages.length === 0 && !item.artistName && !item.artworkName && (
-              <div className="text-center py-12">
+            {!item.isAnalyzing && messages.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
+                <div className="w-12 h-px bg-neutral-200 mb-6 font-serif tracking-[0.4em]">...</div>
                 <p className="text-[11px] text-neutral-400 italic mb-4 font-serif leading-relaxed px-8">
                   The curator awaits your spatial and conceptual queries.
                 </p>
@@ -445,6 +511,32 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                   <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce"></div>
                   <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce delay-100"></div>
                   <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce delay-200"></div>
+                </div>
+              </div>
+            )}
+
+            {/* Suggested Topics Chips */}
+            {!item.isAnalyzing && suggestedTopics.length > 0 && !isTyping && (
+              <div className="pt-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <p className="text-[8px] tracking-[0.3em] uppercase text-neutral-300 mb-3 font-bold px-1">Suggested Explorations</p>
+                <div className="flex flex-wrap gap-2">
+                  {suggestedTopics.map((topic, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSend(topic)}
+                      className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-left"
+                    >
+                      {topic}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => fetchSuggestions(messages)}
+                    disabled={isSuggesting}
+                    className="text-[11px] text-neutral-400 p-2 hover:text-neutral-900 transition-colors disabled:opacity-30"
+                    title="Suggest more topics"
+                  >
+                    {isSuggesting ? '...' : '↺'}
+                  </button>
                 </div>
               </div>
             )}

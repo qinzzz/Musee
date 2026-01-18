@@ -8,9 +8,10 @@ interface Props {
   conversation: Message[];
   onClose: () => void;
   onUpdateConversation: (newMessages: Message[]) => void;
+  onDeleteItem?: (id: string) => void;
 }
 
-const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdateConversation }) => {
+const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdateConversation, onDeleteItem }) => {
   const [messages, setMessages] = useState<Message[]>(conversation);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -44,7 +45,7 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 sm:p-12">
       <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-2xl" onClick={onClose} />
-      
+
       <div className="relative w-full max-w-5xl h-[80vh] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500">
         <div className="p-8 border-b border-neutral-50 flex justify-between items-center bg-neutral-50/50">
           <div>
@@ -62,6 +63,18 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
               {items.map(item => (
                 <div key={item.id} className="relative group aspect-[3/4] rounded-lg overflow-hidden bg-white border border-neutral-100 p-1">
                   <img src={item.url} className="w-full h-full object-cover rounded shadow-sm" alt="Thumbnail" />
+                  {onDeleteItem && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteItem(item.id);
+                      }}
+                      className="absolute top-2 right-2 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg hover:scale-110"
+                      title="Remove from exhibition"
+                    >
+                      <span className="text-[10px]">✕</span>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -81,11 +94,10 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
               )}
               {messages.map((m, idx) => (
                 <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[75%] p-6 text-[14px] leading-relaxed tracking-wide ${
-                    m.role === 'user' 
-                    ? 'bg-neutral-900 text-white rounded-[1.5rem] rounded-tr-none shadow-xl' 
+                  <div className={`max-w-[75%] p-6 text-[14px] leading-relaxed tracking-wide ${m.role === 'user'
+                    ? 'bg-neutral-900 text-white rounded-[1.5rem] rounded-tr-none shadow-xl'
                     : 'bg-neutral-50 text-neutral-800 rounded-[1.5rem] rounded-tl-none font-serif border border-neutral-100'
-                  }`}>
+                    }`}>
                     {m.text}
                   </div>
                 </div>
@@ -103,18 +115,18 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
 
             <div className="p-8 bg-white border-t border-neutral-50">
               <div className="flex items-center space-x-4 max-w-3xl mx-auto">
-                <input 
+                <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend(input)}
                   placeholder="Speak to the Lead Curator..."
                   className="flex-1 text-[14px] bg-neutral-50 p-4 px-8 rounded-full outline-none focus:ring-1 focus:ring-neutral-200 transition-all border border-neutral-100"
                 />
-                <button 
+                <button
                   onClick={() => handleSend(input)}
                   className="w-14 h-14 rounded-full bg-neutral-900 text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-transform shadow-lg"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                 </button>
               </div>
             </div>

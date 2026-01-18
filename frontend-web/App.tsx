@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { GalleryItem, ViewMode, NeighborItem, Message, Visit, TagCoordinate, Annotation } from './types';
-import { analyzeArtworkStream, ArtworkAnalysisResult, StreamingMetrics, getOrCreateUserId, fetchUserArtworks, getBaseDomain, resolveImageUrl } from './apiService';
+import { analyzeArtworkStream, ArtworkAnalysisResult, StreamingMetrics, getOrCreateUserId, fetchUserArtworks, getBaseDomain, resolveImageUrl, deleteArtwork } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
 import TopographyView from './components/TopographyView';
@@ -69,6 +69,35 @@ const downscaleImage = (dataUrl: string, maxWidth = 1600): Promise<string> => {
     };
     img.src = dataUrl;
   });
+};
+
+const parseAnalysis = (text: string | null) => {
+  if (!text) return '';
+  const trimmed = text.trim();
+
+  // Try to parse if it looks like JSON (starts with [ or {)
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+
+      // If it's an array, look for 'analysis' in the first element
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        if (parsed[0].analysis) return parsed[0].analysis;
+        // Fallback: if first element is just a string, return it
+        if (typeof parsed[0] === 'string') return parsed[0];
+      }
+      // If it's a single object, look for 'analysis'
+      else if (parsed && typeof parsed === 'object' && parsed.analysis) {
+        return parsed.analysis;
+      }
+    } catch (e) {
+      // Not valid JSON or doesn't match our expected structure, 
+      // fall through to return original text
+      console.warn('Analysis parsing ignored:', e);
+    }
+  }
+
+  return text;
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -162,6 +191,7 @@ const App: React.FC = () => {
         const data = await fetchUserArtworks(USER_ID);
 
         if (data && data.items) {
+          // Map each artwork to the frontend GalleryItem type
           const mappedItems: GalleryItem[] = data.items.map((item: any) => {
             // Resolve image URL
             const imageUrl = resolveImageUrl(item.photo_uri);
@@ -177,10 +207,13 @@ const App: React.FC = () => {
               url: imageUrl,
               artistName: item.artist_name,
               artworkName: item.artwork_name,
-              description: item.analysis,
+              description: parseAnalysis(item.analysis),
               keywords: keywords,
               timestamp: item.created_at ? new Date(item.created_at).getTime() : Date.now(),
-              conversation: [], // Individual conversations can be fetched on-demand in InterpretationModal
+              conversation: (item.conversation_history || []).map((msg: any) => ({
+                role: msg.role === 'assistant' ? 'model' : 'user',
+                text: msg.content
+              })),
               annotations: [],
               vibe: {
                 backgroundColor: '#ffffff',
@@ -385,7 +418,7 @@ const App: React.FC = () => {
             visitId: visit.active ? visit.id : undefined,
             artistName: analysis.artist_name,
             artworkName: analysis.artwork_name,
-            description: analysis.description,
+            description: parseAnalysis(analysis.description),
             artworkId: analysis.artwork_id
           };
 
@@ -401,7 +434,7 @@ const App: React.FC = () => {
             annotations: [],
             artistName: analysis.artist_name,
             artworkName: analysis.artwork_name,
-            description: analysis.description,
+            description: parseAnalysis(analysis.description),
             keywords: keywords,
             artworkId: analysis.artwork_id,
             isAnalyzing: false,
@@ -443,6 +476,31 @@ const App: React.FC = () => {
   const updateItemAnnotations = (id: string, annotations: Annotation[]) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, annotations } : item));
     if (interpretingItem?.id === id) setInterpretingItem(prev => prev ? { ...prev, annotations } : null);
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    if (!window.confirm("Are you sure you want to remove this piece from the Musee? This will permanently delete the analysis and conversation history.")) return;
+
+    try {
+      // Find the item to get its artworkId if it exists
+      const itemToDelete = items.find(item => item.id === id);
+      if (itemToDelete?.artworkId) {
+        await deleteArtwork(itemToDelete.artworkId);
+      }
+
+      // Remove from local items state
+      setItems(prev => prev.filter(item => item.id !== id));
+
+      // If it's being interpreted, close the modal
+      if (interpretingItem?.id === id) {
+        setInterpretingItem(null);
+      }
+
+      console.log(`Successfully deleted artwork: ${id}`);
+    } catch (error) {
+      console.error("Failed to delete artwork:", error);
+      alert("Encountered an error while attempting to remove this piece. Please try again.");
+    }
   };
 
   if (showEntrance) {
@@ -501,7 +559,11 @@ const App: React.FC = () => {
                 ref={isLast ? lastItemRef : null}
                 className={`snap-center shrink-0 transition-all duration-500 ${visit.active && !visit.itemIds.includes(entry.item.id) ? 'opacity-30 grayscale' : 'opacity-100'}`}
               >
-                <GalleryCard item={entry.item} onInterpret={() => setInterpretingItem({ url: entry.item.url, id: entry.item.id, conversation: entry.item.conversation, annotations: entry.item.annotations, artistName: entry.item.artistName, artworkName: entry.item.artworkName, description: entry.item.description, keywords: entry.item.keywords, artworkId: entry.item.artworkId })} />
+                <GalleryCard
+                  item={entry.item}
+                  onInterpret={() => setInterpretingItem({ url: entry.item.url, id: entry.item.id, conversation: entry.item.conversation, annotations: entry.item.annotations, artistName: entry.item.artistName, artworkName: entry.item.artworkName, description: entry.item.description, keywords: entry.item.keywords, artworkId: entry.item.artworkId })}
+                  onDelete={() => handleDeleteItem(entry.item.id)}
+                />
               </div>
             ) : (
               <div
@@ -509,7 +571,11 @@ const App: React.FC = () => {
                 ref={isLast ? lastItemRef : null}
                 className="snap-center shrink-0"
               >
-                <VisitStack items={entry.items} onOpenExhibition={(stackItems) => setExhibitionContext({ items: stackItems, visitId: entry.visitId })} />
+                <VisitStack
+                  items={entry.items}
+                  onOpenExhibition={(stackItems) => setExhibitionContext({ items: stackItems, visitId: entry.visitId })}
+                  onDeleteItem={handleDeleteItem}
+                />
               </div>
             );
           })}
@@ -544,15 +610,17 @@ const App: React.FC = () => {
           onClose={() => setInterpretingItem(null)}
           onUpdateConversation={updateItemConversation}
           onUpdateAnnotations={(ans) => updateItemAnnotations(interpretingItem.id, ans)}
+          onDelete={handleDeleteItem}
         />
       )}
 
       {exhibitionContext && (
         <ExhibitionHall
-          items={exhibitionContext.items}
+          items={items.filter(i => exhibitionContext.visitId ? i.visitId === exhibitionContext.visitId : exhibitionContext.items.map(ci => ci.id).includes(i.id))}
           conversation={visit.globalConversation}
           onClose={() => setExhibitionContext(null)}
           onUpdateConversation={(msgs) => setVisit(prev => ({ ...prev, globalConversation: [...prev.globalConversation, ...msgs] }))}
+          onDeleteItem={handleDeleteItem}
         />
       )}
 

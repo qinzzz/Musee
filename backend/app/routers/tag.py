@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import logging
@@ -81,11 +81,7 @@ async def get_tag_explanation(
 
     if existing_tag and existing_tag.explanation:
         logger.info(f"Found cached explanation for {normalized_tag}")
-        return {
-            "tag": normalized_tag,
-            "explanation": existing_tag.explanation,
-            "from_cache": True
-        }
+        return Response(content=existing_tag.explanation, media_type="text/plain")
 
     # Generate new explanation using LLM
     logger.info(f"Generating new explanation for {normalized_tag}")
@@ -106,11 +102,7 @@ async def get_tag_explanation(
         logger.error(f"Failed to save explanation to DB: {e}")
         # Still return the explanation even if saving failed
 
-    return {
-        "tag": normalized_tag,
-        "explanation": explanation,
-        "from_cache": False
-    }
+    return Response(content=explanation, media_type="text/plain")
 
 
 @router.get("/tags", response_model=List[dict])

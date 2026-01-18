@@ -5,9 +5,10 @@ import { GalleryItem } from '../types';
 interface Props {
   item: GalleryItem;
   onInterpret: () => void;
+  onDelete?: () => void;
 }
 
-const GalleryCard: React.FC<Props> = ({ item, onInterpret }) => {
+const GalleryCard: React.FC<Props> = ({ item, onInterpret, onDelete }) => {
   const { vibe, url, keywords } = item;
   const [imageWidth, setImageWidth] = React.useState<number>(0);
   const imageRef = React.useRef<HTMLImageElement>(null);
@@ -55,6 +56,20 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret }) => {
                 Consult Curator
               </div>
             </button>
+
+            {/* Delete Trigger */}
+            {onDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 backdrop-blur hover:bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all duration-300 z-10 hover:scale-110"
+                title="Remove from Musee"
+              >
+                <span className="text-xs">✕</span>
+              </button>
+            )}
           </div>
 
           {/* AI Insight Metadata - constrained to image width */}

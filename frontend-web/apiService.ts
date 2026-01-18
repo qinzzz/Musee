@@ -1,3 +1,39 @@
+import { Message } from './types';
+
+/**
+ * Suggested topic API endpoint
+ */
+export async function suggestTopics(
+  artistName: string,
+  artworkName: string,
+  conversationHistory: Message[]
+): Promise<string[]> {
+  const formData = new FormData();
+  formData.append('artist_name', artistName);
+  formData.append('artwork_name', artworkName);
+
+  const historyForBackend = conversationHistory.map(msg => ({
+    role: msg.role === 'model' ? 'assistant' : msg.role,
+    content: msg.text
+  }));
+  formData.append('conversation_history', JSON.stringify(historyForBackend));
+
+  console.log('Fetching suggested topics for:', { artistName, artworkName });
+
+  const response = await fetch(`${API_BASE_URL}/suggest-topic`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.warn(`Failed to fetch suggested topics: ${errorText}`);
+    return [];
+  }
+
+  const data: TopicSuggestionResponse = await response.json();
+  return data.suggested_topics || [];
+}
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -317,6 +353,11 @@ export interface ChatResponse {
   model_used: string;
 }
 
+export interface TopicSuggestionResponse {
+  suggested_topics: string[];
+  model_used: string;
+}
+
 /**
  * Chat with the AI about an artwork
  * Two modes:
@@ -541,11 +582,6 @@ export function base64ToFile(base64: string, filename: string = 'image.jpg'): Fi
   return new File([u8arr], filename, { type: mime });
 }
 
-export interface TagExplanationResponse {
-  tag: string;
-  explanation: string;
-  from_cache: boolean;
-}
 
 /**
  * Get an LLM-generated explanation for a tag
@@ -558,7 +594,7 @@ export interface TagExplanationResponse {
 export async function getTagExplanation(
   tag: string,
   artworkId?: string
-): Promise<TagExplanationResponse> {
+): Promise<string> {
   const params = new URLSearchParams({ tag });
   if (artworkId) {
     params.append('artwork_id', artworkId);
@@ -571,7 +607,7 @@ export async function getTagExplanation(
     throw new Error(`API error (${response.status}): ${errorText}`);
   }
 
-  return response.json();
+  return response.text();
 }
 
 /**
@@ -596,3 +632,21 @@ export async function fetchUserArtworks(userId: string): Promise<any> {
   return response.json();
 }
 
+/**
+ * Delete a saved artwork
+ * 
+ * @param artworkId - The ID of the artwork to delete
+ * @returns Status message
+ */
+export async function deleteArtwork(artworkId: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/artworks/${artworkId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}

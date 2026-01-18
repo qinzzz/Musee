@@ -5,9 +5,10 @@ import { GalleryItem } from '../types';
 interface Props {
   items: GalleryItem[];
   onOpenExhibition: (items: GalleryItem[]) => void;
+  onDeleteItem?: (id: string) => void;
 }
 
-const VisitStack: React.FC<Props> = ({ items, onOpenExhibition }) => {
+const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onDeleteItem }) => {
   if (items.length === 0) return null;
 
   // We show up to 3 cards in the stack visually
