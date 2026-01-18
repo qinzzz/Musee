@@ -39,6 +39,7 @@ export interface GalleryItem {
   artworkName?: string;
   description?: string;
   artworkId?: string;  // Backend DB artwork ID for persistent conversations
+  isAnalyzing?: boolean; // Loading state for batch analysis
 }
 
 export interface Visit {

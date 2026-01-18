@@ -41,21 +41,37 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onDelete }) => {
               src={url}
               alt="Gallery item"
               onLoad={handleImageLoad}
-              className="max-h-[60vh] max-w-full w-auto block transition-transform duration-700 group-hover:scale-105 object-contain"
+              className={`max-h-[60vh] max-w-full w-auto block transition-all duration-700 object-contain ${item.isAnalyzing ? 'blur-md opacity-60 scale-95' : 'group-hover:scale-105'
+                }`}
             />
 
-            {/* Interpretation Trigger Overlay */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onInterpret();
-              }}
-              className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity duration-500"
-            >
-              <div className="bg-white/90 backdrop-blur px-6 py-2 rounded-full text-[10px] tracking-[0.4em] uppercase font-bold text-neutral-900 shadow-xl hover:scale-105 transition-transform">
-                Consult Curator
+            {/* Loading Indicator for Batch Analysis */}
+            {item.isAnalyzing && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/10 backdrop-blur-sm z-20">
+                <div className="relative mb-4">
+                  <div className="w-12 h-12 border-4 border-neutral-100/30 rounded-full"></div>
+                  <div className="absolute inset-0 w-12 h-12 border-t-4 border-neutral-800 rounded-full animate-spin"></div>
+                </div>
+                <p className="text-[10px] tracking-[0.4em] uppercase font-bold text-neutral-800 animate-pulse">
+                  Analyzing Piece
+                </p>
               </div>
-            </button>
+            )}
+
+            {/* Interpretation Trigger Overlay */}
+            {!item.isAnalyzing && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInterpret();
+                }}
+                className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity duration-500"
+              >
+                <div className="bg-white/90 backdrop-blur px-6 py-2 rounded-full text-[10px] tracking-[0.4em] uppercase font-bold text-neutral-900 shadow-xl hover:scale-105 transition-transform">
+                  Consult Curator
+                </div>
+              </button>
+            )}
 
             {/* Delete Trigger */}
             {onDelete && (

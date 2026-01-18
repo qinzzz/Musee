@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { GalleryItem, ViewMode, NeighborItem, Message, Visit, TagCoordinate, Annotation } from './types';
-import { analyzeArtworkStream, ArtworkAnalysisResult, StreamingMetrics, getOrCreateUserId, fetchUserArtworks, getBaseDomain, resolveImageUrl, deleteArtwork } from './apiService';
+import { analyzeArtworkStream, analyzeArtwork, ArtworkAnalysisResult, StreamingMetrics, getOrCreateUserId, fetchUserArtworks, getBaseDomain, resolveImageUrl, deleteArtwork } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
 import TopographyView from './components/TopographyView';
@@ -313,160 +313,106 @@ const App: React.FC = () => {
     console.log('Files selected:', files.length);
     if (files.length === 0) return;
 
-    // Process first file immediately to show modal
-    const file = files[0];
-    console.log('Processing file:', file.name, file.size, 'bytes');
+    // Reset input so the same file can be selected again
+    event.target.value = '';
 
-    try {
-      // Read file as base64 for display
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target?.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      console.log('Got base64, opening modal immediately...');
+    // Process each file
+    files.forEach(async (file) => {
+      console.log('Processing file:', file.name, file.size, 'bytes');
 
-      // Create temporary item ID
       const newItemId = Math.random().toString(36).substring(2, 11);
 
-      // Immediately open modal with image and loading state
-      setInterpretingItem({
-        url: base64,
-        id: newItemId,
-        conversation: [],
-        annotations: [],
-        isAnalyzing: true,  // Loading state
-        streamingText: ''   // Track streaming text
-      });
+      try {
+        // Read file as base64 for immediate display in corridor
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
 
-      // Now call the streaming API
-      console.log('Starting streaming analysis for file:', file.name, file.size, 'bytes');
-      setIsAnalyzing(true);
+        // Add placeholder item to exhibition immediately
+        const placeholderItem: GalleryItem = {
+          id: newItemId,
+          url: base64,
+          keywords: [],
+          vibe: {
+            backgroundColor: '#ffffff',
+            padding: 4,
+            borderRadius: '12px',
+            borderType: 'solid',
+            accentColor: '#000000'
+          },
+          timestamp: Date.now(),
+          conversation: [],
+          annotations: [],
+          visitId: visit.active ? visit.id : undefined,
+          isAnalyzing: true
+        };
 
-      // Track the accumulated streaming text
-      let accumulatedText = '';
+        setItems(prev => [...prev, placeholderItem]);
+        if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
 
-      // Helper to extract just the "analysis" field content from partial JSON
-      const extractAnalysisText = (text: string): string => {
-        // Look for "analysis": "..." pattern and extract the content
-        const analysisMatch = text.match(/"analysis"\s*:\s*"([\s\S]*?)(?:"|$)/);
-        if (analysisMatch) {
-          // Unescape JSON string escapes
-          return analysisMatch[1]
-            .replace(/\\n/g, '\n')
-            .replace(/\\"/g, '"')
-            .replace(/\\\\/g, '\\');
-        }
-        return '';
-      };
+        // Call the non-streaming API for batch processing
+        console.log('Starting analysis for file:', file.name);
+        const analysis = await analyzeArtwork(file, USER_ID);
+        console.log('Analysis complete for:', file.name, analysis);
 
-      await analyzeArtworkStream(
-        file,
-        USER_ID,
-        // onChunk - called for each text chunk
-        (chunk: string) => {
-          accumulatedText += chunk;
-          // Extract only the analysis text for display
-          const analysisOnly = extractAnalysisText(accumulatedText);
-          // Update the modal with streaming text (still analyzing)
-          setInterpretingItem(prev => prev ? {
-            ...prev,
-            streamingText: analysisOnly,
-            isAnalyzing: true
-          } : null);
-        },
-        // onComplete - called when analysis is complete
-        (analysis: ArtworkAnalysisResult) => {
-          console.log('Streaming analysis complete:', analysis);
+        // Convert tags array to keywords format (with #)
+        const keywords = analysis.tags.map((tag: string) =>
+          tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
+        );
 
-          // Convert tags array to keywords format (with #)
-          const keywords = analysis.tags.map((tag: string) =>
-            tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
-          );
-
-          // Generate random coordinates for tags
-          const newTagPositions: Record<string, TagCoordinate> = { ...tagPositions };
+        // Update tag positions
+        setTagPositions(prev => {
+          const updated = { ...prev };
           keywords.forEach((tag: string) => {
-            if (!newTagPositions[tag]) {
-              newTagPositions[tag] = {
+            if (!updated[tag]) {
+              updated[tag] = {
                 x: (Math.random() * 2 - 1),
                 y: (Math.random() * 2 - 1)
               };
             }
           });
-          setTagPositions(newTagPositions);
+          return updated;
+        });
 
-          // Resolve backend URL for the corrected image
-          const finalUrl = resolveImageUrl(analysis.photo_uri) || base64;
+        // Resolve backend URL for the corrected image
+        const finalUrl = resolveImageUrl(analysis.photo_uri) || base64;
 
-          // Create the full gallery item
-          const newItem: GalleryItem = {
-            id: newItemId,
-            url: finalUrl,
-            keywords: keywords,
-            vibe: {
-              backgroundColor: '#ffffff',
-              padding: 4,
-              borderRadius: '12px',
-              borderType: 'solid',
-              accentColor: '#000000'
-            },
-            timestamp: Date.now(),
-            conversation: [],
-            annotations: [],
-            visitId: visit.active ? visit.id : undefined,
-            artistName: analysis.artist_name,
-            artworkName: analysis.artwork_name,
-            description: parseAnalysis(analysis.description),
-            artworkId: analysis.artwork_id
-          };
+        // Update the item in the gallery with final results
+        setItems(prev => prev.map(item => item.id === newItemId ? {
+          ...item,
+          url: finalUrl,
+          keywords: keywords,
+          artistName: analysis.artist_name,
+          artworkName: analysis.artwork_name,
+          description: parseAnalysis(analysis.description),
+          artworkId: analysis.artwork_id,
+          isAnalyzing: false
+        } : item));
 
-          // Add to items list
-          setItems(prev => [...prev, newItem]);
-          if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+      } catch (error) {
+        console.error(`Failed to analyze ${file.name}:`, error);
+        // Remove 'isAnalyzing' flag even on error so it doesn't spin forever
+        setItems(prev => prev.map(item => {
+          if (item.id === newItemId) {
+            return { ...item, isAnalyzing: false };
+          }
+          return item;
+        }));
+      }
+    });
 
-          // Update the modal with final analysis results (no longer loading)
-          setInterpretingItem({
-            url: finalUrl,
-            id: newItemId,
-            conversation: [],
-            annotations: [],
-            artistName: analysis.artist_name,
-            artworkName: analysis.artwork_name,
-            description: parseAnalysis(analysis.description),
-            keywords: keywords,
-            artworkId: analysis.artwork_id,
-            isAnalyzing: false,
-            streamingText: undefined
-          });
-
-          setIsAnalyzing(false);
-        },
-        // onError - called on error
-        (error: Error) => {
-          console.error(`Failed to analyze ${file.name}:`, error.message);
-          // Update modal to show error state
-          setInterpretingItem(prev => prev ? { ...prev, isAnalyzing: false, streamingText: undefined } : null);
-          setIsAnalyzing(false);
-        },
-        // onMetrics - called with timing metrics
-        reportStreamingMetrics
-      );
-
-      // Scroll to the last item added
-      setTimeout(() => {
-        if (lastItemRef.current) {
-          lastItemRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
-      }, 100);
-
-    } catch (error) {
-      console.error("File upload failed:", error);
-      setIsAnalyzing(false);
-    } finally {
-      event.target.value = '';
-    }
+    // Scroll to the end of the corridor to see new items
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({
+          left: scrollRef.current.scrollWidth,
+          behavior: 'smooth'
+        });
+      }
+    }, 100);
   };
 
   const updateItemConversation = (id: string, newMessages: Message[]) => {
