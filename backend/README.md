@@ -1,163 +1,88 @@
-# Musee Backend API
+# Musee Backend Architecture
 
-Python FastAPI backend for Musee artwork analysis application.
+The Musee backend is a high-performance FastAPI application designed to orchestrate complex AI operations for artwork analysis, history management, and conversational art curation.
 
-## Features
+## System Architecture
 
-- **AI-Powered Artwork Analysis**: Uses OpenAI GPT-4 Vision, Claude, or Gemini to analyze artwork images
-- **Multiple Tone Options**: Professional, general public, sarcastic, educational, or poetic analysis styles  
-- **Swappable AI Models**: Easy configuration to switch between different AI providers
-- **Collection Management**: Save and organize analyzed artworks
-- **Image Processing**: Automatic image validation, resizing, and metadata extraction
-- **RESTful API**: Clean API design with automatic documentation
+The system follows a modular, interface-driven architecture to ensure scalability and easy integration of new AI providers.
 
-## Quick Start
+```mermaid
+graph TD
+    A[Client: iOS/Web] -->|HTTP/SSE| B[FastAPI Routers]
+    B --> C[AI Orchestration Service]
+    B --> D[Database: Neon/PostgreSQL]
+    C --> E[AI Service Factory]
+    E --> F[OpenAI Client]
+    E --> G[Claude Client]
+    E --> H[Gemini Client]
+    C --> I[Prompt Engine]
+    B --> J[Storage Service: Vercel/Local]
+```
+
+### Core Modules
+
+- **`app.routers`**: Handles API endpoints, including streaming (SSE) and standard REST requests.
+- **`app.services`**: The brain of the application. 
+    - `AIService`: Orchestrates prompts, image encoding, and provider-specific calls.
+    - `AIClientInterface`: Polymorphic interface for all AI providers.
+    - `StorageService`: Pluggable storage for artwork images.
+- **`app.prompts`**: A dynamic prompt management system with support for multiple identities (personas) and languages.
+- **`app.database`**: Managed via SQLAlchemy and Neon PostgreSQL for persistent storage of artworks, conversations, and tags.
+- **`app.utils`**: Image processing, prompt loading, and validation utilities.
+
+## Developer Manual
 
 ### Prerequisites
+- Python 3.9+
+- PostgreSQL (Neon recommended)
+- API Keys: OpenAI, Anthropic, or Google Gemini
 
-- Python 3.8+
-- API keys for at least one AI service (OpenAI, Claude, or Gemini)
-
-### Installation
-
-1. **Navigate to backend directory**:
-   ```bash
-   cd backend
-   ```
-
-2. **Create virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure environment**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys
-   ```
-
-5. **Run the server**:
-   ```bash
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-   ```
-
-The API will be available at `http://localhost:8000` with documentation at `http://localhost:8000/docs`.
-
-## Configuration
-
-Edit the `.env` file to configure:
-
-### AI Services
-- `AI_PROVIDER`: Default AI service (openai, claude, or gemini)
-- `OPENAI_API_KEY`: OpenAI API key for GPT-4 Vision
-- `CLAUDE_API_KEY`: Anthropic Claude API key  
-- `GEMINI_API_KEY`: Google Gemini API key
-
-### File Upload
-- `MAX_FILE_SIZE_MB`: Maximum upload size (default: 10MB)
-
-### Database
-- `NEON_DATABASE_URL`: Neon PostgreSQL connection string (required for both dev and production)
-
-## API Endpoints
-
-### Artwork Analysis
-- `POST /api/analyze` - Analyze artwork image
-- `GET /api/analysis/{id}` - Get analysis by ID
-- `DELETE /api/analysis/{id}` - Delete analysis
-- `GET /api/providers` - List available AI providers
-
-### Collection Management  
-- `GET /api/collection` - Get collection with pagination/filtering
-- `GET /api/collection/stats` - Collection statistics
-- `GET /api/collection/search` - Search through analyses
-
-### Analysis Tones
-
-- **Professional**: Academic, art history focused
-- **General**: Accessible to general public  
-- **Sarcastic**: Humorous, witty commentary
-- **Educational**: Teaching-focused for students
-- **Poetic**: Artistic, emotional interpretation
-
-## Example Usage
-
-### Analyze Artwork
+### 1. Local Setup
 ```bash
-curl -X POST "http://localhost:8000/api/analyze" \
-  -H "Content-Type: multipart/form-data" \
-  -F "image=@artwork.jpg" \
-  -F "tone=professional" \
-  -F "model=openai"
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env.local
 ```
 
-### Get Collection
+### 2. Environment Configuration
+Key variables in your `.env.local`:
+- `NEON_DATABASE_URL`: Your PostgreSQL connection string.
+- `AI_PROVIDER`: `gemini`, `openai`, or `claude`.
+- `MAX_FILE_SIZE_MB`: Defaults to 10.
+- `LOG_LEVEL`: `INFO` or `DEBUG`.
+
+### 3. Running the Server
 ```bash
-curl "http://localhost:8000/api/collection?page=1&per_page=10&tone=general"
+uvicorn app.main:app --reload --port 8000
 ```
+- **Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Health**: [http://localhost:8000/health](http://localhost:8000/health)
 
-## Development
-
-### Project Structure
-```
-backend/
-├── app/
-│   ├── main.py              # FastAPI application
-│   ├── config/settings.py   # Configuration  
-│   ├── models/              # Pydantic models
-│   ├── services/            # AI service implementations
-│   ├── routers/             # API endpoints
-│   ├── database/            # Database models & connection
-│   └── utils/               # Utilities (image processing)
-├── uploads/                 # Uploaded images
-├── requirements.txt         # Python dependencies
-└── .env                     # Environment configuration
-```
-
-### Adding New AI Services
-
-1. Create new client in `app/services/`
-2. Implement `AIServiceInterface`
-3. Register in `app/routers/artwork.py`
-
-### Database Schema
-
-The Neon PostgreSQL database includes:
-- `artwork_analyses`: Analysis records with metadata
-- `artwork_history`: Fast photo history with artist/artwork metadata
-- Automatic timestamps and UUID primary keys
-- JSON storage for flexible image metadata
-
-**Database Setup:**
+### 4. Database Migrations
+We use a custom migration script for high-speed schema updates:
 ```bash
-# Run migrations to create tables
+python migrate_tags.py  # Fixes legacy tag associations
+# For full schema init:
 python migrate_db.py
-
-# Check database connection
-python check_db_config.py
-
-# Test connection
-python test_connection.py
 ```
 
-## Production Deployment
+## AI Orchestration
 
-1. Set `DEBUG=False` in environment
-2. Ensure `NEON_DATABASE_URL` is set with production database credentials
-3. Configure proper CORS origins
-4. Use production ASGI server (Gunicorn + Uvicorn)
-5. Set up file storage (AWS S3, etc.) for images
-6. Add authentication and user management
-7. Implement rate limiting and monitoring
+To add a new AI provider:
+1. Implement the `AIClientInterface` in `app/services/`.
+2. Register the provider in `AIServiceFactory`.
+3. Update `AIProvider` enum in `app/models/artwork.py`.
 
-**Note:** The app now uses Neon PostgreSQL for both development and production environments, eliminating the need for separate database configurations.
+### Prompt personae
+The system supports multiple curator identities (e.g., `default`, `professional`, `sarcastic`). These are defined in `app/prompts/identities/` and merged with instructions in `app/prompts/instructions/`.
 
-## License
+## Deployment
 
-MIT License - see LICENSE file for details.
+The backend is configured for **Vercel** via `vercel.json` but can run on any ASGI-compliant platform.
+- **Streaming**: Uses `StreamingResponse` with SSE for real-time analysis.
+- **Pooling**: SQLAlchemy is configured with `pool_pre_ping=True` and `pool_recycle=300` for stable cloud connections.
+
+---
+*Built for the future of art curation.*
