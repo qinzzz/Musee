@@ -6,9 +6,9 @@ Musee is a multi-platform art exploration ecosystem that uses advanced AI to ide
 
 The project is divided into three main components:
 
-- **[Backend](file:///Users/qinzzz/Musee/backend)**: A high-performance FastAPI server orchestrating AI models (Gemini, OpenAI, Claude) and managing persistent curation history with Neon PostgreSQL.
-- **[Web Client](file:///Users/qinzzz/Musee/frontend-web)**: A stunning, glassmorphic React/Vite application featuring an infinite "Exhibition Corridor" and batch artwork curation.
-- **[iOS App](file:///Users/qinzzz/Musee/frontend)**: A React Native mobile app for on-the-go art discovery with native camera integration.
+- **[Backend](https://github.com/qinzzz/Musee/tree/main/backend)**: A high-performance FastAPI server orchestrating AI models (Gemini, OpenAI, Claude) and managing persistent curation history with Neon PostgreSQL.
+- **[Web Client](https://github.com/qinzzz/Musee/tree/main/frontend-web)**: A stunning, glassmorphic React/Vite application featuring an infinite "Exhibition Corridor" and batch artwork curation.
+- **[iOS App](https://github.com/qinzzz/Musee/tree/main/frontend)**: A React Native mobile app for on-the-go art discovery with native camera integration.
 
 ## Quick Start
 
@@ -70,9 +70,9 @@ graph LR
 ## Detailed Documentation
 
 For specific setup guides and technical deep-dives:
-- **[Backend README](file:///Users/qinzzz/Musee/backend/README.md)**
-- **[Web Client README](file:///Users/qinzzz/Musee/frontend-web/README.md)**
-- **[iOS App README](file:///Users/qinzzz/Musee/frontend/README.md)**
+- **[Backend README](https://github.com/qinzzz/Musee/blob/main/backend/README.md)**
+- **[Web Client README](https://github.com/qinzzz/Musee/blob/main/frontend-web/README.md)**
+- **[iOS App README](https://github.com/qinzzz/Musee/blob/main/frontend/README.md)**
 
 ---
 *Built for the future of art curation.*
