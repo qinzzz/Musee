@@ -139,3 +139,23 @@ class AIClientInterface(ABC):
             str: Text chunks as they arrive from the API
         """
         pass
+
+    @abstractmethod
+    async def stream_with_conversation(
+        self,
+        messages: list,
+        max_tokens: int,
+        temperature: float
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream API call with conversation history
+
+        Args:
+            messages: Provider-specific message format
+            max_tokens: Maximum tokens for response
+            temperature: Temperature parameter
+
+        Yields:
+            str: Text chunks as they arrive from the API
+        """
+        pass

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import Response, StreamingResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Optional, List
 import json
@@ -552,8 +553,11 @@ async def analyze_bite(
                 except Exception as e:
                     logger.error(f"Failed to load image from storage {artwork.photo_uri}: {e}")
 
-            # Get next sequence number
-            next_seq = len(conversations)
+            # Get next sequence number (most robust way)
+            max_seq = db.query(func.max(Conversation.sequence_number)).filter(
+                Conversation.saved_artwork_id == artwork_id
+            ).scalar()
+            next_seq = (max_seq + 1) if max_seq is not None else 0
 
             # Write user message to DB FIRST (before LLM call)
             user_msg_record = Conversation(
@@ -614,6 +618,154 @@ async def analyze_bite(
         if "API error" in str(e):
             raise HTTPException(status_code=503, detail=str(e))
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@router.post("/artwork-chat-stream")
+async def analyze_bite_stream(
+    query: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    artist_name: Optional[str] = Form(None),
+    artwork_name: Optional[str] = Form(None),
+    conversation_history: Optional[str] = Form(None),
+    artwork_id: Optional[str] = Form(None),
+    model: Optional[AIProvider] = Form(None),
+    identity: Optional[str] = Form("default"),
+    language: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Stream artwork insight based on query and context using SSE
+    """
+    ai_provider = determine_ai_provider(model)
+
+    try:
+        user_message = query or "Tell me more about this artwork."
+
+        if not image and not artwork_id:
+            raise HTTPException(
+                status_code=400, 
+                detail="Must provide either an image or an artwork_id (session context)"
+            )
+
+        image_bytes = None
+        if image:
+            image_bytes = await process_image(image)
+
+        previous_messages = []
+        artwork = None
+        user_msg_record = None
+
+        # Mode 1: artwork_id provided - use DB for conversation history
+        if artwork_id:
+            artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+            if not artwork:
+                raise HTTPException(status_code=404, detail="Artwork not found")
+
+            if not artist_name:
+                artist_name = artwork.artist_name
+            if not artwork_name:
+                artwork_name = artwork.artwork_name
+
+            conversations = db.query(Conversation).filter(
+                Conversation.saved_artwork_id == artwork_id
+            ).order_by(Conversation.sequence_number).all()
+
+            previous_messages = [
+                ConversationMessage(role=c.role, content=c.content)
+                for c in conversations
+            ]
+
+            if not image_bytes and artwork.photo_uri:
+                try:
+                    storage = StorageFactory.get_service_for_uri(artwork.photo_uri)
+                    if storage:
+                        image_bytes = await storage.load(artwork.photo_uri)
+                except Exception as e:
+                    logger.error(f"Failed to load image: {e}")
+
+            # Get next sequence number (most robust way)
+            max_seq = db.query(func.max(Conversation.sequence_number)).filter(
+                Conversation.saved_artwork_id == artwork_id
+            ).scalar()
+            next_seq = (max_seq + 1) if max_seq is not None else 0
+            user_msg_record = Conversation(
+                saved_artwork_id=artwork_id,
+                sequence_number=next_seq,
+                role="user",
+                content=user_message
+            )
+            db.add(user_msg_record)
+            db.commit()  # Commit user message immediately so it's visible to other sessions
+            db.refresh(user_msg_record) # Ensure we have the latest state for sequence number
+
+        # Mode 2: stateless mode
+        elif conversation_history:
+            try:
+                conv_data = json.loads(conversation_history)
+                previous_messages = [
+                    ConversationMessage(role=msg.get('role', 'user'), content=msg.get('content', ''))
+                    for msg in conv_data if msg.get('content')
+                ]
+            except json.JSONDecodeError:
+                pass
+
+        async def event_generator():
+            nonlocal user_message, artist_name, artwork_name, previous_messages, identity, language, ai_provider, artwork_id, user_msg_record
+
+            full_text = ""
+            ai_service = AIServiceFactory.get_service(ai_provider)
+
+            try:
+                async for chunk in ai_service.get_artwork_bite_stream(
+                    image_bytes,
+                    artist_name or "Unknown Artist",
+                    artwork_name or "Unknown",
+                    user_message,
+                    previous_messages,
+                    identity=identity,
+                    language=language
+                ):
+                    full_text += chunk
+                    yield f"event: chunk\ndata: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
+
+                # If artwork_id mode, write assistant message to DB
+                if artwork_id:
+                    # Create a new session for the background task to avoid issues with the main request session
+                    from app.database.connection import SessionLocal
+                    with SessionLocal() as background_db:
+                        next_seq = (user_msg_record.sequence_number + 1) if user_msg_record else len(previous_messages)
+                        assistant_msg_record = Conversation(
+                            saved_artwork_id=artwork_id,
+                            sequence_number=next_seq,
+                            role="assistant",
+                            content=full_text
+                        )
+                        background_db.add(assistant_msg_record)
+                        background_db.commit()
+
+                # Send completion event
+                yield f"event: complete\ndata: {json.dumps({'type': 'result', 'response': full_text, 'model_used': ai_provider.value})}\n\n"
+
+            except Exception as e:
+                logger.error(f"Streaming chat error: {str(e)}", exc_info=True)
+                yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in analyze_bite_stream: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/suggest-topic")
@@ -792,7 +944,7 @@ async def remove_background(image: UploadFile = File(...)):
 # Artwork CRUD Endpoints
 # =============================================================================
 
-@router.post("/save-artwork")
+@router.post("/artworks")
 async def save_artwork(
     photo_uri: str = Form(...),
     artist_name: str = Form(...),
@@ -885,7 +1037,7 @@ async def save_artwork(
         raise HTTPException(status_code=500, detail=f"Failed to save artwork: {str(e)}")
 
 
-@router.get("/save-artwork")
+@router.get("/artworks")
 async def get_artworks(
     user_id: str = Query(...),
     recognized_only: Optional[bool] = None,
@@ -920,7 +1072,7 @@ async def get_artworks(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve artworks: {str(e)}")
 
 
-@router.get("/save-artwork/{artwork_id}")
+@router.get("/artworks/{artwork_id}")
 async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
     """Get a specific artwork with full conversation history"""
     artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
@@ -931,7 +1083,7 @@ async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
     return artwork.to_dict()
 
 
-@router.put("/save-artwork/{artwork_id}")
+@router.put("/artworks/{artwork_id}")
 async def update_artwork(
     artwork_id: str,
     request: UpdateArtworkRequest,
@@ -980,7 +1132,7 @@ async def update_artwork(
         raise HTTPException(status_code=500, detail=f"Failed to update artwork: {str(e)}")
 
 
-@router.delete("/save-artwork/{artwork_id}")
+@router.delete("/artworks/{artwork_id}")
 async def delete_artwork(artwork_id: str, db: Session = Depends(get_db)):
     """Delete a saved artwork"""
     artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
@@ -994,7 +1146,7 @@ async def delete_artwork(artwork_id: str, db: Session = Depends(get_db)):
     return {"message": "Artwork deleted successfully"}
 
 
-@router.post("/save-artwork/batch-delete")
+@router.post("/artworks/batch-delete")
 async def batch_delete_artworks(
     artwork_ids: List[str],
     user_id: str,

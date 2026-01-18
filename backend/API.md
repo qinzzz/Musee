@@ -3,7 +3,7 @@
 ## Design Principles
 
 - **Stateless AI endpoints**: Analysis endpoints (`/analyze-*`, `/generate-*`) do not read from or write to the database. Pass `conversation_history` as JSON to maintain context.
-- **Explicit persistence**: Use `/save-artwork` to persist data after analysis.
+- **Explicit persistence**: Use `/artworks` to persist data after analysis.
 - **No side effects on reads**: GET endpoints are pure reads with no database writes.
 
 ---
@@ -36,16 +36,16 @@
 
 ---
 
-## Artwork CRUD (`/api/save-artwork`)
+## Artwork CRUD (/api/artworks)
 
 | Method | Path | Request Fields | Response Fields |
 |--------|------|----------------|-----------------|
-| **POST** | `/save-artwork` | `photo_uri`, `artist_name`, `artwork_name`, `conversation_history` (JSON), `user_id`, `location?`, `museum_name?`, `is_recognized?`, `tags?`, `analysis?`, `summary?`, `params?` (JSON), `photo_time?` | SavedArtwork object |
-| **GET** | `/save-artwork` | `user_id` (required), `recognized_only?`, `limit?` (max 100), `offset?` | `{items[], count, offset, limit}` |
-| **GET** | `/save-artwork/{artwork_id}` | - | SavedArtwork object with conversations |
-| **PUT** | `/save-artwork/{artwork_id}` | `artist_name?`, `artwork_name?`, `summary?`, `tags?`, `analysis?`, `params?` | SavedArtwork object |
-| **DELETE** | `/save-artwork/{artwork_id}` | - | `{message}` |
-| **POST** | `/save-artwork/batch-delete` | `artwork_ids[]`, `user_id` | `{message, deleted_count}` |
+| **POST** | `/artworks` | `photo_uri`, `artist_name`, `artwork_name`, `conversation_history` (JSON), `user_id`, `location?`, `museum_name?`, `is_recognized?`, `tags?`, `analysis?`, `summary?`, `params?` (JSON), `photo_time?` | SavedArtwork object |
+| **GET** | `/artworks` | `user_id` (required), `recognized_only?`, `limit?` (max 100), `offset?` | `{items[], count, offset, limit}` |
+| **GET** | `/artworks/{artwork_id}` | - | SavedArtwork object with conversations |
+| **PUT** | `/artworks/{artwork_id}` | `artist_name?`, `artwork_name?`, `summary?`, `tags?`, `analysis?`, `params?` | SavedArtwork object |
+| **DELETE** | `/artworks/{artwork_id}` | - | `{message}` |
+| **POST** | `/artworks/batch-delete` | `artwork_ids[]`, `user_id` | `{message, deleted_count}` |
 
 ---
 
@@ -80,8 +80,8 @@
 | **GET** | `/tags` | `user_id` (query param) | Tag[] |
 | **POST** | `/tags` | `name`, `user_id` | Tag object |
 | **DELETE** | `/tags/{tag_id}` | - | `{message}` |
-| **POST** | `/save-artwork/{artwork_id}/tags/{tag_id}` | - | `{message}` |
-| **DELETE** | `/save-artwork/{artwork_id}/tags/{tag_id}` | - | `{message}` |
+| **POST** | `/artworks/{artwork_id}/tags/{tag_id}` | - | `{message}` |
+| **DELETE** | `/artworks/{artwork_id}/tags/{tag_id}` | - | `{message}` |
 
 ---
 

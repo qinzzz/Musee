@@ -23,10 +23,10 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret }) => {
       className="min-w-[40vw] h-[80vh] mx-12 flex items-center justify-center transition-all duration-1000 group"
       style={{ backgroundColor: 'transparent' }}
     >
-      <div className="flex flex-col items-center">
+      <div className="flex flex-col items-center max-w-full">
         {/* Card frame - hugs the image */}
         <div
-          className="relative transition-all duration-700 shadow-2xl"
+          className="relative transition-all duration-700 shadow-2xl max-w-[90vw] sm:max-w-[85vw]"
           style={{
             backgroundColor: vibe.backgroundColor,
             padding: `${vibe.padding * 12}px`,
@@ -40,7 +40,7 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret }) => {
               src={url}
               alt="Gallery item"
               onLoad={handleImageLoad}
-              className="max-h-[60vh] block transition-transform duration-700 group-hover:scale-105"
+              className="max-h-[60vh] max-w-full w-auto block transition-transform duration-700 group-hover:scale-105 object-contain"
             />
 
             {/* Interpretation Trigger Overlay */}

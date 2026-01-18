@@ -1,4 +1,4 @@
-from PIL import Image, ExifTags
+from PIL import Image, ExifTags, ImageOps
 from fastapi import HTTPException, UploadFile
 from typing import Dict, Any, Tuple
 import os
@@ -72,6 +72,11 @@ async def process_image(file: UploadFile) -> Tuple[bytes, Dict[str, Any]]:
     try:
         from io import BytesIO
         image = Image.open(BytesIO(image_bytes))
+        
+        # Correct orientation based on EXIF before further processing
+        # This ensures images from mobile devices are correctly oriented
+        image = ImageOps.exif_transpose(image)
+        
         logger.info(f"PIL opened image: format={image.format}, mode={image.mode}, size={image.size}")
     except Exception as e:
         logger.error(f"Failed to open image with PIL: {e}, first 100 bytes: {image_bytes[:100]}")

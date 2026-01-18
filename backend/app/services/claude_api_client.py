@@ -193,3 +193,22 @@ class ClaudeAPIClient(AIClientInterface):
                     yield text
         except Exception as e:
             raise Exception(f"Claude streaming API error: {str(e)}")
+
+    async def stream_with_conversation(
+        self,
+        messages: list,
+        max_tokens: int,
+        temperature: float
+    ) -> AsyncGenerator[str, None]:
+        """Stream Claude API call with conversation history"""
+        try:
+            async with self.client.messages.stream(
+                model=self.model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                messages=messages
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield text
+        except Exception as e:
+            raise Exception(f"Claude conversation streaming API error: {str(e)}")

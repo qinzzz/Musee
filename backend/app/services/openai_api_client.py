@@ -201,3 +201,24 @@ class OpenAIAPIClient(AIClientInterface):
                     yield chunk.choices[0].delta.content
         except Exception as e:
             raise Exception(f"OpenAI streaming API error: {str(e)}")
+
+    async def stream_with_conversation(
+        self,
+        messages: list,
+        max_tokens: int,
+        temperature: float
+    ) -> AsyncGenerator[str, None]:
+        """Stream OpenAI API call with conversation history"""
+        logger.info(f"OpenAI conversation streaming API call: model={self.model}")
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                stream=True,
+                **self._get_common_params()
+            )
+            async for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        except Exception as e:
+            raise Exception(f"OpenAI conversation streaming API error: {str(e)}")

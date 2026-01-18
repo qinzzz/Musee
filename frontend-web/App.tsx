@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { GalleryItem, ViewMode, NeighborItem, Message, Visit, TagCoordinate, Annotation } from './types';
-import { analyzeArtworkStream, ArtworkAnalysisResult, StreamingMetrics } from './apiService';
+import { analyzeArtworkStream, ArtworkAnalysisResult, StreamingMetrics, getOrCreateUserId, fetchUserArtworks, getBaseDomain, resolveImageUrl } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
 import TopographyView from './components/TopographyView';
@@ -74,9 +74,9 @@ const downscaleImage = (dataUrl: string, maxWidth = 1600): Promise<string> => {
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const MOCK_NEIGHBORS: NeighborItem[] = [
-  { 
-    id: 'tag-zen', 
-    mainKeyword: '#Zen', 
+  {
+    id: 'tag-zen',
+    mainKeyword: '#Zen',
     resonances: 12,
     coordinate: { x: -0.8, y: -0.5 },
     works: [
@@ -97,9 +97,9 @@ const MOCK_NEIGHBORS: NeighborItem[] = [
       }
     ]
   },
-  { 
-    id: 'tag-brutalist', 
-    mainKeyword: '#Brutalist', 
+  {
+    id: 'tag-brutalist',
+    mainKeyword: '#Brutalist',
     resonances: 45,
     coordinate: { x: 0.7, y: 0.6 },
     works: [
@@ -122,8 +122,8 @@ const MOCK_NEIGHBORS: NeighborItem[] = [
   },
 ];
 
-// Demo user ID - in production, this would come from authentication
-const DEMO_USER_ID = 'demo-user-web-001';
+// Persistent user ID for the current browser session
+const USER_ID = getOrCreateUserId();
 
 const App: React.FC = () => {
   const [items, setItems] = useState<GalleryItem[]>([]);
@@ -131,16 +131,93 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.CORRIDOR);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showEntrance, setShowEntrance] = useState(true);
-  const [interpretingItem, setInterpretingItem] = useState<{url: string, id: string, conversation: Message[], annotations: Annotation[], artistName?: string, artworkName?: string, description?: string, keywords?: string[], artworkId?: string} | null>(null);
-  const [exhibitionContext, setExhibitionContext] = useState<{items: GalleryItem[], visitId?: string} | null>(null);
-  const [neighborProximity, setNeighborProximity] = useState(0); 
-  
+  const [interpretingItem, setInterpretingItem] = useState<{
+    url: string,
+    id: string,
+    conversation: Message[],
+    annotations: Annotation[],
+    artistName?: string,
+    artworkName?: string,
+    description?: string,
+    keywords?: string[],
+    artworkId?: string,
+    isAnalyzing?: boolean,
+    streamingText?: string
+  } | null>(null);
+  const [exhibitionContext, setExhibitionContext] = useState<{ items: GalleryItem[], visitId?: string } | null>(null);
+  const [neighborProximity, setNeighborProximity] = useState(0);
+
   const [visit, setVisit] = useState<Visit>({
     id: 'initial-' + Math.random().toString(36).substring(7),
     active: false,
     itemIds: [],
     globalConversation: []
   });
+
+  // Fetch previous artworks on mount
+  useEffect(() => {
+    const loadArtworks = async () => {
+      try {
+        console.log('Fetching previous artworks for user:', USER_ID);
+        const data = await fetchUserArtworks(USER_ID);
+
+        if (data && data.items) {
+          const mappedItems: GalleryItem[] = data.items.map((item: any) => {
+            // Resolve image URL
+            const imageUrl = resolveImageUrl(item.photo_uri);
+
+            // Map keywords from tags
+            const keywords = (item.artwork_tags || []).map((t: any) =>
+              t.name.startsWith('#') ? t.name.toLowerCase() : `#${t.name.toLowerCase()}`
+            );
+
+            return {
+              id: item.id,
+              artworkId: item.id,
+              url: imageUrl,
+              artistName: item.artist_name,
+              artworkName: item.artwork_name,
+              description: item.analysis,
+              keywords: keywords,
+              timestamp: item.created_at ? new Date(item.created_at).getTime() : Date.now(),
+              conversation: [], // Individual conversations can be fetched on-demand in InterpretationModal
+              annotations: [],
+              vibe: {
+                backgroundColor: '#ffffff',
+                padding: 4,
+                borderRadius: '12px',
+                borderType: 'solid',
+                accentColor: '#000000'
+              }
+            };
+          });
+
+          console.log(`Loaded ${mappedItems.length} artworks from history`);
+          setItems(mappedItems);
+
+          // Update tag positions for topography view
+          const newTagPositions = { ...tagPositions };
+          let changed = false;
+          mappedItems.forEach(item => {
+            item.keywords.forEach(tag => {
+              if (!newTagPositions[tag]) {
+                newTagPositions[tag] = {
+                  x: (Math.random() * 2 - 1),
+                  y: (Math.random() * 2 - 1)
+                };
+                changed = true;
+              }
+            });
+          });
+          if (changed) setTagPositions(newTagPositions);
+        }
+      } catch (error) {
+        console.error('Failed to load previous artworks:', error);
+      }
+    };
+
+    loadArtworks();
+  }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastItemRef = useRef<HTMLDivElement>(null);
@@ -253,7 +330,7 @@ const App: React.FC = () => {
 
       await analyzeArtworkStream(
         file,
-        DEMO_USER_ID,
+        USER_ID,
         // onChunk - called for each text chunk
         (chunk: string) => {
           accumulatedText += chunk;
@@ -287,10 +364,13 @@ const App: React.FC = () => {
           });
           setTagPositions(newTagPositions);
 
+          // Resolve backend URL for the corrected image
+          const finalUrl = resolveImageUrl(analysis.photo_uri) || base64;
+
           // Create the full gallery item
           const newItem: GalleryItem = {
             id: newItemId,
-            url: base64,
+            url: finalUrl,
             keywords: keywords,
             vibe: {
               backgroundColor: '#ffffff',
@@ -315,7 +395,7 @@ const App: React.FC = () => {
 
           // Update the modal with final analysis results (no longer loading)
           setInterpretingItem({
-            url: base64,
+            url: finalUrl,
             id: newItemId,
             conversation: [],
             annotations: [],
@@ -379,10 +459,10 @@ const App: React.FC = () => {
 
   return (
     <div className="relative w-screen h-screen bg-[#fdfdfd] overflow-hidden flex flex-col transition-colors duration-1000">
-      
-      <div 
+
+      <div
         className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000 ease-out"
-        style={{ 
+        style={{
           opacity: neighborProximity,
           background: `radial-gradient(circle at 80% 50%, #1a1a1a 0%, #0a0a0a 100%)`,
         }}
@@ -399,8 +479,8 @@ const App: React.FC = () => {
       )}
 
       <div className={`relative z-10 flex-1 transition-all duration-700 ease-in-out ${(viewMode === ViewMode.TOPOGRAPHY || interpretingItem || exhibitionContext) ? 'scale-[0.95] opacity-40 blur-sm' : 'scale-100 opacity-100'}`}>
-        <div 
-          ref={scrollRef} 
+        <div
+          ref={scrollRef}
           onScroll={handleScroll}
           className="horizontal-corridor w-full h-full flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
         >
@@ -416,16 +496,16 @@ const App: React.FC = () => {
           {corridorEntries.map((entry, idx) => {
             const isLast = idx === corridorEntries.length - 1;
             return entry.type === 'item' ? (
-              <div 
-                key={entry.item.id} 
+              <div
+                key={entry.item.id}
                 ref={isLast ? lastItemRef : null}
                 className={`snap-center shrink-0 transition-all duration-500 ${visit.active && !visit.itemIds.includes(entry.item.id) ? 'opacity-30 grayscale' : 'opacity-100'}`}
               >
                 <GalleryCard item={entry.item} onInterpret={() => setInterpretingItem({ url: entry.item.url, id: entry.item.id, conversation: entry.item.conversation, annotations: entry.item.annotations, artistName: entry.item.artistName, artworkName: entry.item.artworkName, description: entry.item.description, keywords: entry.item.keywords, artworkId: entry.item.artworkId })} />
               </div>
             ) : (
-              <div 
-                key={entry.visitId} 
+              <div
+                key={entry.visitId}
                 ref={isLast ? lastItemRef : null}
                 className="snap-center shrink-0"
               >
@@ -440,7 +520,7 @@ const App: React.FC = () => {
               <p className="text-[10px] tracking-widest text-neutral-500 uppercase">Analyzing Material...</p>
             </div>
           )}
-          
+
           {/* Always reachable neighbors */}
           <div className="min-w-[15vw] flex items-center justify-center shrink-0">
             <div className={`h-48 w-px transition-colors duration-1000 ${neighborProximity > 0.5 ? 'bg-neutral-800' : 'bg-gradient-to-b from-transparent via-neutral-200 to-transparent'}`} />
@@ -454,12 +534,12 @@ const App: React.FC = () => {
 
       {items.length > 0 && viewMode === ViewMode.TOPOGRAPHY && (
         <div className="absolute inset-0 z-20 flex items-center justify-center p-12 bg-white/80 backdrop-blur-md animate-in fade-in duration-500">
-           <TopographyView items={items} cachedTagMap={tagPositions} neighborItems={MOCK_NEIGHBORS} onClose={() => setViewMode(ViewMode.CORRIDOR)} />
+          <TopographyView items={items} cachedTagMap={tagPositions} neighborItems={MOCK_NEIGHBORS} onClose={() => setViewMode(ViewMode.CORRIDOR)} />
         </div>
       )}
 
       {interpretingItem && (
-        <InterpretationModal 
+        <InterpretationModal
           item={interpretingItem}
           onClose={() => setInterpretingItem(null)}
           onUpdateConversation={updateItemConversation}
@@ -468,7 +548,7 @@ const App: React.FC = () => {
       )}
 
       {exhibitionContext && (
-        <ExhibitionHall 
+        <ExhibitionHall
           items={exhibitionContext.items}
           conversation={visit.globalConversation}
           onClose={() => setExhibitionContext(null)}
@@ -476,7 +556,7 @@ const App: React.FC = () => {
         />
       )}
 
-      <Controls 
+      <Controls
         viewMode={viewMode}
         onToggleView={() => setViewMode(prev => prev === ViewMode.CORRIDOR ? ViewMode.TOPOGRAPHY : ViewMode.CORRIDOR)}
         onUpload={handleFileUpload}

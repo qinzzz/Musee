@@ -103,7 +103,7 @@ class GeminiAPIClient(AIClientInterface):
                 contents=messages,  # Pass the prepared content list
                 config=types.GenerateContentConfig(
                     temperature=temperature,
-                    response_mime_type="application/json"
+                    # No response_mime_type="application/json" for chat
                 )
             )
 
@@ -265,3 +265,26 @@ class GeminiAPIClient(AIClientInterface):
                     yield chunk.text
         except Exception as e:
             raise Exception(f"Gemini streaming API error: {str(e)}")
+
+    async def stream_with_conversation(
+        self,
+        messages: list,
+        max_tokens: int,
+        temperature: float
+    ) -> AsyncGenerator[str, None]:
+        """Stream Gemini API call with conversation history"""
+        logger.debug(f"Gemini conversation streaming call")
+        try:
+            response = await self.client.aio.models.generate_content_stream(
+                model=self.model_name,
+                contents=messages,
+                config=types.GenerateContentConfig(
+                    temperature=temperature,
+                    # No response_mime_type="application/json" for chat
+                )
+            )
+            async for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            raise Exception(f"Gemini conversation streaming API error: {str(e)}")

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Message, Annotation } from '../types';
-import { chatWithArtwork, base64ToFile, getTagExplanation } from '../apiService';
+import { chatWithArtwork, chatWithArtworkStream, base64ToFile, getTagExplanation } from '../apiService';
 
 interface Props {
   item: {
@@ -170,20 +170,40 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
       // Use artworkId mode if available (DB-backed, reliable)
       // Otherwise fall back to stateless mode with conversation history
-      const modelText = await chatWithArtwork(
+      const assistantMsg: Message = { role: 'model', text: '' };
+      setMessages(prev => [...prev, assistantMsg]);
+      setIsTyping(false);
+
+      await chatWithArtworkStream(
         text,
-        item.artworkId,  // If provided, uses DB for conversation history
+        (chunk) => {
+          setMessages(prev => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last && last.role === 'model') {
+              last.text += chunk;
+            }
+            return next;
+          });
+        },
+        (fullResponse) => {
+          // Final response received
+          onUpdateConversation(item.id, [userMsg, { role: 'model', text: fullResponse }]);
+        },
+        (error) => {
+          console.error('Chat error:', error);
+          const errorMsg: Message = { role: 'model', text: 'Apologies, the architectural dialogue has been interrupted.' };
+          setMessages(prev => [...prev, errorMsg]);
+          onUpdateConversation(item.id, [userMsg, errorMsg]);
+        },
+        item.artworkId,
         item.artistName,
         item.artworkName,
-        messages,        // Only used if artworkId not provided
+        messages,
         imageFile
       );
-      const modelMsg: Message = { role: 'model', text: modelText };
-      setMessages(prev => [...prev, modelMsg]);
-      onUpdateConversation(item.id, [userMsg, modelMsg]);
     } catch (e) {
       console.error(e);
-    } finally {
       setIsTyping(false);
     }
   };
@@ -412,8 +432,8 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             {messages.map((m, idx) => (
               <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[85%] p-4 text-[13px] leading-relaxed tracking-wide ${m.role === 'user'
-                    ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-none'
-                    : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-none font-serif'
+                  ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-none'
+                  : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-none font-serif'
                   }`}>
                   {m.text}
                 </div>

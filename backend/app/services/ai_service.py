@@ -220,11 +220,62 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         # Call API through client
         response = await self.ai_client.call_with_conversation(
             messages=messages,
-            max_tokens=200,  # Increased for Gemini compatibility
+            max_tokens=200,
             temperature=0.8
         )
 
         return response
+
+    async def get_artwork_bite_stream(
+        self,
+        image_bytes: bytes,
+        artist_name: str,
+        artwork_name: str = "Unknown",
+        followup_question: str = None,
+        previous_messages: list = None,
+        identity: str = "default",
+        language: Optional[str] = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream interesting information about the artwork
+
+        Args:
+            image_bytes: Raw image data
+            artist_name: Name of the artist
+            artwork_name: Name of the artwork
+            followup_question: Optional followup question
+            previous_messages: List of previous ConversationMessage objects
+            identity: AI identity/persona to use
+            language: Language code for response
+
+        Yields:
+            str: Text chunks as they arrive from the API
+        """
+        # Prepare image in provider-specific format
+        image_data = self.ai_client.prepare_image(image_bytes)
+
+        # Load base prompt
+        from app.utils.prompt_loader import get_artwork_bite_prompt_v2
+        prompt = get_artwork_bite_prompt_v2(artist_name, artwork_name, identity, language=language)
+
+        # Determine current question
+        current_question = "Tell me more about this artwork." if not followup_question else followup_question
+
+        # Build conversation messages in provider-specific format
+        messages = self.ai_client.build_conversation_messages(
+            initial_prompt=prompt,
+            image_data=image_data,
+            previous_messages=previous_messages,
+            current_question=current_question
+        )
+
+        # Stream API through client
+        async for chunk in self.ai_client.stream_with_conversation(
+            messages=messages,
+            max_tokens=200,
+            temperature=0.8
+        ):
+            yield chunk
 
     async def suggest_topics(
         self,

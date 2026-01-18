@@ -128,7 +128,7 @@ class APITester:
         try:
             start_time = time.time()
             async with self.session.get(
-                f"{self.config.base_url}/api/save-artwork?limit=100"
+                f"{self.config.base_url}/api/artworks?limit=100"
             ) as response:
                 latency = time.time() - start_time
                 if response.status == 200:
@@ -448,12 +448,12 @@ class APITester:
             self.log_test("PUT /api/users/{user_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_save_artwork(self):
-        """Test POST /api/save-artwork endpoint"""
-        if self.should_skip_non_llm_test("POST /api/save-artwork"):
+        """Test POST /api/artworks endpoint"""
+        if self.should_skip_non_llm_test("POST /api/artworks"):
             return
 
         if not self.test_user_id:
-            self.log_test("POST /api/save-artwork", "SKIP", "No test user created")
+            self.log_test("POST /api/artworks", "SKIP", "No test user created")
             return
 
         try:
@@ -481,7 +481,7 @@ class APITester:
 
             start_time = time.time()
             async with self.session.post(
-                f"{self.config.base_url}/api/save-artwork",
+                f"{self.config.base_url}/api/artworks",
                 data=data
             ) as response:
                 result = await response.json()
@@ -492,27 +492,27 @@ class APITester:
                 # Store for later tests
                 self.test_artwork_id = result['id']
                 self.log_test(
-                    "POST /api/save-artwork",
+                    "POST /api/artworks",
                     "PASS",
                     f"Saved artwork: {self.test_artwork_id} | Latency: {latency:.3f}s"
                 )
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test("POST /api/save-artwork", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+            self.log_test("POST /api/artworks", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_get_saved_artworks(self):
-        """Test GET /api/save-artwork endpoint"""
-        if self.should_skip_non_llm_test("GET /api/save-artwork"):
+        """Test GET /api/artworks endpoint"""
+        if self.should_skip_non_llm_test("GET /api/artworks"):
             return
 
         if not self.test_user_id:
-            self.log_test("GET /api/save-artwork", "SKIP", "No test user created")
+            self.log_test("GET /api/artworks", "SKIP", "No test user created")
             return
 
         try:
             start_time = time.time()
             async with self.session.get(
-                f"{self.config.base_url}/api/save-artwork?user_id={self.test_user_id}"
+                f"{self.config.base_url}/api/artworks?user_id={self.test_user_id}"
             ) as response:
                 data = await response.json()
                 latency = time.time() - start_time
@@ -520,45 +520,45 @@ class APITester:
                 assert 'items' in data
                 assert isinstance(data['items'], list)
                 self.log_test(
-                    "GET /api/save-artwork",
+                    "GET /api/artworks",
                     "PASS",
                     f"Found {data['count']} artworks | Latency: {latency:.3f}s"
                 )
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test("GET /api/save-artwork", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+            self.log_test("GET /api/artworks", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_get_saved_artwork(self):
-        """Test GET /api/save-artwork/{artwork_id} endpoint"""
-        if self.should_skip_non_llm_test("GET /api/save-artwork/{artwork_id}"):
+        """Test GET /api/artworks/{artwork_id} endpoint"""
+        if self.should_skip_non_llm_test("GET /api/artworks/{artwork_id}"):
             return
 
         if not self.test_artwork_id:
-            self.log_test("GET /api/save-artwork/{artwork_id}", "SKIP", "No test artwork created")
+            self.log_test("GET /api/artworks/{artwork_id}", "SKIP", "No test artwork created")
             return
 
         try:
             start_time = time.time()
             async with self.session.get(
-                f"{self.config.base_url}/api/save-artwork/{self.test_artwork_id}"
+                f"{self.config.base_url}/api/artworks/{self.test_artwork_id}"
             ) as response:
                 data = await response.json()
                 latency = time.time() - start_time
                 assert response.status == 200
                 assert data['id'] == self.test_artwork_id
                 assert 'conversation_history' in data
-                self.log_test("GET /api/save-artwork/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
+                self.log_test("GET /api/artworks/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test("GET /api/save-artwork/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+            self.log_test("GET /api/artworks/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_update_saved_artwork(self):
-        """Test PUT /api/save-artwork/{artwork_id} endpoint"""
-        if self.should_skip_non_llm_test("PUT /api/save-artwork/{artwork_id}"):
+        """Test PUT /api/artworks/{artwork_id} endpoint"""
+        if self.should_skip_non_llm_test("PUT /api/artworks/{artwork_id}"):
             return
 
         if not self.test_artwork_id:
-            self.log_test("PUT /api/save-artwork/{artwork_id}", "SKIP", "No test artwork created")
+            self.log_test("PUT /api/artworks/{artwork_id}", "SKIP", "No test artwork created")
             return
 
         try:
@@ -570,17 +570,17 @@ class APITester:
 
             start_time = time.time()
             async with self.session.put(
-                f"{self.config.base_url}/api/save-artwork/{self.test_artwork_id}",
+                f"{self.config.base_url}/api/artworks/{self.test_artwork_id}",
                 json=payload
             ) as response:
                 data = await response.json()
                 latency = time.time() - start_time
                 assert response.status == 200
                 assert data['artist_name'] == "Updated Artist"
-                self.log_test("PUT /api/save-artwork/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
+                self.log_test("PUT /api/artworks/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test("PUT /api/save-artwork/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+            self.log_test("PUT /api/artworks/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_artwork_chat(self, language: str = "english"):
         """Test POST /api/artwork-chat endpoint (stateless)"""
@@ -729,34 +729,34 @@ class APITester:
             self.log_test(test_name, "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_delete_saved_artwork(self):
-        """Test DELETE /api/save-artwork/{artwork_id} endpoint"""
-        if self.should_skip_non_llm_test("DELETE /api/save-artwork/{artwork_id}"):
+        """Test DELETE /api/artworks/{artwork_id} endpoint"""
+        if self.should_skip_non_llm_test("DELETE /api/artworks/{artwork_id}"):
             return
 
         if not self.test_artwork_id:
-            self.log_test("DELETE /api/save-artwork/{artwork_id}", "SKIP", "No test artwork created")
+            self.log_test("DELETE /api/artworks/{artwork_id}", "SKIP", "No test artwork created")
             return
 
         # Don't delete if we're using an existing artwork from the database
         if self.using_existing_artwork:
-            self.log_test("DELETE /api/save-artwork/{artwork_id}", "SKIP", "Using existing artwork (not deleting)")
+            self.log_test("DELETE /api/artworks/{artwork_id}", "SKIP", "Using existing artwork (not deleting)")
             return
 
         try:
             start_time = time.time()
             async with self.session.delete(
-                f"{self.config.base_url}/api/save-artwork/{self.test_artwork_id}"
+                f"{self.config.base_url}/api/artworks/{self.test_artwork_id}"
             ) as response:
                 data = await response.json()
                 latency = time.time() - start_time
                 assert response.status == 200
                 assert 'message' in data
-                self.log_test("DELETE /api/save-artwork/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
+                self.log_test("DELETE /api/artworks/{artwork_id}", "PASS", f"Latency: {latency:.3f}s")
                 # Clear the ID so we don't try to use it again
                 self.test_artwork_id = None
         except Exception as e:
             latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test("DELETE /api/save-artwork/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
+            self.log_test("DELETE /api/artworks/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
     async def test_delete_user(self):
         """Test DELETE /api/users/{user_id} endpoint"""
