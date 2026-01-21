@@ -4,7 +4,7 @@ All business logic, prompt loading, and request construction is handled by AISer
 """
 
 import base64
-from typing import Optional, Any, AsyncGenerator
+from typing import Optional, Any, AsyncGenerator, Dict
 from anthropic import AsyncAnthropic
 from app.services.ai_client_interface import AIClientInterface
 from app.models.artwork import AIProvider
@@ -39,7 +39,8 @@ class ClaudeAPIClient(AIClientInterface):
         prompt: str,
         image_data: Any,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         """Make Claude API call with image and text"""
         try:
@@ -75,7 +76,8 @@ class ClaudeAPIClient(AIClientInterface):
         self,
         messages: list,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         """Make Claude API call with conversation history"""
         try:
@@ -93,7 +95,8 @@ class ClaudeAPIClient(AIClientInterface):
         self,
         prompt: str,
         max_tokens: int,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         """Make Claude API call with text only (no image)"""
         try:
@@ -161,7 +164,8 @@ class ClaudeAPIClient(AIClientInterface):
         prompt: str,
         image_data: Any,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """Stream Claude API call with image and text"""
         try:
@@ -198,7 +202,8 @@ class ClaudeAPIClient(AIClientInterface):
         self,
         messages: list,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """Stream Claude API call with conversation history"""
         try:

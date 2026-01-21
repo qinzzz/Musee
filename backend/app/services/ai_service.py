@@ -14,6 +14,23 @@ from app.utils.prompt_loader import (
 )
 from app.services.ai_client_interface import AIClientInterface
 
+# Schema for structured artwork analysis
+ARTWORK_ANALYSIS_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "artist": {"type": "STRING"},
+        "title": {"type": "STRING"},
+        "date": {"type": "STRING"},
+        "medium": {"type": "STRING"},
+        "description": {"type": "STRING"},
+        "tags": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"}
+        }
+    },
+    "required": ["artist", "title", "date", "medium", "description", "tags"]
+}
+
 
 class AIService:
     """
@@ -109,12 +126,71 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         summary = summary.strip('"').strip("'")
         return summary
 
+    @staticmethod
+    def inject_session_context(prompt: str, session_context: Dict[str, Any]) -> str:
+        """Inject session context into the prompt"""
+        previous_artworks = session_context.get("previous_artworks", [])
+        narrative_summary = session_context.get("narrative_summary")
+
+        context_block = "\n\n### SESSION CONTEXT (THE CURATOR'S MEMORY)\n"
+        
+        if narrative_summary:
+            context_block += f"ONGOING NARRATIVE: {narrative_summary}\n\n"
+        
+        if previous_artworks:
+            context_block += "PREVIOUS ARTWORKS SEEN IN THIS SESSION:\n"
+            for i, art in enumerate(previous_artworks):
+                context_block += f"{i+1}. '{art.get('title')}' by {art.get('artist')}\n"
+                context_block += f"   ANALYSIS: {art.get('analysis')}\n"
+                if art.get("tags"):
+                    context_block += f"   TAGS: {', '.join(art.get('tags'))}\n"
+                context_block += "\n"
+        
+        context_block += "When analyzing the NEW artwork, incorporate these connections or contrasts naturally where relevant. Don't be too repetitive, but show that you remember the visitor's journey.\n"
+        
+        # Append context to the prompt
+        return prompt + context_block
+
+    async def summarize_session_narrative(
+        self,
+        previous_narrative: Optional[str],
+        new_artwork_data: Dict[str, Any],
+        identity: str = "default",
+        language: Optional[str] = None
+    ) -> str:
+        """
+        Update the session's thematic narrative summary based on a new artwork.
+        """
+        language_instruction = self.build_language_instruction(language)
+        
+        history_text = f"Previous Session Narrative: {previous_narrative if previous_narrative else 'Just started the tour.'}"
+        current_art = f"Latest Artwork: '{new_artwork_data.get('title')}' by {new_artwork_data.get('artist')}. Description: {new_artwork_data.get('description')}"
+        
+        prompt = f"""You are a museum curator distilling the essence of an art tour into a single, evolving thematic narrative.
+
+{history_text}
+
+{current_art}
+
+Update the "Session Narrative" to incorporate this latest piece. The narrative should be 2-3 sentences max and describe the thematic journey, stylistic shifts, or emerging connections across the session so far. Focus on the 'vibe' and intellectual thread.
+
+Return ONLY the updated narrative text.{language_instruction}"""
+
+        response = await self.ai_client.call_text_only(
+            prompt=prompt,
+            max_tokens=300,
+            temperature=0.7
+        )
+        
+        return response.strip()
+
     # Main service methods
     async def identify_artist(
         self,
         image_bytes: bytes,
         identity: str = "default",
-        language: Optional[str] = None
+        language: Optional[str] = None,
+        session_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Identify the artist and artwork details (non-streaming)
@@ -123,6 +199,7 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
             image_bytes: Raw image data
             identity: AI identity/persona to use
             language: Language code for response
+            session_context: Optional context from previous session artworks
 
         Returns:
             str: Complete artist identification analysis
@@ -133,12 +210,17 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         # Load prompt
         prompt = get_artist_identification_prompt_v2(identity, language=language)
 
+        # Inject session context if provided
+        if session_context:
+            prompt = self.inject_session_context(prompt, session_context)
+
         # Call API through client
         response = await self.ai_client.call_with_image_and_text(
             prompt=prompt,
             image_data=image_data,
-            max_tokens=2000,  # Increased for Gemini compatibility
-            temperature=0.7
+            max_tokens=2000,
+            temperature=0.7,
+            response_schema=ARTWORK_ANALYSIS_SCHEMA
         )
 
         return response
@@ -147,7 +229,8 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         self,
         image_bytes: bytes,
         identity: str = "default",
-        language: Optional[str] = None
+        language: Optional[str] = None,
+        session_context: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """
         Stream identify the artist and artwork details
@@ -156,6 +239,7 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
             image_bytes: Raw image data
             identity: AI identity/persona to use
             language: Language code for response
+            session_context: Optional context from previous session artworks
 
         Yields:
             str: Text chunks as they arrive
@@ -171,7 +255,8 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
             prompt=prompt,
             image_data=image_data,
             max_tokens=2000,
-            temperature=0.7
+            temperature=0.7,
+            response_schema=ARTWORK_ANALYSIS_SCHEMA
         ):
             yield chunk
 
@@ -183,7 +268,8 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         followup_question: str = None,
         previous_messages: list = None,
         identity: str = "default",
-        language: Optional[str] = None
+        language: Optional[str] = None,
+        session_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Get a concise, interesting bite of information about the artwork
@@ -196,6 +282,7 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
             previous_messages: List of previous ConversationMessage objects
             identity: AI identity/persona to use
             language: Language code for response
+            session_context: Optional context from previous session artworks
 
         Returns:
             str: Concise interesting fact about the artwork
@@ -205,6 +292,10 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
 
         # Load base prompt
         prompt = get_artwork_bite_prompt_v2(artist_name, artwork_name, identity, language=language)
+
+        # Inject session context if provided
+        if session_context:
+            prompt = self.inject_session_context(prompt, session_context)
 
         # Determine current question
         current_question = "Tell me more about this artwork." if not followup_question else followup_question
@@ -234,7 +325,8 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         followup_question: str = None,
         previous_messages: list = None,
         identity: str = "default",
-        language: Optional[str] = None
+        language: Optional[str] = None,
+        session_context: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """
         Stream interesting information about the artwork
@@ -247,6 +339,7 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
             previous_messages: List of previous ConversationMessage objects
             identity: AI identity/persona to use
             language: Language code for response
+            session_context: Optional context from previous session artworks
 
         Yields:
             str: Text chunks as they arrive from the API
@@ -257,6 +350,10 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         # Load base prompt
         from app.utils.prompt_loader import get_artwork_bite_prompt_v2
         prompt = get_artwork_bite_prompt_v2(artist_name, artwork_name, identity, language=language)
+
+        # Inject session context if provided
+        if session_context:
+            prompt = self.inject_session_context(prompt, session_context)
 
         # Determine current question
         current_question = "Tell me more about this artwork." if not followup_question else followup_question

@@ -14,6 +14,8 @@ interface Props {
     artworkName?: string;
     description?: string;
     keywords?: string[];
+    date?: string;
+    medium?: string;
     artworkId?: string;  // Backend DB artwork ID for persistent conversations
     isAnalyzing?: boolean;  // Loading state while analyzing
     streamingText?: string;  // Real-time streaming text during analysis
@@ -218,7 +220,16 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           });
         },
         (fullResponse) => {
-          // Final response received
+          // Final response received - sync local state and update parent
+          setMessages(prev => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last && last.role === 'model') {
+              last.text = fullResponse;
+            }
+            return next;
+          });
+
           const updatedMessages: Message[] = [...messages, userMsg, { role: 'model' as const, text: fullResponse }];
           onUpdateConversation(item.id, [userMsg, { role: 'model', text: fullResponse }]);
 
@@ -286,28 +297,18 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
       };
     }
 
-    // Desktop: side-by-side layout, size based on image
-    const maxHeight = 85; // vh
-    const maxWidth = 90; // vw
-    const chatPanelWidth = 500; // px - fixed width for chat panel (increased from 380)
+    // Desktop: side-by-side layout, 50/50 split
+    const maxHeight = viewportWidth > 1200 ? 92 : 88; // vh
+    const maxWidth = 94; // vw
 
-    const maxImageHeight = (maxHeight / 100) * viewportHeight - 64;
-    const maxImageWidth = (maxWidth / 100) * viewportWidth - chatPanelWidth - 64;
-
-    let imageHeight = maxImageHeight;
-    let imageWidth = imageHeight * imageAspect;
-
-    if (imageWidth > maxImageWidth) {
-      imageWidth = maxImageWidth;
-      imageHeight = imageWidth / imageAspect;
-    }
-
-    const totalWidth = imageWidth + chatPanelWidth + 64;
-    const totalHeight = imageHeight + 64;
+    // We target a consistent total width and allow flex-1 to handle the split
+    const totalWidth = (maxWidth / 100) * viewportWidth;
+    const totalHeight = (maxHeight / 100) * viewportHeight;
 
     return {
-      width: `${Math.min(totalWidth, (maxWidth / 100) * viewportWidth)}px`,
-      height: `${Math.min(totalHeight, (maxHeight / 100) * viewportHeight)}px`,
+      width: `${totalWidth}px`,
+      height: `${totalHeight}px`,
+      maxWidth: '1800px' // cap on extremely wide screens
     };
   };
 
@@ -327,14 +328,14 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         className={`relative bg-white rounded-2xl sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col sm:flex-row animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         style={getModalStyle()}
       >
-        {/* Visual Reference & Annotation Canvas */}
-        <div className="h-[40vh] sm:h-auto sm:flex-1 bg-neutral-50 flex items-center justify-center p-4 sm:p-8 overflow-hidden relative group/canvas shrink-0">
-          <div className="relative inline-block cursor-crosshair max-h-full">
+        {/* Visual Reference & Annotation Canvas Panel */}
+        <div className="h-[45vh] sm:h-auto sm:flex-1 bg-neutral-50 flex items-center justify-center p-4 sm:p-12 overflow-hidden relative group/canvas min-w-0">
+          <div className="relative cursor-crosshair w-full h-full flex items-center justify-center">
             <img
               ref={imageRef}
               src={item.url}
               onClick={handleImageClick}
-              className="max-w-full max-h-[35vh] sm:max-h-full object-contain shadow-xl rounded-lg"
+              className="max-w-full max-h-full object-contain shadow-xl rounded-lg"
               alt="Interpretation target"
             />
 
@@ -378,68 +379,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               </div>
             )}
 
-            {/* Overlay Toggle Button */}
-            {!item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMetadata(!showMetadata);
-                }}
-                className={`absolute top-6 left-6 z-20 w-8 h-8 rounded-full border border-white/20 flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-lg ${showMetadata
-                    ? 'bg-neutral-900/10 text-neutral-800'
-                    : 'bg-white/80 text-neutral-900'
-                  }`}
-                title={showMetadata ? "Hide Details" : "Show Details"}
-              >
-                {showMetadata ? (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                )}
-              </button>
-            )}
-
-            {/* Metadata Overlay Card */}
-            {showMetadata && !item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
-              <div className="absolute inset-4 sm:inset-10 bg-white/90 backdrop-blur-md p-6 sm:p-10 rounded-2xl shadow-2xl border border-white/20 overflow-y-auto z-10 invisible sm:visible scrollbar-hide animate-in zoom-in-95 duration-500">
-                <div className="space-y-8">
-                  {item.artistName && (
-                    <div>
-                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Artist</p>
-                      <p className="text-[18px] font-medium text-neutral-900 tracking-tight leading-tight">{item.artistName}</p>
-                    </div>
-                  )}
-                  {item.artworkName && (
-                    <div>
-                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Title</p>
-                      <p className="text-[16px] font-serif italic text-neutral-700 leading-tight">{item.artworkName}</p>
-                    </div>
-                  )}
-                  {item.description && (
-                    <div>
-                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Description</p>
-                      <div className="text-[12px] leading-relaxed text-neutral-600 font-serif">
-                        <ReactMarkdown components={markdownComponents}>
-                          {item.description}
-                        </ReactMarkdown>
-                      </div>
-                    </div>
-                  )}
-                  {item.keywords && item.keywords.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {item.keywords.map((tag, idx) => (
-                        <HoverTag
-                          key={idx}
-                          tag={tag}
-                          artworkId={item.artworkId}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Loading/Streaming Overlay for Metadata */}
             {item.isAnalyzing && (
               <div className="absolute top-8 left-8 w-72 bg-white/90 backdrop-blur-md p-8 rounded-2xl shadow-2xl border border-white/20 z-10 hidden sm:block animate-in fade-in duration-500">
@@ -463,13 +402,91 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               </div>
             )}
           </div>
-          <div className="hidden sm:block absolute bottom-8 left-8 text-[9px] tracking-[0.4em] uppercase text-neutral-300 pointer-events-none">
-            Click to Annotate Area of Interest
-          </div>
+
+          {/* Overlay Toggle Button */}
+          {!item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMetadata(!showMetadata);
+              }}
+              className={`absolute top-8 left-8 z-40 w-10 h-10 rounded-full border border-white/20 flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-lg ${showMetadata
+                ? 'bg-neutral-900/10 text-neutral-800'
+                : 'bg-white/80 text-neutral-900'
+                }`}
+              title={showMetadata ? "Hide Details" : "Show Details"}
+            >
+              {showMetadata ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              )}
+            </button>
+          )}
+
+          {/* Metadata Overlay Card - Positioned relative to the left panel (sm:flex-1) */}
+          {showMetadata && !item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
+            <div className="absolute inset-0 bg-white/95 backdrop-blur-md p-8 sm:p-12 overflow-y-auto z-30 scrollbar-hide animate-in fade-in duration-500">
+              <div className="max-w-xl mx-auto space-y-8">
+                {item.artistName && (
+                  <div>
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Artist</p>
+                    <p className="text-[20px] sm:text-[24px] font-medium text-neutral-900 tracking-tight leading-tight">{item.artistName}</p>
+                  </div>
+                )}
+                {item.artworkName && (
+                  <div>
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Title</p>
+                    <p className="text-[18px] sm:text-[22px] font-serif italic text-neutral-700 leading-tight">{item.artworkName}</p>
+                  </div>
+                )}
+                {(item.date || item.medium) && (
+                  <div className="flex gap-12">
+                    {item.date && (
+                      <div>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Date</p>
+                        <p className="text-[14px] text-neutral-600">{item.date}</p>
+                      </div>
+                    )}
+                    {item.medium && (
+                      <div>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Medium</p>
+                        <p className="text-[14px] text-neutral-600">{item.medium}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {item.description && (
+                  <div>
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Analysis</p>
+                    <div className="text-[13px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
+                      <ReactMarkdown components={markdownComponents}>
+                        {item.description}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+                {item.keywords && item.keywords.length > 0 && (
+                  <div className="pt-2">
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Tags</p>
+                    <div className="flex flex-wrap gap-2">
+                      {item.keywords.map((tag, idx) => (
+                        <HoverTag
+                          key={idx}
+                          tag={tag}
+                          artworkId={item.artworkId}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Chat Interface */}
-        <div className="flex-1 sm:flex-none w-full sm:w-[500px] flex flex-col bg-white border-t sm:border-t-0 sm:border-l border-neutral-100 shrink-0 min-h-0">
+        {/* Chat Interface - 50% split on desktop */}
+        <div className="flex-1 w-full sm:w-1/2 flex flex-col bg-white border-t sm:border-t-0 sm:border-l border-neutral-100 min-w-0 min-h-0">
           <div className="p-4 sm:p-6 border-b border-neutral-50 flex justify-between items-center shrink-0">
             <h3 className="text-[9px] sm:text-[10px] tracking-[0.4em] sm:tracking-[0.5em] uppercase text-neutral-400 font-bold">curator dialogue</h3>
             <div className="flex items-center space-x-4">

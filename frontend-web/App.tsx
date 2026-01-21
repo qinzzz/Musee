@@ -169,6 +169,8 @@ const App: React.FC = () => {
     artworkName?: string,
     description?: string,
     keywords?: string[],
+    date?: string,
+    medium?: string,
     artworkId?: string,
     isAnalyzing?: boolean,
     streamingText?: string
@@ -209,6 +211,8 @@ const App: React.FC = () => {
               artworkName: item.artwork_name,
               description: parseAnalysis(item.analysis),
               keywords: keywords,
+              date: item.date,
+              medium: item.medium,
               timestamp: item.created_at ? new Date(item.created_at).getTime() : Date.now(),
               conversation: (item.conversation_history || []).map((msg: any) => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
@@ -316,14 +320,12 @@ const App: React.FC = () => {
     // Reset input so the same file can be selected again
     event.target.value = '';
 
-    // Process each file
-    files.forEach(async (file) => {
-      console.log('Processing file:', file.name, file.size, 'bytes');
-
+    // Single file upload: Open modal immediately and stream analysis
+    if (files.length === 1) {
+      const file = files[0];
       const newItemId = Math.random().toString(36).substring(2, 11);
 
       try {
-        // Read file as base64 for immediate display in corridor
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (e) => resolve(e.target?.result as string);
@@ -331,7 +333,6 @@ const App: React.FC = () => {
           reader.readAsDataURL(file);
         });
 
-        // Add placeholder item to exhibition immediately
         const placeholderItem: GalleryItem = {
           id: newItemId,
           url: base64,
@@ -347,62 +348,158 @@ const App: React.FC = () => {
           conversation: [],
           annotations: [],
           visitId: visit.active ? visit.id : undefined,
-          isAnalyzing: true
+          isAnalyzing: true,
+          streamingText: ''
         };
 
         setItems(prev => [...prev, placeholderItem]);
         if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
 
-        // Call the non-streaming API for batch processing
-        console.log('Starting analysis for file:', file.name);
-        const analysis = await analyzeArtwork(file, USER_ID);
-        console.log('Analysis complete for:', file.name, analysis);
-
-        // Convert tags array to keywords format (with #)
-        const keywords = analysis.tags.map((tag: string) =>
-          tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
-        );
-
-        // Update tag positions
-        setTagPositions(prev => {
-          const updated = { ...prev };
-          keywords.forEach((tag: string) => {
-            if (!updated[tag]) {
-              updated[tag] = {
-                x: (Math.random() * 2 - 1),
-                y: (Math.random() * 2 - 1)
-              };
-            }
-          });
-          return updated;
+        // Open modal immediately
+        setInterpretingItem({
+          ...placeholderItem,
+          streamingText: 'Initializing analysis...'
         });
 
-        // Resolve backend URL for the corrected image
-        const finalUrl = resolveImageUrl(analysis.photo_uri) || base64;
+        console.log('Starting streaming analysis for single file:', file.name);
 
-        // Update the item in the gallery with final results
-        setItems(prev => prev.map(item => item.id === newItemId ? {
-          ...item,
-          url: finalUrl,
-          keywords: keywords,
-          artistName: analysis.artist_name,
-          artworkName: analysis.artwork_name,
-          description: parseAnalysis(analysis.description),
-          artworkId: analysis.artwork_id,
-          isAnalyzing: false
-        } : item));
+        await analyzeArtworkStream(
+          file,
+          USER_ID,
+          (chunk) => {
+            // Update streaming text in both places
+            setInterpretingItem(prev => (prev && prev.id === newItemId) ? {
+              ...prev,
+              streamingText: (prev.streamingText || '') + chunk
+            } : prev);
+          },
+          (analysis) => {
+            const keywords = analysis.tags.map((tag: string) =>
+              tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
+            );
 
+            // Update tag positions
+            setTagPositions(prev => {
+              const updated = { ...prev };
+              keywords.forEach((tag: string) => {
+                if (!updated[tag]) {
+                  updated[tag] = {
+                    x: (Math.random() * 2 - 1),
+                    y: (Math.random() * 2 - 1)
+                  };
+                }
+              });
+              return updated;
+            });
+
+            const finalUrl = resolveImageUrl(analysis.photo_uri) || base64;
+
+            const finalItemUpdates = {
+              url: finalUrl,
+              keywords: keywords,
+              artistName: analysis.artist_name,
+              artworkName: analysis.artwork_name,
+              description: parseAnalysis(analysis.description),
+              date: analysis.date,
+              medium: analysis.medium,
+              artworkId: analysis.artwork_id,
+              isAnalyzing: false,
+              streamingText: undefined
+            };
+
+            // Update gallery
+            setItems(prev => prev.map(item => item.id === newItemId ? {
+              ...item,
+              ...finalItemUpdates
+            } : item));
+
+            // Update modal
+            setInterpretingItem(prev => (prev && prev.id === newItemId) ? {
+              ...prev,
+              ...finalItemUpdates
+            } : prev);
+          },
+          (error) => {
+            console.error('Streaming analysis failed:', error);
+            const errorUpdates = { isAnalyzing: false, streamingText: 'Analysis interrupted. Please try again.' };
+            setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...errorUpdates } : item));
+            setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...errorUpdates } : prev);
+          },
+          visit.active ? visit.id : undefined
+        );
       } catch (error) {
-        console.error(`Failed to analyze ${file.name}:`, error);
-        // Remove 'isAnalyzing' flag even on error so it doesn't spin forever
-        setItems(prev => prev.map(item => {
-          if (item.id === newItemId) {
-            return { ...item, isAnalyzing: false };
-          }
-          return item;
-        }));
+        console.error('Failed to prepare single upload:', error);
       }
-    });
+    }
+    // Batch upload: Keep current background processing implementation
+    else {
+      files.forEach(async (file) => {
+        console.log('Processing batch file:', file.name);
+        const newItemId = Math.random().toString(36).substring(2, 11);
+
+        try {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+
+          const placeholderItem: GalleryItem = {
+            id: newItemId,
+            url: base64,
+            keywords: [],
+            vibe: {
+              backgroundColor: '#ffffff',
+              padding: 4,
+              borderRadius: '12px',
+              borderType: 'solid',
+              accentColor: '#000000'
+            },
+            timestamp: Date.now(),
+            conversation: [],
+            annotations: [],
+            visitId: visit.active ? visit.id : undefined,
+            isAnalyzing: true
+          };
+
+          setItems(prev => [...prev, placeholderItem]);
+          if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+
+          const analysis = await analyzeArtwork(file, USER_ID, undefined, visit.active ? visit.id : undefined);
+          const keywords = analysis.tags.map((tag: string) =>
+            tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
+          );
+
+          setTagPositions(prev => {
+            const updated = { ...prev };
+            keywords.forEach((tag: string) => {
+              if (!updated[tag]) updated[tag] = { x: (Math.random() * 2 - 1), y: (Math.random() * 2 - 1) };
+            });
+            return updated;
+          });
+
+          const finalUrl = resolveImageUrl(analysis.photo_uri) || base64;
+
+          setItems(prev => prev.map(item => item.id === newItemId ? {
+            ...item,
+            url: finalUrl,
+            keywords: keywords,
+            artistName: analysis.artist_name,
+            artworkName: analysis.artwork_name,
+            description: parseAnalysis(analysis.description),
+            date: analysis.date,
+            medium: analysis.medium,
+            artworkId: analysis.artwork_id,
+            isAnalyzing: false
+          } : item));
+
+        } catch (error) {
+          console.error(`Failed to analyze ${file.name}:`, error);
+          setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false } : item));
+        }
+      });
+    }
 
     // Scroll to the end of the corridor to see new items
     setTimeout(() => {
@@ -507,7 +604,19 @@ const App: React.FC = () => {
               >
                 <GalleryCard
                   item={entry.item}
-                  onInterpret={() => setInterpretingItem({ url: entry.item.url, id: entry.item.id, conversation: entry.item.conversation, annotations: entry.item.annotations, artistName: entry.item.artistName, artworkName: entry.item.artworkName, description: entry.item.description, keywords: entry.item.keywords, artworkId: entry.item.artworkId })}
+                  onInterpret={() => setInterpretingItem({
+                    url: entry.item.url,
+                    id: entry.item.id,
+                    conversation: entry.item.conversation,
+                    annotations: entry.item.annotations,
+                    artistName: entry.item.artistName,
+                    artworkName: entry.item.artworkName,
+                    description: entry.item.description,
+                    keywords: entry.item.keywords,
+                    date: entry.item.date,
+                    medium: entry.item.medium,
+                    artworkId: entry.item.artworkId
+                  })}
                   onDelete={() => handleDeleteItem(entry.item.id)}
                 />
               </div>

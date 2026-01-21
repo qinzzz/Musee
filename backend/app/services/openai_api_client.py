@@ -4,7 +4,7 @@ All business logic, prompt loading, and request construction is handled by AISer
 """
 
 import base64
-from typing import Optional, Any, AsyncGenerator
+from typing import Optional, Any, AsyncGenerator, Dict
 from openai import AsyncOpenAI
 from app.services.ai_client_interface import AIClientInterface
 from app.models.artwork import AIProvider
@@ -48,7 +48,8 @@ class OpenAIAPIClient(AIClientInterface):
         prompt: str,
         image_data: Any,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         """Make OpenAI API call with image and text"""
         logger.info(f"OpenAI API call: model={self.model}, max_tokens={max_tokens}")
@@ -83,7 +84,8 @@ class OpenAIAPIClient(AIClientInterface):
         self,
         messages: list,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         """Make OpenAI API call with conversation history"""
         logger.info(f"OpenAI conversation API call: model={self.model}")
@@ -101,7 +103,8 @@ class OpenAIAPIClient(AIClientInterface):
         self,
         prompt: str,
         max_tokens: int,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         """Make OpenAI API call with text only (no image)"""
         logger.info(f"OpenAI text-only API call: model={self.model}")
@@ -168,7 +171,8 @@ class OpenAIAPIClient(AIClientInterface):
         prompt: str,
         image_data: Any,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """Stream OpenAI API call with image and text"""
         logger.info(f"OpenAI streaming API call: model={self.model}, max_tokens={max_tokens}")
@@ -206,7 +210,8 @@ class OpenAIAPIClient(AIClientInterface):
         self,
         messages: list,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """Stream OpenAI API call with conversation history"""
         logger.info(f"OpenAI conversation streaming API call: model={self.model}")

@@ -66,6 +66,8 @@ export interface ArtworkAnalysisResult {
   artwork_name: string;
   description: string;
   tags: string[];
+  date?: string;
+  medium?: string;
   model_used: string;
   artwork_id?: string;  // Returned if user_id was provided
   photo_uri?: string;   // Server path to stored image (web clients)
@@ -101,7 +103,8 @@ export function getOrCreateUserId(): string {
 export async function analyzeArtwork(
   imageFile: File,
   userId?: string,
-  photoUri?: string
+  photoUri?: string,
+  sessionId?: string
 ): Promise<ArtworkAnalysisResult> {
   const formData = new FormData();
   formData.append('image', imageFile);
@@ -112,6 +115,9 @@ export async function analyzeArtwork(
   }
   if (photoUri) {
     formData.append('photo_uri', photoUri);
+  }
+  if (sessionId) {
+    formData.append('session_id', sessionId);
   }
 
   console.log('Sending request to:', `${API_BASE_URL}/artwork-analyze`);
@@ -131,75 +137,25 @@ export async function analyzeArtwork(
   const data = await response.json();
   console.log('Raw API response:', data);
 
-  // Parse the analysis - it may be a JSON string wrapped in markdown code blocks
-  let analysis: any = data.analysis;
+  // The backend now provides cleaned, structured data at the top level.
+  // We only pull from 'analysis' if the structured fields are missing (legacy support).
 
-  if (typeof analysis === 'string') {
-    // Remove markdown code blocks if present
-    let jsonStr = analysis;
-    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch) {
-      jsonStr = codeBlockMatch[1].trim();
-    }
-
-    try {
-      const parsed = JSON.parse(jsonStr);
-      console.log('Parsed analysis:', parsed);
-
-      // Handle array format from backend
-      // Structure: [artistGuess1, artistGuess2, ..., {analysis, tags}]
-      // First items have artist_name/artwork_name/score, last item has analysis/tags
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Find the best artist guess (first item with artist_name, usually highest score)
-        const artistInfo = parsed.find((item: any) => item.artist_name && item.score !== undefined) || parsed[0] || {};
-
-        // Find the analysis info (item with 'analysis' and 'tags' properties)
-        const analysisInfo = parsed.find((item: any) => item.analysis !== undefined) || {};
-
-        // Parse tags from comma-separated string
-        let tags: string[] = [];
-        if (analysisInfo.tags) {
-          tags = analysisInfo.tags.split(',').map((t: string) => `#${t.trim().toLowerCase().replace(/\s+/g, '-')}`);
-        }
-
-        // Prefer parsed values over backend's top-level values (which may be defaults)
-        const artist_name = artistInfo.artist_name || data.artist_name || 'Unknown Artist';
-        const artwork_name = artistInfo.artwork_name || data.artwork_name || 'Untitled';
-
-        return {
-          artist_name,
-          artwork_name,
-          description: analysisInfo.analysis || '',
-          tags: tags,
-          model_used: data.model_used || 'unknown',
-          artwork_id: data.artwork_id,
-          photo_uri: data.photo_uri,
-        };
-      }
-
-      analysis = parsed;
-    } catch (e) {
-      console.error('Failed to parse analysis JSON:', e);
-    }
-  }
-
-  // Fallback: handle as object directly
   let tags: string[] = [];
-  if (analysis.tags) {
-    if (typeof analysis.tags === 'string') {
-      tags = analysis.tags.split(/[,\s]+/).filter((t: string) => t).map((t: string) =>
-        t.startsWith('#') ? t.toLowerCase() : `#${t.toLowerCase().replace(/\s+/g, '-')}`
-      );
-    } else if (Array.isArray(analysis.tags)) {
-      tags = analysis.tags;
-    }
+  if (Array.isArray(data.tags)) {
+    tags = data.tags;
+  } else if (typeof data.tags === 'string') {
+    tags = data.tags.split(/[,\s]+/).filter((t: string) => t).map((t: string) =>
+      t.startsWith('#') ? t.toLowerCase() : `#${t.toLowerCase().replace(/\s+/g, '-')}`
+    );
   }
 
   return {
-    artist_name: data.artist_name || analysis.artist_name || 'Unknown Artist',
-    artwork_name: data.artwork_name || analysis.artwork_name || 'Untitled',
-    description: analysis.description || analysis.analysis || '',
+    artist_name: data.artist_name || 'Unknown Artist',
+    artwork_name: data.artwork_name || 'Untitled',
+    description: data.analysis || '',
     tags: tags,
+    date: data.date,
+    medium: data.medium,
     model_used: data.model_used || 'unknown',
     artwork_id: data.artwork_id,
     photo_uri: data.photo_uri,
@@ -239,6 +195,7 @@ export async function analyzeArtworkStream(
   onChunk: (text: string) => void,
   onComplete: (result: ArtworkAnalysisResult) => void,
   onError: (error: Error) => void,
+  sessionId?: string,
   onMetrics?: (metrics: StreamingMetrics) => void
 ): Promise<void> {
   const formData = new FormData();
@@ -247,6 +204,9 @@ export async function analyzeArtworkStream(
 
   if (userId) {
     formData.append('user_id', userId);
+  }
+  if (sessionId) {
+    formData.append('session_id', sessionId);
   }
 
   console.log('Starting streaming analysis to:', `${API_BASE_URL}/artwork-analyze-stream`);
@@ -305,7 +265,11 @@ export async function analyzeArtworkStream(
           } else if (eventType === 'complete' && data.type === 'result') {
             // Parse tags from comma-separated string
             let tags: string[] = [];
-            if (data.tags) {
+            if (Array.isArray(data.tags)) {
+              tags = data.tags.map((t: string) =>
+                t.startsWith('#') ? t.toLowerCase() : `#${t.toLowerCase().replace(/\s+/g, '-')}`
+              );
+            } else if (typeof data.tags === 'string') {
               tags = data.tags.split(',').map((t: string) =>
                 `#${t.trim().toLowerCase().replace(/\s+/g, '-')}`
               );
@@ -316,6 +280,8 @@ export async function analyzeArtworkStream(
               artwork_name: data.artwork_name || 'Untitled',
               description: data.description || '',
               tags: tags,
+              date: data.date,
+              medium: data.medium,
               model_used: data.model_used || 'unknown',
               artwork_id: data.artwork_id,
               photo_uri: data.photo_uri,

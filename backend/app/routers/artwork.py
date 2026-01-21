@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict, Any
 import json
 import logging
 import re
@@ -134,9 +134,11 @@ async def analyze_artist(
     identity: Optional[str] = Form("default"),
     language: Optional[str] = Form(None),
     user_id: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
     photo_uri: Optional[str] = Form(None),
-    client_type: Optional[str] = Form(None),  # "web" or "ios" - helps determine storage strategy
-    db: Session = Depends(get_db)
+    client_type: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """
     Analyze artwork image to identify artist
@@ -146,6 +148,7 @@ async def analyze_artist(
     - **identity**: AI identity/persona
     - **language**: Language code for response
     - **user_id**: If provided, saves artwork to DB and returns artwork_id
+    - **session_id**: Optional ID to group artworks and share context
     - **photo_uri**: URI/path for the photo (iOS clients provide local path)
     - **client_type**: "web" or "ios" - web clients will have images stored on server
     """
@@ -154,12 +157,18 @@ async def analyze_artist(
     try:
         image_bytes = await process_image(image)
         ai_service = AIServiceFactory.get_service(ai_provider)
+        
+        # Get session context if session_id provided
+        session_context = None
+        if session_id:
+            session_context = await get_session_context(db, session_id)
+
         analysis_text = await ai_service.identify_artist(
-            image_bytes, identity=identity, language=language
+            image_bytes, identity=identity, language=language, session_context=session_context
         )
 
         response = {
-            "analysis": analysis_text,
+            "analysis": None, # Will be filled after parsing
             "model_used": ai_provider.value
         }
 
@@ -174,13 +183,28 @@ async def analyze_artist(
                 db.flush()
                 logger.info(f"Auto-created user: {user_id}")
 
+            # Ensure session exists (auto-create if not)
+            if session_id:
+                session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+                if not session_record:
+                    session_record = SessionModel(id=session_id, user_id=user_id or "anonymous")
+                    db.add(session_record)
+                    db.flush()
+                    logger.info(f"Auto-created session: {session_id}")
+
             # Parse analysis to extract artist/artwork info
             artist_name = "Unknown Artist"
             artwork_name = "Untitled"
             extracted_tags = []
 
-            # Try to parse the analysis JSON
+            # Parse analysis to extract artist/artwork info
+            artist_name = "Unknown Artist"
+            artwork_name = "Untitled"
+            extracted_tags = []
             extracted_analysis = None
+            date_val = None
+            medium_val = None
+
             try:
                 import re
                 json_str = analysis_text
@@ -192,25 +216,26 @@ async def analyze_artist(
 
                 parsed = json.loads(json_str)
 
-                # Handle array format: [artistGuess1, artistGuess2, ..., {analysis, tags}]
-                if isinstance(parsed, list) and len(parsed) > 0:
-                    # Find best artist guess (first item with artist_name and score)
-                    artist_info = next(
-                        (item for item in parsed if isinstance(item, dict) and 'artist_name' in item and 'score' in item),
-                        parsed[0] if isinstance(parsed[0], dict) else {}
-                    )
-                    artist_name = artist_info.get('artist_name', artist_name)
-                    artwork_name = artist_info.get('artwork_name', artwork_name)
-
-                    # Find analysis info (item with 'analysis' and 'tags')
-                    analysis_info = next(
-                        (item for item in parsed if isinstance(item, dict) and 'analysis' in item),
-                        {}
-                    )
-                    extracted_tags = analysis_info.get('tags', [])
-                    extracted_analysis = analysis_info.get('analysis', '')
-
-                    logger.info(f"Parsed artwork: {artist_name} - {artwork_name}, tags: {extracted_tags}")
+                # Handle the new structured object format
+                if isinstance(parsed, dict):
+                    artist_name = parsed.get('artist', artist_name)
+                    artwork_name = parsed.get('title', artwork_name)
+                    extracted_tags = parsed.get('tags', [])
+                    extracted_analysis = parsed.get('description', '')
+                    date_val = parsed.get('date')
+                    medium_val = parsed.get('medium')
+                    
+                    logger.info(f"Parsed structured artwork: {artist_name} - {artwork_name}, tags: {extracted_tags}")
+                
+                # Fallback for old array format (removed for brevity)
+                elif isinstance(parsed, list) and len(parsed) > 0:
+                    item0 = parsed[0] if isinstance(parsed[0], dict) else {}
+                    artist_name = item0.get('artist_name', item0.get('artist', artist_name))
+                    artwork_name = item0.get('artwork_name', item0.get('title', artwork_name))
+                    extracted_tags = item0.get('tags', [])
+                    extracted_analysis = item0.get('analysis', item0.get('description', ''))
+                    date_val = item0.get('date')
+                    medium_val = item0.get('medium')
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 logger.warning(f"Failed to parse analysis for DB save: {e}")
 
@@ -239,22 +264,53 @@ async def analyze_artist(
                 artwork_name=artwork_name,
                 user_id=user_id,
                 is_recognized=1 if artist_name != "Unknown Artist" else 0,
-                analysis=extracted_analysis
+                analysis=extracted_analysis,
+                params={"date": date_val, "medium": medium_val},
+                session_id=session_id
             )
             db.add(saved_artwork)
 
-            # Link tags if parsed
-            if extracted_tags:
-                db.flush()  # Get the artwork ID
-                batch_link_tags(db, saved_artwork, extracted_tags)
-
             db.commit()
             db.refresh(saved_artwork)
+
+            # Update session narrative in background
+            if session_id and background_tasks:
+                background_tasks.add_task(
+                    update_session_narrative_task,
+                    session_id=session_id,
+                    new_artwork_data={
+                        "artist": artist_name,
+                        "title": artwork_name,
+                        "description": extracted_analysis
+                    },
+                    identity=identity,
+                    language=language
+                )
 
             response["artwork_id"] = str(saved_artwork.id)
             response["artist_name"] = artist_name
             response["artwork_name"] = artwork_name
             response["photo_uri"] = generated_photo_uri  # For web clients, this is the server path
+            response["date"] = date_val
+            response["medium"] = medium_val
+            response["tags"] = extracted_tags
+            response["analysis"] = extracted_analysis
+        else:
+            # If not saving to DB, still try to parse for cleaner response
+            extracted_analysis = None
+            try:
+                import re
+                json_str = analysis_text
+                json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', analysis_text)
+                if json_match:
+                    json_str = json_match.group(1).strip()
+                parsed = json.loads(json_str)
+                if isinstance(parsed, dict):
+                    extracted_analysis = parsed.get('description')
+            except:
+                pass
+            
+            response["analysis"] = extracted_analysis or analysis_text
 
         return response
 
@@ -275,7 +331,9 @@ async def analyze_artist_stream(
     user_id: Optional[str] = Form(None),
     photo_uri: Optional[str] = Form(None),
     client_type: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    session_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """
     Stream artwork analysis with SSE (Server-Sent Events)
@@ -319,9 +377,14 @@ async def analyze_artist_stream(
             t_ai_call = time.time()
             logger.info(f"[{request_id}] METRIC: ai_service_called, elapsed={(t_ai_call - t_request_received)*1000:.0f}ms")
 
+            # Get session context if session_id provided
+            session_context = None
+            if session_id:
+                session_context = await get_session_context(db, session_id)
+
             # Stream the analysis text
             async for chunk in ai_service.identify_artist_stream(
-                image_bytes, identity=identity, language=language
+                image_bytes, identity=identity, language=language, session_context=session_context
             ):
                 # TIMING: First chunk received
                 if not first_chunk_received:
@@ -343,8 +406,10 @@ async def analyze_artist_stream(
             # Parse the full response to extract metadata
             artist_name = "Unknown Artist"
             artwork_name = "Untitled"
-            tags_str = ""
+            extracted_tags = []
             description = ""
+            date_val = None
+            medium_val = None
 
             try:
                 json_str = full_text
@@ -356,25 +421,34 @@ async def analyze_artist_stream(
 
                 parsed = json.loads(json_str)
 
-                # Handle array format: [artistGuess1, artistGuess2, ..., {analysis, tags}]
-                if isinstance(parsed, list) and len(parsed) > 0:
-                    # Find best artist guess
+                # Handle the new structured object format
+                if isinstance(parsed, dict):
+                    artist_name = parsed.get('artist', artist_name)
+                    artwork_name = parsed.get('title', artwork_name)
+                    extracted_tags = parsed.get('tags', [])
+                    description = parsed.get('description', '')
+                    date_val = parsed.get('date')
+                    medium_val = parsed.get('medium')
+                
+                # Fallback for old array format
+                elif isinstance(parsed, list) and len(parsed) > 0:
                     artist_info = next(
-                        (item for item in parsed if isinstance(item, dict) and 'artist_name' in item and 'score' in item),
+                        (item for item in parsed if isinstance(item, dict) and 'artist_name' in item),
                         parsed[0] if isinstance(parsed[0], dict) else {}
                     )
                     artist_name = artist_info.get('artist_name', artist_name)
                     artwork_name = artist_info.get('artwork_name', artwork_name)
 
-                    # Find analysis info
                     analysis_info = next(
                         (item for item in parsed if isinstance(item, dict) and 'analysis' in item),
                         {}
                     )
                     extracted_tags = analysis_info.get('tags', [])
                     description = analysis_info.get('analysis', '')
+                    date_val = artist_info.get('date') or analysis_info.get('date')
+                    medium_val = artist_info.get('medium') or analysis_info.get('medium')
 
-                    logger.info(f"[{request_id}] Parsed streaming artwork: {artist_name} - {artwork_name}, tags: {extracted_tags}")
+                logger.info(f"[{request_id}] Parsed streaming artwork: {artist_name} - {artwork_name}, tags: {extracted_tags}")
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 logger.warning(f"[{request_id}] Failed to parse streaming analysis: {e}")
 
@@ -383,9 +457,11 @@ async def analyze_artist_stream(
                 "type": "result",
                 "artist_name": artist_name,
                 "artwork_name": artwork_name,
+                "date": date_val,
+                "medium": medium_val,
                 "description": description,
                 "tags": extracted_tags,
-                "analysis": full_text,
+                "analysis": description or full_text,
                 "model_used": ai_provider.value
             }
 
@@ -399,6 +475,15 @@ async def analyze_artist_stream(
                         db.add(user)
                         db.flush()
                         logger.info(f"Auto-created user: {user_id}")
+
+                    # Ensure session exists (auto-create if not)
+                    if session_id:
+                        session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+                        if not session_record:
+                            session_record = SessionModel(id=session_id, user_id=user_id)
+                            db.add(session_record)
+                            db.flush()
+                            logger.info(f"Auto-created session: {session_id}")
 
                     # Generate photo_uri based on client type
                     if photo_uri:
@@ -418,7 +503,9 @@ async def analyze_artist_stream(
                         artwork_name=artwork_name,
                         user_id=user_id,
                         is_recognized=1 if artist_name != "Unknown Artist" else 0,
-                        analysis=description or full_text  # Store plain text if available
+                        analysis=description or full_text,  # Store plain text if available
+                        params={"date": date_val, "medium": medium_val},
+                        session_id=session_id
                     )
                     db.add(saved_artwork)
 
@@ -432,6 +519,20 @@ async def analyze_artist_stream(
 
                     result["artwork_id"] = str(saved_artwork.id)
                     result["photo_uri"] = generated_photo_uri
+
+                    # Update session narrative in background
+                    if session_id and background_tasks:
+                        background_tasks.add_task(
+                            update_session_narrative_task,
+                            session_id=session_id,
+                            new_artwork_data={
+                                "artist": artist_name,
+                                "title": artwork_name,
+                                "description": description or full_text
+                            },
+                            identity=identity,
+                            language=language
+                        )
                 except Exception as e:
                     logger.error(f"Failed to save artwork to DB: {e}")
                     db.rollback()
@@ -511,6 +612,7 @@ async def analyze_bite(
 
     try:
         user_message = query or "Tell me more about this artwork."
+        session_id = None
 
         # Fail if both image and artwork_id are missing
         if not image and not artwork_id:
@@ -538,6 +640,11 @@ async def analyze_bite(
                 artist_name = artwork.artist_name
             if not artwork_name:
                 artwork_name = artwork.artwork_name
+
+            # Use artwork's session_id if not explicitly provided
+            if artwork.session_id:
+                session_id = artwork.session_id
+                logger.info(f"Inferred session_id {session_id} from artwork_id {artwork_id}")
 
             # Load conversation history from DB
             conversations = db.query(Conversation).filter(
@@ -590,6 +697,11 @@ async def analyze_bite(
             except json.JSONDecodeError:
                 logger.warning("Failed to parse conversation_history JSON")
 
+        # Get session context if session_id provided
+        session_context = None
+        if session_id:
+            session_context = await get_session_context(db, session_id)
+
         # Call LLM
         ai_service = AIServiceFactory.get_service(ai_provider)
         bite_text = await ai_service.get_artwork_bite(
@@ -599,7 +711,8 @@ async def analyze_bite(
             user_message,
             previous_messages,
             identity=identity,
-            language=language
+            language=language,
+            session_context=session_context
         )
 
         # If artwork_id mode, write assistant message to DB
@@ -650,6 +763,7 @@ async def analyze_bite_stream(
 
     try:
         user_message = query or "Tell me more about this artwork."
+        session_id = None
 
         if not image and not artwork_id:
             raise HTTPException(
@@ -675,6 +789,11 @@ async def analyze_bite_stream(
                 artist_name = artwork.artist_name
             if not artwork_name:
                 artwork_name = artwork.artwork_name
+
+            # Use artwork's session_id if not explicitly provided
+            if not session_id and artwork.session_id:
+                session_id = artwork.session_id
+                logger.info(f"Inferred session_id {session_id} from artwork_id {artwork_id}")
 
             conversations = db.query(Conversation).filter(
                 Conversation.saved_artwork_id == artwork_id
@@ -719,8 +838,13 @@ async def analyze_bite_stream(
             except json.JSONDecodeError:
                 pass
 
+        # Get session context if session_id provided
+        session_context = None
+        if session_id:
+            session_context = await get_session_context(db, session_id)
+
         async def event_generator():
-            nonlocal user_message, artist_name, artwork_name, previous_messages, identity, language, ai_provider, artwork_id, user_msg_record
+            nonlocal user_message, artist_name, artwork_name, previous_messages, identity, language, ai_provider, artwork_id, user_msg_record, session_context
 
             full_text = ""
             ai_service = AIServiceFactory.get_service(ai_provider)
@@ -733,7 +857,8 @@ async def analyze_bite_stream(
                     user_message,
                     previous_messages,
                     identity=identity,
-                    language=language
+                    language=language,
+                    session_context=session_context
                 ):
                     full_text += chunk
                     yield f"event: chunk\ndata: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
@@ -1184,3 +1309,66 @@ async def batch_delete_artworks(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Batch delete failed: {str(e)}")
+
+
+# =============================================================================
+# Session Memory Helpers
+# =============================================================================
+
+from app.database.models import Session as SessionModel
+
+async def get_session_context(db: Session, session_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve thematic context for a session"""
+    session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_record:
+        # Create session if it doesn't exist
+        return None
+    
+    # Get previous artworks in this session (ordered by creation)
+    artworks = db.query(SavedArtwork).filter(
+        SavedArtwork.session_id == session_id
+    ).order_by(SavedArtwork.created_at).all()
+    
+    if not artworks and not session_record.narrative_summary:
+        return None
+
+    return {
+        "narrative_summary": session_record.narrative_summary,
+        "previous_artworks": [
+            {
+                "artist": art.artist_name,
+                "title": art.artwork_name,
+                "analysis": art.analysis,
+                "tags": [tag.name for tag in art.artwork_tags]
+            }
+            for art in artworks
+        ]
+    }
+
+async def update_session_narrative_task(
+    session_id: str, 
+    new_artwork_data: Dict[str, Any], 
+    identity: str = "default",
+    language: Optional[str] = None
+):
+    """Background task to update session narrative distilled from all artworks"""
+    from app.database.connection import SessionLocal
+    with SessionLocal() as db:
+        session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        if not session_record:
+            return
+            
+        # Determine AI provider to use
+        ai_provider = determine_ai_provider()
+        ai_service = AIServiceFactory.get_service(ai_provider)
+        
+        updated_narrative = await ai_service.summarize_session_narrative(
+            previous_narrative=session_record.narrative_summary,
+            new_artwork_data=new_artwork_data,
+            identity=identity,
+            language=language
+        )
+        
+        session_record.narrative_summary = updated_narrative
+        db.commit()
+        logger.info(f"Updated narrative for session {session_id}: {updated_narrative}")

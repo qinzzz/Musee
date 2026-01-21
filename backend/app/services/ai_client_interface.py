@@ -17,7 +17,8 @@ class AIClientInterface(ABC):
         prompt: str,
         image_data: Any,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Make a simple API call with image and text prompt
@@ -27,6 +28,7 @@ class AIClientInterface(ABC):
             image_data: Provider-specific image format (base64 string, PIL Image, etc.)
             max_tokens: Maximum tokens for response
             temperature: Temperature parameter
+            response_schema: Optional JSON schema to enforce response format
 
         Returns:
             str: Model's text response
@@ -38,7 +40,8 @@ class AIClientInterface(ABC):
         self,
         messages: list,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Make API call with conversation history
@@ -47,6 +50,7 @@ class AIClientInterface(ABC):
             messages: Provider-specific message format
             max_tokens: Maximum tokens for response
             temperature: Temperature parameter
+            response_schema: Optional JSON schema to enforce response format
 
         Returns:
             str: Model's text response
@@ -58,7 +62,8 @@ class AIClientInterface(ABC):
         self,
         prompt: str,
         max_tokens: int,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Make a text-only API call (no image)
@@ -67,6 +72,7 @@ class AIClientInterface(ABC):
             prompt: Text prompt
             max_tokens: Maximum tokens for response
             temperature: Temperature parameter
+            response_schema: Optional JSON schema to enforce response format
 
         Returns:
             str: Model's text response
@@ -124,7 +130,8 @@ class AIClientInterface(ABC):
         prompt: str,
         image_data: Any,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """
         Stream API call with image and text prompt
@@ -134,6 +141,7 @@ class AIClientInterface(ABC):
             image_data: Provider-specific image format (base64 string, PIL Image, etc.)
             max_tokens: Maximum tokens for response
             temperature: Temperature parameter
+            response_schema: Optional JSON schema to enforce response format
 
         Yields:
             str: Text chunks as they arrive from the API
@@ -145,7 +153,8 @@ class AIClientInterface(ABC):
         self,
         messages: list,
         max_tokens: int,
-        temperature: float
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """
         Stream API call with conversation history
@@ -154,6 +163,7 @@ class AIClientInterface(ABC):
             messages: Provider-specific message format
             max_tokens: Maximum tokens for response
             temperature: Temperature parameter
+            response_schema: Optional JSON schema to enforce response format
 
         Yields:
             str: Text chunks as they arrive from the API

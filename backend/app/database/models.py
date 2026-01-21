@@ -21,6 +21,7 @@ class User(Base):
     # Relationship to artworks
     artworks = relationship("SavedArtwork", back_populates="user", cascade="all, delete-orphan")
     collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
+    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self):
         """Convert model to dictionary"""
@@ -55,12 +56,14 @@ class SavedArtwork(Base):
     user_id = Column(String, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)  # Foreign key to users table
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    session_id = Column(String, ForeignKey('sessions.id', ondelete='SET NULL'), nullable=True, index=True)
 
     # Relationships
     user = relationship("User", back_populates="artworks")
     conversations = relationship("Conversation", back_populates="artwork", cascade="all, delete-orphan", order_by="Conversation.sequence_number")
     collections = relationship("Collection", secondary="collection_artworks", back_populates="artworks")
     artwork_tags = relationship("Tag", secondary="artwork_tags", back_populates="artworks")
+    session = relationship("Session", back_populates="artworks")
 
     def to_dict(self, include_conversations=True):
         """Convert model to dictionary
@@ -84,7 +87,10 @@ class SavedArtwork(Base):
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "artwork_tags": [tag.to_dict() for tag in self.artwork_tags] if hasattr(self, 'artwork_tags') else []
+            "session_id": self.session_id,
+            "artwork_tags": [tag.to_dict() for tag in self.artwork_tags] if hasattr(self, 'artwork_tags') else [],
+            "date": self.params.get('date') if self.params and isinstance(self.params, dict) else None,
+            "medium": self.params.get('medium') if self.params and isinstance(self.params, dict) else None
         }
 
         # Include conversation_history for backward compatibility with frontend
@@ -221,3 +227,34 @@ class ArtworkTag(Base):
 
     artwork_id = Column(String, ForeignKey('saved_artworks.id', ondelete='CASCADE'), primary_key=True)
     tag_id = Column(String, ForeignKey('tags.id', ondelete='CASCADE'), primary_key=True)
+
+
+class Session(Base):
+    """Database model for exploration sessions / visits"""
+
+    __tablename__ = "sessions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    narrative_summary = Column(Text, nullable=True)  # Compressed thematic distillation
+    metadata_json = Column(JSON, nullable=True)  # Renamed from 'metadata' to avoid conflict with Base.metadata
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="sessions")
+    artworks = relationship("SavedArtwork", back_populates="session")
+
+    def to_dict(self, include_artworks=False):
+        """Convert model to dictionary"""
+        result = {
+            "id": self.id,
+            "user_id": self.user_id,
+            "narrative_summary": self.narrative_summary,
+            "metadata": self.metadata_json,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
+        if include_artworks:
+            result["artworks"] = [artwork.to_dict(include_conversations=False) for artwork in self.artworks]
+        return result

@@ -1,46 +1,23 @@
 # Instructions
-Given a photo taken within a museum or gallery setting, what is it in the image? Analyze the main object in the center of the image and provide the following two things in your response.
+Given a photo taken within a museum or gallery setting, identify the artwork and analyze it.
 
-1. Artist Identification: Identify potential artists based on style and technique, with an attributed confidence score out of 10.
-- If the top artist's confidence score is 7 or higher, only show the single artist in response.
-- If the top artist's confidence score is lower than 7, display a list of potential artists (up to 3) with a short attribution reason for each.
-- Use artist_name: "Unknown artist" when it looks like an artwork but you cannot determine the artist.
-- Use artist_name: "Not an artwork?" when it is not an artwork or information is indeterminable. This should be the catch-call response.
+1. Artist Identification: Identify potential artists based on style and technique.
+- If you cannot determine the artist or it's not an artwork, use "Unknown artist" and "Not an artwork?".
 
-The list can contain 1, 2 or 3 artists.
-- If you cannot determine the artist or it's not an artwork, you should only reply with a single element in the list.
-- NEVER return an empty list.
+2. Artwork analysis: Provide a short understanding of the artwork as a museum narrator.
+- You can use markdown syntax for headings and highlights.
+- Do not start with "welcome", directly start with the analysis.
 
-2. Artwork analysis: A short paragraph of understanding of the artwork -- As a museum narrator, tell me more about the artwork.
-- You can use markdown syntax for headings and highlight certain terminologies.
-- You should always include this analysis part, regardless of the artist identification.
-
-3. Tags: a comma-separated string of tags for this artwork (UP TO 5). 
+3. Tags: no more than 5 tags.
 
 # Output Format
 Respond with ONLY valid JSON, no additional text. Use this exact structure:
 
-[
-  {
-    "analysis": "As a museum narrator, tell me more about the artwork. (you can use markdown syntax here)",
-    "tags": "pop art, late 90s, dadaism"
-  },
-  {
-    "artist_name": "Artist Name 1",
-    "artwork_name": "Artwork name 1",
-    "score": 8,
-    "reason": "Brief reason for attribution based on style, technique, color palette, or subject matter"
-  },
-  {
-    "artist_name": "Artist Name 2",
-    "artwork_name": "Artwork name 2",
-    "score": 6,
-    "reason": "Brief reason for attribution"
-  },
-  {
-    "artist_name": "Artist Name 3",
-    "artwork_name": "Artwork name 3",
-    "score": 4,
-    "reason": "Brief reason for attribution"
-  }
-]
+{
+  "artist": "Artist Name",
+  "title": "Artwork Name",
+  "date": "Approximate date",
+  "medium": "Medium used",
+  "description": "Narrated analysis of the artwork...",
+  "tags": ["tag1", "tag2", "tag3"]
+}
