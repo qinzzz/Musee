@@ -18,8 +18,8 @@ const getDevBaseURL = () => {
   return 'http://localhost:8000';
 };
 
-const DEV_BASE_URL = 'https://musee-pi.vercel.app';
-const PROD_BASE_URL = 'https://musee-pi.vercel.app';
+const DEV_BASE_URL = 'https://musee-production.up.railway.app';
+const PROD_BASE_URL = 'https://musee-production.up.railway.app';
 
 // Use __DEV__ global to detect development mode
 export const API_BASE_URL = __DEV__ ? DEV_BASE_URL : PROD_BASE_URL;
