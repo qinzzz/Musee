@@ -50,6 +50,7 @@ interface SaveArtworkParams {
   tags?: string;
   analysis?: string;
   colorPalette?: ColorPalette;
+  sessionId?: string;
 }
 
 interface GetSavedArtworksParams {
@@ -79,6 +80,7 @@ class SavedArtworkApiService {
     formData.append('conversation_history', JSON.stringify(params.conversationHistory));
     formData.append('user_id', userId);
     formData.append('color_palette', JSON.stringify(params.colorPalette));
+    if (params.sessionId) formData.append('session_id', params.sessionId);
 
     if (params.location) formData.append('location', params.location);
     if (params.museumName) formData.append('museum_name', params.museumName);
@@ -188,7 +190,7 @@ class SavedArtworkApiService {
    * Identify the artist and artwork from an image
    * Handles compression and API call
    */
-  async identifyArtist(photoUri: string, identity: string = 'museum_narrator', language: string = 'en'): Promise<any> {
+  async identifyArtist(photoUri: string, identity: string = 'museum_narrator', language: string = 'en', sessionId?: string): Promise<any> {
     console.log('[SavedArtworkApiService] Identifying artist for:', photoUri);
 
     // 1. Compress image (max 4MB for Vercel/API limits)
@@ -211,6 +213,7 @@ class SavedArtworkApiService {
     }
     formData.append('identity', identity);
     formData.append('language', language);
+    if (sessionId) formData.append('session_id', sessionId);
 
     // 3. Call API
     // Note: We use the fetch API directly for multipart form data with identity/language

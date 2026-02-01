@@ -24,6 +24,7 @@ interface Props {
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
   onUpdateAnnotations: (annotations: Annotation[]) => void;
   onDelete?: (id: string) => void;
+  sessionId?: string;
 }
 
 // Tag component with explanation tooltip on hover
@@ -80,7 +81,7 @@ const HoverTag: React.FC<{
   );
 };
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onDelete }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onDelete, sessionId }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -246,7 +247,8 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         item.artistName,
         item.artworkName,
         messages,
-        imageFile
+        imageFile,
+        sessionId
       );
     } catch (e) {
       console.error(e);

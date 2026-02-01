@@ -1094,7 +1094,9 @@ async def save_artwork(
     summary: Optional[str] = Form(None),
     params: Optional[str] = Form(None),
     photo_time: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    session_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """
     Save a new artwork with conversation history
@@ -1112,6 +1114,7 @@ async def save_artwork(
     - **summary**: One-sentence summary
     - **params**: JSON string of additional parameters
     - **photo_time**: Original photo capture time
+    - **session_id**: Optional session ID for thematic grouping
     """
     try:
         # Parse JSON fields
@@ -1123,6 +1126,14 @@ async def save_artwork(
                 params_data = json.loads(params)
             except json.JSONDecodeError:
                 logger.warning("Failed to parse params JSON")
+
+        # Ensure user exists (auto-create if not)
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            user = User(user_id=user_id, device_id=user_id)
+            db.add(user)
+            db.flush()
+            logger.info(f"Auto-created user from save_artwork: {user_id}")
 
         # Create artwork
         saved_artwork = SavedArtwork(
@@ -1136,9 +1147,19 @@ async def save_artwork(
             analysis=analysis,
             summary=summary,
             params=params_data,
-            photo_time=photo_time
+            photo_time=photo_time,
+            session_id=session_id
         )
         db.add(saved_artwork)
+        
+        # Ensure session exists (auto-create if not)
+        if session_id:
+            session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            if not session_record:
+                session_record = SessionModel(id=session_id, user_id=user_id)
+                db.add(session_record)
+                logger.info(f"Auto-created session from save_artwork: {session_id}")
+
         db.flush()
 
         # Link tags (batch operation)
@@ -1162,6 +1183,18 @@ async def save_artwork(
 
         db.commit()
         db.refresh(saved_artwork)
+
+        # Update session narrative in background
+        if session_id and background_tasks:
+            background_tasks.add_task(
+                update_session_narrative_task,
+                session_id=session_id,
+                new_artwork_data={
+                    "artist": artist_name,
+                    "title": artwork_name,
+                    "description": analysis or summary
+                }
+            )
 
         return saved_artwork.to_dict()
 

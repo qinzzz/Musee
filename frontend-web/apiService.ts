@@ -343,7 +343,8 @@ export async function chatWithArtwork(
   artistName?: string,
   artworkName?: string,
   conversationHistory: ChatMessage[] = [],
-  imageFile?: File
+  imageFile?: File,
+  sessionId?: string
 ): Promise<string> {
   const formData = new FormData();
   formData.append('query', query);
@@ -379,6 +380,10 @@ export async function chatWithArtwork(
     } else {
       console.warn('Image file is empty, not sending');
     }
+  }
+
+  if (sessionId) {
+    formData.append('session_id', sessionId);
   }
 
   console.log('Sending chat request:', { query, artworkId, artistName, artworkName, hasImage: !!imageFile && imageFile.size > 0 });
@@ -421,7 +426,8 @@ export async function chatWithArtworkStream(
   artistName?: string,
   artworkName?: string,
   conversationHistory: ChatMessage[] = [],
-  imageFile?: File
+  imageFile?: File,
+  sessionId?: string
 ): Promise<void> {
   const formData = new FormData();
   formData.append('query', query);
@@ -446,6 +452,10 @@ export async function chatWithArtworkStream(
 
   if (imageFile && imageFile.size > 0) {
     formData.append('image', imageFile);
+  }
+
+  if (sessionId) {
+    formData.append('session_id', sessionId);
   }
 
   console.log('Starting streaming chat to:', `${API_BASE_URL}/artwork-chat-stream`);

@@ -425,7 +425,7 @@ const App: React.FC = () => {
             setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...errorUpdates } : item));
             setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...errorUpdates } : prev);
           },
-          visit.active ? visit.id : undefined
+          visit.id
         );
       } catch (error) {
         console.error('Failed to prepare single upload:', error);
@@ -466,7 +466,7 @@ const App: React.FC = () => {
           setItems(prev => [...prev, placeholderItem]);
           if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
 
-          const analysis = await analyzeArtwork(file, USER_ID, undefined, visit.active ? visit.id : undefined);
+          const analysis = await analyzeArtwork(file, USER_ID, undefined, visit.id);
           const keywords = analysis.tags.map((tag: string) =>
             tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
           );
@@ -666,6 +666,7 @@ const App: React.FC = () => {
           onUpdateConversation={updateItemConversation}
           onUpdateAnnotations={(ans) => updateItemAnnotations(interpretingItem.id, ans)}
           onDelete={handleDeleteItem}
+          sessionId={visit.id}
         />
       )}
 
