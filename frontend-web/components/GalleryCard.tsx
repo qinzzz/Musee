@@ -5,10 +5,11 @@ import { GalleryItem } from '../types';
 interface Props {
   item: GalleryItem;
   onInterpret: () => void;
+  onContinueVision?: () => void;
   onDelete?: () => void;
 }
 
-const GalleryCard: React.FC<Props> = ({ item, onInterpret, onDelete }) => {
+const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onDelete }) => {
   const { vibe, url, keywords } = item;
   const [imageWidth, setImageWidth] = React.useState<number>(0);
   const imageRef = React.useRef<HTMLImageElement>(null);
@@ -19,12 +20,56 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onDelete }) => {
     }
   };
 
+  // Helper to parse location string (which might be JSON) or object
+  const displayLocation = React.useMemo(() => {
+    if (!item.location) return null;
+    console.log('GalleryCard location:', item.location);
+    try {
+      let data: any = null;
+      if (typeof item.location === 'object') {
+        data = item.location;
+      } else if (typeof item.location === 'string' && item.location.startsWith('{')) {
+        data = JSON.parse(item.location);
+      }
+
+      if (data) {
+        const parts = [];
+        if (data.museum) parts.push(data.museum);
+        if (data.city) parts.push(data.city);
+        if (!data.city && data.country) parts.push(data.country);
+        if (data.city && data.country && !data.museum) parts.push(data.country);
+
+        return parts.join(', ');
+      }
+      return typeof item.location === 'string' ? item.location : null;
+    } catch (e) {
+      console.warn('Failed to parse location:', e);
+      return typeof item.location === 'string' ? item.location : null;
+    }
+  }, [item.location]);
+
   return (
     <div
       className="min-w-[40vw] h-[80vh] mx-12 flex items-center justify-center transition-all duration-1000 group"
       style={{ backgroundColor: 'transparent' }}
     >
       <div className="flex flex-col items-center max-w-full">
+        {/* Location and Date Metadata */}
+        {(item.location || item.photoTime) && (
+          <div className="mb-6 text-center opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform translate-y-4 group-hover:translate-y-0">
+            {displayLocation && (
+              <h3 className="text-lg font-serif text-neutral-800 mb-2 whitespace-nowrap">
+                {displayLocation}
+              </h3>
+            )}
+            {item.photoTime && (
+              <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-light">
+                {item.photoTime}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Card frame - hugs the image */}
         <div
           className="relative transition-all duration-700 shadow-2xl max-w-[90vw] sm:max-w-[85vw]"
@@ -58,19 +103,29 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onDelete }) => {
               </div>
             )}
 
-            {/* Interpretation Trigger Overlay */}
             {!item.isAnalyzing && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onInterpret();
-                }}
-                className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity duration-500"
-              >
-                <div className="bg-white/90 backdrop-blur px-6 py-2 rounded-full text-[10px] tracking-[0.4em] uppercase font-bold text-neutral-900 shadow-xl hover:scale-105 transition-transform">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 opacity-0 group-hover/img:opacity-100 transition-opacity duration-500 bg-black/20">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onInterpret();
+                  }}
+                  className="bg-white/90 backdrop-blur px-6 py-2 rounded-full text-[10px] tracking-[0.4em] uppercase font-bold text-neutral-900 shadow-xl hover:scale-105 transition-transform"
+                >
                   Consult Curator
-                </div>
-              </button>
+                </button>
+                {onContinueVision && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onContinueVision();
+                    }}
+                    className="bg-neutral-900/90 backdrop-blur px-6 py-2 rounded-full text-[10px] tracking-[0.4em] uppercase font-bold text-white shadow-xl hover:scale-105 transition-transform"
+                  >
+                    Continue the Visit
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Delete Trigger */}

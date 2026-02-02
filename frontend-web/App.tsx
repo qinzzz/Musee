@@ -214,6 +214,9 @@ const App: React.FC = () => {
               date: item.date,
               medium: item.medium,
               timestamp: item.created_at ? new Date(item.created_at).getTime() : Date.now(),
+              visitId: item.session_id,
+              location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
+              photoTime: item.photo_time,
               conversation: (item.conversation_history || []).map((msg: any) => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 text: msg.content
@@ -311,6 +314,80 @@ const App: React.FC = () => {
     setVisit(prev => ({ ...prev, active: false }));
   };
 
+  const handleResumeVisit = (visitId: string) => {
+    const visitItems = items.filter(i => i.visitId === visitId);
+    setVisit({
+      id: visitId,
+      active: true,
+      itemIds: visitItems.map(i => i.id),
+      globalConversation: [] // We don't have global history stored yet, but we can resume adding
+    });
+  };
+
+  const handleContinueVision = (item: GalleryItem) => {
+    // Start a new visit with this item
+    const newVisitId = Math.random().toString(36).substring(2, 11);
+
+    // Update the local item to use this new visit ID
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, visitId: newVisitId } : i));
+
+    // Set active visit
+    setVisit({
+      id: newVisitId,
+      active: true,
+      itemIds: [item.id],
+      globalConversation: []
+    });
+  };
+
+  const getCurrentLocation = async (): Promise<string | undefined> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(undefined);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          try {
+            // Reverse geocoding using Nominatim (OpenStreetMap)
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`);
+            if (response.ok) {
+              const data = await response.json();
+
+              // Extract data
+              const city = data.address.city || data.address.town || data.address.village || data.address.hamlet || '';
+              const country = data.address.country || '';
+              // Try to find museum in address or place name
+              const museum = data.address.museum || (data.type === 'museum' ? data.name : '') || '';
+
+              const locationStruct = {
+                longitude,
+                latitude,
+                city,
+                country,
+                museum
+              };
+
+              resolve(JSON.stringify(locationStruct));
+            } else {
+              // Fallback structure
+              resolve(JSON.stringify({ longitude, latitude, city: '', country: '', museum: '' }));
+            }
+          } catch (e) {
+            console.warn('Geocoding failed:', e);
+            resolve(JSON.stringify({ longitude, latitude, city: '', country: '', museum: '' }));
+          }
+        },
+        (error) => {
+          console.warn('Geolocation error:', error);
+          resolve(undefined);
+        },
+        { timeout: 5000 }
+      );
+    });
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     console.log('handleFileUpload called');
     const files = Array.from(event.target.files || []);
@@ -324,6 +401,10 @@ const App: React.FC = () => {
     if (files.length === 1) {
       const file = files[0];
       const newItemId = Math.random().toString(36).substring(2, 11);
+
+      // Get location and time
+      const location = await getCurrentLocation();
+      const photoTime = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
       try {
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -349,7 +430,9 @@ const App: React.FC = () => {
           annotations: [],
           visitId: visit.active ? visit.id : undefined,
           isAnalyzing: true,
-          streamingText: ''
+          streamingText: '',
+          location: location,
+          photoTime: photoTime
         };
 
         setItems(prev => [...prev, placeholderItem]);
@@ -425,7 +508,10 @@ const App: React.FC = () => {
             setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...errorUpdates } : item));
             setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...errorUpdates } : prev);
           },
-          visit.id
+          visit.active ? visit.id : Math.random().toString(36).substring(2, 11),
+          undefined,
+          location,
+          photoTime
         );
       } catch (error) {
         console.error('Failed to prepare single upload:', error);
@@ -433,6 +519,10 @@ const App: React.FC = () => {
     }
     // Batch upload: Keep current background processing implementation
     else {
+      // Get location once for the batch
+      const location = await getCurrentLocation();
+      const photoTime = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
       files.forEach(async (file) => {
         console.log('Processing batch file:', file.name);
         const newItemId = Math.random().toString(36).substring(2, 11);
@@ -460,13 +550,23 @@ const App: React.FC = () => {
             conversation: [],
             annotations: [],
             visitId: visit.active ? visit.id : undefined,
-            isAnalyzing: true
+            isAnalyzing: true,
+            streamingText: '',
+            location: location,
+            photoTime: photoTime
           };
 
           setItems(prev => [...prev, placeholderItem]);
           if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
 
-          const analysis = await analyzeArtwork(file, USER_ID, undefined, visit.id);
+          const analysis = await analyzeArtwork(
+            file,
+            USER_ID,
+            undefined,
+            visit.active ? visit.id : Math.random().toString(36).substring(2, 11),
+            location,
+            photoTime
+          );
           const keywords = analysis.tags.map((tag: string) =>
             tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
           );
@@ -491,7 +591,9 @@ const App: React.FC = () => {
             date: analysis.date,
             medium: analysis.medium,
             artworkId: analysis.artwork_id,
-            isAnalyzing: false
+            isAnalyzing: false,
+            location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
+            photoTime: analysis.photo_time
           } : item));
 
         } catch (error) {
@@ -618,6 +720,7 @@ const App: React.FC = () => {
                     artworkId: entry.item.artworkId
                   })}
                   onDelete={() => handleDeleteItem(entry.item.id)}
+                  onContinueVision={!visit.active ? () => handleContinueVision(entry.item) : undefined}
                 />
               </div>
             ) : (
@@ -629,6 +732,7 @@ const App: React.FC = () => {
                 <VisitStack
                   items={entry.items}
                   onOpenExhibition={(stackItems) => setExhibitionContext({ items: stackItems, visitId: entry.visitId })}
+                  onResumeVisit={() => handleResumeVisit(entry.visitId)}
                   onDeleteItem={handleDeleteItem}
                 />
               </div>

@@ -45,7 +45,7 @@ class SavedArtwork(Base):
     photo_uri = Column(String, nullable=False)  # Local file path or URI
     artist_name = Column(String, nullable=False)
     artwork_name = Column(String, nullable=False)
-    location = Column(String, nullable=True)  # Geographic location where photo was taken
+    location = Column(JSON, nullable=True)  # Geographic location where photo was taken (JSON struct)
     photo_time = Column(String, nullable=True)  # Original capture time of the photo
     museum_name = Column(String, nullable=True)  # Museum or gallery name
     summary = Column(String, nullable=True)  # One-sentence fun summary of the artwork

@@ -8,8 +8,9 @@ import logging
 import re
 import time
 from datetime import datetime
+import anyio
 
-from app.database.connection import get_db
+from app.database.connection import get_db, SessionLocal
 from app.database.models import SavedArtwork, Conversation, Tag, User
 from app.models.artwork import AIProvider, UpdateArtworkRequest
 from app.services.ai_service import AIServiceFactory
@@ -137,6 +138,8 @@ async def analyze_artist(
     session_id: Optional[str] = Form(None),
     photo_uri: Optional[str] = Form(None),
     client_type: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    photo_time: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = None
 ):
@@ -153,6 +156,7 @@ async def analyze_artist(
     - **client_type**: "web" or "ios" - web clients will have images stored on server
     """
     ai_provider = determine_ai_provider(model)
+    logger.info(f"analyze_artist received session_id: {session_id}, user_id: {user_id}")
 
     try:
         image_bytes = await process_image(image)
@@ -161,8 +165,9 @@ async def analyze_artist(
         # Get session context if session_id provided
         session_context = None
         if session_id:
-            session_context = await get_session_context(db, session_id)
+            session_context = await get_session_context(session_id)
 
+        ai_service = AIServiceFactory.get_service(ai_provider)
         analysis_text = await ai_service.identify_artist(
             image_bytes, identity=identity, language=language, session_context=session_context
         )
@@ -174,29 +179,6 @@ async def analyze_artist(
 
         # If user_id provided, save to DB
         if user_id:
-            # Ensure user exists (auto-create if not)
-            user = db.query(User).filter(User.user_id == user_id).first()
-            if not user:
-                # Create user with specified user_id (overrides default UUID)
-                user = User(user_id=user_id, device_id=user_id)
-                db.add(user)
-                db.flush()
-                logger.info(f"Auto-created user: {user_id}")
-
-            # Ensure session exists (auto-create if not)
-            if session_id:
-                session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-                if not session_record:
-                    session_record = SessionModel(id=session_id, user_id=user_id or "anonymous")
-                    db.add(session_record)
-                    db.flush()
-                    logger.info(f"Auto-created session: {session_id}")
-
-            # Parse analysis to extract artist/artwork info
-            artist_name = "Unknown Artist"
-            artwork_name = "Untitled"
-            extracted_tags = []
-
             # Parse analysis to extract artist/artwork info
             artist_name = "Unknown Artist"
             artwork_name = "Untitled"
@@ -208,7 +190,6 @@ async def analyze_artist(
             try:
                 import re
                 json_str = analysis_text
-
                 # Extract JSON from markdown code blocks if present
                 json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', analysis_text)
                 if json_match:
@@ -224,19 +205,7 @@ async def analyze_artist(
                     extracted_analysis = parsed.get('description', '')
                     date_val = parsed.get('date')
                     medium_val = parsed.get('medium')
-                    
-                    logger.info(f"Parsed structured artwork: {artist_name} - {artwork_name}, tags: {extracted_tags}")
-                
-                # Fallback for old array format (removed for brevity)
-                elif isinstance(parsed, list) and len(parsed) > 0:
-                    item0 = parsed[0] if isinstance(parsed[0], dict) else {}
-                    artist_name = item0.get('artist_name', item0.get('artist', artist_name))
-                    artwork_name = item0.get('artwork_name', item0.get('title', artwork_name))
-                    extracted_tags = item0.get('tags', [])
-                    extracted_analysis = item0.get('analysis', item0.get('description', ''))
-                    date_val = item0.get('date')
-                    medium_val = item0.get('medium')
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+            except Exception as e:
                 logger.warning(f"Failed to parse analysis for DB save: {e}")
 
             # Fallback to full text if extraction failed
@@ -245,33 +214,79 @@ async def analyze_artist(
 
             # Generate photo_uri based on client type
             if photo_uri:
-                # iOS client provided local path
                 generated_photo_uri = photo_uri
             elif client_type == "web" or not photo_uri:
-                # Web client or no photo_uri - save image using configured storage
                 storage = get_storage_service()
                 generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
-                logger.info(f"Saved web upload to: {generated_photo_uri}")
             else:
-                # Fallback: generate placeholder URI
                 import uuid as uuid_mod
                 generated_photo_uri = f"artwork_{uuid_mod.uuid4().hex[:12]}"
 
-            # Create artwork record
-            saved_artwork = SavedArtwork(
-                photo_uri=generated_photo_uri,
-                artist_name=artist_name,
-                artwork_name=artwork_name,
-                user_id=user_id,
-                is_recognized=1 if artist_name != "Unknown Artist" else 0,
-                analysis=extracted_analysis,
-                params={"date": date_val, "medium": medium_val},
-                session_id=session_id
-            )
-            db.add(saved_artwork)
+            # Parse location JSON
+            parsed_location = None
+            if location and isinstance(location, str):
+                try:
+                    if location.strip().startswith('{'):
+                         parsed_location = json.loads(location)
+                    else:
+                         parsed_location = {"raw": location}
+                except:
+                    parsed_location = {"raw": location}
+            elif location:
+                 parsed_location = location
 
-            db.commit()
-            db.refresh(saved_artwork)
+            # Create artwork record in a thread-safe way
+            def _save_artwork_sync(
+                u_id, s_id, p_uri, a_name, w_name, e_analysis, d_val, m_val, loc, p_time
+            ):
+                with SessionLocal() as local_db:
+                    # Ensure user exists
+                    usr = local_db.query(User).filter(User.user_id == u_id).first()
+                    if not usr:
+                        usr = User(user_id=u_id, device_id=u_id)
+                        local_db.add(usr)
+                        local_db.flush()
+                    
+                    # Ensure session exists
+                    if s_id:
+                        sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
+                        if not sess_record:
+                            sess_record = SessionModel(id=s_id, user_id=u_id or "anonymous")
+                            local_db.add(sess_record)
+                            local_db.flush()
+                    
+                    # Create artwork
+                    art = SavedArtwork(
+                        photo_uri=p_uri,
+                        artist_name=a_name,
+                        artwork_name=w_name,
+                        user_id=u_id,
+                        is_recognized=1 if a_name != "Unknown Artist" else 0,
+                        analysis=e_analysis,
+                        params={"date": d_val, "medium": m_val},
+                        session_id=s_id,
+                        location=loc,
+                        photo_time=p_time
+                    )
+                    local_db.add(art)
+                    local_db.commit()
+                    local_db.refresh(art)
+                    return str(art.id)
+
+            artwork_id = await anyio.to_thread.run_sync(
+                _save_artwork_sync,
+                user_id,
+                session_id,
+                generated_photo_uri,
+                artist_name,
+                artwork_name,
+                artwork_name,
+                extracted_analysis,
+                date_val,
+                medium_val,
+                parsed_location,
+                photo_time
+            )
 
             # Update session narrative in background
             if session_id and background_tasks:
@@ -287,12 +302,14 @@ async def analyze_artist(
                     language=language
                 )
 
-            response["artwork_id"] = str(saved_artwork.id)
+            response["artwork_id"] = artwork_id
             response["artist_name"] = artist_name
             response["artwork_name"] = artwork_name
             response["photo_uri"] = generated_photo_uri  # For web clients, this is the server path
             response["date"] = date_val
             response["medium"] = medium_val
+            response["location"] = location
+            response["photo_time"] = photo_time
             response["tags"] = extracted_tags
             response["analysis"] = extracted_analysis
         else:
@@ -332,6 +349,8 @@ async def analyze_artist_stream(
     photo_uri: Optional[str] = Form(None),
     client_type: Optional[str] = Form(None),
     session_id: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    photo_time: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = None
 ):
@@ -380,7 +399,7 @@ async def analyze_artist_stream(
             # Get session context if session_id provided
             session_context = None
             if session_id:
-                session_context = await get_session_context(db, session_id)
+                session_context = await get_session_context(session_id)
 
             # Stream the analysis text
             async for chunk in ai_service.identify_artist_stream(
@@ -462,84 +481,111 @@ async def analyze_artist_stream(
                 "description": description,
                 "tags": extracted_tags,
                 "analysis": description or full_text,
-                "model_used": ai_provider.value
+                "analysis": description or full_text,
+                "model_used": ai_provider.value,
+                "location": location,
+                "photo_time": photo_time
             }
 
-            # If user_id provided, save to DB
-            if user_id:
+            # Generate photo_uri based on client type
+            if photo_uri:
+                generated_photo_uri = photo_uri
+            elif client_type == "web" or not photo_uri:
+                storage = get_storage_service()
+                generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
+            else:
+                import uuid as uuid_mod
+                generated_photo_uri = f"artwork_{uuid_mod.uuid4().hex[:12]}"
+
+            # Parse location JSON
+            parsed_location = None
+            if location and isinstance(location, str):
                 try:
-                    # Ensure user exists
-                    user = db.query(User).filter(User.user_id == user_id).first()
-                    if not user:
-                        user = User(user_id=user_id, device_id=user_id)
-                        db.add(user)
-                        db.flush()
-                        logger.info(f"Auto-created user: {user_id}")
-
-                    # Ensure session exists (auto-create if not)
-                    if session_id:
-                        session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-                        if not session_record:
-                            session_record = SessionModel(id=session_id, user_id=user_id)
-                            db.add(session_record)
-                            db.flush()
-                            logger.info(f"Auto-created session: {session_id}")
-
-                    # Generate photo_uri based on client type
-                    if photo_uri:
-                        generated_photo_uri = photo_uri
-                    elif client_type == "web" or not photo_uri:
-                        storage = get_storage_service()
-                        generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
-                        logger.info(f"Saved web upload to: {generated_photo_uri}")
+                    if location.strip().startswith('{'):
+                         parsed_location = json.loads(location)
                     else:
-                        import uuid as uuid_mod
-                        generated_photo_uri = f"artwork_{uuid_mod.uuid4().hex[:12]}"
+                         parsed_location = {"raw": location}
+                except:
+                    parsed_location = {"raw": location}
+            elif location:
+                 parsed_location = location
+
+            # Create artwork record in a thread Safe way
+            def _save_streaming_artwork_sync(
+                u_id, s_id, p_uri, a_name, w_name, desc, full_txt, d_val, m_val, tags, loc, p_time
+            ):
+                with SessionLocal() as local_db:
+                    # Ensure user exists
+                    usr = local_db.query(User).filter(User.user_id == u_id).first()
+                    if not usr:
+                        usr = User(user_id=u_id, device_id=u_id)
+                        local_db.add(usr)
+                        local_db.flush()
+
+                    # Ensure session exists
+                    if s_id:
+                        sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
+                        if not sess_record:
+                            sess_record = SessionModel(id=s_id, user_id=u_id)
+                            local_db.add(sess_record)
+                            local_db.flush()
 
                     # Create artwork record
-                    saved_artwork = SavedArtwork(
-                        photo_uri=generated_photo_uri,
-                        artist_name=artist_name,
-                        artwork_name=artwork_name,
-                        user_id=user_id,
-                        is_recognized=1 if artist_name != "Unknown Artist" else 0,
-                        analysis=description or full_text,  # Store plain text if available
-                        params={"date": date_val, "medium": medium_val},
-                        session_id=session_id
+                    art = SavedArtwork(
+                        photo_uri=p_uri,
+                        artist_name=a_name,
+                        artwork_name=w_name,
+                        user_id=u_id,
+                        is_recognized=1 if a_name != "Unknown Artist" else 0,
+                        analysis=desc or full_txt,
+                        params={"date": d_val, "medium": m_val},
+                        session_id=s_id,
+                        location=loc,
+                        photo_time=p_time
                     )
-                    db.add(saved_artwork)
+                    local_db.add(art)
 
                     # Link tags if parsed
-                    if extracted_tags:
-                        db.flush()
-                        batch_link_tags(db, saved_artwork, extracted_tags)
+                    if tags:
+                        local_db.flush()
+                        batch_link_tags(local_db, art, tags)
 
-                    db.commit()
-                    db.refresh(saved_artwork)
+                    local_db.commit()
+                    local_db.refresh(art)
+                    return str(art.id)
 
-                    result["artwork_id"] = str(saved_artwork.id)
-                    result["photo_uri"] = generated_photo_uri
+            artwork_id = await anyio.to_thread.run_sync(
+                _save_streaming_artwork_sync,
+                user_id,
+                session_id,
+                generated_photo_uri,
+                artist_name,
+                artwork_name,
+                description,
+                full_text,
+                date_val,
+                medium_val,
+                extracted_tags,
+                parsed_location,
+                photo_time
+            )
+            result["artwork_id"] = artwork_id
+            result["photo_uri"] = generated_photo_uri
 
-                    # Update session narrative in background
-                    if session_id and background_tasks:
-                        background_tasks.add_task(
-                            update_session_narrative_task,
-                            session_id=session_id,
-                            new_artwork_data={
-                                "artist": artist_name,
-                                "title": artwork_name,
-                                "description": description or full_text
-                            },
-                            identity=identity,
-                            language=language
-                        )
-                except Exception as e:
-                    logger.error(f"Failed to save artwork to DB: {e}")
-                    db.rollback()
-
-            # Send complete event
-            yield f"event: complete\ndata: {json.dumps(result)}\n\n"
-
+            # Update session narrative in background
+            if session_id and background_tasks:
+                background_tasks.add_task(
+                    update_session_narrative_task,
+                    session_id=session_id,
+                    new_artwork_data={
+                        "artist": artist_name,
+                        "title": artwork_name,
+                        "description": description or full_text
+                    },
+                    identity=identity,
+                    language=language
+                )
+            
             # TIMING: Request finished
             t_request_done = time.time()
             total_duration = (t_request_done - t_request_received) * 1000
@@ -561,6 +607,8 @@ async def analyze_artist_stream(
             }
             logger.info(f"[{request_id}] METRIC_SUMMARY: {json.dumps(metrics['timings'])}")
             yield f"event: metrics\ndata: {json.dumps(metrics)}\n\n"
+
+            yield f"event: complete\ndata: {json.dumps(result)}\n\n"
 
         except Exception as e:
             logger.error(f"[{request_id}] Streaming error: {str(e)}", exc_info=True)
@@ -1350,33 +1398,38 @@ async def batch_delete_artworks(
 
 from app.database.models import Session as SessionModel
 
-async def get_session_context(db: Session, session_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieve thematic context for a session"""
-    session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_record:
-        # Create session if it doesn't exist
-        return None
-    
-    # Get previous artworks in this session (ordered by creation)
-    artworks = db.query(SavedArtwork).filter(
-        SavedArtwork.session_id == session_id
-    ).order_by(SavedArtwork.created_at).all()
-    
-    if not artworks and not session_record.narrative_summary:
-        return None
+async def get_session_context(session_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve thematic context for a session in a thread-safe way"""
+    from app.database.connection import SessionLocal
 
-    return {
-        "narrative_summary": session_record.narrative_summary,
-        "previous_artworks": [
-            {
-                "artist": art.artist_name,
-                "title": art.artwork_name,
-                "analysis": art.analysis,
-                "tags": [tag.name for tag in art.artwork_tags]
+    def sync_get_context():
+        with SessionLocal() as db:
+            session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            if not session_record:
+                return None
+            
+            # Get previous artworks in this session (ordered by creation)
+            artworks = db.query(SavedArtwork).filter(
+                SavedArtwork.session_id == session_id
+            ).order_by(SavedArtwork.created_at).all()
+            
+            if not artworks and not session_record.narrative_summary:
+                return None
+
+            return {
+                "narrative_summary": session_record.narrative_summary,
+                "previous_artworks": [
+                    {
+                        "artist": art.artist_name,
+                        "title": art.artwork_name,
+                        "analysis": art.analysis,
+                        "tags": [tag.name for tag in art.artwork_tags]
+                    }
+                    for art in artworks
+                ]
             }
-            for art in artworks
-        ]
-    }
+    
+    return await anyio.to_thread.run_sync(sync_get_context)
 
 async def update_session_narrative_task(
     session_id: str, 

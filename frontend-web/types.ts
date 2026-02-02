@@ -43,6 +43,8 @@ export interface GalleryItem {
   date?: string;
   medium?: string;
   streamingText?: string;
+  location?: any;
+  photoTime?: string;
 }
 
 export interface Visit {

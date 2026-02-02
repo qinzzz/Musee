@@ -5,15 +5,47 @@ import { GalleryItem } from '../types';
 interface Props {
   items: GalleryItem[];
   onOpenExhibition: (items: GalleryItem[]) => void;
+  onResumeVisit?: () => void;
   onDeleteItem?: (id: string) => void;
 }
 
-const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onDeleteItem }) => {
+const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, onDeleteItem }) => {
   if (items.length === 0) return null;
 
   // We show up to 3 cards in the stack visually
   const displayItems = items.slice(-3).reverse();
   const count = items.length;
+
+  // Find first non-empty location and time
+  const locationItem = items.find(i => i.location);
+  const timeItem = items.find(i => i.photoTime);
+  const locationStr = locationItem?.location;
+  const timeStr = timeItem?.photoTime;
+
+  const displayLocation = React.useMemo(() => {
+    if (!locationStr) return null;
+    try {
+      let data: any = null;
+      if (typeof locationStr === 'object') {
+        data = locationStr;
+      } else if (typeof locationStr === 'string' && locationStr.startsWith('{')) {
+        data = JSON.parse(locationStr);
+      }
+
+      if (data) {
+        const parts = [];
+        if (data.museum) parts.push(data.museum);
+        if (data.city) parts.push(data.city);
+        if (!data.city && data.country) parts.push(data.country);
+        if (data.city && data.country && !data.museum) parts.push(data.country);
+
+        return parts.join(', ');
+      }
+      return typeof locationStr === 'string' ? locationStr : null;
+    } catch (e) {
+      return typeof locationStr === 'string' ? locationStr : null;
+    }
+  }, [locationStr]);
 
   return (
     <div
@@ -21,6 +53,22 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onDeleteItem }) 
       onClick={() => onOpenExhibition(items)}
     >
       <div className="relative w-full h-full flex items-center justify-center">
+        {/* Location and Date Metadata (Above) */}
+        {(displayLocation || timeStr) && (
+          <div className="absolute z-20 flex flex-col items-center -translate-y-[32vh] opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform translate-y-[-28vh] group-hover:-translate-y-[32vh]">
+            {displayLocation && (
+              <h3 className="text-lg font-serif text-neutral-800 mb-2 whitespace-nowrap bg-white/80 px-4 py-1 rounded-full backdrop-blur-sm shadow-sm">
+                {displayLocation}
+              </h3>
+            )}
+            {timeStr && (
+              <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-light bg-white/50 px-3 py-1 rounded-full backdrop-blur-sm">
+                {timeStr}
+              </p>
+            )}
+          </div>
+        )}
+
         {displayItems.map((item, idx) => {
           const rotation = (idx - (displayItems.length - 1) / 2) * 5;
           const offset = idx * 12;
@@ -49,11 +97,31 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onDeleteItem }) 
         })}
 
         {/* Info Overlay */}
-        <div className="absolute z-20 flex flex-col items-center translate-y-[32vh] opacity-100 group-hover:scale-110 transition-transform">
-          <div className="bg-neutral-900 text-white px-6 py-2 rounded-full shadow-2xl border border-white/10 flex items-center space-x-3">
-            <span className="text-[10px] tracking-[0.4em] uppercase font-bold">Visit Record</span>
-            <span className="w-px h-3 bg-white/20"></span>
-            <span className="text-[10px] tracking-widest text-emerald-400 font-mono">{count} PIECES</span>
+        <div className="absolute z-20 flex flex-col items-center translate-y-[32vh]">
+          <div className="flex items-center">
+            <div
+              className="bg-neutral-900 text-white px-6 py-2 rounded-full shadow-2xl border border-white/10 flex items-center space-x-3 group-hover:scale-105 transition-transform"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenExhibition(items);
+              }}
+            >
+              <span className="text-[10px] tracking-[0.4em] uppercase font-bold">Visit Record</span>
+              <span className="w-px h-3 bg-white/20"></span>
+              <span className="text-[10px] tracking-widest text-emerald-400 font-mono">{count} PIECES</span>
+            </div>
+
+            {onResumeVisit && (
+              <button
+                className="bg-emerald-500 text-white rounded-full shadow-2xl border border-emerald-400/20 flex items-center whitespace-nowrap overflow-hidden transition-all duration-500 ease-out max-w-0 opacity-0 p-0 group-hover:max-w-[200px] group-hover:opacity-100 group-hover:px-6 group-hover:py-2 group-hover:ml-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onResumeVisit();
+                }}
+              >
+                <span className="text-[10px] tracking-[0.4em] uppercase font-bold">Resume</span>
+              </button>
+            )}
           </div>
           <p className="mt-4 text-[9px] tracking-[0.2em] text-neutral-400 uppercase font-light">Tap to re-enter exhibition hall</p>
         </div>

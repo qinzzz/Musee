@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = True
+    ai_timeout: int = 115  # Seconds before timing out AI calls
 
     # File Upload & Storage
     max_file_size_mb: int = 10

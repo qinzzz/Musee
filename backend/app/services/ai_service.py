@@ -13,6 +13,8 @@ from app.utils.prompt_loader import (
     get_suggest_topics_prompt_v2
 )
 from app.services.ai_client_interface import AIClientInterface
+import anyio
+from app.config.settings import settings
 
 # Schema for structured artwork analysis
 ARTWORK_ANALYSIS_SCHEMA = {
@@ -215,13 +217,14 @@ Return ONLY the updated narrative text.{language_instruction}"""
             prompt = self.inject_session_context(prompt, session_context)
 
         # Call API through client
-        response = await self.ai_client.call_with_image_and_text(
-            prompt=prompt,
-            image_data=image_data,
-            max_tokens=2000,
-            temperature=0.7,
-            response_schema=ARTWORK_ANALYSIS_SCHEMA
-        )
+        with anyio.fail_after(settings.ai_timeout):
+            response = await self.ai_client.call_with_image_and_text(
+                prompt=prompt,
+                image_data=image_data,
+                max_tokens=2000,
+                temperature=0.7,
+                response_schema=ARTWORK_ANALYSIS_SCHEMA
+            )
 
         return response
 
@@ -251,14 +254,15 @@ Return ONLY the updated narrative text.{language_instruction}"""
         prompt = get_artist_identification_prompt_v2(identity, language=language)
 
         # Stream API through client
-        async for chunk in self.ai_client.stream_with_image_and_text(
-            prompt=prompt,
-            image_data=image_data,
-            max_tokens=2000,
-            temperature=0.7,
-            response_schema=ARTWORK_ANALYSIS_SCHEMA
-        ):
-            yield chunk
+        with anyio.fail_after(settings.ai_timeout):
+            async for chunk in self.ai_client.stream_with_image_and_text(
+                prompt=prompt,
+                image_data=image_data,
+                max_tokens=2000,
+                temperature=0.7,
+                response_schema=ARTWORK_ANALYSIS_SCHEMA
+            ):
+                yield chunk
 
     async def get_artwork_bite(
         self,
@@ -309,11 +313,12 @@ Return ONLY the updated narrative text.{language_instruction}"""
         )
 
         # Call API through client
-        response = await self.ai_client.call_with_conversation(
-            messages=messages,
-            max_tokens=200,
-            temperature=0.8
-        )
+        with anyio.fail_after(settings.ai_timeout):
+            response = await self.ai_client.call_with_conversation(
+                messages=messages,
+                max_tokens=200,
+                temperature=0.8
+            )
 
         return response
 
@@ -367,12 +372,13 @@ Return ONLY the updated narrative text.{language_instruction}"""
         )
 
         # Stream API through client
-        async for chunk in self.ai_client.stream_with_conversation(
-            messages=messages,
-            max_tokens=200,
-            temperature=0.8
-        ):
-            yield chunk
+        with anyio.fail_after(settings.ai_timeout):
+            async for chunk in self.ai_client.stream_with_conversation(
+                messages=messages,
+                max_tokens=200,
+                temperature=0.8
+            ):
+                yield chunk
 
     async def suggest_topics(
         self,
@@ -405,11 +411,12 @@ Return ONLY the updated narrative text.{language_instruction}"""
         )
 
         # Call API through client (text-only)
-        response = await self.ai_client.call_text_only(
-            prompt=prompt,
-            max_tokens=150,  # Increased for Gemini compatibility
-            temperature=0.7
-        )
+        with anyio.fail_after(settings.ai_timeout):
+            response = await self.ai_client.call_text_only(
+                prompt=prompt,
+                max_tokens=150,  # Increased for Gemini compatibility
+                temperature=0.7
+            )
 
         # Parse JSON response
         return self.parse_json_response(response)
@@ -444,12 +451,13 @@ Return ONLY the updated narrative text.{language_instruction}"""
         prompt = self.build_summary_prompt(artist_name, artwork_name, conversation_history, language)
 
         # Call API through client
-        response = await self.ai_client.call_with_image_and_text(
-            prompt=prompt,
-            image_data=image_data,
-            max_tokens=100,  # Increased for Gemini compatibility (summary can be longer)
-            temperature=0.9
-        )
+        with anyio.fail_after(settings.ai_timeout):
+            response = await self.ai_client.call_with_image_and_text(
+                prompt=prompt,
+                image_data=image_data,
+                max_tokens=100,  # Increased for Gemini compatibility (summary can be longer)
+                temperature=0.9
+            )
 
         # Clean and return
         return self.clean_summary_response(response)

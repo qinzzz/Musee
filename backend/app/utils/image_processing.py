@@ -4,6 +4,7 @@ from typing import Dict, Any, Tuple
 import os
 import uuid
 import logging
+import anyio
 from datetime import datetime
 from app.config.settings import settings
 
@@ -64,46 +65,48 @@ async def process_image(file: UploadFile) -> Tuple[bytes, Dict[str, Any]]:
     if len(image_bytes) == 0:
         raise HTTPException(status_code=400, detail="Uploaded image file is empty")
 
-    # Log first few bytes for debugging (image magic numbers)
-    if len(image_bytes) >= 4:
-        logger.info(f"Image header bytes: {image_bytes[:4].hex()}")
-
-    # Open image with PIL for processing
-    try:
+    # Define the CPU-bound PIL processing to run in a thread
+    def _do_pil_processing(data: bytes) -> bytes:
         from io import BytesIO
-        image = Image.open(BytesIO(image_bytes))
-        
-        # Correct orientation based on EXIF before further processing
-        # This ensures images from mobile devices are correctly oriented
-        image = ImageOps.exif_transpose(image)
-        
-        logger.info(f"PIL opened image: format={image.format}, mode={image.mode}, size={image.size}")
+        try:
+            image = Image.open(BytesIO(data))
+            
+            # Correct orientation based on EXIF before further processing
+            image = ImageOps.exif_transpose(image)
+            
+            # Resize image if too large (max 1024px on longest side for AI service limits)
+            max_dimension = 1024
+            
+            # Convert to RGB if necessary
+            if image.mode in ('RGBA', 'P'):
+                image = image.convert('RGB')
+
+            if max(image.size) > max_dimension:
+                image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+
+            # Save to JPEG
+            output = BytesIO()
+            image.save(output, format='JPEG', optimize=True, quality=80)
+            processed_bytes = output.getvalue()
+
+            # If still too large (>900KB), reduce quality further
+            if len(processed_bytes) > 900 * 1024:
+                output = BytesIO()
+                image.save(output, format='JPEG', optimize=True, quality=60)
+                processed_bytes = output.getvalue()
+                
+            return processed_bytes
+        except Exception as e:
+            logger.error(f"PIL processing error: {e}")
+            raise e
+
+    try:
+        # Run sync PIL code in a thread pool to avoid blocking the event loop
+        processed_image_bytes = await anyio.to_thread.run_sync(_do_pil_processing, image_bytes)
+        return processed_image_bytes
     except Exception as e:
-        logger.error(f"Failed to open image with PIL: {e}, first 100 bytes: {image_bytes[:100]}")
+        logger.error(f"Failed to process image: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
-
-    # Resize image if too large (max 1024px on longest side for AI service limits)
-    max_dimension = 1024
-    output = BytesIO()
-
-    # Convert to RGB if necessary (for PNG with transparency, etc.)
-    if image.mode in ('RGBA', 'P'):
-        image = image.convert('RGB')
-
-    if max(image.size) > max_dimension:
-        image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
-
-    # Always re-encode to ensure proper compression
-    image.save(output, format='JPEG', optimize=True, quality=80)
-    image_bytes = output.getvalue()
-
-    # If still too large (>900KB), reduce quality further
-    if len(image_bytes) > 900 * 1024:
-        output = BytesIO()
-        image.save(output, format='JPEG', optimize=True, quality=60)
-        image_bytes = output.getvalue()
-
-    return image_bytes
 
 
 def extract_image_metadata(image: Image.Image, filename: str, file_size: int) -> Dict[str, Any]:

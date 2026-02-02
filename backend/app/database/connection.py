@@ -9,7 +9,10 @@ engine = create_engine(
     effective_url,
     connect_args={"check_same_thread": False} if "sqlite" in effective_url else {},
     pool_pre_ping=True,
-    pool_recycle=300
+    pool_recycle=300,
+    # Increased pool size for concurrent streaming requests
+    pool_size=20,
+    max_overflow=10
 )
 
 # Create SessionLocal class

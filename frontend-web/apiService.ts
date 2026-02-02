@@ -20,7 +20,7 @@ export async function suggestTopics(
 
   console.log('Fetching suggested topics for:', { artistName, artworkName });
 
-  const response = await fetch(`${API_BASE_URL}/suggest-topic`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/suggest-topic`, {
     method: 'POST',
     body: formData,
   });
@@ -36,6 +36,27 @@ export async function suggestTopics(
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_TIMEOUT = 120000; // 120 seconds
+
+/**
+ * Enhanced fetch with timeout support
+ */
+async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit & { timeout?: number } = {}) {
+  const { timeout = API_TIMEOUT } = options;
+
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } finally {
+    clearTimeout(id);
+  }
+}
 
 /**
  * Get the base URL for images (removes /api suffix if present)
@@ -71,6 +92,8 @@ export interface ArtworkAnalysisResult {
   model_used: string;
   artwork_id?: string;  // Returned if user_id was provided
   photo_uri?: string;   // Server path to stored image (web clients)
+  location?: string;
+  photo_time?: string;
 }
 
 /**
@@ -104,7 +127,9 @@ export async function analyzeArtwork(
   imageFile: File,
   userId?: string,
   photoUri?: string,
-  sessionId?: string
+  sessionId?: string,
+  location?: string,
+  photoTime?: string
 ): Promise<ArtworkAnalysisResult> {
   const formData = new FormData();
   formData.append('image', imageFile);
@@ -122,7 +147,7 @@ export async function analyzeArtwork(
 
   console.log('Sending request to:', `${API_BASE_URL}/artwork-analyze`);
 
-  const response = await fetch(`${API_BASE_URL}/artwork-analyze`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-analyze`, {
     method: 'POST',
     body: formData,
   });
@@ -159,6 +184,8 @@ export async function analyzeArtwork(
     model_used: data.model_used || 'unknown',
     artwork_id: data.artwork_id,
     photo_uri: data.photo_uri,
+    location: data.location,
+    photo_time: data.photo_time,
   };
 }
 
@@ -196,7 +223,9 @@ export async function analyzeArtworkStream(
   onComplete: (result: ArtworkAnalysisResult) => void,
   onError: (error: Error) => void,
   sessionId?: string,
-  onMetrics?: (metrics: StreamingMetrics) => void
+  onMetrics?: (metrics: StreamingMetrics) => void,
+  location?: string,
+  photoTime?: string
 ): Promise<void> {
   const formData = new FormData();
   formData.append('image', imageFile);
@@ -208,13 +237,22 @@ export async function analyzeArtworkStream(
   if (sessionId) {
     formData.append('session_id', sessionId);
   }
+  if (location) {
+    formData.append('location', location);
+  }
+  if (photoTime) {
+    formData.append('photo_time', photoTime);
+  }
 
   console.log('Starting streaming analysis to:', `${API_BASE_URL}/artwork-analyze-stream`);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/artwork-analyze-stream`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-analyze-stream`, {
       method: 'POST',
       body: formData,
+      // For streaming, we might want a longer timeout or none, 
+      // but the user requested 120s for ALL api calls.
+      timeout: API_TIMEOUT
     });
 
     if (!response.ok) {
@@ -285,6 +323,8 @@ export async function analyzeArtworkStream(
               model_used: data.model_used || 'unknown',
               artwork_id: data.artwork_id,
               photo_uri: data.photo_uri,
+              location: data.location,
+              photo_time: data.photo_time,
             };
 
             onComplete(result);
@@ -388,7 +428,7 @@ export async function chatWithArtwork(
 
   console.log('Sending chat request:', { query, artworkId, artistName, artworkName, hasImage: !!imageFile && imageFile.size > 0 });
 
-  const response = await fetch(`${API_BASE_URL}/artwork-chat`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-chat`, {
     method: 'POST',
     body: formData,
   });
@@ -461,9 +501,10 @@ export async function chatWithArtworkStream(
   console.log('Starting streaming chat to:', `${API_BASE_URL}/artwork-chat-stream`);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/artwork-chat-stream`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-chat-stream`, {
       method: 'POST',
       body: formData,
+      timeout: API_TIMEOUT
     });
 
     if (!response.ok) {
@@ -576,7 +617,7 @@ export async function getTagExplanation(
     params.append('artwork_id', artworkId);
   }
 
-  const response = await fetch(`${API_BASE_URL}/tag-explanation?${params.toString()}`);
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tag-explanation?${params.toString()}`);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -598,7 +639,7 @@ export async function fetchUserArtworks(userId: string): Promise<any> {
     limit: '100'
   });
 
-  const response = await fetch(`${API_BASE_URL}/artworks?${params.toString()}`);
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks?${params.toString()}`);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -615,7 +656,7 @@ export async function fetchUserArtworks(userId: string): Promise<any> {
  * @returns Status message
  */
 export async function deleteArtwork(artworkId: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/artworks/${artworkId}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}`, {
     method: 'DELETE',
   });
 
