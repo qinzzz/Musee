@@ -129,7 +129,9 @@ export async function analyzeArtwork(
   photoUri?: string,
   sessionId?: string,
   location?: string,
-  photoTime?: string
+  photoTime?: string,
+  latitude?: number,
+  longitude?: number
 ): Promise<ArtworkAnalysisResult> {
   const formData = new FormData();
   formData.append('image', imageFile);
@@ -143,6 +145,12 @@ export async function analyzeArtwork(
   }
   if (sessionId) {
     formData.append('session_id', sessionId);
+  }
+  if (latitude !== undefined) {
+    formData.append('latitude', latitude.toString());
+  }
+  if (longitude !== undefined) {
+    formData.append('longitude', longitude.toString());
   }
 
   console.log('Sending request to:', `${API_BASE_URL}/artwork-analyze`);
@@ -225,7 +233,9 @@ export async function analyzeArtworkStream(
   sessionId?: string,
   onMetrics?: (metrics: StreamingMetrics) => void,
   location?: string,
-  photoTime?: string
+  photoTime?: string,
+  latitude?: number,
+  longitude?: number
 ): Promise<void> {
   const formData = new FormData();
   formData.append('image', imageFile);
@@ -242,6 +252,12 @@ export async function analyzeArtworkStream(
   }
   if (photoTime) {
     formData.append('photo_time', photoTime);
+  }
+  if (latitude !== undefined) {
+    formData.append('latitude', latitude.toString());
+  }
+  if (longitude !== undefined) {
+    formData.append('longitude', longitude.toString());
   }
 
   console.log('Starting streaming analysis to:', `${API_BASE_URL}/artwork-analyze-stream`);
@@ -657,6 +673,25 @@ export async function fetchUserArtworks(userId: string): Promise<any> {
  */
 export async function deleteArtwork(artworkId: string): Promise<any> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Delete an entire session and its artworks
+ * 
+ * @param sessionId - The ID of the session to delete
+ * @returns Status message
+ */
+export async function deleteSession(sessionId: string): Promise<any> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}`, {
     method: 'DELETE',
   });
 

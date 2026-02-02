@@ -19,6 +19,9 @@ interface Props {
     artworkId?: string;  // Backend DB artwork ID for persistent conversations
     isAnalyzing?: boolean;  // Loading state while analyzing
     streamingText?: string;  // Real-time streaming text during analysis
+    location?: any;
+    photoTime?: string;
+    visitId?: string;
   };
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
@@ -94,6 +97,69 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [showMetadata, setShowMetadata] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+
+  const displayLocation = React.useMemo(() => {
+    if (!item.location) return null;
+    try {
+      let data: any = null;
+      if (typeof item.location === 'object') {
+        data = item.location;
+      } else if (typeof item.location === 'string' && item.location.startsWith('{')) {
+        data = JSON.parse(item.location);
+      }
+
+      if (data) {
+        const parts = [data.museum, data.city, data.country].filter(Boolean);
+        return parts.length > 0 ? parts.join(', ') : (data.raw || item.location);
+      }
+      return typeof item.location === 'string' ? item.location : null;
+    } catch (e) {
+      return typeof item.location === 'string' ? item.location : null;
+    }
+  }, [item.location]);
+
+  // Helper to format date strings to (Month Day, Year) without time
+  const formatDisplayDate = (dateStr: string | null | undefined): string | null => {
+    if (!dateStr) return null;
+    try {
+      // If it has a comma followed by time, split it
+      if (dateStr.includes(', ')) {
+        const parts = dateStr.split(', ');
+        if (parts.length >= 2) {
+          // Check if it's "Dec 18, 2024, 8:31 AM"
+          if (parts.length >= 3 && parts[2].match(/\d{2}:\d{2}/)) {
+            return `${parts[0]}, ${parts[1]}`;
+          }
+          // If it's already "Dec 18, 2024" return as is
+          return `${parts[0]}, ${parts[1]}`;
+        }
+      }
+
+      // If it has a space followed by time (e.g. ISO result)
+      if (dateStr.includes(' ')) {
+        const parts = dateStr.split(' ');
+        if (parts[0].includes('-')) {
+          const dt = new Date(dateStr);
+          if (!isNaN(dt.getTime())) {
+            return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          }
+        }
+        // If "Dec 18, 2024 15:30:00"
+        if (parts.length >= 3 && parts[1].endsWith(',')) {
+          return `${parts[0]} ${parts[1]} ${parts[2]}`;
+        }
+      }
+
+      const dt = new Date(dateStr);
+      if (!isNaN(dt.getTime())) {
+        return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+
+      return dateStr;
+    } catch (e) {
+      return dateStr;
+    }
+  };
 
   // Custom markdown component to make bold text clickable (Google search)
   const markdownComponents = {
@@ -430,6 +496,30 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           {showMetadata && !item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-md p-8 sm:p-12 overflow-y-auto z-30 scrollbar-hide animate-in fade-in duration-500">
               <div className="max-w-xl mx-auto space-y-8">
+                {/* Location and Date Metadata (Top context) */}
+                {(displayLocation || item.photoTime) && (
+                  <div className="flex flex-wrap gap-x-12 gap-y-6 pb-8 border-b border-neutral-100">
+                    {displayLocation && (
+                      <div>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Location</p>
+                        <p className="text-[14px] font-serif italic text-neutral-800">{displayLocation}</p>
+                      </div>
+                    )}
+                    {item.photoTime && (
+                      <div>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Photo Taken</p>
+                        <p className="text-[14px] font-serif italic text-neutral-800">{formatDisplayDate(item.photoTime)}</p>
+                      </div>
+                    )}
+                    {item.visitId && (
+                      <div>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Visit</p>
+                        <p className="text-[9px] tracking-widest text-emerald-600 font-mono uppercase bg-emerald-50 px-2 py-0.5 rounded">Recorded</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {item.artistName && (
                   <div>
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Artist</p>
@@ -443,17 +533,33 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                   </div>
                 )}
                 {(item.date || item.medium) && (
-                  <div className="flex gap-12">
+                  <div className="flex flex-wrap gap-8 sm:gap-12">
                     {item.date && (
                       <div>
                         <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Date</p>
-                        <p className="text-[14px] text-neutral-600">{item.date}</p>
+                        <p className="text-[14px] text-neutral-600">{formatDisplayDate(item.date)}</p>
                       </div>
                     )}
                     {item.medium && (
                       <div>
                         <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Medium</p>
                         <p className="text-[14px] text-neutral-600">{item.medium}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(displayLocation || item.photoTime) && (
+                  <div className="flex flex-wrap gap-8 sm:gap-12 pt-2">
+                    {displayLocation && (
+                      <div>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Location</p>
+                        <p className="text-[14px] text-neutral-600">{displayLocation}</p>
+                      </div>
+                    )}
+                    {item.photoTime && (
+                      <div>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Photo Taken</p>
+                        <p className="text-[14px] text-neutral-600">{item.photoTime}</p>
                       </div>
                     )}
                   </div>

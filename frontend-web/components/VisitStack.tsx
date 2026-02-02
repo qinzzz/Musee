@@ -7,9 +7,10 @@ interface Props {
   onOpenExhibition: (items: GalleryItem[]) => void;
   onResumeVisit?: () => void;
   onDeleteItem?: (id: string) => void;
+  onDeleteSession?: () => void;
 }
 
-const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, onDeleteItem }) => {
+const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, onDeleteItem, onDeleteSession }) => {
   if (items.length === 0) return null;
 
   // We show up to 3 cards in the stack visually
@@ -18,9 +19,8 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
 
   // Find first non-empty location and time
   const locationItem = items.find(i => i.location);
-  const timeItem = items.find(i => i.photoTime);
   const locationStr = locationItem?.location;
-  const timeStr = timeItem?.photoTime;
+  const timeStr = items.find(i => i.photoTime)?.photoTime;
 
   const displayLocation = React.useMemo(() => {
     if (!locationStr) return null;
@@ -120,6 +120,19 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
                 }}
               >
                 <span className="text-[10px] tracking-[0.4em] uppercase font-bold">Resume</span>
+              </button>
+            )}
+
+            {onDeleteSession && (
+              <button
+                className="bg-red-500/10 backdrop-blur text-red-500 rounded-full shadow-2xl border border-red-500/20 flex items-center whitespace-nowrap overflow-hidden transition-all duration-500 ease-out max-w-0 opacity-0 p-0 group-hover:max-w-[200px] group-hover:opacity-100 group-hover:px-4 group-hover:py-2 group-hover:ml-2 hover:bg-red-500 hover:text-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteSession();
+                }}
+                title="Delete Visit Record"
+              >
+                <span className="text-[10px] font-bold">✕</span>
               </button>
             )}
           </div>

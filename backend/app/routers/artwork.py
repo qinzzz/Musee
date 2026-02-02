@@ -11,14 +11,14 @@ from datetime import datetime
 import anyio
 
 from app.database.connection import get_db, SessionLocal
-from app.database.models import SavedArtwork, Conversation, Tag, User
+from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel
 from app.models.artwork import AIProvider, UpdateArtworkRequest
 from app.services.ai_service import AIServiceFactory
 from app.services.openai_api_client import OpenAIAPIClient
 from app.services.claude_api_client import ClaudeAPIClient
 from app.services.gemini_api_client import GeminiAPIClient
 from app.services.photoroom_service import photoroom_service
-from app.utils.image_processing import process_image
+from app.utils.image_processing import process_image, reverse_geocode
 from app.services.storage import get_storage_service, StorageFactory
 from app.config.settings import settings
 from app.utils.conversation_storage import ConversationMessage
@@ -140,6 +140,8 @@ async def analyze_artist(
     client_type: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
     photo_time: Optional[str] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = None
 ):
@@ -159,7 +161,27 @@ async def analyze_artist(
     logger.info(f"analyze_artist received session_id: {session_id}, user_id: {user_id}")
 
     try:
-        image_bytes = await process_image(image)
+        image_bytes, image_metadata = await process_image(image)
+        
+        # Determine location source
+        if image_metadata.get("location_data"):
+            location = json.dumps(image_metadata["location_data"])
+            logger.info(f"Metadata Source [Location]: PHOTO EXIF (Resolved: {location})")
+        elif latitude is not None and longitude is not None:
+            # Frontend provided coordinates, but EXIF didn't have GPS or geocoding failed
+            location_data = await reverse_geocode(latitude, longitude)
+            location = json.dumps(location_data)
+            logger.info(f"Metadata Source [Location]: FRONTEND COORDS (Resolved: {location})")
+        else:
+            logger.info(f"Metadata Source [Location]: FRONTEND (Value: {location})")
+        
+        # Determine time source
+        if image_metadata.get("exif_timestamp"):
+            photo_time = image_metadata["exif_timestamp"]
+            logger.info(f"Metadata Source [Time]: PHOTO EXIF (Timestamp: {photo_time})")
+        else:
+            logger.info(f"Metadata Source [Time]: FRONTEND (Value: {photo_time})")
+
         ai_service = AIServiceFactory.get_service(ai_provider)
         
         # Get session context if session_id provided
@@ -350,6 +372,8 @@ async def analyze_artist_stream(
     session_id: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
     photo_time: Optional[str] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = None
 ):
@@ -367,18 +391,34 @@ async def analyze_artist_stream(
     # TIMING: Request received
     t_request_received = time.time()
     request_id = f"stream_{int(t_request_received * 1000)}"
-    logger.info(f"[{request_id}] METRIC: request_received")
 
     ai_provider = determine_ai_provider(model)
 
     try:
-        image_bytes = await process_image(image)
+        image_bytes, image_metadata = await process_image(image)
+        
+        # Determine location source
+        if image_metadata.get("location_data"):
+            location = json.dumps(image_metadata["location_data"])
+            logger.info(f"Metadata Source [Streaming Location]: PHOTO EXIF (Resolved: {location})")
+        elif latitude is not None and longitude is not None:
+            location_data = await reverse_geocode(latitude, longitude)
+            location = json.dumps(location_data)
+            logger.info(f"Metadata Source [Streaming Location]: FRONTEND COORDS (Resolved: {location})")
+        else:
+            logger.info(f"Metadata Source [Streaming Location]: FRONTEND (Value: {location})")
+        
+        # Determine time source
+        if image_metadata.get("exif_timestamp"):
+            photo_time = image_metadata["exif_timestamp"]
+            logger.info(f"Metadata Source [Streaming Time]: PHOTO EXIF (Timestamp: {photo_time})")
+        else:
+            logger.info(f"Metadata Source [Streaming Time]: FRONTEND (Value: {photo_time})")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
 
     # TIMING: Image processed
     t_image_processed = time.time()
-    logger.info(f"[{request_id}] METRIC: image_processed, elapsed={(t_image_processed - t_request_received)*1000:.0f}ms")
 
     async def event_generator():
         nonlocal t_request_received, t_image_processed, request_id
@@ -393,7 +433,6 @@ async def analyze_artist_stream(
         try:
             # TIMING: Call AI service
             t_ai_call = time.time()
-            logger.info(f"[{request_id}] METRIC: ai_service_called, elapsed={(t_ai_call - t_request_received)*1000:.0f}ms")
 
             # Get session context if session_id provided
             session_context = None
@@ -409,7 +448,6 @@ async def analyze_artist_stream(
                     t_first_chunk = time.time()
                     first_chunk_received = True
                     time_to_first_chunk = (t_first_chunk - t_ai_call) * 1000
-                    logger.info(f"[{request_id}] METRIC: first_chunk_received, ttfc={time_to_first_chunk:.0f}ms, total_elapsed={(t_first_chunk - t_request_received)*1000:.0f}ms")
 
                 full_text += chunk
                 # Send chunk as SSE event
@@ -419,7 +457,6 @@ async def analyze_artist_stream(
             # TIMING: Streaming finished
             t_streaming_done = time.time()
             streaming_duration = (t_streaming_done - t_first_chunk) * 1000 if t_first_chunk else 0
-            logger.info(f"[{request_id}] METRIC: streaming_finished, streaming_duration={streaming_duration:.0f}ms, total_elapsed={(t_streaming_done - t_request_received)*1000:.0f}ms")
 
             # Parse the full response to extract metadata
             artist_name = "Unknown Artist"
@@ -588,7 +625,6 @@ async def analyze_artist_stream(
             # TIMING: Request finished
             t_request_done = time.time()
             total_duration = (t_request_done - t_request_received) * 1000
-            logger.info(f"[{request_id}] METRIC: request_finished, total_duration={total_duration:.0f}ms")
 
             # Build and send metrics event for frontend consumption
             metrics = {
@@ -670,7 +706,13 @@ async def analyze_bite(
 
         image_bytes = None
         if image:
-            image_bytes = await process_image(image)
+            image_bytes, image_metadata = await process_image(image)
+            
+            # Optionally override if needed
+            if image_metadata.get("exif_location"):
+                location = json.dumps(image_metadata["exif_location"])
+            if image_metadata.get("exif_timestamp"):
+                photo_time = image_metadata["exif_timestamp"]
 
         previous_messages = []
         artwork = None
@@ -820,7 +862,13 @@ async def analyze_bite_stream(
 
         image_bytes = None
         if image:
-            image_bytes = await process_image(image)
+            image_bytes, image_metadata = await process_image(image)
+            
+            # Optionally override if needed
+            if image_metadata.get("exif_location"):
+                location = json.dumps(image_metadata["exif_location"])
+            if image_metadata.get("exif_timestamp"):
+                photo_time = image_metadata["exif_timestamp"]
 
         previous_messages = []
         artwork = None
@@ -1032,7 +1080,7 @@ async def generate_summary(
     ai_provider = determine_ai_provider(model)
 
     try:
-        image_bytes = await process_image(image)
+        image_bytes, _ = await process_image(image)
 
         # Parse conversation history
         conv_messages = []
@@ -1391,15 +1439,32 @@ async def batch_delete_artworks(
         raise HTTPException(status_code=500, detail=f"Batch delete failed: {str(e)}")
 
 
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str, db: Session = Depends(get_db)):
+    """Delete a session and all its associated artworks"""
+    session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+
+    if not session_record:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Delete all artworks in this session
+    db.query(SavedArtwork).filter(SavedArtwork.session_id == session_id).delete()
+    
+    # Delete the session record
+    db.delete(session_record)
+    db.commit()
+
+    logger.info(f"Session {session_id} and all its artworks deleted successfully")
+    return {"message": "Session deleted successfully"}
+
+
 # =============================================================================
 # Session Memory Helpers
 # =============================================================================
 
-from app.database.models import Session as SessionModel
 
 async def get_session_context(session_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieve thematic context for a session in a thread-safe way"""
-    from app.database.connection import SessionLocal
+    """Helper to get previous artwork context for a session"""
 
     def sync_get_context():
         with SessionLocal() as db:
@@ -1437,7 +1502,6 @@ async def update_session_narrative_task(
     language: Optional[str] = None
 ):
     """Background task to update session narrative distilled from all artworks"""
-    from app.database.connection import SessionLocal
     with SessionLocal() as db:
         session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
         if not session_record:
@@ -1456,4 +1520,4 @@ async def update_session_narrative_task(
         
         session_record.narrative_summary = updated_narrative
         db.commit()
-        logger.info(f"Updated narrative for session {session_id}: {updated_narrative}")
+        logger.info(f"Updated narrative for session {session_id}")

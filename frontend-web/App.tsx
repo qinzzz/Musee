@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { GalleryItem, ViewMode, NeighborItem, Message, Visit, TagCoordinate, Annotation } from './types';
-import { analyzeArtworkStream, analyzeArtwork, ArtworkAnalysisResult, StreamingMetrics, getOrCreateUserId, fetchUserArtworks, getBaseDomain, resolveImageUrl, deleteArtwork } from './apiService';
+import { analyzeArtworkStream, analyzeArtwork, ArtworkAnalysisResult, StreamingMetrics, getOrCreateUserId, fetchUserArtworks, getBaseDomain, resolveImageUrl, deleteArtwork, deleteSession } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
 import TopographyView from './components/TopographyView';
@@ -100,6 +100,51 @@ const parseAnalysis = (text: string | null) => {
   return text;
 };
 
+// Helper to format date strings to (Month Day, Year) without time
+export const formatDisplayDate = (dateStr: string | null | undefined): string | null => {
+  if (!dateStr) return null;
+  // If it's a timestamp like "Feb 1, 2026, 8:31:14 PM" or "2026-02-01 20:31:14"
+  // We want to just keep the date part. 
+  // Custom EXIF format is "Feb 1, 2026" or "2024:12:18 15:30:00"
+
+  try {
+    // If it has a comma followed by time, split it
+    if (dateStr.includes(', ')) {
+      const parts = dateStr.split(', ');
+      // Check if second or third part looks like time
+      if (parts.length >= 3) {
+        return `${parts[0]}, ${parts[1]}`;
+      }
+    }
+
+    // If it has a space followed by time
+    if (dateStr.includes(' ')) {
+      const parts = dateStr.split(' ');
+      // If it looks like ISO date + time "2026-02-01 20:31:14"
+      if (parts[0].includes('-')) {
+        const dt = new Date(dateStr);
+        if (!isNaN(dt.getTime())) {
+          return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+      }
+      // If it looks like "Feb 1, 2026 20:31:14"
+      if (parts.length >= 3 && parts[1].endsWith(',')) {
+        return `${parts[0]} ${parts[1]} ${parts[2]}`;
+      }
+    }
+
+    // Fallback: if it's just a raw ISO string or something
+    const dt = new Date(dateStr);
+    if (!isNaN(dt.getTime())) {
+      return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    return dateStr;
+  } catch (e) {
+    return dateStr;
+  }
+};
+
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const MOCK_NEIGHBORS: NeighborItem[] = [
@@ -173,7 +218,8 @@ const App: React.FC = () => {
     medium?: string,
     artworkId?: string,
     isAnalyzing?: boolean,
-    streamingText?: string
+    streamingText?: string,
+    visitId?: string
   } | null>(null);
   const [exhibitionContext, setExhibitionContext] = useState<{ items: GalleryItem[], visitId?: string } | null>(null);
   const [neighborProximity, setNeighborProximity] = useState(0);
@@ -340,50 +386,22 @@ const App: React.FC = () => {
     });
   };
 
-  const getCurrentLocation = async (): Promise<string | undefined> => {
+  const getCurrentLocation = async (): Promise<{ latitude: number, longitude: number } | undefined> => {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
         resolve(undefined);
         return;
       }
       navigator.geolocation.getCurrentPosition(
-        async (position) => {
+        (position) => {
           const { latitude, longitude } = position.coords;
-          try {
-            // Reverse geocoding using Nominatim (OpenStreetMap)
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`);
-            if (response.ok) {
-              const data = await response.json();
-
-              // Extract data
-              const city = data.address.city || data.address.town || data.address.village || data.address.hamlet || '';
-              const country = data.address.country || '';
-              // Try to find museum in address or place name
-              const museum = data.address.museum || (data.type === 'museum' ? data.name : '') || '';
-
-              const locationStruct = {
-                longitude,
-                latitude,
-                city,
-                country,
-                museum
-              };
-
-              resolve(JSON.stringify(locationStruct));
-            } else {
-              // Fallback structure
-              resolve(JSON.stringify({ longitude, latitude, city: '', country: '', museum: '' }));
-            }
-          } catch (e) {
-            console.warn('Geocoding failed:', e);
-            resolve(JSON.stringify({ longitude, latitude, city: '', country: '', museum: '' }));
-          }
+          resolve({ latitude, longitude });
         },
         (error) => {
           console.warn('Geolocation error:', error);
           resolve(undefined);
         },
-        { timeout: 5000 }
+        { timeout: 10000, enableHighAccuracy: false }
       );
     });
   };
@@ -402,8 +420,8 @@ const App: React.FC = () => {
       const file = files[0];
       const newItemId = Math.random().toString(36).substring(2, 11);
 
-      // Get location and time
-      const location = await getCurrentLocation();
+      // Get location coordinates
+      const coords = await getCurrentLocation();
       const photoTime = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
       try {
@@ -431,7 +449,7 @@ const App: React.FC = () => {
           visitId: visit.active ? visit.id : undefined,
           isAnalyzing: true,
           streamingText: '',
-          location: location,
+          location: coords ? JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city: '', country: '', museum: '' }) : undefined,
           photoTime: photoTime
         };
 
@@ -441,6 +459,7 @@ const App: React.FC = () => {
         // Open modal immediately
         setInterpretingItem({
           ...placeholderItem,
+          visitId: visit.active ? visit.id : undefined,
           streamingText: 'Initializing analysis...'
         });
 
@@ -487,7 +506,9 @@ const App: React.FC = () => {
               medium: analysis.medium,
               artworkId: analysis.artwork_id,
               isAnalyzing: false,
-              streamingText: undefined
+              streamingText: undefined,
+              location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
+              photoTime: analysis.photo_time
             };
 
             // Update gallery
@@ -510,8 +531,10 @@ const App: React.FC = () => {
           },
           visit.active ? visit.id : Math.random().toString(36).substring(2, 11),
           undefined,
-          location,
-          photoTime
+          undefined,
+          photoTime,
+          coords?.latitude,
+          coords?.longitude
         );
       } catch (error) {
         console.error('Failed to prepare single upload:', error);
@@ -520,7 +543,7 @@ const App: React.FC = () => {
     // Batch upload: Keep current background processing implementation
     else {
       // Get location once for the batch
-      const location = await getCurrentLocation();
+      const coords = await getCurrentLocation();
       const photoTime = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
       files.forEach(async (file) => {
@@ -552,7 +575,7 @@ const App: React.FC = () => {
             visitId: visit.active ? visit.id : undefined,
             isAnalyzing: true,
             streamingText: '',
-            location: location,
+            location: coords ? JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city: '', country: '', museum: '' }) : undefined,
             photoTime: photoTime
           };
 
@@ -564,8 +587,10 @@ const App: React.FC = () => {
             USER_ID,
             undefined,
             visit.active ? visit.id : Math.random().toString(36).substring(2, 11),
-            location,
-            photoTime
+            undefined,
+            photoTime,
+            coords?.latitude,
+            coords?.longitude
           );
           const keywords = analysis.tags.map((tag: string) =>
             tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
@@ -627,24 +652,30 @@ const App: React.FC = () => {
     if (!window.confirm("Are you sure you want to remove this piece from the Musee? This will permanently delete the analysis and conversation history.")) return;
 
     try {
-      // Find the item to get its artworkId if it exists
       const itemToDelete = items.find(item => item.id === id);
       if (itemToDelete?.artworkId) {
         await deleteArtwork(itemToDelete.artworkId);
       }
-
-      // Remove from local items state
       setItems(prev => prev.filter(item => item.id !== id));
-
-      // If it's being interpreted, close the modal
-      if (interpretingItem?.id === id) {
-        setInterpretingItem(null);
-      }
-
+      if (interpretingItem?.id === id) setInterpretingItem(null);
       console.log(`Successfully deleted artwork: ${id}`);
     } catch (error) {
       console.error("Failed to delete artwork:", error);
-      alert("Encountered an error while attempting to remove this piece. Please try again.");
+    }
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!window.confirm("Are you sure you want to delete this entire visit record? This will remove all associated artworks.")) return;
+
+    try {
+      await deleteSession(sessionId);
+      setItems(prev => prev.filter(item => item.visitId !== sessionId));
+      if (interpretingItem && interpretingItem.visitId === sessionId) {
+        setInterpretingItem(null);
+      }
+      console.log(`Successfully deleted session: ${sessionId}`);
+    } catch (error) {
+      console.error("Failed to delete session:", error);
     }
   };
 
@@ -707,17 +738,8 @@ const App: React.FC = () => {
                 <GalleryCard
                   item={entry.item}
                   onInterpret={() => setInterpretingItem({
-                    url: entry.item.url,
-                    id: entry.item.id,
-                    conversation: entry.item.conversation,
-                    annotations: entry.item.annotations,
-                    artistName: entry.item.artistName,
-                    artworkName: entry.item.artworkName,
-                    description: entry.item.description,
-                    keywords: entry.item.keywords,
-                    date: entry.item.date,
-                    medium: entry.item.medium,
-                    artworkId: entry.item.artworkId
+                    ...entry.item,
+                    visitId: entry.item.visitId
                   })}
                   onDelete={() => handleDeleteItem(entry.item.id)}
                   onContinueVision={!visit.active ? () => handleContinueVision(entry.item) : undefined}
@@ -734,6 +756,7 @@ const App: React.FC = () => {
                   onOpenExhibition={(stackItems) => setExhibitionContext({ items: stackItems, visitId: entry.visitId })}
                   onResumeVisit={() => handleResumeVisit(entry.visitId)}
                   onDeleteItem={handleDeleteItem}
+                  onDeleteSession={() => handleDeleteSession(entry.visitId)}
                 />
               </div>
             );
@@ -781,6 +804,7 @@ const App: React.FC = () => {
           onClose={() => setExhibitionContext(null)}
           onUpdateConversation={(msgs) => setVisit(prev => ({ ...prev, globalConversation: [...prev.globalConversation, ...msgs] }))}
           onDeleteItem={handleDeleteItem}
+          onInterpret={setInterpretingItem}
         />
       )}
 

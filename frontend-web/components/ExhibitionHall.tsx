@@ -9,9 +9,10 @@ interface Props {
   onClose: () => void;
   onUpdateConversation: (newMessages: Message[]) => void;
   onDeleteItem?: (id: string) => void;
+  onInterpret?: (item: GalleryItem) => void;
 }
 
-const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdateConversation, onDeleteItem }) => {
+const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdateConversation, onDeleteItem, onInterpret }) => {
   const [messages, setMessages] = useState<Message[]>(conversation);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -61,7 +62,11 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
             <h4 className="text-[8px] tracking-[0.4em] uppercase text-neutral-400 mb-6 font-bold">Curation</h4>
             <div className="space-y-4">
               {items.map(item => (
-                <div key={item.id} className="relative group aspect-[3/4] rounded-lg overflow-hidden bg-white border border-neutral-100 p-1">
+                <div
+                  key={item.id}
+                  className="relative group aspect-[3/4] rounded-lg overflow-hidden bg-white border border-neutral-100 p-1 cursor-pointer hover:border-neutral-900 transition-colors"
+                  onClick={() => onInterpret?.(item)}
+                >
                   <img src={item.url} className="w-full h-full object-cover rounded shadow-sm" alt="Thumbnail" />
                   {onDeleteItem && (
                     <button

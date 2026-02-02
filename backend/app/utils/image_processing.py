@@ -5,6 +5,8 @@ import os
 import uuid
 import logging
 import anyio
+import json
+import httpx
 from datetime import datetime
 from app.config.settings import settings
 
@@ -65,51 +67,104 @@ async def process_image(file: UploadFile) -> Tuple[bytes, Dict[str, Any]]:
     if len(image_bytes) == 0:
         raise HTTPException(status_code=400, detail="Uploaded image file is empty")
 
-    # Define the CPU-bound PIL processing to run in a thread
-    def _do_pil_processing(data: bytes) -> bytes:
-        from io import BytesIO
-        try:
-            image = Image.open(BytesIO(data))
-            
-            # Correct orientation based on EXIF before further processing
-            image = ImageOps.exif_transpose(image)
-            
-            # Resize image if too large (max 1024px on longest side for AI service limits)
-            max_dimension = 1024
-            
-            # Convert to RGB if necessary
-            if image.mode in ('RGBA', 'P'):
-                image = image.convert('RGB')
-
-            if max(image.size) > max_dimension:
-                image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
-
-            # Save to JPEG
-            output = BytesIO()
-            image.save(output, format='JPEG', optimize=True, quality=80)
-            processed_bytes = output.getvalue()
-
-            # If still too large (>900KB), reduce quality further
-            if len(processed_bytes) > 900 * 1024:
-                output = BytesIO()
-                image.save(output, format='JPEG', optimize=True, quality=60)
-                processed_bytes = output.getvalue()
-                
-            return processed_bytes
-        except Exception as e:
-            logger.error(f"PIL processing error: {e}")
-            raise e
-
     try:
+        from io import BytesIO
+        # Open image for metadata extraction
+        image = Image.open(BytesIO(image_bytes))
+        
+        # Extract metadata (includes async reverse geocoding if GPS present)
+        metadata = await extract_image_metadata(image, file.filename, len(image_bytes))
+        
+        # Define the CPU-bound PIL processing to run in a thread
+        def _do_pil_processing(img: Image.Image) -> bytes:
+            try:
+                # Correct orientation based on EXIF before further processing
+                img = ImageOps.exif_transpose(img)
+                
+                # Resize image if too large (max 1024px on longest side for AI service limits)
+                max_dimension = 1024
+                
+                # Convert to RGB if necessary
+                if img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+                if max(img.size) > max_dimension:
+                    img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+
+                # Save to JPEG
+                output = BytesIO()
+                img.save(output, format='JPEG', optimize=True, quality=80)
+                processed_bytes = output.getvalue()
+
+                # If still too large (>900KB), reduce quality further
+                if len(processed_bytes) > 900 * 1024:
+                    output = BytesIO()
+                    img.save(output, format='JPEG', optimize=True, quality=60)
+                    processed_bytes = output.getvalue()
+                    
+                return processed_bytes
+            except Exception as e:
+                logger.error(f"PIL processing error: {e}")
+                raise e
+
         # Run sync PIL code in a thread pool to avoid blocking the event loop
-        processed_image_bytes = await anyio.to_thread.run_sync(_do_pil_processing, image_bytes)
-        return processed_image_bytes
+        processed_image_bytes = await anyio.to_thread.run_sync(_do_pil_processing, image)
+        return processed_image_bytes, metadata
     except Exception as e:
         logger.error(f"Failed to process image: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
 
 
-def extract_image_metadata(image: Image.Image, filename: str, file_size: int) -> Dict[str, Any]:
+def _convert_to_degrees(value):
+    """Helper function to convert the GPS coordinates stored in the EXIF to decimal degrees"""
+    d = float(value[0])
+    m = float(value[1])
+    s = float(value[2])
+    return d + (m / 60.0) + (s / 3600.0)
+
+def _format_exif_date(date_str):
+    """Convert EXIF date string (YYYY:MM:DD HH:MM:SS) to (Month Day, Year)"""
+    try:
+        # EXIF dates are typically YYYY:MM:DD HH:MM:SS, but some sources use dashes
+        clean_date = date_str[:19].replace('-', ':')
+        dt = datetime.strptime(clean_date, '%Y:%m:%d %H:%M:%S')
+        return dt.strftime('%b %d, %Y')
+    except Exception:
+        return date_str
+
+async def reverse_geocode(lat: float, lon: float) -> Dict[str, Any]:
+    """
+    Reverse geocode coordinates using Nominatim (OpenStreetMap)
+    Returns: {city, country, museum, raw}
+    """
+    url = f"https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={lat}&lon={lon}"
+    headers = {"User-Agent": "MuseeApp/1.0"}
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                address = data.get("address", {})
+                
+                # Extract data similar to frontend logic
+                city = address.get("city") or address.get("town") or address.get("village") or address.get("hamlet") or ""
+                country = address.get("country") or ""
+                museum = address.get("museum") or (data.get("type") == "museum" and data.get("name")) or ""
+                
+                return {
+                    "city": city,
+                    "country": country,
+                    "museum": museum,
+                    "latitude": lat,
+                    "longitude": lon,
+                    "raw": data.get("display_name", "")
+                }
+    except Exception as e:
+        logger.warning(f"Reverse geocode failed: {e}")
+    
+    return {"latitude": lat, "longitude": lon}
+
+async def extract_image_metadata(image: Image.Image, filename: str, file_size: int) -> Dict[str, Any]:
     """Extract metadata from PIL Image"""
     
     metadata = {
@@ -117,7 +172,9 @@ def extract_image_metadata(image: Image.Image, filename: str, file_size: int) ->
         "size": file_size,
         "dimensions": image.size,
         "format": image.format or "Unknown",
-        "upload_timestamp": datetime.utcnow().isoformat()
+        "upload_timestamp": datetime.utcnow().isoformat(),
+        "exif_location": None,
+        "exif_timestamp": None
     }
     
     # Extract EXIF data if available
@@ -126,9 +183,37 @@ def extract_image_metadata(image: Image.Image, filename: str, file_size: int) ->
         exif = image._getexif()
         for tag_id, value in exif.items():
             tag = ExifTags.TAGS.get(tag_id, tag_id)
-            # Only include basic, non-sensitive EXIF data
-            if tag in ['DateTime', 'Software', 'ColorSpace', 'Orientation']:
+            if tag in ['DateTime', 'DateTimeOriginal', 'DateTimeDigitized', 'Software', 'ColorSpace', 'Orientation']:
                 exif_data[tag] = str(value)
+                if tag == 'DateTimeOriginal' and not metadata["exif_timestamp"]:
+                    metadata["exif_timestamp"] = _format_exif_date(str(value))
+            
+            # GPS Data
+            if tag == 'GPSInfo':
+                gps_data = {}
+                for t in value:
+                    sub_tag = ExifTags.GPSTAGS.get(t, t)
+                    gps_data[sub_tag] = value[t]
+                
+                try:
+                    if 'GPSLatitude' in gps_data and 'GPSLatitudeRef' in gps_data and \
+                       'GPSLongitude' in gps_data and 'GPSLongitudeRef' in gps_data:
+                        lat = _convert_to_degrees(gps_data['GPSLatitude'])
+                        if gps_data['GPSLatitudeRef'] != 'N':
+                            lat = 0 - lat
+                        
+                        lon = _convert_to_degrees(gps_data['GPSLongitude'])
+                        if gps_data['GPSLongitudeRef'] != 'E':
+                            lon = 0 - lon
+                        
+                        metadata["exif_location"] = {"latitude": lat, "longitude": lon}
+                        
+                        # Trigger reverse geocoding if we have coordinates
+                        # Note: This is an async call but extract_image_metadata is now async
+                        metadata["location_data"] = await reverse_geocode(lat, lon)
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to parse GPS data: {e}")
     
     metadata["exif"] = exif_data
     return metadata

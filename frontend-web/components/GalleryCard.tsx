@@ -48,6 +48,41 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
     }
   }, [item.location]);
 
+  // Helper to format date strings to (Month Day, Year) without time
+  const formatDisplayDate = (dateStr: string | null | undefined): string | null => {
+    if (!dateStr) return null;
+    try {
+      // If it has a comma followed by time, split it
+      if (dateStr.includes(', ')) {
+        const parts = dateStr.split(', ');
+        if (parts.length >= 3) return `${parts[0]}, ${parts[1]}`;
+      }
+
+      // If it has a space followed by time
+      if (dateStr.includes(' ')) {
+        const parts = dateStr.split(' ');
+        if (parts[0].includes('-')) {
+          const dt = new Date(dateStr);
+          if (!isNaN(dt.getTime())) {
+            return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          }
+        }
+        if (parts.length >= 3 && parts[1].endsWith(',')) {
+          return `${parts[0]} ${parts[1]} ${parts[2]}`;
+        }
+      }
+
+      const dt = new Date(dateStr);
+      if (!isNaN(dt.getTime())) {
+        return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+
+      return dateStr;
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   return (
     <div
       className="min-w-[40vw] h-[80vh] mx-12 flex items-center justify-center transition-all duration-1000 group"
@@ -64,7 +99,7 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
             )}
             {item.photoTime && (
               <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-light">
-                {item.photoTime}
+                {formatDisplayDate(item.photoTime)}
               </p>
             )}
           </div>
