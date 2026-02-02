@@ -280,7 +280,6 @@ async def analyze_artist(
                 generated_photo_uri,
                 artist_name,
                 artwork_name,
-                artwork_name,
                 extracted_analysis,
                 date_val,
                 medium_val,
