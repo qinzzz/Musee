@@ -28,6 +28,8 @@ interface Props {
   onUpdateAnnotations: (annotations: Annotation[]) => void;
   onDelete?: (id: string) => void;
   sessionId?: string;
+  allVisitItems?: any[];
+  onNavigate?: (direction: 'prev' | 'next') => void;
 }
 
 // Tag component with explanation tooltip on hover
@@ -84,7 +86,7 @@ const HoverTag: React.FC<{
   );
 };
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onDelete, sessionId }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onDelete, sessionId, allVisitItems, onNavigate }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -95,6 +97,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [showMetadata, setShowMetadata] = useState(true);
+  const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
@@ -206,6 +209,13 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     img.src = item.url;
   }, [item.url]);
 
+  // Sync internal state when navigating between items in a session
+  useEffect(() => {
+    setMessages(item.conversation || []);
+    setSuggestedTopics([]); // Reset suggestions for the new item
+    setShowMetadata(true); // Default to showing metadata for the new piece
+  }, [item.id, item.conversation]);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -273,10 +283,12 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
       const assistantMsg: Message = { role: 'model', text: '' };
       setMessages(prev => [...prev, assistantMsg]);
       setIsTyping(false);
+      setIsWaitingForFirstChunk(true);
 
       await chatWithArtworkStream(
         text,
         (chunk) => {
+          setIsWaitingForFirstChunk(false);
           setMessages(prev => {
             const next = [...prev];
             const last = next[next.length - 1];
@@ -287,6 +299,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           });
         },
         (fullResponse) => {
+          setIsWaitingForFirstChunk(false);
           // Final response received - sync local state and update parent
           setMessages(prev => {
             const next = [...prev];
@@ -471,30 +484,46 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             )}
           </div>
 
-          {/* Overlay Toggle Button */}
-          {!item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
+          {/* Info/Label Toggle Button (Switch to Details) - Only visible when metadata is hidden and not analyzing */}
+          {!item.isAnalyzing && !showMetadata && (item.artistName || item.artworkName || item.description || item.keywords) && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setShowMetadata(!showMetadata);
+                setShowMetadata(true);
               }}
-              className={`absolute top-8 left-8 z-40 w-10 h-10 rounded-full border border-white/20 flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-lg ${showMetadata
-                ? 'bg-neutral-900/10 text-neutral-800'
-                : 'bg-white/80 text-neutral-900'
-                }`}
-              title={showMetadata ? "Hide Details" : "Show Details"}
+              className="absolute top-8 right-8 z-40 w-16 h-20 sm:w-20 sm:h-28 bg-white rounded-lg shadow-2xl border border-neutral-200 p-3 flex flex-col space-y-2 hover:scale-110 transition-all duration-300 group overflow-hidden"
+              title="View Artwork Label"
             >
-              {showMetadata ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-              )}
+              <div className="w-1/2 h-1 bg-neutral-200 rounded-full" />
+              <div className="w-full h-1 bg-neutral-100 rounded-full" />
+              <div className="w-3/4 h-1 bg-neutral-100 rounded-full" />
+              <div className="mt-auto flex justify-between items-end">
+                <div className="w-2 h-2 bg-neutral-100 rounded-full shrink-0" />
+                <div className="text-[6px] tracking-widest text-neutral-300 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">Info</div>
+              </div>
+              {/* Subtle hover overlay */}
+              <div className="absolute inset-0 bg-neutral-500/0 group-hover:bg-neutral-500/5 transition-colors" />
             </button>
           )}
 
           {/* Metadata Overlay Card - Positioned relative to the left panel (sm:flex-1) */}
           {showMetadata && !item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-md p-8 sm:p-12 overflow-y-auto z-30 scrollbar-hide animate-in fade-in duration-500">
+              {/* Thumbnail Toggle (Back to Image) */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMetadata(false);
+                }}
+                className="absolute top-8 right-8 w-16 h-20 sm:w-20 sm:h-28 rounded-lg overflow-hidden border-2 border-white shadow-2xl hover:scale-110 transition-transform active:scale-95 z-50 group"
+                title="Back to Artwork"
+              >
+                <img src={item.url} className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all" alt="Back to artwork" />
+                <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                  <span className="text-[6px] tracking-widest text-white font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">Image</span>
+                </div>
+              </button>
+
               <div className="max-w-xl mx-auto space-y-8">
                 {/* Location and Date Metadata (Top context) */}
                 {(displayLocation || item.photoTime) && (
@@ -596,7 +625,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         {/* Chat Interface - 50% split on desktop */}
         <div className="flex-1 w-full sm:w-1/2 flex flex-col bg-white border-t sm:border-t-0 sm:border-l border-neutral-100 min-w-0 min-h-0">
           <div className="p-4 sm:p-6 border-b border-neutral-50 flex justify-between items-center shrink-0">
-            <h3 className="text-[9px] sm:text-[10px] tracking-[0.4em] sm:tracking-[0.5em] uppercase text-neutral-400 font-bold">curator dialogue</h3>
+            <div className="flex items-center space-x-3">
+              <h3 className="text-[9px] sm:text-[10px] tracking-[0.4em] sm:tracking-[0.5em] uppercase text-neutral-400 font-bold">curator dialogue</h3>
+            </div>
             <div className="flex items-center space-x-4">
               {onDelete && !item.isAnalyzing && (
                 <button
@@ -626,11 +657,18 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                   ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-none'
                   : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-none font-serif'
                   }`}>
-                  {m.text}
+                  {m.text || (m.role === 'model' && isWaitingForFirstChunk && idx === messages.length - 1 ? (
+                    <div className="flex space-x-1.5 py-1">
+                      <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse"></div>
+                      <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-75"></div>
+                      <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-150"></div>
+                    </div>
+                  ) : null)}
                 </div>
               </div>
             ))}
-            {isTyping && (
+
+            {isTyping && !isWaitingForFirstChunk && (
               <div className="flex justify-start px-2">
                 <div className="flex space-x-1.5 py-4">
                   <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce"></div>
@@ -687,6 +725,33 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             </div>
           </div>
         </div>
+
+        {/* Navigation Arrows */}
+        {allVisitItems && allVisitItems.length > 1 && onNavigate && (
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col items-center space-y-2 z-50 pointer-events-none">
+            <button
+              onClick={() => onNavigate('prev')}
+              className="w-12 h-12 rounded-full bg-neutral-900/80 backdrop-blur-md border border-white/20 text-white flex flex-col items-center justify-center hover:bg-neutral-900 transition-all hover:scale-110 group pointer-events-auto shadow-2xl"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+              <span className="absolute right-16 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[8px] uppercase tracking-[0.3em] font-bold bg-neutral-900 text-white px-3 py-1.5 rounded-full shadow-2xl">Previous Piece</span>
+            </button>
+
+            <div className="bg-emerald-50/90 backdrop-blur-sm px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm pointer-events-auto">
+              <span className="text-[9px] font-mono text-emerald-600 tracking-[0.2em] font-bold whitespace-nowrap">
+                PIECE {allVisitItems.findIndex(i => i.id === item.id) + 1}/{allVisitItems.length}
+              </span>
+            </div>
+
+            <button
+              onClick={() => onNavigate('next')}
+              className="w-12 h-12 rounded-full bg-neutral-900/80 backdrop-blur-md border border-white/20 text-white flex flex-col items-center justify-center hover:bg-neutral-900 transition-all hover:scale-110 group pointer-events-auto shadow-2xl"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+              <span className="absolute right-16 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[8px] uppercase tracking-[0.3em] font-bold bg-neutral-900 text-white px-3 py-1.5 rounded-full shadow-2xl">Next Piece</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 {
-  "name": "The Aesthetic Gallery",
-  "description": "A minimalist, architecturally-inspired photo gallery that uses AI to analyze your personal taste and visualize it as a horizontal corridor and topographic map.",
+  "name": "Musee",
+  "description": "A personal life-long art journey.",
   "requestFramePermissions": [
     "camera"
   ]

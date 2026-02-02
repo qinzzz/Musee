@@ -789,7 +789,7 @@ async def analyze_bite(
         # Get session context if session_id provided
         session_context = None
         if session_id:
-            session_context = await get_session_context(db, session_id)
+            session_context = await get_session_context(session_id)
 
         # Call LLM
         ai_service = AIServiceFactory.get_service(ai_provider)
@@ -936,7 +936,7 @@ async def analyze_bite_stream(
         # Get session context if session_id provided
         session_context = None
         if session_id:
-            session_context = await get_session_context(db, session_id)
+            session_context = await get_session_context(session_id)
 
         async def event_generator():
             nonlocal user_message, artist_name, artwork_name, previous_messages, identity, language, ai_provider, artwork_id, user_msg_record, session_context

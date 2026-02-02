@@ -200,6 +200,8 @@ const MOCK_NEIGHBORS: NeighborItem[] = [
 const USER_ID = getOrCreateUserId();
 
 const App: React.FC = () => {
+  const albumInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.CORRIDOR);
@@ -219,7 +221,8 @@ const App: React.FC = () => {
     artworkId?: string,
     isAnalyzing?: boolean,
     streamingText?: string,
-    visitId?: string
+    visitId?: string,
+    allVisitItems?: GalleryItem[]
   } | null>(null);
   const [exhibitionContext, setExhibitionContext] = useState<{ items: GalleryItem[], visitId?: string } | null>(null);
   const [neighborProximity, setNeighborProximity] = useState(0);
@@ -639,6 +642,28 @@ const App: React.FC = () => {
     }, 100);
   };
 
+  const handleNavigateInterpretation = (direction: 'prev' | 'next') => {
+    if (!interpretingItem || !interpretingItem.allVisitItems || interpretingItem.allVisitItems.length <= 1) return;
+
+    const allItems = interpretingItem.allVisitItems;
+    const currentIndex = allItems.findIndex(i => i.id === interpretingItem.id);
+
+    if (currentIndex === -1) return;
+
+    let nextIndex: number;
+    if (direction === 'next') {
+      nextIndex = (currentIndex + 1) % allItems.length;
+    } else {
+      nextIndex = (currentIndex - 1 + allItems.length) % allItems.length;
+    }
+
+    const nextItem = allItems[nextIndex];
+    setInterpretingItem({
+      ...nextItem,
+      allVisitItems: allItems
+    });
+  };
+
   const updateItemConversation = (id: string, newMessages: Message[]) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, conversation: [...item.conversation, ...newMessages] } : item));
   };
@@ -753,8 +778,18 @@ const App: React.FC = () => {
               >
                 <VisitStack
                   items={entry.items}
-                  onOpenExhibition={(stackItems) => setExhibitionContext({ items: stackItems, visitId: entry.visitId })}
-                  onResumeVisit={() => handleResumeVisit(entry.visitId)}
+                  onOpenExhibition={(stackItems) => setInterpretingItem({
+                    ...stackItems[0],
+                    allVisitItems: stackItems
+                  })}
+                  onResumeVisit={(source) => {
+                    handleResumeVisit(entry.visitId);
+                    // Short delay to ensure visit is active before trigger
+                    setTimeout(() => {
+                      if (source === 'camera') cameraInputRef.current?.click();
+                      else albumInputRef.current?.click();
+                    }, 100);
+                  }}
                   onDeleteItem={handleDeleteItem}
                   onDeleteSession={() => handleDeleteSession(entry.visitId)}
                 />
@@ -794,6 +829,8 @@ const App: React.FC = () => {
           onUpdateAnnotations={(ans) => updateItemAnnotations(interpretingItem.id, ans)}
           onDelete={handleDeleteItem}
           sessionId={visit.id}
+          allVisitItems={interpretingItem.allVisitItems}
+          onNavigate={handleNavigateInterpretation}
         />
       )}
 
@@ -807,6 +844,24 @@ const App: React.FC = () => {
           onInterpret={setInterpretingItem}
         />
       )}
+
+      {/* Hidden inputs for programmatic triggering */}
+      <input
+        ref={albumInputRef}
+        type="file"
+        className="hidden"
+        accept="image/*"
+        onChange={handleFileUpload}
+        multiple
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        className="hidden"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileUpload}
+      />
 
       <Controls
         viewMode={viewMode}

@@ -5,12 +5,13 @@ import { GalleryItem } from '../types';
 interface Props {
   items: GalleryItem[];
   onOpenExhibition: (items: GalleryItem[]) => void;
-  onResumeVisit?: () => void;
+  onResumeVisit?: (source: 'camera' | 'album') => void;
   onDeleteItem?: (id: string) => void;
   onDeleteSession?: () => void;
 }
 
 const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, onDeleteItem, onDeleteSession }) => {
+  const [showResumeMenu, setShowResumeMenu] = React.useState(false);
   if (items.length === 0) return null;
 
   // We show up to 3 cards in the stack visually
@@ -112,15 +113,45 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
             </div>
 
             {onResumeVisit && (
-              <button
-                className="bg-emerald-500 text-white rounded-full shadow-2xl border border-emerald-400/20 flex items-center whitespace-nowrap overflow-hidden transition-all duration-500 ease-out max-w-0 opacity-0 p-0 group-hover:max-w-[200px] group-hover:opacity-100 group-hover:px-6 group-hover:py-2 group-hover:ml-2"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onResumeVisit();
-                }}
-              >
-                <span className="text-[10px] tracking-[0.4em] uppercase font-bold">Resume</span>
-              </button>
+              <div className="relative">
+                <button
+                  className="bg-emerald-500 text-white rounded-full shadow-2xl border border-emerald-400/20 flex items-center whitespace-nowrap overflow-hidden transition-all duration-500 ease-out max-w-0 opacity-0 p-0 group-hover:max-w-[200px] group-hover:opacity-100 group-hover:px-6 group-hover:py-2 group-hover:ml-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowResumeMenu(!showResumeMenu);
+                  }}
+                >
+                  <span className="text-[10px] tracking-[0.4em] uppercase font-bold">Resume</span>
+                </button>
+
+                {showResumeMenu && (
+                  <div className="absolute bottom-full left-2 mb-4 bg-white rounded-2xl shadow-2xl border border-neutral-100 p-2 flex flex-col space-y-1 animate-in slide-in-from-bottom-2 duration-300 z-50 min-w-[180px]">
+                    <button
+                      className="flex items-center space-x-3 px-4 py-3 hover:bg-neutral-50 rounded-xl transition-colors text-neutral-600 hover:text-emerald-600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onResumeVisit('camera');
+                        setShowResumeMenu(false);
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+                      <span className="text-[10px] tracking-widest uppercase font-bold">Take a photo</span>
+                    </button>
+                    <div className="h-px bg-neutral-50 mx-2"></div>
+                    <button
+                      className="flex items-center space-x-3 px-4 py-3 hover:bg-neutral-50 rounded-xl transition-colors text-neutral-600 hover:text-emerald-600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onResumeVisit('album');
+                        setShowResumeMenu(false);
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                      <span className="text-[10px] tracking-widest uppercase font-bold">Upload from album</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {onDeleteSession && (

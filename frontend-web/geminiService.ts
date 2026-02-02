@@ -298,7 +298,7 @@ export async function chatWithExhibition(items: GalleryItem[], history: Message[
       parts: [{ text: m.text }]
     })),
     config: {
-      systemInstruction: `You are the Lead Curator of 'The Aesthetic Gallery'. 
+      systemInstruction: `You are the Lead Curator of 'Musee'. 
       You are discussing a collection of ${items.length} works with the user.
       
       The collection includes:
