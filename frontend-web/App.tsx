@@ -338,7 +338,6 @@ const App: React.FC = () => {
   }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const lastItemRef = useRef<HTMLDivElement>(null);
 
   const corridorEntries = useMemo(() => {
     const entries: Array<{ type: 'item', item: GalleryItem } | { type: 'stack', items: GalleryItem[], visitId: string }> = [];
@@ -872,7 +871,6 @@ const App: React.FC = () => {
               return entry.type === 'item' ? (
                 <div
                   key={entry.item.id}
-                  ref={isLast ? lastItemRef : null}
                   className="snap-center shrink-0 opacity-100 transition-all duration-500"
                 >
                   <GalleryCard
@@ -896,7 +894,6 @@ const App: React.FC = () => {
               ) : (
                 <div
                   key={entry.visitId}
-                  ref={isLast ? lastItemRef : null}
                   className="snap-center shrink-0"
                 >
                   <VisitStack
