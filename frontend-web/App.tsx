@@ -1,7 +1,21 @@
-
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { GalleryItem, ViewMode, NeighborItem, Message, Visit, TagCoordinate, Annotation } from './types';
-import { analyzeArtworkStream, analyzeArtwork, ArtworkAnalysisResult, StreamingMetrics, getOrCreateUserId, fetchUserArtworks, getBaseDomain, resolveImageUrl, deleteArtwork, deleteSession } from './apiService';
+import { GoogleOAuthProvider } from '@react-oauth/google';
+import GoogleLogin from './components/GoogleLogin';
+import {
+  analyzeArtworkStream,
+  analyzeArtwork,
+  ArtworkAnalysisResult,
+  StreamingMetrics,
+  getOrCreateUserId,
+  fetchUserArtworks,
+  getBaseDomain,
+  resolveImageUrl,
+  deleteArtwork,
+  deleteSession,
+  getCurrentUser,
+  logout
+} from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
 import TopographyView from './components/TopographyView';
@@ -226,6 +240,21 @@ const App: React.FC = () => {
   } | null>(null);
   const [exhibitionContext, setExhibitionContext] = useState<{ items: GalleryItem[], visitId?: string } | null>(null);
   const [neighborProximity, setNeighborProximity] = useState(0);
+  const [currentUser, setCurrentUser] = useState<any>(getCurrentUser());
+  const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
+
+  const handleLoginSuccess = (user: any) => {
+    setCurrentUser(user);
+    // Reload artworks list for the new user
+    window.location.reload();
+  };
+
+  const handleLogout = () => {
+    logout();
+    setCurrentUser(null);
+    window.location.reload();
+  };
 
   const [visit, setVisit] = useState<Visit>({
     id: 'initial-' + Math.random().toString(36).substring(7),
@@ -316,8 +345,14 @@ const App: React.FC = () => {
     let currentStack: GalleryItem[] = [];
     let currentVisitId: string | null = null;
 
-    items.forEach(item => {
-      const isFromFinishedVisit = item.visitId && (!visit.active || visit.id !== item.visitId);
+    // Filter items based on active session or manual filter
+    const activeId = filteredVisitId || (visit.active ? visit.id : null);
+    const filteredItems = activeId
+      ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id)))
+      : items;
+
+    filteredItems.forEach(item => {
+      const isFromFinishedVisit = item.visitId && (!visit.active || visit.id !== item.visitId) && item.visitId !== filteredVisitId;
       if (isFromFinishedVisit) {
         if (currentVisitId === item.visitId) {
           currentStack.push(item);
@@ -337,7 +372,7 @@ const App: React.FC = () => {
     });
     if (currentStack.length > 0) entries.push({ type: 'stack', items: [...currentStack], visitId: currentVisitId! });
     return entries;
-  }, [items, visit]);
+  }, [items, visit, filteredVisitId]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -463,6 +498,9 @@ const App: React.FC = () => {
         setInterpretingItem({
           ...placeholderItem,
           visitId: visit.active ? visit.id : undefined,
+          allVisitItems: visit.active
+            ? [...items, placeholderItem].filter(i => i.visitId === visit.id || visit.itemIds.includes(i.id) || i.id === newItemId)
+            : undefined,
           streamingText: 'Initializing analysis...'
         });
 
@@ -631,15 +669,6 @@ const App: React.FC = () => {
       });
     }
 
-    // Scroll to the end of the corridor to see new items
-    setTimeout(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTo({
-          left: scrollRef.current.scrollWidth,
-          behavior: 'smooth'
-        });
-      }
-    }, 100);
   };
 
   const handleNavigateInterpretation = (direction: 'prev' | 'next') => {
@@ -673,9 +702,11 @@ const App: React.FC = () => {
     if (interpretingItem?.id === id) setInterpretingItem(prev => prev ? { ...prev, annotations } : null);
   };
 
-  const handleDeleteItem = async (id: string) => {
-    if (!window.confirm("Are you sure you want to remove this piece from the Musee? This will permanently delete the analysis and conversation history.")) return;
+  const handleDeleteItem = (id: string) => {
+    setDeleteConfirmation({ id, type: 'item' });
+  };
 
+  const confirmDeleteItem = async (id: string) => {
     try {
       const itemToDelete = items.find(item => item.id === id);
       if (itemToDelete?.artworkId) {
@@ -686,12 +717,16 @@ const App: React.FC = () => {
       console.log(`Successfully deleted artwork: ${id}`);
     } catch (error) {
       console.error("Failed to delete artwork:", error);
+    } finally {
+      setDeleteConfirmation(null);
     }
   };
 
-  const handleDeleteSession = async (sessionId: string) => {
-    if (!window.confirm("Are you sure you want to delete this entire visit record? This will remove all associated artworks.")) return;
+  const handleDeleteSession = (sessionId: string) => {
+    setDeleteConfirmation({ id: sessionId, type: 'session' });
+  };
 
+  const confirmDeleteSession = async (sessionId: string) => {
     try {
       await deleteSession(sessionId);
       setItems(prev => prev.filter(item => item.visitId !== sessionId));
@@ -701,14 +736,20 @@ const App: React.FC = () => {
       console.log(`Successfully deleted session: ${sessionId}`);
     } catch (error) {
       console.error("Failed to delete session:", error);
+    } finally {
+      setDeleteConfirmation(null);
     }
   };
 
   if (showEntrance) {
     return (
       <div className="fixed inset-0 bg-neutral-900 flex flex-col items-center justify-center text-white z-50 transition-opacity duration-1000" onClick={() => setShowEntrance(false)}>
-        <h1 className="text-4xl font-extralight tracking-[0.4em] mb-4 uppercase animate-pulse">The Entrance</h1>
-        <p className="text-neutral-400 font-light tracking-widest text-sm">TAP TO CROSS THE THRESHOLD</p>
+        <h1 className="text-4xl font-extralight tracking-[0.4em] mb-4 uppercase text-center">
+          The Entrance <br />
+          <span className="text-sm tracking-[0.2em] font-light text-neutral-400 lowercase italic mt-4 block">
+            to your lifelong personal collection
+          </span>
+        </h1>
         <div className="mt-12 w-px h-24 bg-white/20 animate-bounce"></div>
       </div>
     );
@@ -716,162 +757,283 @@ const App: React.FC = () => {
 
   const isGalleryEmpty = items.length === 0 && !isAnalyzing;
 
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
+
   return (
-    <div className="relative w-screen h-screen bg-[#fdfdfd] overflow-hidden flex flex-col transition-colors duration-1000">
-
-      <div
-        className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000 ease-out"
-        style={{
-          opacity: neighborProximity,
-          background: `radial-gradient(circle at 80% 50%, #1a1a1a 0%, #0a0a0a 100%)`,
-        }}
-      >
-        <div className="absolute inset-0 backdrop-blur-[10px] bg-black/40" />
-      </div>
-
-      {visit.active && (
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-40 bg-neutral-900 text-white px-6 py-2 rounded-full text-[9px] tracking-[0.3em] uppercase flex items-center space-x-4 animate-in slide-in-from-top-4 shadow-2xl">
-          <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-          <span>Exhibition in Progress: {visit.itemIds.length} Pieces</span>
-          <button onClick={() => setExhibitionContext({ items: items.filter(i => visit.itemIds.includes(i.id)) })} className="ml-4 border-l border-white/20 pl-4 hover:text-emerald-400 transition-colors">Consult Exhibition Hall</button>
-        </div>
-      )}
-
-      <div className={`relative z-10 flex-1 transition-all duration-700 ease-in-out ${(viewMode === ViewMode.TOPOGRAPHY || interpretingItem || exhibitionContext) ? 'scale-[0.95] opacity-40 blur-sm' : 'scale-100 opacity-100'}`}>
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="horizontal-corridor w-full h-full flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
-        >
-          {/* Initial Gallery State / Empty Room */}
-          {isGalleryEmpty ? (
-            <div className="snap-center shrink-0">
-              <EmptyWall />
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <div className="relative w-screen h-screen bg-[#fdfdfd] overflow-hidden flex flex-col transition-colors duration-1000">
+        {/* User Auth Info */}
+        <div className="fixed top-8 right-8 z-50 flex items-center space-x-4">
+          {currentUser ? (
+            <div className="flex items-center space-x-3 bg-white/90 backdrop-blur-md px-4 py-2 rounded-full border border-neutral-200 shadow-xl group">
+              <img
+                src={currentUser.profile_picture_url}
+                alt={currentUser.full_name}
+                className="w-6 h-6 rounded-full grayscale group-hover:grayscale-0 transition-all"
+              />
+              <span className="text-[9px] tracking-[0.2em] uppercase text-neutral-800 font-medium">{currentUser.full_name.split(' ')[0]}</span>
+              <button
+                onClick={handleLogout}
+                className="text-[9px] tracking-[0.2em] uppercase text-neutral-400 hover:text-black transition-colors border-l border-neutral-100 pl-3 ml-1"
+              >
+                Logout
+              </button>
             </div>
           ) : (
-            <div className="min-w-[30vw] h-full shrink-0" />
-          )}
-
-          {corridorEntries.map((entry, idx) => {
-            const isLast = idx === corridorEntries.length - 1;
-            return entry.type === 'item' ? (
-              <div
-                key={entry.item.id}
-                ref={isLast ? lastItemRef : null}
-                className={`snap-center shrink-0 transition-all duration-500 ${visit.active && !visit.itemIds.includes(entry.item.id) ? 'opacity-30 grayscale' : 'opacity-100'}`}
-              >
-                <GalleryCard
-                  item={entry.item}
-                  onInterpret={() => setInterpretingItem({
-                    ...entry.item,
-                    visitId: entry.item.visitId
-                  })}
-                  onDelete={() => handleDeleteItem(entry.item.id)}
-                  onContinueVision={!visit.active ? () => handleContinueVision(entry.item) : undefined}
-                />
-              </div>
-            ) : (
-              <div
-                key={entry.visitId}
-                ref={isLast ? lastItemRef : null}
-                className="snap-center shrink-0"
-              >
-                <VisitStack
-                  items={entry.items}
-                  onOpenExhibition={(stackItems) => setInterpretingItem({
-                    ...stackItems[0],
-                    allVisitItems: stackItems
-                  })}
-                  onResumeVisit={(source) => {
-                    handleResumeVisit(entry.visitId);
-                    // Short delay to ensure visit is active before trigger
-                    setTimeout(() => {
-                      if (source === 'camera') cameraInputRef.current?.click();
-                      else albumInputRef.current?.click();
-                    }, 100);
-                  }}
-                  onDeleteItem={handleDeleteItem}
-                  onDeleteSession={() => handleDeleteSession(entry.visitId)}
-                />
-              </div>
-            );
-          })}
-
-          {isAnalyzing && (
-            <div className="min-w-[400px] h-[60vh] mx-12 flex flex-col items-center justify-center space-y-4 snap-center shrink-0">
-              <div className="w-12 h-12 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
-              <p className="text-[10px] tracking-widest text-neutral-500 uppercase">Analyzing Material...</p>
+            <div className="bg-white/10 backdrop-blur-md p-1 rounded-full border border-white/20 shadow-xl">
+              <GoogleLogin
+                onLoginSuccess={handleLoginSuccess}
+                onLoginError={(err) => alert(`Login Error: ${err}`)}
+              />
             </div>
           )}
-
-          {/* Always reachable neighbors */}
-          <div className="min-w-[15vw] flex items-center justify-center shrink-0">
-            <div className={`h-48 w-px transition-colors duration-1000 ${neighborProximity > 0.5 ? 'bg-neutral-800' : 'bg-gradient-to-b from-transparent via-neutral-200 to-transparent'}`} />
-          </div>
-          <div className="snap-center shrink-0">
-            <NeighborSection neighbors={MOCK_NEIGHBORS} onInterpret={(work) => setInterpretingItem({ url: work.url, id: work.id, conversation: work.conversation, annotations: work.annotations })} />
-          </div>
-          <div className="min-w-[30vw] h-full shrink-0" />
         </div>
+
+        <div
+          className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000 ease-out"
+          style={{
+            opacity: neighborProximity,
+            background: `radial-gradient(circle at 80% 50%, #1a1a1a 0%, #0a0a0a 100%)`,
+          }}
+        >
+          <div className="absolute inset-0 backdrop-blur-[10px] bg-black/40" />
+        </div>
+
+        {/* Unified Session / Filter Bar */}
+        {(visit.active || filteredVisitId) && (
+          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-40 bg-neutral-900/90 backdrop-blur-md text-white px-6 py-2.5 rounded-full text-[9px] tracking-[0.3em] uppercase flex items-center space-x-6 animate-in slide-in-from-top-4 shadow-2xl border border-white/10">
+            <div className="flex items-center space-x-3">
+              <span className={`w-1.5 h-1.5 rounded-full ${visit.active && !filteredVisitId ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'}`}></span>
+              <span className="font-bold">
+                {filteredVisitId ? 'Recorded Visit' : 'Exhibition in Progress'}
+              </span>
+              <span className="text-neutral-500">|</span>
+              <span className="text-[8px] opacity-70">
+                {items.filter(i => i.visitId === (filteredVisitId || visit.id)).length} Pieces
+              </span>
+            </div>
+
+            <div className="w-px h-4 bg-white/10" />
+
+            <div className="flex items-center space-x-6">
+              <button
+                onClick={() => {
+                  const sessionItems = items.filter(i => i.visitId === (filteredVisitId || visit.id));
+                  setExhibitionContext({ items: sessionItems, visitId: filteredVisitId || (visit.active ? visit.id : undefined) });
+                }}
+                className="hover:text-emerald-400 transition-all active:scale-95 font-bold tracking-[0.4em]"
+              >
+                Consult Exhibition Hall
+              </button>
+
+              {filteredVisitId && (
+                <button
+                  onClick={() => {
+                    handleResumeVisit(filteredVisitId);
+                    setFilteredVisitId(null);
+                  }}
+                  className="hover:text-emerald-400 transition-all active:scale-95 font-bold tracking-[0.4em] border-l border-white/10 pl-6"
+                >
+                  Continue the Visit
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                if (filteredVisitId) setFilteredVisitId(null);
+                else handleEndVisit();
+              }}
+              className="text-white/40 hover:text-white transition-all active:scale-95"
+              title={filteredVisitId ? "Exit Session" : "End Exhibition"}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+        )}
+
+        <div className={`relative z-10 flex-1 transition-all duration-700 ease-in-out ${(viewMode === ViewMode.TOPOGRAPHY || interpretingItem || exhibitionContext) ? 'scale-[0.95] opacity-40 blur-sm' : 'scale-100 opacity-100'}`}>
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="horizontal-corridor w-full h-full flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
+          >
+            {/* Initial Gallery State / Empty Room */}
+            {isGalleryEmpty ? (
+              <div className="snap-center shrink-0">
+                <EmptyWall />
+              </div>
+            ) : (
+              <div className="min-w-[30vw] h-full shrink-0" />
+            )}
+
+            {corridorEntries.map((entry, idx) => {
+              const isLast = idx === corridorEntries.length - 1;
+              return entry.type === 'item' ? (
+                <div
+                  key={entry.item.id}
+                  ref={isLast ? lastItemRef : null}
+                  className="snap-center shrink-0 opacity-100 transition-all duration-500"
+                >
+                  <GalleryCard
+                    item={entry.item}
+                    onInterpret={() => {
+                      const activeId = filteredVisitId || (visit.active ? visit.id : null);
+                      const sessionItems = activeId
+                        ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id)))
+                        : undefined;
+
+                      setInterpretingItem({
+                        ...entry.item,
+                        visitId: entry.item.visitId || (visit.active && visit.itemIds.includes(entry.item.id) ? visit.id : undefined),
+                        allVisitItems: sessionItems
+                      });
+                    }}
+                    onDelete={() => handleDeleteItem(entry.item.id)}
+                    onContinueVision={(!visit.active && !filteredVisitId) ? () => handleContinueVision(entry.item) : undefined}
+                  />
+                </div>
+              ) : (
+                <div
+                  key={entry.visitId}
+                  ref={isLast ? lastItemRef : null}
+                  className="snap-center shrink-0"
+                >
+                  <VisitStack
+                    items={entry.items}
+                    onOpenExhibition={() => setFilteredVisitId(entry.visitId)}
+                    onInterpret={(item) => setInterpretingItem({
+                      ...item,
+                      allVisitItems: entry.items,
+                      visitId: entry.visitId
+                    })}
+                    onResumeVisit={(!visit.active && !filteredVisitId) ? (source) => {
+                      handleResumeVisit(entry.visitId);
+                      setTimeout(() => {
+                        if (source === 'camera') cameraInputRef.current?.click();
+                        else albumInputRef.current?.click();
+                      }, 100);
+                    } : undefined}
+                    onDeleteItem={handleDeleteItem}
+                    onDeleteSession={() => handleDeleteSession(entry.visitId)}
+                  />
+                </div>
+              );
+            })}
+
+            {isAnalyzing && (
+              <div className="min-w-[400px] h-[60vh] mx-12 flex flex-col items-center justify-center space-y-4 snap-center shrink-0">
+                <div className="w-12 h-12 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
+                <p className="text-[10px] tracking-widest text-neutral-500 uppercase">Analyzing Material...</p>
+              </div>
+            )}
+
+            {/* Always reachable neighbors */}
+            <div className="min-w-[15vw] flex items-center justify-center shrink-0">
+              <div className={`h-48 w-px transition-colors duration-1000 ${neighborProximity > 0.5 ? 'bg-neutral-800' : 'bg-gradient-to-b from-transparent via-neutral-200 to-transparent'}`} />
+            </div>
+            <div className="snap-center shrink-0">
+              <NeighborSection neighbors={MOCK_NEIGHBORS} onInterpret={(work) => setInterpretingItem({ url: work.url, id: work.id, conversation: work.conversation, annotations: work.annotations })} />
+            </div>
+            <div className="min-w-[30vw] h-full shrink-0" />
+          </div>
+        </div>
+
+        {items.length > 0 && viewMode === ViewMode.TOPOGRAPHY && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center p-12 bg-white/80 backdrop-blur-md animate-in fade-in duration-500">
+            <TopographyView items={items} cachedTagMap={tagPositions} neighborItems={MOCK_NEIGHBORS} onClose={() => setViewMode(ViewMode.CORRIDOR)} />
+          </div>
+        )}
+
+        {interpretingItem && (
+          <InterpretationModal
+            item={interpretingItem}
+            onClose={() => setInterpretingItem(null)}
+            onUpdateConversation={updateItemConversation}
+            onUpdateAnnotations={(ans) => updateItemAnnotations(interpretingItem.id, ans)}
+            onDelete={handleDeleteItem}
+            sessionId={visit.id}
+            allVisitItems={interpretingItem.allVisitItems}
+            onNavigate={handleNavigateInterpretation}
+          />
+        )}
+
+        {exhibitionContext && (
+          <ExhibitionHall
+            items={items.filter(i => exhibitionContext.visitId ? i.visitId === exhibitionContext.visitId : exhibitionContext.items.map(ci => ci.id).includes(i.id))}
+            conversation={visit.globalConversation}
+            onClose={() => setExhibitionContext(null)}
+            onUpdateConversation={(msgs) => setVisit(prev => ({ ...prev, globalConversation: [...prev.globalConversation, ...msgs] }))}
+            onDeleteItem={handleDeleteItem}
+            onInterpret={setInterpretingItem}
+          />
+        )}
+
+        {/* Hidden inputs for programmatic triggering */}
+        <input
+          ref={albumInputRef}
+          type="file"
+          className="hidden"
+          accept="image/*"
+          onChange={handleFileUpload}
+          multiple
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          className="hidden"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileUpload}
+        />
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmation && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+            <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm" onClick={() => setDeleteConfirmation(null)} />
+            <div className="relative bg-white rounded-[2rem] p-10 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
+              <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mb-6">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#171717" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+              </div>
+              <h3 className="text-xl font-serif text-neutral-900 mb-3">
+                {deleteConfirmation.type === 'item' ? 'Remove Artwork?' : 'Delete Visit Record?'}
+              </h3>
+              <p className="text-sm text-neutral-500 leading-relaxed mb-8">
+                {deleteConfirmation.type === 'item'
+                  ? 'This will permanently remove this piece and its curated analysis from your Musee.'
+                  : 'This will delete the entire visit record and all associated artwork analysis.'}
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setDeleteConfirmation(null)}
+                  className="flex-1 px-6 py-3 rounded-full text-[10px] tracking-[0.3em] uppercase font-bold text-neutral-500 hover:bg-neutral-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (deleteConfirmation.type === 'item') confirmDeleteItem(deleteConfirmation.id);
+                    else confirmDeleteSession(deleteConfirmation.id);
+                  }}
+                  className="flex-1 bg-neutral-900 text-white px-6 py-3 rounded-full text-[10px] tracking-[0.3em] uppercase font-bold hover:bg-black transition-colors shadow-lg shadow-neutral-200"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <Controls
+          viewMode={viewMode}
+          onToggleView={() => setViewMode(prev => prev === ViewMode.CORRIDOR ? ViewMode.TOPOGRAPHY : ViewMode.CORRIDOR)}
+          onUpload={handleFileUpload}
+          isAnalyzing={isAnalyzing}
+          isVisitActive={visit.active}
+          onToggleVisit={visit.active ? handleEndVisit : handleStartVisit}
+        />
       </div>
-
-      {items.length > 0 && viewMode === ViewMode.TOPOGRAPHY && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center p-12 bg-white/80 backdrop-blur-md animate-in fade-in duration-500">
-          <TopographyView items={items} cachedTagMap={tagPositions} neighborItems={MOCK_NEIGHBORS} onClose={() => setViewMode(ViewMode.CORRIDOR)} />
-        </div>
-      )}
-
-      {interpretingItem && (
-        <InterpretationModal
-          item={interpretingItem}
-          onClose={() => setInterpretingItem(null)}
-          onUpdateConversation={updateItemConversation}
-          onUpdateAnnotations={(ans) => updateItemAnnotations(interpretingItem.id, ans)}
-          onDelete={handleDeleteItem}
-          sessionId={visit.id}
-          allVisitItems={interpretingItem.allVisitItems}
-          onNavigate={handleNavigateInterpretation}
-        />
-      )}
-
-      {exhibitionContext && (
-        <ExhibitionHall
-          items={items.filter(i => exhibitionContext.visitId ? i.visitId === exhibitionContext.visitId : exhibitionContext.items.map(ci => ci.id).includes(i.id))}
-          conversation={visit.globalConversation}
-          onClose={() => setExhibitionContext(null)}
-          onUpdateConversation={(msgs) => setVisit(prev => ({ ...prev, globalConversation: [...prev.globalConversation, ...msgs] }))}
-          onDeleteItem={handleDeleteItem}
-          onInterpret={setInterpretingItem}
-        />
-      )}
-
-      {/* Hidden inputs for programmatic triggering */}
-      <input
-        ref={albumInputRef}
-        type="file"
-        className="hidden"
-        accept="image/*"
-        onChange={handleFileUpload}
-        multiple
-      />
-      <input
-        ref={cameraInputRef}
-        type="file"
-        className="hidden"
-        accept="image/*"
-        capture="environment"
-        onChange={handleFileUpload}
-      />
-
-      <Controls
-        viewMode={viewMode}
-        onToggleView={() => setViewMode(prev => prev === ViewMode.CORRIDOR ? ViewMode.TOPOGRAPHY : ViewMode.CORRIDOR)}
-        onUpload={handleFileUpload}
-        isAnalyzing={isAnalyzing}
-        isVisitActive={visit.active}
-        onToggleVisit={visit.active ? handleEndVisit : handleStartVisit}
-      />
-    </div>
+    </GoogleOAuthProvider>
   );
 };
 

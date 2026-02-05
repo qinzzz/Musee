@@ -37,9 +37,11 @@ export async function suggestTopics(
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 const API_TIMEOUT = 120000; // 120 seconds
+const AUTH_TOKEN_KEY = 'musee_auth_token';
+const USER_INFO_KEY = 'musee_user_info';
 
 /**
- * Enhanced fetch with timeout support
+ * Enhanced fetch with timeout support and Auth header
  */
 async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit & { timeout?: number } = {}) {
   const { timeout = API_TIMEOUT } = options;
@@ -47,15 +49,76 @@ async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestIni
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
 
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const headers = new Headers(options.headers || {});
+
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
   try {
     const response = await fetch(resource, {
       ...options,
+      headers,
       signal: controller.signal
     });
     return response;
   } finally {
     clearTimeout(id);
   }
+}
+
+/**
+ * Login with Google ID Token and migrate anonymous data
+ */
+export async function loginWithGoogle(idToken: string, anonymousUserId?: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/auth/google`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      id_token: idToken,
+      anonymous_user_id: anonymousUserId,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Login failed: ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  // Store authentication details
+  if (data.access_token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
+  }
+  if (data.user) {
+    localStorage.setItem(USER_INFO_KEY, JSON.stringify(data.user));
+    // Also update the persistent user_id to match the new authenticated user_id
+    localStorage.setItem('musee_user_id', data.user.user_id);
+  }
+
+  return data;
+}
+
+/**
+ * Logout and clear local auth data
+ */
+export function logout() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(USER_INFO_KEY);
+  // Note: we might want to keep musee_user_id to generate a new anonymous one next time
+  localStorage.removeItem('musee_user_id');
+}
+
+/**
+ * Get the currently logged in user info from local storage
+ */
+export function getCurrentUser(): any | null {
+  const userInfo = localStorage.getItem(USER_INFO_KEY);
+  return userInfo ? JSON.parse(userInfo) : null;
 }
 
 /**

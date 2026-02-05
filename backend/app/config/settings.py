@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     openai_verbosity: Optional[str] = None  # Verbosity level (e.g., "low", "medium", "high")
     claude_api_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
+    google_client_id: Optional[str] = None
 
     # Environment: "dev" or "prod"
     env: str = "dev"

@@ -16,3 +16,4 @@ passlib
 aiohttp
 psycopg2-binary
 httpx
+google-auth

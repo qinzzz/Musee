@@ -631,7 +631,11 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             <div className="flex items-center space-x-4">
               {onDelete && !item.isAnalyzing && (
                 <button
-                  onClick={() => onDelete(item.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onDelete(item.id);
+                  }}
                   className="text-neutral-300 hover:text-red-500 transition-colors"
                   title="Remove from Musee"
                 >

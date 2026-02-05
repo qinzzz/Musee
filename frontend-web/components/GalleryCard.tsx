@@ -1,5 +1,6 @@
 
 import React from 'react';
+import InteractionOverlay from './InteractionOverlay';
 import { GalleryItem } from '../types';
 
 interface Props {
@@ -85,7 +86,7 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
 
   return (
     <div
-      className="min-w-[40vw] h-[80vh] mx-12 flex items-center justify-center transition-all duration-1000 group"
+      className="min-w-[40vw] h-[80vh] mx-12 flex items-center justify-center transition-all duration-500 group hover:scale-[1.02]"
       style={{ backgroundColor: 'transparent' }}
     >
       <div className="flex flex-col items-center max-w-full">
@@ -107,7 +108,7 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
 
         {/* Card frame - hugs the image */}
         <div
-          className="relative transition-all duration-700 shadow-2xl max-w-[90vw] sm:max-w-[85vw]"
+          className="relative transition-all duration-700 shadow-2xl max-w-[90vw] sm:max-w-[85vw] group/img"
           style={{
             backgroundColor: vibe.backgroundColor,
             padding: `${vibe.padding * 12}px`,
@@ -115,13 +116,17 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
             border: `1px solid ${vibe.accentColor}22`
           }}
         >
-          <div className="relative overflow-hidden group/img" style={{ borderRadius: vibe.borderRadius }}>
+          <div
+            className="relative overflow-hidden cursor-pointer"
+            style={{ borderRadius: vibe.borderRadius }}
+            onClick={onInterpret}
+          >
             <img
               ref={imageRef}
               src={url}
               alt="Gallery item"
               onLoad={handleImageLoad}
-              className={`max-h-[60vh] max-w-full w-auto block transition-all duration-700 object-contain ${item.isAnalyzing ? 'blur-md opacity-60 scale-95' : 'group-hover:scale-105'
+              className={`max-h-[60vh] max-w-full w-auto block transition-all duration-700 object-contain ${item.isAnalyzing ? 'blur-md opacity-60 scale-95' : ''
                 }`}
             />
 
@@ -139,44 +144,45 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
             )}
 
             {!item.isAnalyzing && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 opacity-0 group-hover/img:opacity-100 transition-opacity duration-500 bg-black/20">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onInterpret();
-                  }}
-                  className="bg-white/90 backdrop-blur px-6 py-2 rounded-full text-[10px] tracking-[0.4em] uppercase font-bold text-neutral-900 shadow-xl hover:scale-105 transition-transform"
-                >
-                  Consult Curator
-                </button>
-                {onContinueVision && (
-                  <button
-                    onClick={(e) => {
+              <InteractionOverlay
+                isVisible={true} // Visibility is handled by the parent group-hover/img:opacity-100 logic or CSS
+                className="opacity-0 group-hover/img:opacity-100 transition-opacity duration-500"
+                buttons={[
+                  {
+                    label: 'Consult Curator',
+                    primary: true,
+                    onClick: (e) => {
+                      e.stopPropagation();
+                      onInterpret();
+                    }
+                  },
+                  ...(onContinueVision ? [{
+                    label: 'Continue the Visit',
+                    onClick: (e: React.MouseEvent) => {
                       e.stopPropagation();
                       onContinueVision();
-                    }}
-                    className="bg-neutral-900/90 backdrop-blur px-6 py-2 rounded-full text-[10px] tracking-[0.4em] uppercase font-bold text-white shadow-xl hover:scale-105 transition-transform"
-                  >
-                    Continue the Visit
-                  </button>
-                )}
-              </div>
+                    }
+                  }] : [])
+                ]}
+              />
             )}
 
-            {/* Delete Trigger */}
-            {onDelete && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 backdrop-blur hover:bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all duration-300 z-10 hover:scale-110"
-                title="Remove from Musee"
-              >
-                <span className="text-xs">✕</span>
-              </button>
-            )}
           </div>
+
+          {/* Delete Trigger - moved outside the clickable area */}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-neutral-100 backdrop-blur hover:bg-neutral-900 text-neutral-400 hover:text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all duration-300 z-30 hover:scale-110 border border-neutral-200"
+              title="Remove from Musee"
+            >
+              <span className="text-xs">✕</span>
+            </button>
+          )}
 
           {/* AI Insight Metadata - constrained to image width */}
           {imageWidth > 0 && (
@@ -184,6 +190,12 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
               className="mt-6 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
               style={{ width: imageWidth }}
             >
+              <div className="text-center mb-3">
+                <span className="text-[7px] tracking-[0.3em] uppercase font-bold text-neutral-300">
+                  1 Piece
+                </span>
+              </div>
+
               <div className="flex flex-wrap justify-center gap-x-3 gap-y-2">
                 {keywords.map((kw, idx) => (
                   <span

@@ -64,7 +64,7 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
               {items.map(item => (
                 <div
                   key={item.id}
-                  className="relative group aspect-[3/4] rounded-lg overflow-hidden bg-white border border-neutral-100 p-1 cursor-pointer hover:border-neutral-900 transition-colors"
+                  className="relative group aspect-[3/4] rounded-lg overflow-hidden bg-white border border-neutral-100 p-1 cursor-pointer hover:border-neutral-900 transition-all hover:scale-105"
                   onClick={() => onInterpret?.(item)}
                 >
                   <img src={item.url} className="w-full h-full object-cover rounded shadow-sm" alt="Thumbnail" />

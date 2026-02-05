@@ -14,6 +14,9 @@ class User(Base):
     username = Column(String, nullable=True, unique=True)  # Optional username for user accounts
     email = Column(String, nullable=True, unique=True)  # Optional email for user accounts
     device_id = Column(String, nullable=True, unique=True)  # Unique device identifier from Keychain
+    google_id = Column(String, nullable=True, unique=True, index=True)  # Google account ID
+    profile_picture_url = Column(String, nullable=True)  # URL to Google profile picture
+    full_name = Column(String, nullable=True)  # User's full name from Google
     created_at = Column(DateTime, server_default=func.now())
     last_active = Column(DateTime, server_default=func.now(), onupdate=func.now())
     settings = Column(JSON, nullable=True)  # User preferences and settings
@@ -29,6 +32,9 @@ class User(Base):
             "user_id": self.user_id,
             "username": self.username,
             "email": self.email,
+            "full_name": self.full_name,
+            "profile_picture_url": self.profile_picture_url,
+            "google_id": self.google_id,
             "device_id": self.device_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_active": self.last_active.isoformat() if self.last_active else None,

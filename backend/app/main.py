@@ -7,7 +7,7 @@ import sys
 import os
 
 from app.config.settings import settings
-from app.routers import artwork, users, collection, tag
+from app.routers import artwork, users, collection, tag, auth
 
 # Configure logging to work with uvicorn
 # This ensures all Python logs are visible in uvicorn output
@@ -104,6 +104,7 @@ app.include_router(artwork.router, prefix="/api", tags=["artwork"])
 app.include_router(users.router, prefix="/api", tags=["users"])
 app.include_router(collection.router, prefix="/api", tags=["collection"])
 app.include_router(tag.router, prefix="/api", tags=["tag"])
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 
 # Mount uploads directory for serving stored images (web clients)
 # Only if NOT in production, as Vercel has a read-only filesystem
