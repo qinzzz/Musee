@@ -566,7 +566,7 @@ const App: React.FC = () => {
           photoTime: photoTime
         };
 
-        setItems(prev => [...prev, placeholderItem]);
+        setItems(prev => [placeholderItem, ...prev]);
         if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
 
         // Open modal immediately
@@ -610,10 +610,7 @@ const App: React.FC = () => {
               return updated;
             });
 
-            const finalUrl = resolveImageUrl(analysis.photo_uri) || base64;
-
             const finalItemUpdates = {
-              url: finalUrl,
               keywords: keywords,
               artistName: analysis.artist_name,
               artworkName: analysis.artwork_name,
@@ -696,7 +693,7 @@ const App: React.FC = () => {
             photoTime: photoTime
           };
 
-          setItems(prev => [...prev, placeholderItem]);
+          setItems(prev => [placeholderItem, ...prev]);
           if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
 
           const analysis = await analyzeArtwork(
@@ -721,11 +718,8 @@ const App: React.FC = () => {
             return updated;
           });
 
-          const finalUrl = resolveImageUrl(analysis.photo_uri) || base64;
-
           setItems(prev => prev.map(item => item.id === newItemId ? {
             ...item,
-            url: finalUrl,
             keywords: keywords,
             artistName: analysis.artist_name,
             artworkName: analysis.artwork_name,
@@ -1003,7 +997,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className={`relative z-10 flex-1 transition-all duration-700 ease-in-out ${(viewMode === ViewMode.TOPOGRAPHY || interpretingItem || exhibitionContext) ? 'scale-[0.95] opacity-40 blur-sm' : 'scale-100 opacity-100'}`}>
+        <div className={`relative z-10 flex-1 transition-all duration-700 ease-in-out ${(viewMode === ViewMode.TOPOGRAPHY || interpretingItem || exhibitionContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
           {!communityMode ? (
             <div
               ref={scrollRef}
