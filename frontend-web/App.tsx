@@ -995,7 +995,7 @@ const App: React.FC = () => {
             <div
               ref={scrollRef}
               onScroll={handleScroll}
-              className="horizontal-corridor w-full h-full flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
+              className="horizontal-corridor w-full h-full flex items-start sm:items-center pt-8 sm:pt-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
             >
               {/* Initial Gallery State / Empty Room */}
               {isGalleryEmpty ? (
@@ -1078,7 +1078,10 @@ const App: React.FC = () => {
             </div>
           )}
           {!communityMode && (galleryEdges.hasPrev || galleryEdges.hasNext) && (
-            <div className="absolute bottom-20 sm:bottom-16 left-1/2 -translate-x-1/2 z-20 w-40 sm:w-52 pointer-events-auto">
+            <div
+              className="fixed left-1/2 -translate-x-1/2 z-20 w-40 sm:w-52 pointer-events-auto"
+              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.25rem)' }}
+            >
               <div
                 ref={thumbStripRef}
                 className="w-full overflow-x-auto no-scrollbar"

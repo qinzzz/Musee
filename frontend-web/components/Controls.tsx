@@ -63,7 +63,10 @@ const Controls: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed bottom-3 sm:bottom-12 left-1/2 -translate-x-1/2 flex items-center space-x-3 sm:space-x-6 z-30">
+    <div
+      className="fixed left-1/2 -translate-x-1/2 flex items-center space-x-3 sm:space-x-6 z-30"
+      style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+    >
       <input
         ref={cameraInputRef}
         type="file"

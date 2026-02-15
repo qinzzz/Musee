@@ -52,7 +52,7 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
 
   return (
     <div
-      className="min-w-[85vw] sm:min-w-[40vw] h-[80vh] mx-3 sm:mx-12 flex items-center justify-center transition-all duration-500 group cursor-pointer hover:scale-[1.02]"
+      className="min-w-[85vw] sm:min-w-[40vw] h-[66dvh] sm:h-[80vh] mx-3 sm:mx-12 flex items-center justify-center transition-all duration-500 group cursor-pointer hover:scale-[1.02]"
     >
       <div
         className="relative w-full h-full flex items-center justify-center"
@@ -60,7 +60,7 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
       >
         {/* Location and Date Metadata (Above) */}
         {(displayLocation || timeStr) && (
-          <div className="absolute z-20 flex flex-col items-center -translate-y-[32vh] opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform translate-y-[-28vh] group-hover:-translate-y-[32vh]">
+          <div className="absolute z-20 flex flex-col items-center -translate-y-[25dvh] sm:-translate-y-[32vh] opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform translate-y-[-20dvh] sm:translate-y-[-28vh] group-hover:-translate-y-[25dvh] sm:group-hover:-translate-y-[32vh]">
             {displayLocation && (
               <h3 className="text-lg font-serif text-neutral-800 mb-2 whitespace-nowrap bg-white/80 px-4 py-1 rounded-full backdrop-blur-sm shadow-sm">
                 {displayLocation}
@@ -95,7 +95,7 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
               <img
                 src={item.url}
                 alt="Stacked item"
-                className="max-h-[60vh] sm:max-h-[50vh] max-w-full w-auto object-contain"
+                className="max-h-[48dvh] sm:max-h-[50vh] max-w-full w-auto object-contain"
               />
             </div>
           );
