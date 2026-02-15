@@ -94,7 +94,7 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
 
   return (
     <div
-      className="min-w-[85vw] sm:min-w-[40vw] h-[60dvh] sm:h-[80vh] mt-8 sm:mt-0 mx-3 sm:mx-12 flex items-center justify-center transition-all duration-500 group hover:scale-[1.02]"
+      className="min-w-[85vw] sm:min-w-[40vw] h-[68dvh] sm:h-[80vh] mt-0 mx-3 sm:mx-12 flex items-center justify-center transition-all duration-500 group hover:scale-[1.02]"
       style={{ backgroundColor: 'transparent' }}
     >
       <div className="flex flex-col items-center max-w-full">
@@ -134,7 +134,7 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
               src={url}
               alt="Gallery item"
               onLoad={handleImageLoad}
-              className={`h-[34dvh] w-[34dvh] sm:h-[50vh] sm:w-[50vh] block transition-all duration-700 object-cover ${item.isAnalyzing ? 'blur-md opacity-60 scale-95' : ''
+              className={`h-[40dvh] w-[40dvh] sm:h-[50vh] sm:w-[50vh] block transition-all duration-700 object-cover ${item.isAnalyzing ? 'blur-md opacity-60 scale-95' : ''
                 }`}
             />
 

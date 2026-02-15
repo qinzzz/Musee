@@ -409,11 +409,12 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
     const isMobile = viewportWidth < 640; // sm breakpoint
+    const mobileHeight = 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1rem)';
 
     if (!imageLoaded) {
       // Loading placeholder - responsive
       if (isMobile) {
-        return { width: '95vw', height: '90vh' };
+        return { width: '96vw', height: mobileHeight, maxHeight: mobileHeight };
       }
       return { width: '600px', height: '400px' };
     }
@@ -421,8 +422,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     // Mobile: full screen modal with vertical layout
     if (isMobile) {
       return {
-        width: '95vw',
-        height: '90vh',
+        width: '96vw',
+        height: mobileHeight,
+        maxHeight: mobileHeight,
       };
     }
 
@@ -442,7 +444,13 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-12">
+    <div
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-12"
+      style={{
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)'
+      }}
+    >
       <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xl" onClick={onClose} />
 
       {/* Loading spinner */}

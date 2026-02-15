@@ -995,7 +995,7 @@ const App: React.FC = () => {
             <div
               ref={scrollRef}
               onScroll={handleScroll}
-              className="horizontal-corridor w-full h-full flex items-start sm:items-center pt-8 sm:pt-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
+              className="horizontal-corridor w-full h-full flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
             >
               {/* Initial Gallery State / Empty Room */}
               {isGalleryEmpty ? (
@@ -1077,10 +1077,10 @@ const App: React.FC = () => {
               <NeighborSection neighbors={MOCK_NEIGHBORS} onInterpret={(work) => setInterpretingItem({ url: work.url, id: work.id, conversation: work.conversation, annotations: work.annotations })} />
             </div>
           )}
-          {!communityMode && (galleryEdges.hasPrev || galleryEdges.hasNext) && (
+          {!communityMode && thumbEntries.length > 0 && (
             <div
-              className="fixed left-1/2 -translate-x-1/2 z-20 w-40 sm:w-52 pointer-events-auto"
-              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.25rem)' }}
+              className="fixed left-1/2 -translate-x-1/2 z-50 w-40 sm:w-52 pointer-events-auto"
+              style={{ bottom: 'max(calc(env(safe-area-inset-bottom, 0px) + 8.25rem), 9rem)' }}
             >
               <div
                 ref={thumbStripRef}
