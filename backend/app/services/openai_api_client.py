@@ -4,7 +4,7 @@ All business logic, prompt loading, and request construction is handled by AISer
 """
 
 import base64
-from typing import Optional, Any, AsyncGenerator, Dict
+from typing import Optional, Any, AsyncGenerator, Dict, List
 from openai import AsyncOpenAI
 from app.services.ai_client_interface import AIClientInterface
 from app.models.artwork import AIProvider
@@ -126,37 +126,45 @@ class OpenAIAPIClient(AIClientInterface):
         current_question: str
     ) -> list:
         """Build conversation messages in OpenAI format"""
-        # Initial message with prompt and image
-        initial_message = {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": initial_prompt
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{image_data}",
-                        "detail": "high"
-                    }
-                }
-            ]
-        }
-        messages = [initial_message]
 
-        # Add previous conversation if available
+        def _image_part(encoded: str) -> Dict[str, Any]:
+            return {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{encoded}",
+                    "detail": "high"
+                }
+            }
+
+        content_parts = [{"type": "text", "text": initial_prompt}]
+
+        if image_data:
+            payloads = image_data if isinstance(image_data, list) else [image_data]
+            for data in payloads:
+                if not data:
+                    continue
+                content_parts.append(_image_part(data))
+
+        messages = [{"role": "user", "content": content_parts}]
+
         if previous_messages:
             for msg in previous_messages:
-                messages.append({
-                    "role": msg.role,
-                    "content": msg.content
-                })
-            # Add current question
-            messages.append({
-                "role": "user",
-                "content": current_question
-            })
+                if msg is None:
+                    continue
+                role = getattr(msg, "role", None)
+                if role is None and isinstance(msg, dict):
+                    role = msg.get("role", "user")
+                elif role is None:
+                    role = "user"
+                content = getattr(msg, "content", None)
+                if content is None and isinstance(msg, dict):
+                    content = msg.get("content", "")
+                elif content is None:
+                    content = ""
+                messages.append({"role": role, "content": content})
+
+        if current_question:
+            messages.append({"role": "user", "content": current_question})
 
         return messages
 

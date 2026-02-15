@@ -4,7 +4,7 @@ These clients only handle the actual API calls to external LLM providers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Any, Dict, AsyncGenerator
+from typing import Optional, Any, Dict, AsyncGenerator, List
 from app.models.artwork import AIProvider
 
 
@@ -105,7 +105,7 @@ class AIClientInterface(ABC):
 
         Args:
             initial_prompt: Initial system/user prompt
-            image_data: Provider-specific image format
+            image_data: Provider-specific image payload (single image or list, optional)
             previous_messages: Previous conversation messages
             current_question: Current user question
 

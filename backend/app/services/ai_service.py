@@ -4,7 +4,7 @@ This service handles all common logic (prompt loading, image encoding, request c
 and delegates only the actual API calls to provider-specific clients.
 """
 
-from typing import Dict, Any, Optional, AsyncGenerator
+from typing import Dict, Any, Optional, AsyncGenerator, List
 import json
 from app.models.artwork import AIProvider
 from app.utils.prompt_loader import (
@@ -15,6 +15,7 @@ from app.utils.prompt_loader import (
 from app.services.ai_client_interface import AIClientInterface
 import anyio
 from app.config.settings import settings
+from app.utils.conversation_storage import ConversationMessage
 
 # Schema for structured artwork analysis
 ARTWORK_ANALYSIS_SCHEMA = {
@@ -152,6 +153,54 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         
         # Append context to the prompt
         return prompt + context_block
+
+    @staticmethod
+    def build_exhibition_prompt(items: List[Dict[str, Any]]) -> str:
+        """Construct the system instructions for exhibition chat."""
+        if not items:
+            collection_summary = "- No specific works were provided. Focus on asking the visitor which pieces interest them."
+        else:
+            lines = []
+            for idx, item in enumerate(items, start=1):
+                keywords = ", ".join(item.get("keywords", [])) or "mood unspecified"
+                lines.append(f"{idx}. Keywords: {keywords}")
+            collection_summary = "\n".join(lines)
+
+        return (
+            "You are the Lead Curator of 'Musee'. "
+            "Guide the visitor through the current exhibition, weaving connections, contrasts, and overarching narratives. "
+            "Balance poetic tone with concrete observations, and invite the visitor to look closer.\n\n"
+            f"Collection overview (keywords only):\n{collection_summary}\n\n"
+            "When responding: (1) reference specific works by their described motifs, (2) synthesize relationships across the set, "
+            "(3) end with either a reflective thought or a prompt that keeps the dialogue flowing."
+        )
+
+    @staticmethod
+    def build_conversation_history(history: Optional[List[Dict[str, str]]]) -> List[ConversationMessage]:
+        """Normalize stored history into ConversationMessage objects."""
+        if not history:
+            return []
+
+        normalized: List[ConversationMessage] = []
+        for entry in history:
+            if not entry:
+                continue
+            role = entry.get("role", "user")
+            content = entry.get("content") or entry.get("text") or ""
+            normalized.append(ConversationMessage(role=role, content=content))
+        return normalized
+
+    def prepare_image_batch(self, image_bytes_list: Optional[List[bytes]]) -> Optional[List[Any]]:
+        """Prepare multiple images using the underlying client helper."""
+        if not image_bytes_list:
+            return None
+        prepared: List[Any] = []
+        for image_bytes in image_bytes_list:
+            try:
+                prepared.append(self.ai_client.prepare_image(image_bytes))
+            except Exception:
+                continue
+        return prepared or None
 
     async def summarize_session_narrative(
         self,
@@ -461,6 +510,65 @@ Return ONLY the updated narrative text.{language_instruction}"""
 
         # Clean and return
         return self.clean_summary_response(response)
+
+    async def exhibition_chat(
+        self,
+        items: list,
+        history: list,
+        new_message: str,
+        image_bytes_list: List[bytes],
+    ) -> str:
+        """
+        Exhibition curator chat: discuss a collection of works with the user.
+        Implements provider-agnostic orchestration similar to other service methods.
+        """
+        prompt = self.build_exhibition_prompt(items)
+        conversation_history = self.build_conversation_history(history)
+        image_data = None if history else self.prepare_image_batch(image_bytes_list)
+
+        messages = self.ai_client.build_conversation_messages(
+            initial_prompt=prompt,
+            image_data=image_data,
+            previous_messages=conversation_history,
+            current_question=new_message,
+        )
+
+        with anyio.fail_after(settings.ai_timeout):
+            return await self.ai_client.call_with_conversation(
+                messages=messages,
+                max_tokens=2048,
+                temperature=0.7,
+            )
+
+    async def exhibition_chat_stream(
+        self,
+        items: list,
+        history: list,
+        new_message: str,
+        image_bytes_list: List[bytes],
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream exhibition curator response token by token.
+        Mirrors the non-streaming version but yields incremental chunks.
+        """
+        prompt = self.build_exhibition_prompt(items)
+        conversation_history = self.build_conversation_history(history)
+        image_data = None if history else self.prepare_image_batch(image_bytes_list)
+
+        messages = self.ai_client.build_conversation_messages(
+            initial_prompt=prompt,
+            image_data=image_data,
+            previous_messages=conversation_history,
+            current_question=new_message,
+        )
+
+        with anyio.fail_after(settings.ai_timeout):
+            async for chunk in self.ai_client.stream_with_conversation(
+                messages=messages,
+                max_tokens=2048,
+                temperature=0.7,
+            ):
+                yield chunk
 
     def get_provider_name(self) -> AIProvider:
         """Return the AI provider name"""

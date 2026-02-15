@@ -218,9 +218,9 @@ const App: React.FC = () => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
-  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.CORRIDOR);
+  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GALLERY);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showEntrance, setShowEntrance] = useState(true);
+  const [showEntrance, setShowEntrance] = useState(false);
   const [interpretingItem, setInterpretingItem] = useState<{
     url: string,
     id: string,
@@ -238,11 +238,22 @@ const App: React.FC = () => {
     visitId?: string,
     allVisitItems?: GalleryItem[]
   } | null>(null);
-  const [exhibitionContext, setExhibitionContext] = useState<{ items: GalleryItem[], visitId?: string } | null>(null);
+  const [exhibitionContext, setExhibitionContext] = useState<{ items: GalleryItem[], visitId?: string, initialMessage?: string } | null>(null);
+  const [exhibitionInput, setExhibitionInput] = useState('');
+  const [exhibitionInputFocused, setExhibitionInputFocused] = useState(false);
+  const exhibitionInputRef = useRef<HTMLInputElement>(null);
   const [neighborProximity, setNeighborProximity] = useState(0);
+  const neighborScrollProximityRef = useRef(0);
+  const [communityMode, setCommunityMode] = useState(false);
+  const [galleryEdges, setGalleryEdges] = useState({ hasPrev: false, hasNext: false });
+  const [activeThumbIndex, setActiveThumbIndex] = useState(0);
+  const thumbStripRef = useRef<HTMLDivElement>(null);
+  const galleryEntryRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(getCurrentUser());
   const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
   const handleLoginSuccess = (user: any) => {
     setCurrentUser(user);
@@ -373,6 +384,18 @@ const App: React.FC = () => {
     return entries;
   }, [items, visit, filteredVisitId]);
 
+  const thumbEntries = useMemo(() => {
+    return corridorEntries
+      .map((entry, sourceIndex) => ({
+        id: entry.type === 'item' ? entry.item.id : entry.visitId,
+        sourceIndex,
+        url: entry.type === 'item'
+          ? entry.item.url
+          : entry.items[entry.items.length - 1]?.url
+      }))
+      .filter((entry) => Boolean(entry.url));
+  }, [corridorEntries]);
+
   const handleScroll = () => {
     if (!scrollRef.current) return;
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
@@ -381,7 +404,20 @@ const App: React.FC = () => {
     const progress = scrollLeft / maxScroll;
     // Proximal glow starts feeling stronger as we reach the neighbor section
     const proximity = Math.max(0, (progress - 0.7) / 0.3);
+    neighborScrollProximityRef.current = proximity;
     setNeighborProximity(proximity);
+    const edgeThreshold = 6;
+    setGalleryEdges({
+      hasPrev: scrollLeft > edgeThreshold,
+      hasNext: scrollLeft < maxScroll - edgeThreshold
+    });
+    setActiveThumbIndex(Math.round(progress * Math.max(thumbEntries.length - 1, 0)));
+    if (thumbStripRef.current) {
+      const thumbMax = thumbStripRef.current.scrollWidth - thumbStripRef.current.clientWidth;
+      if (thumbMax > 0) {
+        thumbStripRef.current.scrollLeft = (scrollLeft / maxScroll) * thumbMax;
+      }
+    }
   };
 
   const handleStartVisit = () => {
@@ -422,6 +458,33 @@ const App: React.FC = () => {
       globalConversation: []
     });
   };
+
+  useEffect(() => {
+    if (communityMode) {
+      setNeighborProximity(1);
+    } else {
+      setNeighborProximity(neighborScrollProximityRef.current);
+    }
+  }, [communityMode]);
+
+  useEffect(() => {
+    if (!scrollRef.current || communityMode) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    const maxScroll = scrollWidth - clientWidth;
+    const edgeThreshold = 6;
+    setGalleryEdges({
+      hasPrev: scrollLeft > edgeThreshold,
+      hasNext: scrollLeft < maxScroll - edgeThreshold
+    });
+    const progress = maxScroll > 0 ? scrollLeft / maxScroll : 0;
+    setActiveThumbIndex(Math.round(progress * Math.max(thumbEntries.length - 1, 0)));
+    if (thumbStripRef.current) {
+      const thumbMax = thumbStripRef.current.scrollWidth - thumbStripRef.current.clientWidth;
+      if (thumbMax > 0 && maxScroll > 0) {
+        thumbStripRef.current.scrollLeft = (scrollLeft / maxScroll) * thumbMax;
+      }
+    }
+  }, [items.length, isAnalyzing, filteredVisitId, communityMode, thumbEntries.length]);
 
   const getCurrentLocation = async (): Promise<{ latitude: number, longitude: number } | undefined> => {
     return new Promise((resolve) => {
@@ -500,7 +563,7 @@ const App: React.FC = () => {
           allVisitItems: visit.active
             ? [...items, placeholderItem].filter(i => i.visitId === visit.id || visit.itemIds.includes(i.id) || i.id === newItemId)
             : undefined,
-          streamingText: 'Initializing analysis...'
+          streamingText: ''
         });
 
         console.log('Starting streaming analysis for single file:', file.name);
@@ -565,7 +628,8 @@ const App: React.FC = () => {
           },
           (error) => {
             console.error('Streaming analysis failed:', error);
-            const errorUpdates = { isAnalyzing: false, streamingText: 'Analysis interrupted. Please try again.' };
+            const message = error?.message || 'Analysis failed. Please try again.';
+            const errorUpdates = { isAnalyzing: false, streamingText: message };
             setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...errorUpdates } : item));
             setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...errorUpdates } : prev);
           },
@@ -740,19 +804,7 @@ const App: React.FC = () => {
     }
   };
 
-  if (showEntrance) {
-    return (
-      <div className="fixed inset-0 bg-neutral-900 flex flex-col items-center justify-center text-white z-50 transition-opacity duration-1000" onClick={() => setShowEntrance(false)}>
-        <h1 className="text-4xl font-extralight tracking-[0.4em] mb-4 uppercase text-center">
-          The Entrance <br />
-          <span className="text-sm tracking-[0.2em] font-light text-neutral-400 lowercase italic mt-4 block">
-            to your lifelong personal collection
-          </span>
-        </h1>
-        <div className="mt-12 w-px h-24 bg-white/20 animate-bounce"></div>
-      </div>
-    );
-  }
+
 
   const isGalleryEmpty = items.length === 0 && !isAnalyzing;
 
@@ -762,21 +814,23 @@ const App: React.FC = () => {
     <GoogleOAuthProvider clientId={googleClientId}>
       <div className="relative w-screen h-screen bg-[#fdfdfd] overflow-hidden flex flex-col transition-colors duration-1000">
         {/* User Auth Info */}
-        <div className="fixed top-8 right-8 z-50 flex items-center space-x-4">
+        <div className="fixed top-4 sm:top-8 right-4 sm:right-8 z-50 flex items-center space-x-4">
           {currentUser ? (
-            <div className="flex items-center space-x-3 bg-white/90 backdrop-blur-md px-4 py-2 rounded-full border border-neutral-200 shadow-xl group">
-              <img
-                src={currentUser.profile_picture_url}
-                alt={currentUser.full_name}
-                className="w-6 h-6 rounded-full grayscale group-hover:grayscale-0 transition-all"
-              />
-              <span className="text-[9px] tracking-[0.2em] uppercase text-neutral-800 font-medium">{currentUser.full_name.split(' ')[0]}</span>
+            <div className="relative group">
               <button
-                onClick={handleLogout}
-                className="text-[9px] tracking-[0.2em] uppercase text-neutral-400 hover:text-black transition-colors border-l border-neutral-100 pl-3 ml-1"
+                onClick={() => setSettingsOpen(!settingsOpen)}
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden border-2 border-white shadow-lg hover:scale-110 transition-all active:scale-95"
+                title={`${currentUser.full_name} — settings`}
               >
-                Logout
+                <img
+                  src={currentUser.profile_picture_url}
+                  alt={currentUser.full_name}
+                  className="w-full h-full object-cover"
+                />
               </button>
+              <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-xl border border-neutral-100 px-3 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                <span className="text-[8px] tracking-[0.2em] uppercase text-neutral-500">{currentUser.full_name.split(' ')[0]} · Settings</span>
+              </div>
             </div>
           ) : (
             <div className="bg-white/10 backdrop-blur-md p-1 rounded-full border border-white/20 shadow-xl">
@@ -788,157 +842,285 @@ const App: React.FC = () => {
           )}
         </div>
 
-        <div
-          className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000 ease-out"
-          style={{
-            opacity: neighborProximity,
-            background: `radial-gradient(circle at 80% 50%, #1a1a1a 0%, #0a0a0a 100%)`,
-          }}
-        >
-          <div className="absolute inset-0 backdrop-blur-[10px] bg-black/40" />
+        {/* Settings backdrop */}
+        {settingsOpen && (
+          <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setSettingsOpen(false)} />
+        )}
+
+        {/* Settings panel */}
+        <div className={`fixed top-0 right-0 h-full w-72 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out ${settingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          {currentUser && (
+            <>
+              {/* User header */}
+              <div className="p-6 pt-8 border-b border-neutral-100">
+                <div className="flex items-center space-x-3">
+                  <img
+                    src={currentUser.profile_picture_url}
+                    alt={currentUser.full_name}
+                    className="w-12 h-12 rounded-full object-cover border border-neutral-200"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-neutral-900 truncate">{currentUser.full_name}</p>
+                    <p className="text-[11px] text-neutral-400 truncate">{currentUser.email}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Options */}
+              <div className="p-5 space-y-5">
+                {/* Language toggle */}
+                <div>
+                  <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Language</label>
+                  <div className="flex mt-2 bg-neutral-100 rounded-full p-0.5">
+                    <button
+                      onClick={() => { setLanguage('en'); localStorage.setItem('musee_language', 'en'); }}
+                      className={`flex-1 px-4 py-1.5 rounded-full text-xs font-medium transition-all ${language === 'en' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
+                    >
+                      EN
+                    </button>
+                    <button
+                      onClick={() => { setLanguage('zh'); localStorage.setItem('musee_language', 'zh'); }}
+                      className={`flex-1 px-4 py-1.5 rounded-full text-xs font-medium transition-all ${language === 'zh' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
+                    >
+                      中文
+                    </button>
+                  </div>
+                </div>
+
+                {/* Personalization placeholder */}
+                <div>
+                  <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Personalization</label>
+                  <p className="text-xs text-neutral-300 mt-1.5">Coming soon</p>
+                </div>
+              </div>
+
+              {/* Logout */}
+              <div className="absolute bottom-0 w-full p-5 border-t border-neutral-100">
+                <button
+                  onClick={() => { setSettingsOpen(false); handleLogout(); }}
+                  className="w-full py-2.5 rounded-full text-[10px] tracking-[0.2em] uppercase font-bold text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900 transition-all border border-neutral-200"
+                >
+                  Logout
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Unified Session / Filter Bar */}
+        {/* 1. Status Pill — top center, informational only */}
         {(visit.active || filteredVisitId) && (
-          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-40 bg-neutral-900/90 backdrop-blur-md text-white px-6 py-2.5 rounded-full text-[9px] tracking-[0.3em] uppercase flex items-center space-x-6 animate-in slide-in-from-top-4 shadow-2xl border border-white/10">
-            <div className="flex items-center space-x-3">
-              <span className={`w-1.5 h-1.5 rounded-full ${visit.active && !filteredVisitId ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'}`}></span>
-              <span className="font-bold">
-                {filteredVisitId ? 'Recorded Visit' : 'Exhibition in Progress'}
-              </span>
-              <span className="text-neutral-500">|</span>
-              <span className="text-[8px] opacity-70">
-                {items.filter(i => i.visitId === (filteredVisitId || visit.id)).length} Pieces
-              </span>
-            </div>
+          <div className="fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 z-40 bg-neutral-900/80 backdrop-blur-md text-white px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-[8px] sm:text-[9px] tracking-[0.2em] uppercase flex items-center space-x-2 sm:space-x-3 shadow-xl border border-white/10" style={{ pointerEvents: 'none' }}>
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${visit.active && !filteredVisitId ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'}`} />
+            <span className="font-bold whitespace-nowrap">
+              {filteredVisitId ? 'Recorded Visit' : 'Exhibition in Progress'}
+            </span>
+            <span className="text-white/30">·</span>
+            <span className="opacity-70 whitespace-nowrap">
+              {items.filter(i => i.visitId === (filteredVisitId || visit.id)).length} Pieces
+            </span>
+          </div>
+        )}
 
-            <div className="w-px h-4 bg-white/10" />
-
-            <div className="flex items-center space-x-6">
-              <button
-                onClick={() => {
+        {/* 2. Exhibition Hall Input — below status pill, inline input */}
+        {(visit.active || filteredVisitId) && (
+          <div
+            className={`fixed top-11 sm:top-12 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur-md px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs tracking-wider flex items-center space-x-2 sm:space-x-3 shadow-lg border transition-all w-[260px] sm:w-[320px] ${exhibitionInputFocused ? 'border-neutral-400 bg-white' : 'border-neutral-200'}`}
+            style={{ pointerEvents: 'auto' }}
+            onClick={() => exhibitionInputRef.current?.focus()}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-40">
+              <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+            </svg>
+            <input
+              ref={exhibitionInputRef}
+              value={exhibitionInput}
+              onChange={(e) => setExhibitionInput(e.target.value)}
+              onFocus={() => setExhibitionInputFocused(true)}
+              onBlur={() => setExhibitionInputFocused(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && exhibitionInput.trim()) {
                   const sessionItems = items.filter(i => i.visitId === (filteredVisitId || visit.id));
-                  setExhibitionContext({ items: sessionItems, visitId: filteredVisitId || (visit.active ? visit.id : undefined) });
+                  setExhibitionContext({ items: sessionItems, visitId: filteredVisitId || (visit.active ? visit.id : undefined), initialMessage: exhibitionInput.trim() });
+                  setExhibitionInput('');
+                }
+              }}
+              placeholder="Ask about this exhibition..."
+              className="flex-1 bg-transparent outline-none text-neutral-600 placeholder-neutral-400"
+            />
+            {exhibitionInput.trim() && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const sessionItems = items.filter(i => i.visitId === (filteredVisitId || visit.id));
+                  setExhibitionContext({ items: sessionItems, visitId: filteredVisitId || (visit.active ? visit.id : undefined), initialMessage: exhibitionInput.trim() });
+                  setExhibitionInput('');
                 }}
-                className="hover:text-emerald-400 transition-all active:scale-95 font-bold tracking-[0.4em]"
+                className="shrink-0 w-6 h-6 rounded-full bg-neutral-900 text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
               >
-                Consult Exhibition Hall
+                <span className="text-[10px]">↑</span>
               </button>
+            )}
+          </div>
+        )}
 
-              {filteredVisitId && (
-                <button
-                  onClick={() => {
-                    handleResumeVisit(filteredVisitId);
-                    setFilteredVisitId(null);
-                  }}
-                  className="hover:text-emerald-400 transition-all active:scale-95 font-bold tracking-[0.4em] border-l border-white/10 pl-6"
-                >
-                  Continue the Visit
-                </button>
-              )}
-            </div>
-
+        {/* 3. Right Side Actions — only actionable buttons */}
+        {(visit.active || filteredVisitId) && (
+          <div className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center space-y-3 sm:space-y-4" style={{ pointerEvents: 'auto' }}>
             <button
               onClick={() => {
-                if (filteredVisitId) setFilteredVisitId(null);
-                else handleEndVisit();
+                if (filteredVisitId) {
+                  handleResumeVisit(filteredVisitId);
+                  setFilteredVisitId(null);
+                } else {
+                  handleEndVisit();
+                }
               }}
-              className="text-white/40 hover:text-white transition-all active:scale-95"
-              title={filteredVisitId ? "Exit Session" : "End Exhibition"}
+              className="bg-neutral-900/80 backdrop-blur-md text-white/80 hover:text-emerald-400 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] tracking-[0.2em] uppercase font-bold shadow-xl border border-white/10 transition-all active:scale-95 whitespace-nowrap"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              {filteredVisitId ? (<>Continue<br className="sm:hidden" /> the Visit</>) : (<>End<br className="sm:hidden" /> the Visit</>)}
             </button>
+            {filteredVisitId && (
+              <button
+                onClick={() => setFilteredVisitId(null)}
+                className="bg-neutral-900/60 backdrop-blur-md text-white/40 hover:text-white/80 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] tracking-[0.2em] uppercase font-medium shadow-lg border border-white/10 transition-all active:scale-95"
+              >
+                Back
+              </button>
+            )}
           </div>
         )}
 
         <div className={`relative z-10 flex-1 transition-all duration-700 ease-in-out ${(viewMode === ViewMode.TOPOGRAPHY || interpretingItem || exhibitionContext) ? 'scale-[0.95] opacity-40 blur-sm' : 'scale-100 opacity-100'}`}>
-          <div
-            ref={scrollRef}
-            onScroll={handleScroll}
-            className="horizontal-corridor w-full h-full flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
-          >
-            {/* Initial Gallery State / Empty Room */}
-            {isGalleryEmpty ? (
-              <div className="snap-center shrink-0">
-                <EmptyWall />
-              </div>
-            ) : (
-              <div className="min-w-[30vw] h-full shrink-0" />
-            )}
-
-            {corridorEntries.map((entry, idx) => {
-              const isLast = idx === corridorEntries.length - 1;
-              return entry.type === 'item' ? (
-                <div
-                  key={entry.item.id}
-                  className="snap-center shrink-0 opacity-100 transition-all duration-500"
-                >
-                  <GalleryCard
-                    item={entry.item}
-                    onInterpret={() => {
-                      const activeId = filteredVisitId || (visit.active ? visit.id : null);
-                      const sessionItems = activeId
-                        ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id)))
-                        : undefined;
-
-                      setInterpretingItem({
-                        ...entry.item,
-                        visitId: entry.item.visitId || (visit.active && visit.itemIds.includes(entry.item.id) ? visit.id : undefined),
-                        allVisitItems: sessionItems
-                      });
-                    }}
-                    onDelete={() => handleDeleteItem(entry.item.id)}
-                    onContinueVision={(!visit.active && !filteredVisitId) ? () => handleContinueVision(entry.item) : undefined}
-                  />
+          {!communityMode ? (
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              className="horizontal-corridor w-full h-full flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
+            >
+              {/* Initial Gallery State / Empty Room */}
+              {isGalleryEmpty ? (
+                <div className="snap-center shrink-0">
+                  <EmptyWall />
                 </div>
               ) : (
-                <div
-                  key={entry.visitId}
-                  className="snap-center shrink-0"
-                >
-                  <VisitStack
-                    items={entry.items}
-                    onOpenExhibition={() => setFilteredVisitId(entry.visitId)}
-                    onInterpret={(item) => setInterpretingItem({
-                      ...item,
-                      allVisitItems: entry.items,
-                      visitId: entry.visitId
-                    })}
-                    onResumeVisit={(!visit.active && !filteredVisitId) ? (source) => {
-                      handleResumeVisit(entry.visitId);
-                      setTimeout(() => {
-                        if (source === 'camera') cameraInputRef.current?.click();
-                        else albumInputRef.current?.click();
-                      }, 100);
-                    } : undefined}
-                    onDeleteItem={handleDeleteItem}
-                    onDeleteSession={() => handleDeleteSession(entry.visitId)}
-                  />
+                <div className="min-w-[5vw] sm:min-w-[30vw] h-full shrink-0" />
+              )}
+
+              {corridorEntries.map((entry, idx) => {
+                return entry.type === 'item' ? (
+                  <div
+                    key={entry.item.id}
+                    className="snap-center shrink-0 opacity-100 transition-all duration-500"
+                    ref={(el) => {
+                      galleryEntryRefs.current[idx] = el;
+                    }}
+                  >
+                    <GalleryCard
+                      item={entry.item}
+                      onInterpret={() => {
+                        const activeId = filteredVisitId || (visit.active ? visit.id : null);
+                        const sessionItems = activeId
+                          ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id)))
+                          : undefined;
+
+                        setInterpretingItem({
+                          ...entry.item,
+                          visitId: entry.item.visitId || (visit.active && visit.itemIds.includes(entry.item.id) ? visit.id : undefined),
+                          allVisitItems: sessionItems
+                        });
+                      }}
+                      onDelete={() => handleDeleteItem(entry.item.id)}
+                      onContinueVision={(!visit.active && !filteredVisitId) ? () => handleContinueVision(entry.item) : undefined}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    key={entry.visitId}
+                    className="snap-center shrink-0"
+                    ref={(el) => {
+                      galleryEntryRefs.current[idx] = el;
+                    }}
+                  >
+                    <VisitStack
+                      items={entry.items}
+                      onOpenExhibition={() => setFilteredVisitId(entry.visitId)}
+                      onInterpret={(item) => setInterpretingItem({
+                        ...item,
+                        allVisitItems: entry.items,
+                        visitId: entry.visitId
+                      })}
+                      onResumeVisit={(!visit.active && !filteredVisitId) ? (source) => {
+                        handleResumeVisit(entry.visitId);
+                        setTimeout(() => {
+                          if (source === 'camera') cameraInputRef.current?.click();
+                          else albumInputRef.current?.click();
+                        }, 100);
+                      } : undefined}
+                      onDeleteItem={handleDeleteItem}
+                      onDeleteSession={() => handleDeleteSession(entry.visitId)}
+                    />
+                  </div>
+                );
+              })}
+
+              {isAnalyzing && (
+                <div className="min-w-[80vw] sm:min-w-[400px] h-[60vh] mx-3 sm:mx-12 flex flex-col items-center justify-center space-y-4 snap-center shrink-0">
+                  <div className="w-12 h-12 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
+                  <p className="text-[10px] tracking-widest text-neutral-500 uppercase">Analyzing Material...</p>
                 </div>
-              );
-            })}
+              )}
 
-            {isAnalyzing && (
-              <div className="min-w-[400px] h-[60vh] mx-12 flex flex-col items-center justify-center space-y-4 snap-center shrink-0">
-                <div className="w-12 h-12 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
-                <p className="text-[10px] tracking-widest text-neutral-500 uppercase">Analyzing Material...</p>
-              </div>
-            )}
-
-            {/* Always reachable neighbors */}
-            <div className="min-w-[15vw] flex items-center justify-center shrink-0">
-              <div className={`h-48 w-px transition-colors duration-1000 ${neighborProximity > 0.5 ? 'bg-neutral-800' : 'bg-gradient-to-b from-transparent via-neutral-200 to-transparent'}`} />
+              <div className="min-w-[5vw] sm:min-w-[30vw] h-full shrink-0" />
             </div>
-            <div className="snap-center shrink-0">
+          ) : (
+            <div className="w-full h-full flex items-center justify-center px-6">
               <NeighborSection neighbors={MOCK_NEIGHBORS} onInterpret={(work) => setInterpretingItem({ url: work.url, id: work.id, conversation: work.conversation, annotations: work.annotations })} />
             </div>
-            <div className="min-w-[30vw] h-full shrink-0" />
-          </div>
+          )}
+          {!communityMode && (galleryEdges.hasPrev || galleryEdges.hasNext) && (
+            <div className="absolute bottom-20 sm:bottom-16 left-1/2 -translate-x-1/2 z-20 w-40 sm:w-52 pointer-events-auto">
+              <div
+                ref={thumbStripRef}
+                className="w-full overflow-x-auto no-scrollbar"
+                style={{
+                  WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)',
+                  maskImage: 'linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)'
+                }}
+              >
+                <div className="flex items-center space-x-2 min-w-max">
+                  <div className="w-20 sm:w-24 h-1 shrink-0" />
+                  {thumbEntries.map((entry, idx) => {
+                    return (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => {
+                          galleryEntryRefs.current[entry.sourceIndex]?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'nearest',
+                            inline: 'center'
+                          });
+                        }}
+                        className={`overflow-hidden border bg-white/70 transition-all duration-200 ${
+                          idx === activeThumbIndex
+                            ? 'w-8 h-8 rounded-md border-neutral-400 scale-110'
+                            : 'w-6 h-6 rounded-sm border-neutral-200'
+                        }`}
+                      >
+                        <img src={entry.url} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    );
+                  })}
+                  <div className="w-20 sm:w-24 h-1 shrink-0" />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {items.length > 0 && viewMode === ViewMode.TOPOGRAPHY && (
           <div className="absolute inset-0 z-20 flex items-center justify-center p-12 bg-white/80 backdrop-blur-md animate-in fade-in duration-500">
-            <TopographyView items={items} cachedTagMap={tagPositions} neighborItems={MOCK_NEIGHBORS} onClose={() => setViewMode(ViewMode.CORRIDOR)} />
+            <TopographyView items={items} cachedTagMap={tagPositions} neighborItems={MOCK_NEIGHBORS} onClose={() => setViewMode(ViewMode.GALLERY)} />
           </div>
         )}
 
@@ -963,6 +1145,7 @@ const App: React.FC = () => {
             onUpdateConversation={(msgs) => setVisit(prev => ({ ...prev, globalConversation: [...prev.globalConversation, ...msgs] }))}
             onDeleteItem={handleDeleteItem}
             onInterpret={setInterpretingItem}
+            initialMessage={exhibitionContext.initialMessage}
           />
         )}
 
@@ -1022,13 +1205,25 @@ const App: React.FC = () => {
         )}
 
         <Controls
-          viewMode={viewMode}
-          onToggleView={() => setViewMode(prev => prev === ViewMode.CORRIDOR ? ViewMode.TOPOGRAPHY : ViewMode.CORRIDOR)}
+          activeView={viewMode === ViewMode.TOPOGRAPHY ? 'topography' : (communityMode ? 'community' : 'gallery')}
+          onChangeView={(nextView) => {
+            if (nextView === 'topography') {
+              setCommunityMode(false);
+              setViewMode(ViewMode.TOPOGRAPHY);
+            } else if (nextView === 'community') {
+              setViewMode(ViewMode.GALLERY);
+              setCommunityMode(true);
+            } else {
+              setCommunityMode(false);
+              setViewMode(ViewMode.GALLERY);
+            }
+          }}
           onUpload={handleFileUpload}
           isAnalyzing={isAnalyzing}
           isVisitActive={visit.active}
           onToggleVisit={visit.active ? handleEndVisit : handleStartVisit}
         />
+
       </div>
     </GoogleOAuthProvider>
   );

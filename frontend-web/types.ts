@@ -70,6 +70,6 @@ export interface NeighborItem {
 }
 
 export enum ViewMode {
-  CORRIDOR = 'corridor',
+  GALLERY = 'gallery',
   TOPOGRAPHY = 'topography'
 }

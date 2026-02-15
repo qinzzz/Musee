@@ -4,7 +4,7 @@ All business logic, prompt loading, and request construction is handled by AISer
 """
 
 import base64
-from typing import Optional, Any, AsyncGenerator, Dict
+from typing import Optional, Any, AsyncGenerator, Dict, List
 from anthropic import AsyncAnthropic
 from app.services.ai_client_interface import AIClientInterface
 from app.models.artwork import AIProvider

@@ -17,6 +17,15 @@
 | **POST** | `/suggest-topic` | `artist_name`, `artwork_name`, `conversation_history` (JSON), `model?`, `identity?`, `language?` | `{suggested_topics[], model_used}` |
 | **POST** | `/generate-summary` | `image` (file), `artist_name`, `artwork_name`, `conversation_history?` (JSON), `model?`, `identity?`, `language?` | `{summary, model_used}` |
 
+### Web-client AI
+
+| Method | Path | Request Body | Response |
+|--------|------|--------------|----------|
+| **POST** | `/exhibition-chat` | `{items: [{id, url, keywords}], conversation_history: [{role, content}], new_message}` + optional `?model=` (openai, claude, gemini) | `{response}` — **OpenAI, Claude, Gemini** |
+| **POST** | `/exhibition-chat-stream` | Same as `/exhibition-chat` | SSE: `event: chunk`, then `event: complete` — **OpenAI, Claude, Gemini** |
+| **POST** | `/define-aesthetic-term` | `{tag}` | `{definition, externalResonances[]}` — **Gemini only** |
+| **POST** | `/generate-speech` | `{text}` | Raw PCM audio — **Gemini only** |
+
 ---
 
 ## Configuration Endpoints (`/api`)

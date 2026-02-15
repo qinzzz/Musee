@@ -53,6 +53,14 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
   const formatDisplayDate = (dateStr: string | null | undefined): string | null => {
     if (!dateStr) return null;
     try {
+      // Handle ISO format (e.g. "2025-11-25T00:00:00")
+      if (dateStr.includes('T')) {
+        const dt = new Date(dateStr);
+        if (!isNaN(dt.getTime())) {
+          return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+      }
+
       // If it has a comma followed by time, split it
       if (dateStr.includes(', ')) {
         const parts = dateStr.split(', ');
@@ -86,15 +94,15 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
 
   return (
     <div
-      className="min-w-[40vw] h-[80vh] mx-12 flex items-center justify-center transition-all duration-500 group hover:scale-[1.02]"
+      className="min-w-[85vw] sm:min-w-[40vw] h-[65vh] sm:h-[80vh] mt-16 sm:mt-0 mx-3 sm:mx-12 flex items-center justify-center transition-all duration-500 group hover:scale-[1.02]"
       style={{ backgroundColor: 'transparent' }}
     >
       <div className="flex flex-col items-center max-w-full">
         {/* Location and Date Metadata */}
         {(item.location || item.photoTime) && (
-          <div className="mb-6 text-center opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform translate-y-4 group-hover:translate-y-0">
+          <div className="mb-4 sm:mb-6 text-center opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform translate-y-4 group-hover:translate-y-0">
             {displayLocation && (
-              <h3 className="text-lg font-serif text-neutral-800 mb-2 whitespace-nowrap">
+              <h3 className="text-base sm:text-lg font-serif text-neutral-800 mb-2 whitespace-nowrap">
                 {displayLocation}
               </h3>
             )}
@@ -108,10 +116,10 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
 
         {/* Card frame - hugs the image */}
         <div
-          className="relative transition-all duration-700 shadow-2xl max-w-[90vw] sm:max-w-[85vw] group/img"
+          className="relative transition-all duration-700 shadow-2xl max-w-[92vw] sm:max-w-[85vw] group/img"
           style={{
             backgroundColor: vibe.backgroundColor,
-            padding: `${vibe.padding * 12}px`,
+            padding: `clamp(${vibe.padding * 3}px, ${vibe.padding * 1.5}vw, ${vibe.padding * 12}px)`,
             borderRadius: vibe.borderRadius,
             border: `1px solid ${vibe.accentColor}22`
           }}
@@ -126,7 +134,7 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
               src={url}
               alt="Gallery item"
               onLoad={handleImageLoad}
-              className={`max-h-[60vh] max-w-full w-auto block transition-all duration-700 object-contain ${item.isAnalyzing ? 'blur-md opacity-60 scale-95' : ''
+              className={`h-[38vh] w-[38vh] sm:h-[50vh] sm:w-[50vh] block transition-all duration-700 object-cover ${item.isAnalyzing ? 'blur-md opacity-60 scale-95' : ''
                 }`}
             />
 
@@ -140,6 +148,14 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
                 <p className="text-[10px] tracking-[0.4em] uppercase font-bold text-neutral-800 animate-pulse">
                   Analyzing Piece
                 </p>
+              </div>
+            )}
+
+            {/* Error state: analysis failed (e.g. quota, rate limit) */}
+            {!item.isAnalyzing && item.streamingText && !item.artistName && (
+              <div className="absolute bottom-0 left-0 right-0 bg-red-900/90 text-white py-2 px-3 z-20">
+                <p className="text-[9px] tracking-wider uppercase font-bold">Analysis failed</p>
+                <p className="text-[10px] text-red-100 truncate" title={item.streamingText}>{item.streamingText}</p>
               </div>
             )}
 
@@ -187,7 +203,7 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
           {/* AI Insight Metadata - constrained to image width */}
           {imageWidth > 0 && (
             <div
-              className="mt-6 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+              className="mt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
               style={{ width: imageWidth }}
             >
               <div className="text-center mb-3">
@@ -196,11 +212,11 @@ const GalleryCard: React.FC<Props> = ({ item, onInterpret, onContinueVision, onD
                 </span>
               </div>
 
-              <div className="flex flex-wrap justify-center gap-x-3 gap-y-2">
+              <div className="flex flex-wrap justify-center gap-x-2 gap-y-0.5">
                 {keywords.map((kw, idx) => (
                   <span
                     key={idx}
-                    className="text-[10px] uppercase tracking-[0.2em] font-medium"
+                    className="text-[8px] uppercase tracking-[0.15em] font-medium leading-tight"
                     style={{ color: vibe.accentColor }}
                   >
                     {kw}

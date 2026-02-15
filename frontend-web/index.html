@@ -51,6 +51,33 @@
             animation: pulse-soft 4s infinite ease-in-out;
         }
 
+        @keyframes dot-scroll {
+            0% {
+                opacity: 0.25;
+                transform: translateX(-4px);
+            }
+            50% {
+                opacity: 0.85;
+                transform: translateX(0);
+            }
+            100% {
+                opacity: 0.25;
+                transform: translateX(4px);
+            }
+        }
+
+        .dot-scroll {
+            animation: dot-scroll 1.2s infinite ease-in-out;
+        }
+
+        .dot-scroll.delay-1 {
+            animation-delay: 0.2s;
+        }
+
+        .dot-scroll.delay-2 {
+            animation-delay: 0.4s;
+        }
+
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }

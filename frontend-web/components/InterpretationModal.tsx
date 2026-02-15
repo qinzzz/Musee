@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Message, Annotation } from '../types';
 import { chatWithArtwork, chatWithArtworkStream, base64ToFile, getTagExplanation, suggestTopics } from '../apiService';
@@ -97,6 +97,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [showMetadata, setShowMetadata] = useState(true);
+  const [mobileSection, setMobileSection] = useState<'analysis' | 'dialogue'>('analysis');
   const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -125,6 +126,14 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const formatDisplayDate = (dateStr: string | null | undefined): string | null => {
     if (!dateStr) return null;
     try {
+      // Handle ISO format (e.g. "2025-11-25T00:00:00")
+      if (dateStr.includes('T')) {
+        const dt = new Date(dateStr);
+        if (!isNaN(dt.getTime())) {
+          return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+      }
+
       // If it has a comma followed by time, split it
       if (dateStr.includes(', ')) {
         const parts = dateStr.split(', ');
@@ -214,6 +223,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setMessages(item.conversation || []);
     setSuggestedTopics([]); // Reset suggestions for the new item
     setShowMetadata(true); // Default to showing metadata for the new piece
+    setMobileSection('analysis'); // Reset to analysis view
   }, [item.id, item.conversation]);
 
   useEffect(() => {
@@ -221,6 +231,44 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, suggestedTopics]);
+
+  // Parse streaming JSON to extract fields progressively during analysis
+  const streamingFields = useMemo(() => {
+    if (!item.isAnalyzing || !item.streamingText) return null;
+    const text = item.streamingText;
+    const jsonStart = text.indexOf('{');
+    if (jsonStart === -1) return null;
+    const json = text.substring(jsonStart);
+    const result: Record<string, string> = {};
+
+    const fields = ['artist', 'title', 'date', 'medium'];
+    for (const field of fields) {
+      const match = json.match(new RegExp(`"${field}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`));
+      if (match) result[field] = match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+    }
+
+    // Description may still be streaming (incomplete)
+    const descMatch = json.match(/"description"\s*:\s*"/);
+    if (descMatch && descMatch.index !== undefined) {
+      const afterQuote = descMatch.index + descMatch[0].length;
+      let desc = json.substring(afterQuote);
+      let i = 0;
+      while (i < desc.length) {
+        if (desc[i] === '\\') { i += 2; }
+        else if (desc[i] === '"') { desc = desc.substring(0, i); break; }
+        else { i++; }
+      }
+      result.description = desc.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+    }
+
+    return Object.keys(result).length > 0 ? result : null;
+  }, [item.isAnalyzing, item.streamingText]);
+
+  const displayArtist = streamingFields?.artist || item.artistName;
+  const displayTitle = streamingFields?.title || item.artworkName;
+  const displayDate = streamingFields?.date || item.date;
+  const displayMedium = streamingFields?.medium || item.medium;
+  const displayDescription = streamingFields?.description || item.description;
 
   const fetchSuggestions = async (currentMessages: Message[]) => {
     if (!item.artistName || !item.artworkName) return;
@@ -409,8 +457,37 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         className={`relative bg-white rounded-2xl sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col sm:flex-row animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         style={getModalStyle()}
       >
+        {/* Global close/delete — always top-right of modal */}
+        <div className="absolute top-3 right-3 sm:hidden z-50 flex items-center space-x-3">
+          {onDelete && !item.isAnalyzing && (
+            <button
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(item.id); }}
+              className="text-neutral-400 hover:text-red-500 transition-colors"
+              title="Remove from Musee"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+            </button>
+          )}
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900 transition-colors text-lg">✕</button>
+        </div>
+
         {/* Visual Reference & Annotation Canvas Panel */}
-        <div className="h-[45vh] sm:h-auto sm:flex-1 bg-neutral-50 flex items-center justify-center p-4 sm:p-12 overflow-hidden relative group/canvas min-w-0">
+        <div className={`${mobileSection === 'analysis' ? 'flex-1 min-h-0' : ''} sm:flex-1 bg-neutral-50 overflow-hidden relative group/canvas min-w-0 flex flex-col`}>
+          {/* Mobile: collapsed header when dialogue is active */}
+          <button
+            className={`${mobileSection === 'analysis' ? 'hidden' : 'flex'} sm:hidden items-center justify-between w-full px-4 py-2.5 bg-neutral-50 border-b border-neutral-100 shrink-0`}
+            onClick={() => setMobileSection('analysis')}
+          >
+            <div className="flex items-center space-x-2.5">
+              <img src={item.url} className="w-7 h-7 rounded object-cover" alt="" />
+              <span className="text-[8px] tracking-[0.2em] uppercase text-neutral-500 font-bold truncate">
+                {item.artistName || 'Artwork Analysis'}
+              </span>
+            </div>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+          </button>
+          {/* Analysis content wrapper */}
+          <div className={`${mobileSection !== 'analysis' ? 'hidden sm:flex' : 'flex'} flex-1 items-center justify-center p-4 sm:p-12 relative min-h-0 overflow-hidden`}>
           <div className="relative cursor-crosshair w-full h-full flex items-center justify-center">
             <img
               ref={imageRef}
@@ -460,28 +537,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               </div>
             )}
 
-            {/* Loading/Streaming Overlay for Metadata */}
-            {item.isAnalyzing && (
-              <div className="absolute top-8 left-8 w-72 bg-white/90 backdrop-blur-md p-8 rounded-2xl shadow-2xl border border-white/20 z-10 hidden sm:block animate-in fade-in duration-500">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="relative shrink-0">
-                    <div className="w-6 h-6 border-2 border-neutral-100 rounded-full"></div>
-                    <div className="absolute inset-0 w-6 h-6 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
-                  </div>
-                  <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold">
-                    Analyzing Material
-                  </p>
-                </div>
-                {item.streamingText && (
-                  <div className="text-[11px] leading-relaxed text-neutral-600 font-serif line-clamp-[12]">
-                    <ReactMarkdown components={markdownComponents}>
-                      {item.streamingText}
-                    </ReactMarkdown>
-                    <span className="inline-block w-1.5 h-3 bg-neutral-400 animate-pulse ml-0.5"></span>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Info/Label Toggle Button (Switch to Details) - Only visible when metadata is hidden and not analyzing */}
@@ -491,7 +546,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 e.stopPropagation();
                 setShowMetadata(true);
               }}
-              className="absolute top-8 right-8 z-40 w-16 h-20 sm:w-20 sm:h-28 bg-white rounded-lg shadow-2xl border border-neutral-200 p-3 flex flex-col space-y-2 hover:scale-110 transition-all duration-300 group overflow-hidden"
+              className="absolute top-6 right-6 z-40 w-20 h-24 sm:w-24 sm:h-[8.5rem] bg-white rounded-lg shadow-2xl border border-neutral-200 p-3 flex flex-col space-y-2 hover:scale-110 transition-all duration-300 group overflow-hidden"
               title="View Artwork Label"
             >
               <div className="w-1/2 h-1 bg-neutral-200 rounded-full" />
@@ -506,104 +561,110 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             </button>
           )}
 
-          {/* Metadata Overlay Card - Positioned relative to the left panel (sm:flex-1) */}
-          {showMetadata && !item.isAnalyzing && (item.artistName || item.artworkName || item.description || item.keywords) && (
-            <div className="absolute inset-0 bg-white/95 backdrop-blur-md p-8 sm:p-12 overflow-y-auto z-30 scrollbar-hide animate-in fade-in duration-500">
-              {/* Thumbnail Toggle (Back to Image) */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMetadata(false);
-                }}
-                className="absolute top-8 right-8 w-16 h-20 sm:w-20 sm:h-28 rounded-lg overflow-hidden border-2 border-white shadow-2xl hover:scale-110 transition-transform active:scale-95 z-50 group"
-                title="Back to Artwork"
-              >
-                <img src={item.url} className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all" alt="Back to artwork" />
-                <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors flex items-center justify-center">
-                  <span className="text-[6px] tracking-widest text-white font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">Image</span>
+          {/* Metadata / Streaming Analysis Overlay (includes error state: streamingText with no artist) */}
+          {(item.isAnalyzing || (item.streamingText && !item.artistName && !item.isAnalyzing) || (showMetadata && (displayArtist || displayTitle || displayDescription || item.keywords))) && (
+            <div className="absolute inset-0 bg-white/95 backdrop-blur-md p-5 sm:p-12 overflow-y-auto z-30 scrollbar-hide animate-in fade-in duration-500">
+              {/* Thumbnail: static preview during analysis, toggle back to image otherwise */}
+              {item.isAnalyzing ? (
+                <div className="absolute top-6 right-6 w-20 h-24 sm:w-24 sm:h-[8.5rem] rounded-lg overflow-hidden border-2 border-white shadow-2xl z-50">
+                  <img src={item.url} className="w-full h-full object-cover" alt="" />
                 </div>
-              </button>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMetadata(false);
+                  }}
+                  className="absolute top-6 right-6 w-20 h-24 sm:w-24 sm:h-[8.5rem] rounded-lg overflow-hidden border-2 border-white shadow-2xl hover:scale-110 transition-transform active:scale-95 z-50 group"
+                  title="Back to Artwork"
+                >
+                  <img src={item.url} className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all" alt="Back to artwork" />
+                  <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                    <span className="text-[6px] tracking-widest text-white font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">Image</span>
+                  </div>
+                </button>
+              )}
 
-              <div className="max-w-xl mx-auto space-y-8">
-                {/* Location and Date Metadata (Top context) */}
-                {(displayLocation || item.photoTime) && (
-                  <div className="flex flex-wrap gap-x-12 gap-y-6 pb-8 border-b border-neutral-100">
+              <div className="max-w-xl mx-auto space-y-4 sm:space-y-8">
+                {/* Analyzing indicator */}
+                {item.isAnalyzing && (
+                  <div className="flex items-center space-x-3 pb-2">
+                    <div className="relative shrink-0">
+                      <div className="w-5 h-5 border-2 border-neutral-100 rounded-full"></div>
+                      <div className="absolute inset-0 w-5 h-5 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
+                    </div>
+                    <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold">Analyzing Material</p>
+                  </div>
+                )}
+
+                {/* Error from backend (e.g. quota, rate limit, API error) */}
+                {!item.isAnalyzing && item.streamingText && !item.artistName && (
+                  <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 sm:p-6 mb-4">
+                    <p className="text-[9px] tracking-[0.3em] uppercase text-red-600 font-bold mb-2">Analysis failed</p>
+                    <p className="text-[13px] text-red-800 leading-relaxed">{item.streamingText}</p>
+                  </div>
+                )}
+
+                {/* Location and Date Metadata (only when analysis complete) */}
+                {!item.isAnalyzing && (displayLocation || item.photoTime) && (
+                  <div className="pb-6 sm:pb-8 border-b border-neutral-100 space-y-4">
                     {displayLocation && (
                       <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Location</p>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1 font-bold">Location</p>
                         <p className="text-[14px] font-serif italic text-neutral-800">{displayLocation}</p>
                       </div>
                     )}
                     {item.photoTime && (
                       <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Photo Taken</p>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1 font-bold">Time</p>
                         <p className="text-[14px] font-serif italic text-neutral-800">{formatDisplayDate(item.photoTime)}</p>
-                      </div>
-                    )}
-                    {item.visitId && (
-                      <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Visit</p>
-                        <p className="text-[9px] tracking-widest text-emerald-600 font-mono uppercase bg-emerald-50 px-2 py-0.5 rounded">Recorded</p>
                       </div>
                     )}
                   </div>
                 )}
 
-                {item.artistName && (
+                {displayArtist && (
                   <div>
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Artist</p>
-                    <p className="text-[20px] sm:text-[24px] font-medium text-neutral-900 tracking-tight leading-tight">{item.artistName}</p>
+                    <p className="text-[17px] sm:text-[24px] font-medium text-neutral-900 tracking-tight leading-tight">{displayArtist}</p>
                   </div>
                 )}
-                {item.artworkName && (
+                {displayTitle && (
                   <div>
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Title</p>
-                    <p className="text-[18px] sm:text-[22px] font-serif italic text-neutral-700 leading-tight">{item.artworkName}</p>
+                    <p className="text-[15px] sm:text-[22px] font-serif italic text-neutral-700 leading-tight">{displayTitle}</p>
                   </div>
                 )}
-                {(item.date || item.medium) && (
+                {(displayDate || displayMedium) && (
                   <div className="flex flex-wrap gap-8 sm:gap-12">
-                    {item.date && (
+                    {displayDate && (
                       <div>
                         <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Date</p>
-                        <p className="text-[14px] text-neutral-600">{formatDisplayDate(item.date)}</p>
+                        <p className="text-[14px] text-neutral-600">{formatDisplayDate(displayDate)}</p>
                       </div>
                     )}
-                    {item.medium && (
+                    {displayMedium && (
                       <div>
                         <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Medium</p>
-                        <p className="text-[14px] text-neutral-600">{item.medium}</p>
+                        <p className="text-[14px] text-neutral-600">{displayMedium}</p>
                       </div>
                     )}
                   </div>
                 )}
-                {(displayLocation || item.photoTime) && (
-                  <div className="flex flex-wrap gap-8 sm:gap-12 pt-2">
-                    {displayLocation && (
-                      <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Location</p>
-                        <p className="text-[14px] text-neutral-600">{displayLocation}</p>
-                      </div>
-                    )}
-                    {item.photoTime && (
-                      <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Photo Taken</p>
-                        <p className="text-[14px] text-neutral-600">{item.photoTime}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {item.description && (
+                {displayDescription && (
                   <div>
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Analysis</p>
-                    <div className="text-[13px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
+                    <div className="text-[12px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
                       <ReactMarkdown components={markdownComponents}>
-                        {item.description}
+                        {displayDescription}
                       </ReactMarkdown>
+                      {item.isAnalyzing && (
+                        <span className="inline-block w-1.5 h-3 bg-neutral-400 animate-pulse ml-0.5"></span>
+                      )}
                     </div>
                   </div>
                 )}
-                {item.keywords && item.keywords.length > 0 && (
+                {!item.isAnalyzing && item.keywords && item.keywords.length > 0 && (
                   <div className="pt-2">
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Tags</p>
                     <div className="flex flex-wrap gap-2">
@@ -620,15 +681,20 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               </div>
             </div>
           )}
+          </div>
         </div>
 
-        {/* Chat Interface - 50% split on desktop */}
-        <div className="flex-1 w-full sm:w-1/2 flex flex-col bg-white border-t sm:border-t-0 sm:border-l border-neutral-100 min-w-0 min-h-0">
-          <div className="p-4 sm:p-6 border-b border-neutral-50 flex justify-between items-center shrink-0">
-            <div className="flex items-center space-x-3">
+        {/* Chat Interface - Curator Dialogue */}
+        <div className={`${mobileSection === 'dialogue' ? 'flex-1 min-h-0' : ''} sm:flex-1 w-full sm:w-1/2 flex flex-col bg-white border-t sm:border-t-0 sm:border-l border-neutral-100 min-w-0`}>
+          <div
+            className="p-4 sm:p-6 border-b border-neutral-50 flex justify-between items-center shrink-0 cursor-pointer sm:cursor-default"
+            onClick={() => { if (window.innerWidth < 640) setMobileSection(mobileSection === 'dialogue' ? 'analysis' : 'dialogue'); }}
+          >
+            <div className="flex items-center space-x-2">
               <h3 className="text-[9px] sm:text-[10px] tracking-[0.4em] sm:tracking-[0.5em] uppercase text-neutral-400 font-bold">curator dialogue</h3>
+              <svg className={`sm:hidden transition-transform ${mobileSection === 'dialogue' ? 'rotate-180' : ''}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="hidden sm:flex items-center space-x-4">
               {onDelete && !item.isAnalyzing && (
                 <button
                   onClick={(e) => {
@@ -642,10 +708,11 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                 </button>
               )}
-              <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-xl">✕</button>
+              <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="text-neutral-300 hover:text-neutral-900 transition-colors text-xl">✕</button>
             </div>
           </div>
 
+          <div className={`${mobileSection !== 'dialogue' ? 'hidden sm:flex' : 'flex'} flex-col flex-1 min-h-0`}>
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0">
             {!item.isAnalyzing && messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
@@ -657,11 +724,17 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             )}
             {messages.map((m, idx) => (
               <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-4 text-[13px] leading-relaxed tracking-wide ${m.role === 'user'
+                <div className={`max-w-[85%] p-3 sm:p-4 text-[13px] leading-relaxed tracking-wide ${m.role === 'user'
                   ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-none'
                   : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-none font-serif'
                   }`}>
-                  {m.text || (m.role === 'model' && isWaitingForFirstChunk && idx === messages.length - 1 ? (
+                  {m.text ? (
+                    m.role === 'model' ? (
+                      <div className="prose prose-sm max-w-none prose-neutral prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
+                        <ReactMarkdown components={markdownComponents}>{m.text}</ReactMarkdown>
+                      </div>
+                    ) : m.text
+                  ) : (m.role === 'model' && isWaitingForFirstChunk && idx === messages.length - 1 ? (
                     <div className="flex space-x-1.5 py-1">
                       <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse"></div>
                       <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-75"></div>
@@ -709,24 +782,25 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             )}
           </div>
 
-          <div className="p-6 border-t border-neutral-50">
-            <div className="flex items-center space-x-4">
+          <div className="p-3 sm:p-6 border-t border-neutral-50">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !item.isAnalyzing && handleSend(input)}
                 placeholder={item.isAnalyzing ? "Analyzing artwork..." : "ask anything..."}
                 disabled={item.isAnalyzing}
-                className={`flex-1 text-[13px] bg-neutral-50 p-3 px-5 rounded-full outline-none focus:ring-1 focus:ring-neutral-200 transition-all border border-neutral-100 ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex-1 text-[13px] bg-neutral-50 p-2.5 px-4 sm:p-3 sm:px-5 rounded-full outline-none focus:ring-1 focus:ring-neutral-200 transition-all border border-neutral-100 ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
               />
               <button
                 onClick={() => handleSend(input)}
                 disabled={item.isAnalyzing}
-                className={`w-10 h-10 rounded-full bg-neutral-900 text-white flex items-center justify-center transition-transform shadow-lg ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : 'hover:scale-110 active:scale-95'}`}
+                className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center transition-transform shadow-lg ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : 'hover:scale-110 active:scale-95'}`}
               >
                 ↑
               </button>
             </div>
+          </div>
           </div>
         </div>
 

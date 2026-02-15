@@ -1,24 +1,92 @@
 
-import React from 'react';
-import { ViewMode } from '../types';
-
+import React, { useState, useRef, useEffect } from 'react';
 interface Props {
-  viewMode: ViewMode;
-  onToggleView: () => void;
+  activeView: 'gallery' | 'topography' | 'community';
+  onChangeView: (view: 'gallery' | 'topography' | 'community') => void;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   isAnalyzing: boolean;
   isVisitActive: boolean;
   onToggleVisit: () => void;
 }
 
-const Controls: React.FC<Props> = ({ viewMode, onToggleView, onUpload, isAnalyzing, isVisitActive, onToggleVisit }) => {
+const Controls: React.FC<Props> = ({
+  activeView,
+  onChangeView,
+  onUpload,
+  isAnalyzing,
+  isVisitActive,
+  onToggleVisit
+}) => {
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadControlRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (isAnalyzing) setShowUploadMenu(false);
+  }, [isAnalyzing]);
+
+  useEffect(() => {
+    if (!showUploadMenu) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!uploadControlRef.current) return;
+      if (!uploadControlRef.current.contains(event.target as Node)) {
+        setShowUploadMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showUploadMenu]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    onUpload(e);
+    // Allow same file selection consecutively
+    e.target.value = '';
+  };
+
+  const triggerCameraCapture = () => {
+    if (isAnalyzing) return;
+    cameraInputRef.current?.click();
+    setShowUploadMenu(false);
+  };
+
+  const triggerGalleryImport = () => {
+    if (isAnalyzing) return;
+    galleryInputRef.current?.click();
+    setShowUploadMenu(false);
+  };
+
+  const toggleUploadMenu = () => {
+    if (isAnalyzing) return;
+    setShowUploadMenu(prev => !prev);
+  };
+
   return (
-    <div className="fixed bottom-12 left-1/2 -translate-x-1/2 flex items-center space-x-6 z-30">
+    <div className="fixed bottom-3 sm:bottom-12 left-1/2 -translate-x-1/2 flex items-center space-x-3 sm:space-x-6 z-30">
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleInputChange}
+        disabled={isAnalyzing}
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleInputChange}
+        disabled={isAnalyzing}
+        multiple
+      />
       {/* Visit Toggle */}
       <button 
         onClick={onToggleVisit}
         className={`
-          group relative w-12 h-12 rounded-full border flex items-center justify-center transition-all duration-500
+          group relative w-8 h-8 sm:w-12 sm:h-12 rounded-full border flex items-center justify-center transition-all duration-500
           ${isVisitActive ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-white border-neutral-200 text-neutral-400 hover:bg-neutral-50'}
         `}
       >
@@ -32,57 +100,114 @@ const Controls: React.FC<Props> = ({ viewMode, onToggleView, onUpload, isAnalyzi
       </button>
 
       {/* Upload Button */}
-      <label
-        onClick={() => console.log('Upload label clicked')}
-        className={`
-        group relative w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all duration-500
-        ${isAnalyzing ? 'bg-neutral-100' : 'bg-neutral-900 hover:scale-110 shadow-xl'}
-      `}>
-        <input
-          type="file"
-          className="hidden"
-          accept="image/*"
-          onChange={(e) => {
-            console.log('File input onChange fired', e.target.files);
-            onUpload(e);
-          }}
+      <div className="relative" ref={uploadControlRef}>
+        <button
+          onClick={toggleUploadMenu}
           disabled={isAnalyzing}
-          multiple
-        />
-        {isAnalyzing ? (
-          <div className="w-4 h-4 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin"></div>
-        ) : (
-          <span className="text-white text-3xl font-thin transition-transform duration-500 group-hover:rotate-90">+</span>
-        )}
-        
-        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black text-white text-[8px] px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tracking-widest uppercase">
-          Add Piece
-        </div>
-      </label>
-
-      {/* View Toggle */}
-      <button 
-        onClick={onToggleView}
-        className={`
-          group relative w-12 h-12 rounded-full border border-neutral-200 flex items-center justify-center transition-all duration-500
-          ${viewMode === ViewMode.TOPOGRAPHY ? 'bg-neutral-900 border-neutral-900' : 'bg-white hover:bg-neutral-50'}
-        `}
-      >
-        <svg 
-          width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={viewMode === ViewMode.TOPOGRAPHY ? "white" : "currentColor"} 
-          strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"
+          className={`
+            group relative w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-500
+            ${isAnalyzing ? 'bg-neutral-100 cursor-not-allowed' : 'bg-neutral-900 hover:scale-110 shadow-xl'}
+          `}
         >
-          {viewMode === ViewMode.CORRIDOR ? (
-            <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+          {isAnalyzing ? (
+            <div className="w-4 h-4 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            <span className="text-white text-3xl font-thin transition-transform duration-500 group-hover:rotate-90">+</span>
           )}
-        </svg>
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black text-white text-[8px] px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tracking-widest uppercase">
+            Add Piece
+          </div>
+        </button>
+        {showUploadMenu && !isAnalyzing && (
+          <div className="absolute -top-32 left-1/2 -translate-x-1/2 flex flex-col bg-white shadow-2xl rounded-2xl border border-neutral-100 p-2 w-36">
+            <button
+              onClick={triggerCameraCapture}
+              className="text-xs font-medium px-3 py-2 rounded-xl text-left hover:bg-neutral-50 transition-colors"
+            >
+              Take Photo
+              <span className="block text-[10px] text-neutral-400 tracking-wide">Use camera</span>
+            </button>
+            <button
+              onClick={triggerGalleryImport}
+              className="text-xs font-medium px-3 py-2 rounded-xl text-left hover:bg-neutral-50 transition-colors"
+            >
+              Import
+              <span className="block text-[10px] text-neutral-400 tracking-wide">From album</span>
+            </button>
+          </div>
+        )}
+      </div>
 
-        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black text-white text-[8px] px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tracking-widest uppercase">
-          {viewMode === ViewMode.CORRIDOR ? 'Topography' : 'Corridor'}
+      {/* View Rail */}
+      <div className="relative">
+        <div className="flex items-center space-x-2 bg-white/90 backdrop-blur-md border border-neutral-200 rounded-full px-2 py-1 shadow-lg overflow-x-auto no-scrollbar">
+          <button
+            onClick={() => onChangeView('gallery')}
+            aria-label="Gallery"
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
+              activeView === 'gallery' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
+            }`}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={activeView === 'gallery' ? "white" : "currentColor"}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onChangeView('topography')}
+            aria-label="Topography"
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
+              activeView === 'topography' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
+            }`}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={activeView === 'topography' ? "white" : "currentColor"}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onChangeView('community')}
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border flex items-center justify-center transition-colors ${
+              activeView === 'community' ? 'bg-neutral-900 border-neutral-900 text-white' : 'border-neutral-200 text-neutral-400 hover:text-neutral-700'
+            }`}
+            aria-label="Community"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={activeView === 'community' ? "white" : "currentColor"}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <circle cx="5" cy="7" r="2" />
+              <circle cx="19" cy="7" r="2" />
+              <path d="M5 9v4a3 3 0 0 0 3 3h1" />
+              <path d="M19 9v4a3 3 0 0 1-3 3h-1" />
+              <path d="M8 18a4 4 0 0 1 8 0" />
+            </svg>
+          </button>
         </div>
-      </button>
+      </div>
     </div>
   );
 };

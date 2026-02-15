@@ -18,6 +18,9 @@ export async function suggestTopics(
   }));
   formData.append('conversation_history', JSON.stringify(historyForBackend));
 
+  const lang = getLanguage();
+  if (lang) formData.append('language', lang);
+
   console.log('Fetching suggested topics for:', { artistName, artworkName });
 
   const response = await fetchWithTimeout(`${API_BASE_URL}/suggest-topic`, {
@@ -35,10 +38,169 @@ export async function suggestTopics(
   return data.suggested_topics || [];
 }
 
+/** Exhibition chat: curator conversation about a collection of works (backend LLM). */
+export async function exhibitionChat(
+  items: { id: string; url: string; keywords: string[] }[],
+  conversationHistory: Message[],
+  newMessage: string
+): Promise<string> {
+  const history = conversationHistory.map(m => ({
+    role: m.role === 'model' ? 'assistant' : m.role,
+    content: m.text,
+  }));
+  const response = await fetchWithTimeout(`${API_BASE_URL}/exhibition-chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      items: items.map(i => ({ id: i.id, url: i.url, keywords: i.keywords })),
+      conversation_history: history,
+      new_message: newMessage,
+    }),
+  });
+  if (!response.ok) {
+    const t = await response.text();
+    throw new Error(t || `exhibition-chat failed: ${response.status}`);
+  }
+  const data = await response.json();
+  return data.response ?? '';
+}
+
+/** Exhibition chat streaming: same as exhibitionChat but streams response to UI. */
+export async function exhibitionChatStream(
+  items: { id: string; url: string; keywords: string[] }[],
+  conversationHistory: Message[],
+  newMessage: string,
+  onChunk: (text: string) => void,
+  onComplete: (response: string) => void,
+  onError: (error: Error) => void
+): Promise<void> {
+  const history = conversationHistory.map(m => ({
+    role: m.role === 'model' ? 'assistant' : m.role,
+    content: m.text,
+  }));
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/exhibition-chat-stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: items.map(i => ({ id: i.id, url: i.url, keywords: i.keywords })),
+        conversation_history: history,
+        new_message: newMessage,
+      }),
+      timeout: API_TIMEOUT,
+    });
+    if (!response.ok) {
+      const t = await response.text();
+      throw new Error(t || `exhibition-chat-stream failed: ${response.status}`);
+    }
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Response body is not readable');
+    }
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
+      for (const event of events) {
+        if (!event.trim()) continue;
+        const lines = event.split('\n');
+        let eventType = '';
+        let eventData = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) eventType = line.slice(7);
+          else if (line.startsWith('data: ')) eventData = line.slice(6);
+        }
+        if (!eventData) continue;
+        try {
+          const data = JSON.parse(eventData);
+          if (eventType === 'chunk' && data.type === 'text') {
+            onChunk(data.content);
+          } else if (eventType === 'complete' && data.type === 'result') {
+            onComplete(data.response || '');
+          } else if (eventType === 'error') {
+            onError(new Error(data.message || 'Stream error'));
+          }
+        } catch (parseError) {
+          if (eventType === 'error') {
+            onError(new Error(eventData));
+          }
+        }
+      }
+    }
+  } catch (error) {
+    onError(error instanceof Error ? error : new Error(String(error)));
+  }
+}
+
+/** Define an aesthetic term (backend LLM). */
+export async function defineAestheticTerm(tag: string): Promise<{ definition: string; externalResonances: string[] }> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/define-aesthetic-term`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tag }),
+  });
+  if (!response.ok) {
+    const t = await response.text();
+    throw new Error(t || `define-aesthetic-term failed: ${response.status}`);
+  }
+  const data = await response.json();
+  return {
+    definition: data.definition ?? '',
+    externalResonances: data.externalResonances ?? [],
+  };
+}
+
+/** Generate TTS audio for text (backend Gemini TTS). Returns true if played. */
+export async function generateSpeech(text: string): Promise<boolean> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/generate-speech`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+    timeout: 30000,
+  });
+  if (!response.ok) return false;
+  const arrayBuffer = await response.arrayBuffer();
+  const audioData = new Uint8Array(arrayBuffer);
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+  const audioBuffer = await decodePcmToAudioBuffer(audioData, audioContext, 24000, 1);
+  const source = audioContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(audioContext.destination);
+  source.start();
+  return true;
+}
+
+function decodePcmToAudioBuffer(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return Promise.resolve(buffer);
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 const API_TIMEOUT = 120000; // 120 seconds
 const AUTH_TOKEN_KEY = 'musee_auth_token';
 const USER_INFO_KEY = 'musee_user_info';
+
+/** Read the user's language preference from localStorage */
+function getLanguage(): string | null {
+  return localStorage.getItem('musee_language');
+}
 
 /**
  * Enhanced fetch with timeout support and Auth header
@@ -216,6 +378,9 @@ export async function analyzeArtwork(
     formData.append('longitude', longitude.toString());
   }
 
+  const lang = getLanguage();
+  if (lang) formData.append('language', lang);
+
   console.log('Sending request to:', `${API_BASE_URL}/artwork-analyze`);
 
   const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-analyze`, {
@@ -323,6 +488,9 @@ export async function analyzeArtworkStream(
     formData.append('longitude', longitude.toString());
   }
 
+  const lang = getLanguage();
+  if (lang) formData.append('language', lang);
+
   console.log('Starting streaming analysis to:', `${API_BASE_URL}/artwork-analyze-stream`);
 
   try {
@@ -414,7 +582,8 @@ export async function analyzeArtworkStream(
               onMetrics(data as StreamingMetrics);
             }
           } else if (eventType === 'error') {
-            throw new Error(data.message || 'Unknown streaming error');
+            onError(new Error(data.message || 'Unknown streaming error'));
+            return;
           }
         } catch (parseError) {
           console.error('Failed to parse SSE event:', parseError, eventData);
@@ -505,6 +674,9 @@ export async function chatWithArtwork(
     formData.append('session_id', sessionId);
   }
 
+  const lang = getLanguage();
+  if (lang) formData.append('language', lang);
+
   console.log('Sending chat request:', { query, artworkId, artistName, artworkName, hasImage: !!imageFile && imageFile.size > 0 });
 
   const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-chat`, {
@@ -576,6 +748,9 @@ export async function chatWithArtworkStream(
   if (sessionId) {
     formData.append('session_id', sessionId);
   }
+
+  const lang = getLanguage();
+  if (lang) formData.append('language', lang);
 
   console.log('Starting streaming chat to:', `${API_BASE_URL}/artwork-chat-stream`);
 
@@ -695,6 +870,8 @@ export async function getTagExplanation(
   if (artworkId) {
     params.append('artwork_id', artworkId);
   }
+  const lang = getLanguage();
+  if (lang) params.append('language', lang);
 
   const response = await fetchWithTimeout(`${API_BASE_URL}/tag-explanation?${params.toString()}`);
 

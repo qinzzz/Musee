@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks, Body
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -13,6 +13,9 @@ import anyio
 from app.database.connection import get_db, SessionLocal
 from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel
 from app.models.artwork import AIProvider, UpdateArtworkRequest
+from pydantic import BaseModel
+import base64
+import httpx
 from app.services.ai_service import AIServiceFactory
 from app.services.openai_api_client import OpenAIAPIClient
 from app.services.claude_api_client import ClaudeAPIClient
@@ -1168,6 +1171,163 @@ async def remove_background(image: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Background removal failed: {str(e)}")
+
+
+# =============================================================================
+# Web-client AI endpoints (exhibition chat works with all providers; define term & TTS are Gemini-only)
+# =============================================================================
+
+class ExhibitionItem(BaseModel):
+    id: str
+    url: str
+    keywords: List[str] = []
+
+class ExhibitionChatRequest(BaseModel):
+    items: List[ExhibitionItem]
+    conversation_history: List[Dict[str, str]]  # [{role, content}]
+    new_message: str
+
+async def _image_url_to_bytes(url: str) -> Optional[bytes]:
+    """Return image bytes from data URL or HTTP URL, or None on failure."""
+    if not url:
+        return None
+    if url.startswith("data:"):
+        try:
+            i = url.find(",")
+            if i == -1:
+                return None
+            return base64.b64decode(url[i + 1 :])
+        except Exception:
+            return None
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(url)
+            if r.status_code != 200:
+                return None
+            return r.content
+    except Exception:
+        return None
+
+@router.post("/exhibition-chat")
+async def exhibition_chat(
+    request: ExhibitionChatRequest = Body(...),
+    model: Optional[AIProvider] = Query(None),
+):
+    """Chat with the curator about the current exhibition (collection of works). Supports OpenAI, Claude, Gemini."""
+    ai_provider = determine_ai_provider(model)
+    ai_service = AIServiceFactory.get_service(ai_provider)
+    image_bytes_list = []
+    if not request.conversation_history and request.items:
+        for item in request.items[:10]:
+            b = await _image_url_to_bytes(item.url)
+            if b:
+                image_bytes_list.append(b)
+    try:
+        response_text = await ai_service.exhibition_chat(
+            items=[{"keywords": i.keywords} for i in request.items],
+            history=request.conversation_history,
+            new_message=request.new_message,
+            image_bytes_list=image_bytes_list,
+        )
+        return {"response": response_text}
+    except Exception as e:
+        logger.exception("Exhibition chat failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/exhibition-chat-stream")
+async def exhibition_chat_stream(
+    request: ExhibitionChatRequest = Body(...),
+    model: Optional[AIProvider] = Query(None),
+):
+    """Stream exhibition curator response as SSE (event: chunk, then event: complete). Supports OpenAI, Claude, Gemini."""
+    ai_provider = determine_ai_provider(model)
+    ai_service = AIServiceFactory.get_service(ai_provider)
+    image_bytes_list = []
+    if not request.conversation_history and request.items:
+        for item in request.items[:10]:
+            b = await _image_url_to_bytes(item.url)
+            if b:
+                image_bytes_list.append(b)
+
+    async def event_generator():
+        full_text = ""
+        try:
+            async for chunk in ai_service.exhibition_chat_stream(
+                items=[{"keywords": i.keywords} for i in request.items],
+                history=request.conversation_history,
+                new_message=request.new_message,
+                image_bytes_list=image_bytes_list,
+            ):
+                full_text += chunk
+                yield f"event: chunk\ndata: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
+            yield f"event: complete\ndata: {json.dumps({'type': 'result', 'response': full_text})}\n\n"
+        except Exception as e:
+            logger.exception("Exhibition chat stream failed")
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+class DefineTermRequest(BaseModel):
+    tag: str
+
+@router.post("/define-aesthetic-term")
+async def define_aesthetic_term(
+    request: DefineTermRequest = Body(...),
+    model: Optional[AIProvider] = Query(None),
+):
+    """Get a concise definition and external resonances for an aesthetic term. Requires Gemini."""
+    ai_provider = determine_ai_provider(model)
+    ai_service = AIServiceFactory.get_service(ai_provider)
+    if not isinstance(ai_service.ai_client, GeminiAPIClient):
+        raise HTTPException(status_code=503, detail="Define term requires Gemini")
+    client = ai_service.ai_client
+    try:
+        result = await client.define_aesthetic_term(request.tag)
+        return {
+            "definition": result["definition"],
+            "externalResonances": result["external_resonances"],
+        }
+    except Exception as e:
+        logger.exception("Define aesthetic term failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class GenerateSpeechRequest(BaseModel):
+    text: str
+
+@router.post("/generate-speech")
+async def generate_speech(
+    request: GenerateSpeechRequest = Body(...),
+    model: Optional[AIProvider] = Query(None),
+):
+    """Generate TTS audio for the given text (Gemini TTS). Returns raw PCM bytes (24kHz mono)."""
+    ai_provider = determine_ai_provider(model)
+    ai_service = AIServiceFactory.get_service(ai_provider)
+    if not isinstance(ai_service.ai_client, GeminiAPIClient):
+        raise HTTPException(status_code=503, detail="Speech generation requires Gemini")
+    client = ai_service.ai_client
+    try:
+        audio_bytes = await client.generate_speech(request.text)
+        if not audio_bytes:
+            raise HTTPException(status_code=502, detail="No audio generated")
+        return Response(
+            content=audio_bytes,
+            media_type="application/octet-stream",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Generate speech failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =============================================================================

@@ -52,7 +52,7 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
 
   return (
     <div
-      className="min-w-[40vw] h-[80vh] mx-12 flex items-center justify-center transition-all duration-500 group cursor-pointer hover:scale-[1.02]"
+      className="min-w-[85vw] sm:min-w-[40vw] h-[80vh] mx-3 sm:mx-12 flex items-center justify-center transition-all duration-500 group cursor-pointer hover:scale-[1.02]"
     >
       <div
         className="relative w-full h-full flex items-center justify-center"
@@ -84,7 +84,7 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
               className="absolute transition-all duration-700 shadow-2xl overflow-hidden max-w-[80vw]"
               style={{
                 backgroundColor: item.vibe.backgroundColor,
-                padding: `${item.vibe.padding * 10}px`,
+                padding: `clamp(${item.vibe.padding * 3}px, ${item.vibe.padding * 1.2}vw, ${item.vibe.padding * 10}px)`,
                 borderRadius: item.vibe.borderRadius,
                 border: `1px solid ${item.vibe.accentColor}22`,
                 transform: `rotate(${rotation}deg) translate(${offset}px, ${-offset}px)`,
@@ -95,7 +95,7 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
               <img
                 src={item.url}
                 alt="Stacked item"
-                className="max-h-[50vh] max-w-full w-auto object-contain"
+                className="max-h-[60vh] sm:max-h-[50vh] max-w-full w-auto object-contain"
               />
             </div>
           );
@@ -125,50 +125,37 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
           ]}
         />
 
-        {/* Floating Resume Menu (Keeping for functionality) */}
+        {/* Floating Resume Menu */}
         {showResumeMenu && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-12 bg-white rounded-2xl shadow-2xl border border-neutral-100 p-2 flex flex-col space-y-1 animate-in zoom-in-95 duration-300 z-50 min-w-[180px]">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-4 bg-white rounded-xl shadow-2xl border border-neutral-100 p-1 flex items-center space-x-0.5 animate-in zoom-in-95 duration-300 z-50">
             <button
-              className="flex items-center space-x-3 px-4 py-3 hover:bg-neutral-50 rounded-xl transition-colors text-neutral-600 hover:text-emerald-600"
+              className="flex items-center space-x-1.5 px-2.5 py-1.5 hover:bg-neutral-50 rounded-lg transition-colors text-neutral-600 hover:text-emerald-600"
               onClick={(e) => {
                 e.stopPropagation();
                 onResumeVisit?.('camera');
                 setShowResumeMenu(false);
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-              <span className="text-[10px] tracking-widest uppercase font-bold">Take a photo</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+              <span className="text-[8px] tracking-widest uppercase font-bold">Photo</span>
             </button>
-            <div className="h-px bg-neutral-50 mx-2"></div>
+            <div className="w-px h-4 bg-neutral-100"></div>
             <button
-              className="flex items-center space-x-3 px-4 py-3 hover:bg-neutral-50 rounded-xl transition-colors text-neutral-600 hover:text-emerald-600"
+              className="flex items-center space-x-1.5 px-2.5 py-1.5 hover:bg-neutral-50 rounded-lg transition-colors text-neutral-600 hover:text-emerald-600"
               onClick={(e) => {
                 e.stopPropagation();
                 onResumeVisit?.('album');
                 setShowResumeMenu(false);
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
-              <span className="text-[10px] tracking-widest uppercase font-bold">Upload from album</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+              <span className="text-[8px] tracking-widest uppercase font-bold">Upload</span>
             </button>
           </div>
         )}
 
       </div>
 
-      {onDeleteSession && (
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onDeleteSession();
-          }}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-neutral-100 backdrop-blur hover:bg-neutral-900 text-neutral-400 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 z-30 hover:scale-110 border border-neutral-200"
-          title="Delete Visit Record"
-        >
-          <span className="text-xs">✕</span>
-        </button>
-      )}
 
       <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
         <span className="text-[7px] tracking-[0.3em] uppercase font-bold text-neutral-400">
