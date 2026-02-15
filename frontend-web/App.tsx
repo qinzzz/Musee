@@ -488,20 +488,33 @@ const App: React.FC = () => {
 
   const getCurrentLocation = async (): Promise<{ latitude: number, longitude: number } | undefined> => {
     return new Promise((resolve) => {
+      let settled = false;
+      const resolveOnce = (value: { latitude: number, longitude: number } | undefined) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+
       if (!navigator.geolocation) {
-        resolve(undefined);
+        resolveOnce(undefined);
         return;
       }
+
+      // Don't block uploads on browsers that delay or suppress permission prompts.
+      const failFastTimer = window.setTimeout(() => resolveOnce(undefined), 1200);
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          window.clearTimeout(failFastTimer);
           const { latitude, longitude } = position.coords;
-          resolve({ latitude, longitude });
+          resolveOnce({ latitude, longitude });
         },
         (error) => {
+          window.clearTimeout(failFastTimer);
           console.warn('Geolocation error:', error);
-          resolve(undefined);
+          resolveOnce(undefined);
         },
-        { timeout: 10000, enableHighAccuracy: false }
+        { timeout: 1500, enableHighAccuracy: false }
       );
     });
   };
