@@ -921,6 +921,43 @@ const App: React.FC = () => {
           )}
         </div>
 
+        {/* Top Tab Bar — Gallery / Art Topography / Community */}
+        <div
+          className="fixed top-4 sm:top-8 left-1/2 -translate-x-1/2 z-40 flex items-center bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-sm px-1 py-1"
+          style={{ pointerEvents: 'auto' }}
+        >
+          {(
+            [
+              { label: 'Gallery', active: !communityMode && viewMode !== ViewMode.TOPOGRAPHY },
+              { label: 'Art Topography', active: !communityMode && viewMode === ViewMode.TOPOGRAPHY },
+              { label: 'Community', active: communityMode },
+            ] as const
+          ).map(({ label, active }) => (
+            <button
+              key={label}
+              onClick={() => {
+                if (label === 'Gallery') {
+                  setCommunityMode(false);
+                  if (viewMode === ViewMode.TOPOGRAPHY) setViewMode(ViewMode.GALLERY);
+                } else if (label === 'Art Topography') {
+                  setCommunityMode(false);
+                  setViewMode(ViewMode.TOPOGRAPHY);
+                } else {
+                  setCommunityMode(true);
+                  setViewMode(ViewMode.GALLERY);
+                }
+              }}
+              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-bold transition-all whitespace-nowrap ${
+                active
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-400 hover:text-neutral-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* 1. Status Pill — top center, informational only */}
         {(visit.active || filteredVisitId) && (
           <div className="fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 z-40 bg-neutral-900/80 backdrop-blur-md text-white px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-[8px] sm:text-[9px] tracking-[0.2em] uppercase flex items-center space-x-2 sm:space-x-3 shadow-xl border border-white/10" style={{ pointerEvents: 'none' }}>
@@ -1242,29 +1279,15 @@ const App: React.FC = () => {
         )}
 
         <Controls
-          activeView={
-            viewMode === ViewMode.TOPOGRAPHY ? 'topography' :
+          activeLayout={
             viewMode === ViewMode.GRID ? 'grid' :
-            viewMode === ViewMode.ALBUM ? 'album' :
-            communityMode ? 'community' : 'gallery'
+            viewMode === ViewMode.ALBUM ? 'album' : 'gallery'
           }
-          onChangeView={(nextView) => {
-            if (nextView === 'topography') {
-              setCommunityMode(false);
-              setViewMode(ViewMode.TOPOGRAPHY);
-            } else if (nextView === 'community') {
-              setViewMode(ViewMode.GALLERY);
-              setCommunityMode(true);
-            } else if (nextView === 'grid') {
-              setCommunityMode(false);
-              setViewMode(ViewMode.GRID);
-            } else if (nextView === 'album') {
-              setCommunityMode(false);
-              setViewMode(ViewMode.ALBUM);
-            } else {
-              setCommunityMode(false);
-              setViewMode(ViewMode.GALLERY);
-            }
+          onChangeLayout={(nextLayout) => {
+            setCommunityMode(false);
+            if (nextLayout === 'grid') setViewMode(ViewMode.GRID);
+            else if (nextLayout === 'album') setViewMode(ViewMode.ALBUM);
+            else setViewMode(ViewMode.GALLERY);
           }}
           onUpload={handleFileUpload}
           isAnalyzing={isAnalyzing}

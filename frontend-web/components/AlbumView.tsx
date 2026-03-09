@@ -128,7 +128,7 @@ const AlbumView: React.FC<Props> = ({ items, onInterpret, onDelete }) => {
                 {group.items.length} {group.items.length === 1 ? 'piece' : 'pieces'}
               </span>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1 sm:gap-1.5">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3.5">
               {group.items.map(item => (
                 <div
                   key={item.id + group.key}

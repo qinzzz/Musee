@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 interface Props {
-  activeView: 'gallery' | 'topography' | 'community' | 'grid' | 'album';
-  onChangeView: (view: 'gallery' | 'topography' | 'community' | 'grid' | 'album') => void;
+  activeLayout: 'gallery' | 'grid' | 'album';
+  onChangeLayout: (view: 'gallery' | 'grid' | 'album') => void;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   isAnalyzing: boolean;
   isVisitActive: boolean;
@@ -10,8 +10,8 @@ interface Props {
 }
 
 const Controls: React.FC<Props> = ({
-  activeView,
-  onChangeView,
+  activeLayout,
+  onChangeLayout,
   onUpload,
   isAnalyzing,
   isVisitActive,
@@ -41,7 +41,6 @@ const Controls: React.FC<Props> = ({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     onUpload(e);
-    // Allow same file selection consecutively
     e.target.value = '';
   };
 
@@ -85,8 +84,9 @@ const Controls: React.FC<Props> = ({
         disabled={isAnalyzing}
         multiple
       />
+
       {/* Visit Toggle */}
-      <button 
+      <button
         onClick={onToggleVisit}
         className={`
           group relative w-8 h-8 sm:w-12 sm:h-12 rounded-full border flex items-center justify-center transition-all duration-500
@@ -141,128 +141,48 @@ const Controls: React.FC<Props> = ({
         )}
       </div>
 
-      {/* View Rail */}
-      <div className="relative">
-        <div className="flex items-center space-x-2 bg-white/90 backdrop-blur-md border border-neutral-200 rounded-full px-2 py-1 shadow-lg overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => onChangeView('gallery')}
-            aria-label="Gallery"
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
-              activeView === 'gallery' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
-            }`}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={activeView === 'gallery' ? "white" : "currentColor"}
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => onChangeView('topography')}
-            aria-label="Topography"
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
-              activeView === 'topography' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
-            }`}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={activeView === 'topography' ? "white" : "currentColor"}
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-          </button>
-          {/* Grid view */}
-          <button
-            onClick={() => onChangeView('grid')}
-            aria-label="Grid"
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
-              activeView === 'grid' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
-            }`}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill={activeView === 'grid' ? 'white' : 'currentColor'}
-              stroke="none"
-            >
-              <circle cx="4.5" cy="4.5" r="2" />
-              <circle cx="12" cy="4.5" r="2" />
-              <circle cx="19.5" cy="4.5" r="2" />
-              <circle cx="4.5" cy="12" r="2" />
-              <circle cx="12" cy="12" r="2" />
-              <circle cx="19.5" cy="12" r="2" />
-              <circle cx="4.5" cy="19.5" r="2" />
-              <circle cx="12" cy="19.5" r="2" />
-              <circle cx="19.5" cy="19.5" r="2" />
-            </svg>
-          </button>
+      {/* Layout View Rail — corridor / grid / album */}
+      <div className="flex items-center space-x-1 bg-white/90 backdrop-blur-md border border-neutral-200 rounded-full px-2 py-1 shadow-lg">
+        {/* Corridor view */}
+        <button
+          onClick={() => onChangeLayout('gallery')}
+          aria-label="Corridor"
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
+            activeLayout === 'gallery' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
+          }`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="6" width="4" height="12" rx="1" /><rect x="10" y="3" width="4" height="18" rx="1" /><rect x="17" y="6" width="4" height="12" rx="1" />
+          </svg>
+        </button>
 
-          {/* Album view */}
-          <button
-            onClick={() => onChangeView('album')}
-            aria-label="Albums"
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
-              activeView === 'album' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
-            }`}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={activeView === 'album' ? 'white' : 'currentColor'}
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M3 5h18" />
-              <rect x="3" y="9" width="7" height="6" rx="1" />
-              <rect x="12" y="9" width="4" height="6" rx="1" />
-              <rect x="18" y="9" width="3" height="6" rx="1" />
-              <path d="M3 18h18" />
-            </svg>
-          </button>
+        {/* Grid view */}
+        <button
+          onClick={() => onChangeLayout('grid')}
+          aria-label="Grid"
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
+            activeLayout === 'grid' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
+          }`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill={activeLayout === 'grid' ? 'white' : 'currentColor'} stroke="none">
+            <circle cx="4.5" cy="4.5" r="2" /><circle cx="12" cy="4.5" r="2" /><circle cx="19.5" cy="4.5" r="2" />
+            <circle cx="4.5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19.5" cy="12" r="2" />
+            <circle cx="4.5" cy="19.5" r="2" /><circle cx="12" cy="19.5" r="2" /><circle cx="19.5" cy="19.5" r="2" />
+          </svg>
+        </button>
 
-          <button
-            onClick={() => onChangeView('community')}
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border flex items-center justify-center transition-colors ${
-              activeView === 'community' ? 'bg-neutral-900 border-neutral-900 text-white' : 'border-neutral-200 text-neutral-400 hover:text-neutral-700'
-            }`}
-            aria-label="Community"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={activeView === 'community' ? "white" : "currentColor"}
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <circle cx="5" cy="7" r="2" />
-              <circle cx="19" cy="7" r="2" />
-              <path d="M5 9v4a3 3 0 0 0 3 3h1" />
-              <path d="M19 9v4a3 3 0 0 1-3 3h-1" />
-              <path d="M8 18a4 4 0 0 1 8 0" />
-            </svg>
-          </button>
-        </div>
+        {/* Album view */}
+        <button
+          onClick={() => onChangeLayout('album')}
+          aria-label="Albums"
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
+            activeLayout === 'album' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
+          }`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 5h18" /><rect x="3" y="9" width="7" height="6" rx="1" /><rect x="12" y="9" width="4" height="6" rx="1" /><rect x="18" y="9" width="3" height="6" rx="1" /><path d="M3 18h18" />
+          </svg>
+        </button>
       </div>
     </div>
   );

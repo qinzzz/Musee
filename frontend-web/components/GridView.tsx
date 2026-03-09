@@ -20,7 +20,7 @@ const GridView: React.FC<Props> = ({ items, visit, filteredVisitId, isAnalyzing,
   return (
     <div className="w-full h-full overflow-y-auto">
       <div className="px-4 sm:px-10 pt-6 pb-32">
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-1.5 sm:gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-4">
           {displayItems.map(item => (
             <div
               key={item.id}
