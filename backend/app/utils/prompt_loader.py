@@ -235,6 +235,31 @@ def compose_prompt(identity_name: str, instruction_name: str, language: str = No
     return prompt
 
 
+@lru_cache(maxsize=1)
+def load_exhibition_chat_prompt() -> str:
+    """
+    Load the exhibition chat system prompt template from file.
+
+    Returns:
+        str: The prompt template text (contains {collection_summary} placeholder)
+    """
+    return _load_prompt_file(INSTRUCTIONS_DIR / "exhibition_chat.txt")
+
+
+def get_exhibition_chat_prompt(collection_summary: str) -> str:
+    """
+    Get the exhibition chat system prompt with collection summary injected.
+
+    Args:
+        collection_summary: Formatted string of the user's collection keywords
+
+    Returns:
+        str: The complete system prompt for exhibition chat
+    """
+    template = load_exhibition_chat_prompt()
+    return template.replace("{collection_summary}", collection_summary)
+
+
 def get_artist_identification_prompt_v2(identity: str = "default", language: str = None) -> str:
     """
     Get the artist identification prompt using composable system.

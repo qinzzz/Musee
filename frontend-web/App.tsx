@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { GalleryItem, ViewMode, NeighborItem, Message, Visit, TagCoordinate, Annotation } from './types';
+import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, Annotation, CuratorConversation } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import GoogleLogin from './components/GoogleLogin';
 import {
@@ -18,14 +18,12 @@ import {
 } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
-import TopographyView from './components/TopographyView';
-import NeighborSection from './components/NeighborSection';
 import Controls from './components/Controls';
 import InterpretationModal from './components/InterpretationModal';
 import ExhibitionHall from './components/ExhibitionHall';
 import EmptyWall from './components/EmptyWall';
-import GridView from './components/GridView';
-import AlbumView from './components/AlbumView';
+import UnderstandView from './components/UnderstandView';
+import OrganizeView from './components/OrganizeView';
 
 // Helper to report metrics (can integrate with @vercel/speed-insights or custom analytics)
 const reportStreamingMetrics = (metrics: StreamingMetrics) => {
@@ -220,7 +218,7 @@ const App: React.FC = () => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
-  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GALLERY);
+  const [activeTab, setActiveTab] = useState<'explore' | 'understand' | 'organize'>('explore');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showEntrance, setShowEntrance] = useState(false);
   const [interpretingItem, setInterpretingItem] = useState<{
@@ -241,12 +239,15 @@ const App: React.FC = () => {
     allVisitItems?: GalleryItem[]
   } | null>(null);
   const [exhibitionContext, setExhibitionContext] = useState<{ items: GalleryItem[], visitId?: string, initialMessage?: string } | null>(null);
+
+  // Curator conversation history — persisted to localStorage
+  const [curatorConversations, setCuratorConversations] = useState<CuratorConversation[]>(() => {
+    try { return JSON.parse(localStorage.getItem('musee_curator_conversations') || '[]'); }
+    catch { return []; }
+  });
   const [exhibitionInput, setExhibitionInput] = useState('');
   const [exhibitionInputFocused, setExhibitionInputFocused] = useState(false);
   const exhibitionInputRef = useRef<HTMLInputElement>(null);
-  const [neighborProximity, setNeighborProximity] = useState(0);
-  const neighborScrollProximityRef = useRef(0);
-  const [communityMode, setCommunityMode] = useState(false);
   const [galleryEdges, setGalleryEdges] = useState({ hasPrev: false, hasNext: false });
   const [activeThumbIndex, setActiveThumbIndex] = useState(0);
   const thumbStripRef = useRef<HTMLDivElement>(null);
@@ -255,6 +256,7 @@ const App: React.FC = () => {
   const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
   const handleLoginSuccess = (user: any) => {
@@ -404,10 +406,6 @@ const App: React.FC = () => {
     const maxScroll = scrollWidth - clientWidth;
     if (maxScroll <= 0) return;
     const progress = scrollLeft / maxScroll;
-    // Proximal glow starts feeling stronger as we reach the neighbor section
-    const proximity = Math.max(0, (progress - 0.7) / 0.3);
-    neighborScrollProximityRef.current = proximity;
-    setNeighborProximity(proximity);
     const edgeThreshold = 6;
     setGalleryEdges({
       hasPrev: scrollLeft > edgeThreshold,
@@ -462,15 +460,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (communityMode) {
-      setNeighborProximity(1);
-    } else {
-      setNeighborProximity(neighborScrollProximityRef.current);
-    }
-  }, [communityMode]);
-
-  useEffect(() => {
-    if (!scrollRef.current || communityMode) return;
+    if (!scrollRef.current || activeTab !== 'explore') return;
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
     const maxScroll = scrollWidth - clientWidth;
     const edgeThreshold = 6;
@@ -486,7 +476,7 @@ const App: React.FC = () => {
         thumbStripRef.current.scrollLeft = (scrollLeft / maxScroll) * thumbMax;
       }
     }
-  }, [items.length, isAnalyzing, filteredVisitId, communityMode, thumbEntries.length]);
+  }, [items.length, isAnalyzing, filteredVisitId, activeTab, thumbEntries.length]);
 
   const getCurrentLocation = async (): Promise<{ latitude: number, longitude: number } | undefined> => {
     return new Promise((resolve) => {
@@ -828,7 +818,7 @@ const App: React.FC = () => {
     <GoogleOAuthProvider clientId={googleClientId}>
       <div className="relative w-screen h-screen bg-[#fdfdfd] overflow-hidden flex flex-col transition-colors duration-1000">
         {/* User Auth Info */}
-        <div className="fixed top-4 sm:top-8 right-4 sm:right-8 z-50 flex items-center space-x-4">
+        <div className="fixed top-2 right-3 sm:right-4 z-50 flex items-center space-x-4">
           {currentUser ? (
             <div className="relative group">
               <button
@@ -921,42 +911,45 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Top Tab Bar — Gallery / Art Topography / Community */}
+        {/* Top Tab Bar — Explore / Understand / Organize */}
         <div
-          className="fixed top-4 sm:top-8 left-1/2 -translate-x-1/2 z-40 flex items-center bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-sm px-1 py-1"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-sm px-1 py-1"
           style={{ pointerEvents: 'auto' }}
         >
-          {(
-            [
-              { label: 'Gallery', active: !communityMode && viewMode !== ViewMode.TOPOGRAPHY },
-              { label: 'Art Topography', active: !communityMode && viewMode === ViewMode.TOPOGRAPHY },
-              { label: 'Community', active: communityMode },
-            ] as const
-          ).map(({ label, active }) => (
+          {(['explore', 'understand', 'organize'] as const).map(tab => (
             <button
-              key={label}
-              onClick={() => {
-                if (label === 'Gallery') {
-                  setCommunityMode(false);
-                  if (viewMode === ViewMode.TOPOGRAPHY) setViewMode(ViewMode.GALLERY);
-                } else if (label === 'Art Topography') {
-                  setCommunityMode(false);
-                  setViewMode(ViewMode.TOPOGRAPHY);
-                } else {
-                  setCommunityMode(true);
-                  setViewMode(ViewMode.GALLERY);
-                }
-              }}
-              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-bold transition-all whitespace-nowrap ${
-                active
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-3 sm:px-4 py-1 rounded-full text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-bold transition-all whitespace-nowrap ${
+                activeTab === tab
                   ? 'bg-neutral-900 text-white'
                   : 'text-neutral-400 hover:text-neutral-700'
               }`}
             >
-              {label}
+              {tab}
             </button>
           ))}
         </div>
+
+        {/* Sidebar toggle — same row as tab pill, left-aligned */}
+        {activeTab === 'understand' && (
+          <button
+            onClick={() => setSidebarOpen(p => !p)}
+            title={sidebarOpen ? 'Hide history' : 'Show history'}
+            className="fixed top-2 left-4 z-40 w-7 h-7 flex items-center justify-center rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+            style={{ pointerEvents: 'auto' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M9 3v18"/>
+            </svg>
+          </button>
+        )}
+
+        {/* Divider line — visible below tab pill on Understand / Organize */}
+        {activeTab !== 'explore' && (
+          <div className="fixed top-10 left-0 right-0 z-30 h-px bg-neutral-100" />
+        )}
 
         {/* 1. Status Pill — top center, informational only */}
         {(visit.active || filteredVisitId) && (
@@ -1041,17 +1034,40 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className={`relative z-10 flex-1 transition-all duration-700 ease-in-out ${(viewMode === ViewMode.TOPOGRAPHY || interpretingItem || exhibitionContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
-          {communityMode ? (
-            <div className="w-full h-full flex items-center justify-center px-6">
-              <NeighborSection neighbors={MOCK_NEIGHBORS} onInterpret={(work) => setInterpretingItem({ url: work.url, id: work.id, conversation: work.conversation, annotations: work.annotations })} />
-            </div>
-          ) : viewMode === ViewMode.GRID ? (
-            <GridView
+        <div className={`relative z-10 flex-1 transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-10'} ${(interpretingItem || exhibitionContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
+          {activeTab === 'understand' ? (
+            <UnderstandView
+              items={items}
+              sidebarOpen={sidebarOpen}
+              conversations={curatorConversations}
+              onSaveConversation={(convId, newMsgs, itemIds) => {
+                setCuratorConversations(prev => {
+                  const existing = prev.find(c => c.id === convId);
+                  const allMessages = existing ? [...existing.messages, ...newMsgs] : newMsgs;
+                  const title = allMessages.find(m => m.role === 'user')?.text?.slice(0, 60) ?? 'Conversation';
+                  const updated: CuratorConversation[] = existing
+                    ? prev.map(c => c.id === convId ? { ...c, messages: allMessages, title, updatedAt: Date.now() } : c)
+                    : [{ id: convId, title, messages: allMessages, itemIds, createdAt: Date.now(), updatedAt: Date.now() }, ...prev];
+                  localStorage.setItem('musee_curator_conversations', JSON.stringify(updated));
+                  return updated;
+                });
+              }}
+              onDeleteConversation={(id) => {
+                setCuratorConversations(prev => {
+                  const updated = prev.filter(c => c.id !== id);
+                  localStorage.setItem('musee_curator_conversations', JSON.stringify(updated));
+                  return updated;
+                });
+              }}
+            />
+          ) : activeTab === 'organize' ? (
+            <OrganizeView
               items={items}
               visit={visit}
               filteredVisitId={filteredVisitId}
               isAnalyzing={isAnalyzing}
+              tagPositions={tagPositions}
+              neighborItems={MOCK_NEIGHBORS}
               onInterpret={(item) => {
                 const activeId = filteredVisitId || (visit.active ? visit.id : null);
                 const sessionItems = activeId ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id))) : undefined;
@@ -1059,13 +1075,8 @@ const App: React.FC = () => {
               }}
               onDelete={handleDeleteItem}
             />
-          ) : viewMode === ViewMode.ALBUM ? (
-            <AlbumView
-              items={items}
-              onInterpret={(item) => setInterpretingItem({ ...item })}
-              onDelete={handleDeleteItem}
-            />
           ) : (
+            /* Explore tab — immersive corridor view */
             <div
               ref={scrollRef}
               onScroll={handleScroll}
@@ -1147,7 +1158,7 @@ const App: React.FC = () => {
               <div className="min-w-[5vw] sm:min-w-[30vw] h-full shrink-0" />
             </div>
           )}
-          {!communityMode && viewMode === ViewMode.GALLERY && thumbEntries.length > 0 && (
+          {activeTab === 'explore' && thumbEntries.length > 0 && (
             <div
               className="fixed left-1/2 -translate-x-1/2 z-50 w-40 sm:w-52 pointer-events-auto"
               style={{ bottom: 'max(calc(env(safe-area-inset-bottom, 0px) + 8.25rem), 9rem)' }}
@@ -1190,12 +1201,6 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
-
-        {items.length > 0 && viewMode === ViewMode.TOPOGRAPHY && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center p-12 bg-white/80 backdrop-blur-md animate-in fade-in duration-500">
-            <TopographyView items={items} cachedTagMap={tagPositions} neighborItems={MOCK_NEIGHBORS} onClose={() => setViewMode(ViewMode.GALLERY)} />
-          </div>
-        )}
 
         {interpretingItem && (
           <InterpretationModal
@@ -1278,22 +1283,14 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <Controls
-          activeLayout={
-            viewMode === ViewMode.GRID ? 'grid' :
-            viewMode === ViewMode.ALBUM ? 'album' : 'gallery'
-          }
-          onChangeLayout={(nextLayout) => {
-            setCommunityMode(false);
-            if (nextLayout === 'grid') setViewMode(ViewMode.GRID);
-            else if (nextLayout === 'album') setViewMode(ViewMode.ALBUM);
-            else setViewMode(ViewMode.GALLERY);
-          }}
-          onUpload={handleFileUpload}
-          isAnalyzing={isAnalyzing}
-          isVisitActive={visit.active}
-          onToggleVisit={visit.active ? handleEndVisit : handleStartVisit}
-        />
+        {activeTab === 'explore' && (
+          <Controls
+            onUpload={handleFileUpload}
+            isAnalyzing={isAnalyzing}
+            isVisitActive={visit.active}
+            onToggleVisit={visit.active ? handleEndVisit : handleStartVisit}
+          />
+        )}
 
       </div>
     </GoogleOAuthProvider>

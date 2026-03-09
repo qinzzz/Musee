@@ -10,7 +10,8 @@ from app.models.artwork import AIProvider
 from app.utils.prompt_loader import (
     get_artist_identification_prompt_v2,
     get_artwork_bite_prompt_v2,
-    get_suggest_topics_prompt_v2
+    get_suggest_topics_prompt_v2,
+    get_exhibition_chat_prompt
 )
 from app.services.ai_client_interface import AIClientInterface
 import anyio
@@ -166,14 +167,7 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
                 lines.append(f"{idx}. Keywords: {keywords}")
             collection_summary = "\n".join(lines)
 
-        return (
-            "You are the Lead Curator of 'Musee'. "
-            "Guide the visitor through the current exhibition, weaving connections, contrasts, and overarching narratives. "
-            "Balance poetic tone with concrete observations, and invite the visitor to look closer.\n\n"
-            f"Collection overview (keywords only):\n{collection_summary}\n\n"
-            "When responding: (1) reference specific works by their described motifs, (2) synthesize relationships across the set, "
-            "(3) end with either a reflective thought or a prompt that keeps the dialogue flowing."
-        )
+        return get_exhibition_chat_prompt(collection_summary)
 
     @staticmethod
     def build_conversation_history(history: Optional[List[Dict[str, str]]]) -> List[ConversationMessage]:

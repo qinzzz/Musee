@@ -54,6 +54,15 @@ export interface Visit {
   globalConversation: Message[];
 }
 
+export interface CuratorConversation {
+  id: string;
+  title: string;          // First user message, truncated to 60 chars
+  messages: Message[];
+  itemIds: string[];      // Artwork IDs in context when conversation started
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface NeighborWork {
   id: string;
   url: string;
