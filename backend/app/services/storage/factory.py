@@ -5,6 +5,7 @@ from enum import Enum
 from .base import StorageService
 from .local_storage import LocalStorageService
 from .vercel_blob_storage import VercelBlobStorageService
+from .r2_storage import R2StorageService
 from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 class StorageType(str, Enum):
     LOCAL = "local"
     VERCEL_BLOB = "vercel_blob"
+    R2 = "r2"
 
 
 class StorageFactory:
@@ -39,6 +41,8 @@ class StorageFactory:
                 cls._instances[storage_type] = LocalStorageService()
             elif storage_type == StorageType.VERCEL_BLOB:
                 cls._instances[storage_type] = VercelBlobStorageService()
+            elif storage_type == StorageType.R2:
+                cls._instances[storage_type] = R2StorageService()
             else:
                 raise ValueError(f"Unknown storage type: {storage_type}")
 
@@ -57,7 +61,12 @@ class StorageFactory:
         Returns:
             StorageService that manages this URI, or None
         """
-        # Check Vercel Blob first (more specific pattern)
+        # Check R2 first (most specific pattern — public URL prefix)
+        r2_service = R2StorageService()
+        if r2_service.is_managed_uri(uri):
+            return cls.get_service(StorageType.R2)
+
+        # Check Vercel Blob
         blob_service = VercelBlobStorageService()
         if blob_service.is_managed_uri(uri):
             return cls.get_service(StorageType.VERCEL_BLOB)
