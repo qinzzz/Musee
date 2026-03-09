@@ -1534,6 +1534,14 @@ async def update_artwork(
             artwork.analysis = request.analysis
         if request.params is not None:
             artwork.params = request.params
+        # Merge convenience date/medium fields into params
+        if request.date is not None or request.medium is not None:
+            current_params = dict(artwork.params) if isinstance(artwork.params, dict) else {}
+            if request.date is not None:
+                current_params['date'] = request.date
+            if request.medium is not None:
+                current_params['medium'] = request.medium
+            artwork.params = current_params
         if request.tags is not None:
             batch_link_tags(db, artwork, request.tags)
 

@@ -114,6 +114,70 @@ npm run dev
 
 Frontend dev server runs on port 3000, proxied to backend at localhost:8000.
 
+## Deploying from CLI
+
+### Vercel (Frontend)
+
+```bash
+# First time: link to existing project
+cd frontend-web
+vercel link  # select "qzone" team → "musee-web" project
+
+# Deploy to preview
+vercel
+
+# Deploy to production
+vercel --prod
+
+# Check deployment status
+vercel ls
+```
+
+### Vercel Environment Variables (CLI)
+
+```bash
+# List current env vars
+vercel env ls
+
+# Add/update a variable (will prompt for value)
+vercel env add VITE_API_BASE_URL production
+
+# Remove a variable
+vercel env rm VITE_API_BASE_URL production
+
+# Pull env vars to local .env file
+vercel env pull .env.local
+```
+
+Scopes: `production`, `preview`, `development` (or omit for all).
+
+After changing env vars, redeploy for changes to take effect:
+```bash
+vercel --prod
+```
+
+### Railway (Backend)
+
+```bash
+# Install
+brew install railway
+
+# Login & link to project
+railway login
+railway link  # select musee-backend project
+
+# Deploy
+railway up
+
+# Set env vars
+railway variables set ENV=prod OPENAI_API_KEY=sk-... SECRET_KEY=your-secret
+
+# View current vars
+railway variables
+```
+
+Or use the dashboard Variables tab: https://railway.com/project/55fc7d9e-bfa1-4f91-b384-480bceff6ac3 (supports bulk paste in `KEY=value` format).
+
 ## Environment Variables Reference
 
 | Variable | Required | Default | Description |

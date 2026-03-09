@@ -906,8 +906,36 @@ export async function fetchUserArtworks(userId: string): Promise<any> {
 }
 
 /**
+ * Update artwork metadata (artist, title, date, medium, tags)
+ */
+export async function updateArtwork(
+  artworkId: string,
+  updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; tags?: string }
+): Promise<any> {
+  const body: Record<string, string> = {};
+  if (updates.artistName !== undefined) body.artist_name = updates.artistName;
+  if (updates.artworkName !== undefined) body.artwork_name = updates.artworkName;
+  if (updates.date !== undefined) body.date = updates.date;
+  if (updates.medium !== undefined) body.medium = updates.medium;
+  if (updates.tags !== undefined) body.tags = updates.tags;
+
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}
+
+/**
  * Delete a saved artwork
- * 
+ *
  * @param artworkId - The ID of the artwork to delete
  * @returns Status message
  */

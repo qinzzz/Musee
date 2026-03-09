@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Message, Annotation } from '../types';
-import { chatWithArtwork, chatWithArtworkStream, base64ToFile, getTagExplanation, suggestTopics } from '../apiService';
+import { chatWithArtwork, chatWithArtworkStream, base64ToFile, getTagExplanation, suggestTopics, updateArtwork } from '../apiService';
+import pencilIcon from '../assets/pencil-line.svg';
 
 interface Props {
   item: {
@@ -26,6 +27,7 @@ interface Props {
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
   onUpdateAnnotations: (annotations: Annotation[]) => void;
+  onUpdateMetadata?: (id: string, updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => void;
   onDelete?: (id: string) => void;
   sessionId?: string;
   allVisitItems?: any[];
@@ -86,7 +88,8 @@ const HoverTag: React.FC<{
   );
 };
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onDelete, sessionId, allVisitItems, onNavigate }) => {
+
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onUpdateMetadata, onDelete, sessionId, allVisitItems, onNavigate }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -101,6 +104,21 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+
+  // Inline editing state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValues, setEditValues] = useState({
+    artist: item.artistName || '',
+    title: item.artworkName || '',
+    date: item.date || '',
+    medium: item.medium || '',
+  });
+  const [editTags, setEditTags] = useState<string[]>(item.keywords || []);
+  const [tagInput, setTagInput] = useState('');
+  const [isSavingField, setIsSavingField] = useState(false);
+  const originalValuesRef = useRef(editValues);
+  const originalTagsRef = useRef<string[]>(item.keywords || []);
+  const firstEditInputRef = useRef<HTMLInputElement>(null);
 
   const displayLocation = React.useMemo(() => {
     if (!item.location) return null;
@@ -224,7 +242,20 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setSuggestedTopics([]); // Reset suggestions for the new item
     setShowMetadata(true); // Default to showing metadata for the new piece
     setMobileSection('analysis'); // Reset to analysis view
-  }, [item.id, item.conversation]);
+    setIsEditing(false);
+    setTagInput('');
+    const vals = {
+      artist: item.artistName || '',
+      title: item.artworkName || '',
+      date: item.date || '',
+      medium: item.medium || '',
+    };
+    const tags = item.keywords || [];
+    setEditValues(vals);
+    setEditTags(tags);
+    originalValuesRef.current = vals;
+    originalTagsRef.current = tags;
+  }, [item.id]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -269,6 +300,62 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const displayDate = streamingFields?.date || item.date;
   const displayMedium = streamingFields?.medium || item.medium;
   const displayDescription = streamingFields?.description || item.description;
+
+  // Focus first input when entering edit mode
+  useEffect(() => {
+    if (isEditing) firstEditInputRef.current?.focus();
+  }, [isEditing]);
+
+  const startEditing = () => {
+    if (item.isAnalyzing || !item.artworkId) return;
+    originalValuesRef.current = { ...editValues };
+    originalTagsRef.current = [...editTags];
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditValues(originalValuesRef.current);
+    setEditTags(originalTagsRef.current);
+    setTagInput('');
+    setIsEditing(false);
+  };
+
+  const saveAllFields = async () => {
+    if (!item.artworkId || isSavingField) return;
+    // Commit any pending tag input before saving
+    const finalTags = tagInput.trim()
+      ? [...editTags, tagInput.trim().startsWith('#') ? tagInput.trim() : `#${tagInput.trim()}`]
+      : editTags;
+    setTagInput('');
+    setEditTags(finalTags);
+    setIsEditing(false);
+    const orig = originalValuesRef.current;
+    const origTags = originalTagsRef.current;
+    const apiUpdates: Record<string, any> = {};
+    if (editValues.artist.trim() !== orig.artist) apiUpdates.artistName = editValues.artist.trim();
+    if (editValues.title.trim() !== orig.title) apiUpdates.artworkName = editValues.title.trim();
+    if (editValues.date.trim() !== orig.date) apiUpdates.date = editValues.date.trim();
+    if (editValues.medium.trim() !== orig.medium) apiUpdates.medium = editValues.medium.trim();
+    const tagsChanged = JSON.stringify(finalTags.slice().sort()) !== JSON.stringify(origTags.slice().sort());
+    if (tagsChanged) apiUpdates.tags = finalTags.join(',');
+    if (Object.keys(apiUpdates).length === 0) return;
+    try {
+      setIsSavingField(true);
+      await updateArtwork(item.artworkId, apiUpdates);
+      const metaUpdate: any = { ...apiUpdates };
+      if (tagsChanged) metaUpdate.keywords = finalTags;
+      onUpdateMetadata?.(item.id, metaUpdate);
+    } catch (e) {
+      console.error('Failed to save metadata:', e);
+    } finally {
+      setIsSavingField(false);
+    }
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') { e.preventDefault(); saveAllFields(); }
+    if (e.key === 'Escape') { cancelEditing(); }
+  };
 
   const fetchSuggestions = async (currentMessages: Message[]) => {
     if (!item.artistName || !item.artworkName) return;
@@ -594,6 +681,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               )}
 
               <div className="max-w-xl mx-auto space-y-4 sm:space-y-8">
+
                 {/* Analyzing indicator */}
                 {item.isAnalyzing && (
                   <div className="flex items-center space-x-3 pb-2">
@@ -633,14 +721,62 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
                 {displayArtist && (
                   <div>
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Artist</p>
-                    <p className="text-[17px] sm:text-[24px] font-medium text-neutral-900 tracking-tight leading-tight">{displayArtist}</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Artist</p>
+                      {!item.isAnalyzing && item.artworkId && (
+                        isEditing ? (
+                          <div className="flex items-center space-x-3">
+                            <button
+                              onClick={cancelEditing}
+                              className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors"
+                            >Cancel</button>
+                            <button
+                              onClick={saveAllFields}
+                              disabled={isSavingField}
+                              className="text-[9px] tracking-[0.3em] uppercase text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
+                            >{isSavingField ? 'Saving…' : 'Save'}</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={startEditing}
+                            className="group opacity-40 hover:opacity-80 transition-opacity"
+                            title="Edit artwork info"
+                          >
+                            <img src={pencilIcon} width="15" height="15" alt="Edit" />
+                          </button>
+                        )
+                      )}
+                    </div>
+                    {isEditing ? (
+                      <input
+                        ref={firstEditInputRef}
+                        value={editValues.artist}
+                        onChange={e => setEditValues(v => ({ ...v, artist: e.target.value }))}
+                        onKeyDown={handleEditKeyDown}
+                        className="text-[17px] sm:text-[24px] font-medium text-neutral-900 tracking-tight leading-tight bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
+                      />
+                    ) : (
+                      <p className="text-[17px] sm:text-[24px] font-medium text-neutral-900 tracking-tight leading-tight">
+                        {editValues.artist || displayArtist}
+                      </p>
+                    )}
                   </div>
                 )}
                 {displayTitle && (
                   <div>
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Title</p>
-                    <p className="text-[15px] sm:text-[22px] font-serif italic text-neutral-700 leading-tight">{displayTitle}</p>
+                    {isEditing ? (
+                      <input
+                        value={editValues.title}
+                        onChange={e => setEditValues(v => ({ ...v, title: e.target.value }))}
+                        onKeyDown={handleEditKeyDown}
+                        className="text-[15px] sm:text-[22px] font-serif italic text-neutral-700 leading-tight bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
+                      />
+                    ) : (
+                      <p className="text-[15px] sm:text-[22px] font-serif italic text-neutral-700 leading-tight">
+                        {editValues.title || displayTitle}
+                      </p>
+                    )}
                   </div>
                 )}
                 {(displayDate || displayMedium) && (
@@ -648,13 +784,37 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     {displayDate && (
                       <div>
                         <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Date</p>
-                        <p className="text-[14px] text-neutral-600">{formatDisplayDate(displayDate)}</p>
+                        {isEditing ? (
+                          <input
+                            value={editValues.date}
+                            onChange={e => setEditValues(v => ({ ...v, date: e.target.value }))}
+                            onKeyDown={handleEditKeyDown}
+                            placeholder="e.g. 1889"
+                            className="text-[14px] text-neutral-600 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 w-32"
+                          />
+                        ) : (
+                          <p className="text-[14px] text-neutral-600">
+                            {editValues.date ? formatDisplayDate(editValues.date) : formatDisplayDate(displayDate)}
+                          </p>
+                        )}
                       </div>
                     )}
                     {displayMedium && (
                       <div>
                         <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Medium</p>
-                        <p className="text-[14px] text-neutral-600">{displayMedium}</p>
+                        {isEditing ? (
+                          <input
+                            value={editValues.medium}
+                            onChange={e => setEditValues(v => ({ ...v, medium: e.target.value }))}
+                            onKeyDown={handleEditKeyDown}
+                            placeholder="e.g. Oil on canvas"
+                            className="text-[14px] text-neutral-600 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 w-48"
+                          />
+                        ) : (
+                          <p className="text-[14px] text-neutral-600">
+                            {editValues.medium || displayMedium}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -672,18 +832,52 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     </div>
                   </div>
                 )}
-                {!item.isAnalyzing && item.keywords && item.keywords.length > 0 && (
+                {!item.isAnalyzing && (editTags.length > 0 || isEditing) && (
                   <div className="pt-2">
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Tags</p>
-                    <div className="flex flex-wrap gap-2">
-                      {item.keywords.map((tag, idx) => (
-                        <HoverTag
-                          key={idx}
-                          tag={tag}
-                          artworkId={item.artworkId}
+                    {isEditing ? (
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {editTags.map((tag, idx) => (
+                          <span
+                            key={idx}
+                            className="flex items-center gap-1 text-[10px] tracking-wide text-neutral-500 bg-neutral-50 pl-3 pr-1.5 py-1 rounded-full border border-neutral-200"
+                          >
+                            {tag}
+                            <button
+                              onClick={() => setEditTags(prev => prev.filter((_, i) => i !== idx))}
+                              className="w-4 h-4 flex items-center justify-center text-neutral-400 hover:text-neutral-700 rounded-full hover:bg-neutral-200 transition-colors"
+                              title="Remove tag"
+                            >×</button>
+                          </span>
+                        ))}
+                        <input
+                          value={tagInput}
+                          onChange={e => setTagInput(e.target.value)}
+                          onKeyDown={e => {
+                            if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
+                              e.preventDefault();
+                              const newTag = tagInput.trim().startsWith('#') ? tagInput.trim() : `#${tagInput.trim()}`;
+                              setEditTags(prev => [...prev, newTag]);
+                              setTagInput('');
+                            } else if (e.key === 'Escape') {
+                              cancelEditing();
+                            }
+                          }}
+                          placeholder="add tag…"
+                          className="text-[10px] text-neutral-500 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 min-w-[70px] w-24 py-1"
                         />
-                      ))}
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {editTags.map((tag, idx) => (
+                          <HoverTag
+                            key={idx}
+                            tag={tag}
+                            artworkId={item.artworkId}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

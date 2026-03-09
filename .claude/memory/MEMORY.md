@@ -16,6 +16,7 @@ See [CLAUDE.md](/Users/qinzzz/Musee/CLAUDE.md) for project overview, key files, 
 - No new .md files unless asked; prepend to CHANGE_LOG.md for important changes
 - Keep solutions simple, avoid over-engineering
 - Check existing code before adding features (e.g., backend already had `language` param)
+- **Do not use worktrees** — work directly in `/Users/qinzzz/Musee/`
 
 ## Detail Files
 - [project.md](project.md) — Full architecture, component inventory, DB models, SSE protocol
