@@ -71,5 +71,7 @@ export interface NeighborItem {
 
 export enum ViewMode {
   GALLERY = 'gallery',
-  TOPOGRAPHY = 'topography'
+  TOPOGRAPHY = 'topography',
+  GRID = 'grid',
+  ALBUM = 'album'
 }
