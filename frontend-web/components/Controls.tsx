@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 interface Props {
-  activeView: 'gallery' | 'topography' | 'community';
-  onChangeView: (view: 'gallery' | 'topography' | 'community') => void;
+  activeView: 'gallery' | 'topography' | 'community' | 'grid' | 'album';
+  onChangeView: (view: 'gallery' | 'topography' | 'community' | 'grid' | 'album') => void;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   isAnalyzing: boolean;
   isVisitActive: boolean;
@@ -184,6 +184,59 @@ const Controls: React.FC<Props> = ({
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
           </button>
+          {/* Grid view */}
+          <button
+            onClick={() => onChangeView('grid')}
+            aria-label="Grid"
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
+              activeView === 'grid' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
+            }`}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill={activeView === 'grid' ? 'white' : 'currentColor'}
+              stroke="none"
+            >
+              <circle cx="4.5" cy="4.5" r="2" />
+              <circle cx="12" cy="4.5" r="2" />
+              <circle cx="19.5" cy="4.5" r="2" />
+              <circle cx="4.5" cy="12" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="19.5" cy="12" r="2" />
+              <circle cx="4.5" cy="19.5" r="2" />
+              <circle cx="12" cy="19.5" r="2" />
+              <circle cx="19.5" cy="19.5" r="2" />
+            </svg>
+          </button>
+
+          {/* Album view */}
+          <button
+            onClick={() => onChangeView('album')}
+            aria-label="Albums"
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors ${
+              activeView === 'album' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-700'
+            }`}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={activeView === 'album' ? 'white' : 'currentColor'}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 5h18" />
+              <rect x="3" y="9" width="7" height="6" rx="1" />
+              <rect x="12" y="9" width="4" height="6" rx="1" />
+              <rect x="18" y="9" width="3" height="6" rx="1" />
+              <path d="M3 18h18" />
+            </svg>
+          </button>
+
           <button
             onClick={() => onChangeView('community')}
             className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border flex items-center justify-center transition-colors ${

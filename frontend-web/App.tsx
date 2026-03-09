@@ -24,6 +24,8 @@ import Controls from './components/Controls';
 import InterpretationModal from './components/InterpretationModal';
 import ExhibitionHall from './components/ExhibitionHall';
 import EmptyWall from './components/EmptyWall';
+import GridView from './components/GridView';
+import AlbumView from './components/AlbumView';
 
 // Helper to report metrics (can integrate with @vercel/speed-insights or custom analytics)
 const reportStreamingMetrics = (metrics: StreamingMetrics) => {
@@ -998,7 +1000,30 @@ const App: React.FC = () => {
         )}
 
         <div className={`relative z-10 flex-1 transition-all duration-700 ease-in-out ${(viewMode === ViewMode.TOPOGRAPHY || interpretingItem || exhibitionContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
-          {!communityMode ? (
+          {communityMode ? (
+            <div className="w-full h-full flex items-center justify-center px-6">
+              <NeighborSection neighbors={MOCK_NEIGHBORS} onInterpret={(work) => setInterpretingItem({ url: work.url, id: work.id, conversation: work.conversation, annotations: work.annotations })} />
+            </div>
+          ) : viewMode === ViewMode.GRID ? (
+            <GridView
+              items={items}
+              visit={visit}
+              filteredVisitId={filteredVisitId}
+              isAnalyzing={isAnalyzing}
+              onInterpret={(item) => {
+                const activeId = filteredVisitId || (visit.active ? visit.id : null);
+                const sessionItems = activeId ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id))) : undefined;
+                setInterpretingItem({ ...item, visitId: item.visitId, allVisitItems: sessionItems });
+              }}
+              onDelete={handleDeleteItem}
+            />
+          ) : viewMode === ViewMode.ALBUM ? (
+            <AlbumView
+              items={items}
+              onInterpret={(item) => setInterpretingItem({ ...item })}
+              onDelete={handleDeleteItem}
+            />
+          ) : (
             <div
               ref={scrollRef}
               onScroll={handleScroll}
@@ -1079,12 +1104,8 @@ const App: React.FC = () => {
 
               <div className="min-w-[5vw] sm:min-w-[30vw] h-full shrink-0" />
             </div>
-          ) : (
-            <div className="w-full h-full flex items-center justify-center px-6">
-              <NeighborSection neighbors={MOCK_NEIGHBORS} onInterpret={(work) => setInterpretingItem({ url: work.url, id: work.id, conversation: work.conversation, annotations: work.annotations })} />
-            </div>
           )}
-          {!communityMode && thumbEntries.length > 0 && (
+          {!communityMode && viewMode === ViewMode.GALLERY && thumbEntries.length > 0 && (
             <div
               className="fixed left-1/2 -translate-x-1/2 z-50 w-40 sm:w-52 pointer-events-auto"
               style={{ bottom: 'max(calc(env(safe-area-inset-bottom, 0px) + 8.25rem), 9rem)' }}
@@ -1215,7 +1236,12 @@ const App: React.FC = () => {
         )}
 
         <Controls
-          activeView={viewMode === ViewMode.TOPOGRAPHY ? 'topography' : (communityMode ? 'community' : 'gallery')}
+          activeView={
+            viewMode === ViewMode.TOPOGRAPHY ? 'topography' :
+            viewMode === ViewMode.GRID ? 'grid' :
+            viewMode === ViewMode.ALBUM ? 'album' :
+            communityMode ? 'community' : 'gallery'
+          }
           onChangeView={(nextView) => {
             if (nextView === 'topography') {
               setCommunityMode(false);
@@ -1223,6 +1249,12 @@ const App: React.FC = () => {
             } else if (nextView === 'community') {
               setViewMode(ViewMode.GALLERY);
               setCommunityMode(true);
+            } else if (nextView === 'grid') {
+              setCommunityMode(false);
+              setViewMode(ViewMode.GRID);
+            } else if (nextView === 'album') {
+              setCommunityMode(false);
+              setViewMode(ViewMode.ALBUM);
             } else {
               setCommunityMode(false);
               setViewMode(ViewMode.GALLERY);
