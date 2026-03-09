@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import ExifReader from 'exifreader';
 import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, Annotation, CuratorConversation } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import GoogleLogin from './components/GoogleLogin';
@@ -256,7 +257,7 @@ const App: React.FC = () => {
   const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
   const handleLoginSuccess = (user: any) => {
@@ -478,6 +479,91 @@ const App: React.FC = () => {
     }
   }, [items.length, isAnalyzing, filteredVisitId, activeTab, thumbEntries.length]);
 
+  /* ── EXIF GPS: read lat/lon from image file metadata ─────── */
+  const readExifGps = async (file: File): Promise<{ latitude: number; longitude: number } | undefined> => {
+    try {
+      const tags = await ExifReader.load(file, { expanded: true });
+      const lat = tags.gps?.Latitude;
+      const lon = tags.gps?.Longitude;
+      if (typeof lat === 'number' && typeof lon === 'number') {
+        return { latitude: lat, longitude: lon };
+      }
+    } catch {
+      // No EXIF or no GPS tag — silently ignore
+    }
+    return undefined;
+  };
+
+  /* ── Nominatim + Overpass museum resolution ─────────────── */
+  const MUSEUM_OSM_VALUES = new Set(['museum', 'gallery', 'arts_centre', 'art_gallery', 'exhibition_centre']);
+
+  const findMuseumNearby = async (lat: number, lon: number, radius = 400): Promise<string> => {
+    const query =
+      `[out:json][timeout:6];` +
+      `(node["tourism"~"^(museum|gallery|arts_centre)$"](around:${radius},${lat},${lon});` +
+      `way["tourism"~"^(museum|gallery|arts_centre)$"](around:${radius},${lat},${lon});` +
+      `relation["tourism"~"^(museum|gallery|arts_centre)$"](around:${radius},${lat},${lon}););` +
+      `out center;`; // no limit — pick the closest ourselves
+    try {
+      const res = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: new URLSearchParams({ data: query }),
+      });
+      const json = await res.json();
+      const elements: any[] = json.elements ?? [];
+      if (!elements.length) return '';
+      // Overpass returns results in OSM-ID order, not by proximity.
+      // Nodes have top-level lat/lon; ways/relations get a synthetic "center" from `out center`.
+      const distSq = (el: any) => {
+        const c = el.center ?? el;
+        const dlat = (c.lat ?? lat) - lat;
+        const dlon = (c.lon ?? lon) - lon;
+        return dlat * dlat + dlon * dlon;
+      };
+      const nearest = elements.reduce((a: any, b: any) => distSq(a) <= distSq(b) ? a : b);
+      return nearest.tags?.name ?? '';
+    } catch {
+      return '';
+    }
+  };
+
+  const resolveMuseum = async (
+    lat: number,
+    lon: number
+  ): Promise<{ city: string; country: string; museum: string }> => {
+    let city = '', country = '', museum = '';
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=jsonv2`,
+        { headers: { 'User-Agent': 'Musee-App/1.0' } }
+      );
+      const data = await res.json();
+      const addr = data.address ?? {};
+      city = addr.city ?? addr.town ?? addr.village ?? addr.county ?? '';
+      country = addr.country ?? '';
+
+      // data.type = OSM tag value ("museum", "tertiary", etc.)
+      // addr.tourism = venue name when tagged as tourism=museum
+      const osmType = (data.type ?? '').toLowerCase();
+      const tourismTag = (addr.tourism ?? '').toLowerCase();
+      const amenityTag = (addr.amenity ?? '').toLowerCase();
+      if (MUSEUM_OSM_VALUES.has(osmType)) {
+        museum = data.name ?? addr.tourism ?? '';
+      } else if (MUSEUM_OSM_VALUES.has(tourismTag) || MUSEUM_OSM_VALUES.has(amenityTag)) {
+        museum = addr.tourism ?? addr.amenity ?? data.name ?? '';
+      }
+    } catch {
+      // Nominatim failed — fall through to Overpass
+    }
+
+    // Overpass fallback: GPS may have landed on a road inside a museum campus
+    if (!museum) {
+      museum = await findMuseumNearby(lat, lon);
+    }
+
+    return { city, country, museum };
+  };
+
   const getCurrentLocation = async (): Promise<{ latitude: number, longitude: number } | undefined> => {
     return new Promise((resolve) => {
       let settled = false;
@@ -511,8 +597,11 @@ const App: React.FC = () => {
     });
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('handleFileUpload called');
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    mode: 'gallery' | 'camera' = 'camera'
+  ) => {
+    console.log('handleFileUpload called', mode);
     const files = Array.from(event.target.files || []);
     console.log('Files selected:', files.length);
     if (files.length === 0) return;
@@ -525,8 +614,10 @@ const App: React.FC = () => {
       const file = files[0];
       const newItemId = Math.random().toString(36).substring(2, 11);
 
-      // Get location coordinates
-      const coords = await getCurrentLocation();
+      // Get location: EXIF GPS for gallery imports, device GPS for camera/visit
+      const coords = mode === 'gallery'
+        ? await readExifGps(file)
+        : await getCurrentLocation();
       const photoTime = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
       try {
@@ -560,6 +651,14 @@ const App: React.FC = () => {
 
         setItems(prev => [placeholderItem, ...prev]);
         if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+
+        // Background museum resolution — update location once Nominatim responds
+        if (coords) {
+          resolveMuseum(coords.latitude, coords.longitude).then(({ city, country, museum }) => {
+            const resolved = JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city, country, museum });
+            setItems(prev => prev.map(item => item.id === newItemId ? { ...item, location: resolved } : item));
+          });
+        }
 
         // Open modal immediately
         setInterpretingItem({
@@ -648,8 +747,7 @@ const App: React.FC = () => {
     }
     // Batch upload: Keep current background processing implementation
     else {
-      // Get location once for the batch
-      const coords = await getCurrentLocation();
+      // Batch is always gallery import — read EXIF per file (each photo may have its own location)
       const photoTime = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
       files.forEach(async (file) => {
@@ -657,6 +755,9 @@ const App: React.FC = () => {
         const newItemId = Math.random().toString(36).substring(2, 11);
 
         try {
+          // Read EXIF GPS per file
+          const coords = await readExifGps(file);
+
           const base64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target?.result as string);
@@ -687,6 +788,14 @@ const App: React.FC = () => {
 
           setItems(prev => [placeholderItem, ...prev]);
           if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+
+          // Background museum resolution per file
+          if (coords) {
+            resolveMuseum(coords.latitude, coords.longitude).then(({ city, country, museum }) => {
+              const resolved = JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city, country, museum });
+              setItems(prev => prev.map(item => item.id === newItemId ? { ...item, location: resolved } : item));
+            });
+          }
 
           const analysis = await analyzeArtwork(
             file,
@@ -1039,6 +1148,7 @@ const App: React.FC = () => {
             <UnderstandView
               items={items}
               sidebarOpen={sidebarOpen}
+              onCloseSidebar={() => setSidebarOpen(false)}
               conversations={curatorConversations}
               onSaveConversation={(convId, newMsgs, itemIds) => {
                 setCuratorConversations(prev => {
@@ -1234,7 +1344,7 @@ const App: React.FC = () => {
           type="file"
           className="hidden"
           accept="image/*"
-          onChange={handleFileUpload}
+          onChange={e => handleFileUpload(e, 'gallery')}
           multiple
         />
         <input
@@ -1243,7 +1353,7 @@ const App: React.FC = () => {
           className="hidden"
           accept="image/*"
           capture="environment"
-          onChange={handleFileUpload}
+          onChange={e => handleFileUpload(e, 'camera')}
         />
 
         {/* Delete Confirmation Modal */}

@@ -131,38 +131,101 @@ def _format_exif_date(date_str):
     except Exception:
         return date_str
 
+_MUSEUM_OSM_VALUES = {"museum", "gallery", "arts_centre", "art_gallery", "exhibition_centre"}
+
+async def _find_museum_nearby(lat: float, lon: float, radius: int = 400) -> str:
+    """
+    Overpass API fallback: search for a museum/gallery within `radius` metres.
+    Returns the name of the NEAREST result by distance to (lat, lon).
+    Overpass returns results in internal OSM-ID order (not by proximity), so we
+    fetch all candidates and sort ourselves.
+    """
+    query = (
+        f"[out:json][timeout:6];"
+        f"("
+        f'node["tourism"~"^(museum|gallery|arts_centre)$"](around:{radius},{lat},{lon});'
+        f'way["tourism"~"^(museum|gallery|arts_centre)$"](around:{radius},{lat},{lon});'
+        f'relation["tourism"~"^(museum|gallery|arts_centre)$"](around:{radius},{lat},{lon});'
+        f");"
+        f"out center;"  # no limit — we pick the closest ourselves
+    )
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            response = await client.post(
+                "https://overpass-api.de/api/interpreter",
+                data={"data": query},
+                headers={"User-Agent": "MuseeApp/1.0"},
+            )
+            if response.status_code == 200:
+                elements = response.json().get("elements", [])
+                if not elements:
+                    return ""
+                # nodes carry lat/lon at top level; ways/relations get a synthetic
+                # "center" object from `out center`.  Fall back to query point if absent.
+                def dist_sq(el: dict) -> float:
+                    c = el.get("center") or el
+                    dlat = c.get("lat", lat) - lat
+                    dlon = c.get("lon", lon) - lon
+                    return dlat * dlat + dlon * dlon
+
+                nearest = min(elements, key=dist_sq)
+                return nearest.get("tags", {}).get("name", "")
+    except Exception as e:
+        logger.debug(f"Overpass nearby search failed: {e}")
+    return ""
+
+
 async def reverse_geocode(lat: float, lon: float) -> Dict[str, Any]:
     """
-    Reverse geocode coordinates using Nominatim (OpenStreetMap)
-    Returns: {city, country, museum, raw}
+    Reverse geocode coordinates.
+    Step 1 — Nominatim point lookup (fast).
+    Step 2 — Overpass radius search (fallback when GPS lands on a road/park path
+              instead of the museum building, e.g. campus-style museums).
+    Returns: {city, country, museum, latitude, longitude, raw}
     """
     url = f"https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={lat}&lon={lon}"
-    headers = {"User-Agent": "MuseeApp/1.0"}
-    
+
+    city = country = museum = raw = ""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers)
+            response = await client.get(url, headers={"User-Agent": "MuseeApp/1.0"})
             if response.status_code == 200:
                 data = response.json()
                 address = data.get("address", {})
-                
-                # Extract data similar to frontend logic
-                city = address.get("city") or address.get("town") or address.get("village") or address.get("hamlet") or ""
+
+                city = (
+                    address.get("city") or address.get("town") or
+                    address.get("village") or address.get("hamlet") or ""
+                )
                 country = address.get("country") or ""
-                museum = address.get("museum") or (data.get("type") == "museum" and data.get("name")) or ""
-                
-                return {
-                    "city": city,
-                    "country": country,
-                    "museum": museum,
-                    "latitude": lat,
-                    "longitude": lon,
-                    "raw": data.get("display_name", "")
-                }
+                raw = data.get("display_name", "")
+
+                # Check if Nominatim itself landed on a museum feature
+                # data["type"] is the OSM tag value (e.g. "museum", "tertiary")
+                # address["tourism"] holds the venue name when type=museum
+                osm_type = data.get("type", "").lower()
+                tourism_tag = address.get("tourism", "").lower()
+                amenity_tag = address.get("amenity", "").lower()
+                if osm_type in _MUSEUM_OSM_VALUES:
+                    museum = data.get("name") or address.get("tourism") or ""
+                elif tourism_tag in _MUSEUM_OSM_VALUES or amenity_tag in _MUSEUM_OSM_VALUES:
+                    museum = address.get("tourism") or address.get("amenity") or data.get("name") or ""
+
     except Exception as e:
-        logger.warning(f"Reverse geocode failed: {e}")
-    
-    return {"latitude": lat, "longitude": lon}
+        logger.warning(f"Nominatim reverse geocode failed: {e}")
+
+    # Overpass fallback — GPS may have landed on a road inside a museum campus
+    if not museum:
+        museum = await _find_museum_nearby(lat, lon)
+
+    return {
+        "city": city,
+        "country": country,
+        "museum": museum,
+        "latitude": lat,
+        "longitude": lon,
+        "raw": raw,
+    }
 
 async def extract_image_metadata(image: Image.Image, filename: str, file_size: int) -> Dict[str, Any]:
     """Extract metadata from PIL Image"""

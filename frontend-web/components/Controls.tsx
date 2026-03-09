@@ -2,7 +2,7 @@
 import React, { useRef } from 'react';
 
 interface Props {
-  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   isAnalyzing: boolean;
   isVisitActive: boolean;
   onToggleVisit: () => void;
@@ -12,9 +12,15 @@ const Controls: React.FC<Props> = ({ onUpload, isAnalyzing, isVisitActive, onTog
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGalleryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    onUpload(e);
+    onUpload(e, 'gallery');
+    e.target.value = '';
+  };
+
+  const handleCameraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    onUpload(e, 'camera');
     e.target.value = '';
   };
 
@@ -52,7 +58,7 @@ const Controls: React.FC<Props> = ({ onUpload, isAnalyzing, isVisitActive, onTog
         accept="image/*"
         capture="environment"
         className="hidden"
-        onChange={handleInputChange}
+        onChange={handleCameraChange}
         disabled={isAnalyzing}
       />
       <input
@@ -61,7 +67,7 @@ const Controls: React.FC<Props> = ({ onUpload, isAnalyzing, isVisitActive, onTog
         accept="image/*"
         multiple
         className="hidden"
-        onChange={handleInputChange}
+        onChange={handleGalleryChange}
         disabled={isAnalyzing}
       />
 

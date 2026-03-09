@@ -7,6 +7,7 @@ import { exhibitionChatStream } from '../apiService';
 interface Props {
   items: GalleryItem[];
   sidebarOpen: boolean;
+  onCloseSidebar: () => void;
   conversations: CuratorConversation[];
   onSaveConversation: (convId: string, newMsgs: Message[], itemIds: string[]) => void;
   onDeleteConversation: (id: string) => void;
@@ -45,6 +46,7 @@ function formatRelativeDate(ts: number): string {
 const UnderstandView: React.FC<Props> = ({
   items,
   sidebarOpen,
+  onCloseSidebar,
   conversations,
   onSaveConversation,
   onDeleteConversation,
@@ -164,12 +166,22 @@ const UnderstandView: React.FC<Props> = ({
   }, [conversations]);
 
   return (
-    <div className="w-full h-full flex overflow-hidden bg-white">
+    <div className="w-full h-full flex overflow-hidden bg-white relative">
 
-      {/* ── Sidebar ─────────────────────────────────────────── */}
+      {/* ── Backdrop — mobile only, closes sidebar on outside click */}
+      {sidebarOpen && (
+        <div
+          className="absolute inset-0 z-10 bg-black/20 sm:hidden"
+          onClick={onCloseSidebar}
+        />
+      )}
+
+      {/* ── Sidebar
+            Mobile  (<sm): absolute overlay, shadow, z-20
+            Desktop (≥sm): static flex participant, no shadow        */}
       <aside
-        className={`flex-shrink-0 flex flex-col border-r border-neutral-100 bg-[#fafafa] transition-all duration-300 overflow-hidden ${
-          sidebarOpen ? 'w-52 sm:w-60' : 'w-0'
+        className={`flex-shrink-0 flex flex-col border-r border-neutral-100 bg-[#fafafa] transition-all duration-300 overflow-hidden absolute inset-y-0 left-0 z-20 shadow-xl sm:static sm:shadow-none sm:z-auto ${
+          sidebarOpen ? 'w-64 sm:w-60' : 'w-0'
         }`}
       >
         {/* Sidebar header */}
