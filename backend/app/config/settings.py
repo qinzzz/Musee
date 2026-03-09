@@ -66,8 +66,15 @@ class Settings(BaseSettings):
     # File Upload & Storage
     max_file_size_mb: int = 10
     uploads_dir: str = "uploads"  # Directory for local storage
-    storage_type: str = "local"   # "local" or "vercel_blob"
+    storage_type: str = "local"   # "local", "vercel_blob", or "r2"
     blob_read_write_token: Optional[str] = None  # Vercel Blob token
+
+    # Cloudflare R2 (S3-compatible)
+    r2_account_id: Optional[str] = None
+    r2_access_key_id: Optional[str] = None
+    r2_secret_access_key: Optional[str] = None
+    r2_bucket_name: Optional[str] = None
+    r2_public_url: Optional[str] = None  # e.g. https://pub-xxx.r2.dev
 
     # Security
     secret_key: str = "your-secret-key-change-this-in-production"
