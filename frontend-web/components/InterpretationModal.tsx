@@ -96,6 +96,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [newAnnotationPos, setNewAnnotationPos] = useState<{ x: number, y: number } | null>(null);
   const [annotationInput, setAnnotationInput] = useState('');
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -216,12 +217,17 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     ),
   };
 
-  // Load image to get aspect ratio
+  // Load image to get aspect ratio; open modal even if image fails
   useEffect(() => {
+    setImageError(false);
     const img = new Image();
     img.onload = () => {
       setImageAspect(img.width / img.height);
       setImageLoaded(true);
+    };
+    img.onerror = () => {
+      setImageError(true);
+      setImageLoaded(true); // unblock modal render
     };
     img.src = item.url;
   }, [item.url]);
@@ -548,13 +554,22 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
             {/* Photo — takes remaining space */}
             <div className="flex-1 relative flex items-center justify-center p-3 sm:p-5 cursor-crosshair min-h-0 overflow-hidden">
-              <img
-                ref={imageRef}
-                src={item.url}
-                onClick={handleImageClick}
-                className="max-w-full max-h-full object-contain shadow-xl rounded-lg"
-                alt="Interpretation target"
-              />
+              {imageError ? (
+                <div className="flex flex-col items-center justify-center gap-3 text-neutral-300 select-none">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  <p className="text-[10px] tracking-[0.2em] uppercase">Image unavailable</p>
+                </div>
+              ) : (
+                <img
+                  ref={imageRef}
+                  src={item.url}
+                  onClick={handleImageClick}
+                  className="max-w-full max-h-full object-contain shadow-xl rounded-lg"
+                  alt="Interpretation target"
+                />
+              )}
 
               {/* Analyzing overlay badge on photo */}
               {item.isAnalyzing && (
