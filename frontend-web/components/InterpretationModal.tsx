@@ -627,7 +627,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             )}
 
             {/* Photo — takes remaining space */}
-            <div className="flex-1 relative flex items-center justify-center p-3 sm:p-5 cursor-crosshair min-h-0 overflow-hidden">
+            <div className="flex-1 relative flex items-start sm:items-center justify-center p-3 sm:p-5 cursor-crosshair min-h-0 overflow-hidden">
               {imageError ? (
                 <div className="flex flex-col items-center justify-center gap-3 text-neutral-300 select-none">
                   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
