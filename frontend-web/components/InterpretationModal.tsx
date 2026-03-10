@@ -669,7 +669,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     </div>
                   )}
                   <span className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">
-                    {item.isAnalyzing ? 'Analyzing…' : 'Info'}
+                    {item.isAnalyzing ? 'Analyzing…' : ''}
                   </span>
                 </div>
               )}
@@ -681,11 +681,11 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                   <button
                     onClick={onToggleLike}
                     title={isLiked ? 'Unlike' : 'Like'}
-                    className={`flex items-center justify-center transition-all ${
+                    className={`w-9 h-9 flex items-center justify-center rounded-full transition-all ${
                       isLiked ? 'text-red-500 hover:text-red-600' : 'text-neutral-300 hover:text-neutral-600'
                     }`}
                   >
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                     </svg>
                   </button>
@@ -703,18 +703,18 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                       setShowAlbumDropdown(prev => !prev);
                     }}
                     title="Save to album"
-                    className={`flex items-center justify-center transition-all ${
+                    className={`w-9 h-9 flex items-center justify-center rounded-full transition-all ${
                       (itemAlbumIds && itemAlbumIds.length > 0) ? 'text-neutral-700' : 'text-neutral-300 hover:text-neutral-600'
                     }`}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                     </svg>
                   </button>
                 )}
 
                 {/* Separator */}
-                {(onToggleLike || onSaveToAlbum) && <div className="w-px h-3.5 bg-neutral-200" />}
+                {(onToggleLike || onSaveToAlbum) && <div className="w-px h-4 bg-neutral-200" />}
 
                 {rightMode === 'metadata' && !item.isAnalyzing && item.artworkId && (
                   isEditing ? (
@@ -732,23 +732,23 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                   ) : (
                     <button
                       onClick={startEditing}
-                      className="opacity-40 hover:opacity-80 transition-opacity"
                       title="Edit artwork info"
+                      className="w-9 h-9 flex items-center justify-center rounded-full opacity-30 hover:opacity-70 transition-opacity"
                     >
-                      <img src={pencilIcon} width="15" height="15" alt="Edit" />
+                      <img src={pencilIcon} width="22" height="22" alt="Edit" />
                     </button>
                   )
                 )}
                 {onDelete && !item.isAnalyzing && (
                   <button
                     onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(item.id); }}
-                    className="text-neutral-500 hover:text-red-500 transition-colors"
+                    className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-400 hover:text-red-500 transition-colors"
                     title="Delete from Musee"
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                   </button>
                 )}
-                <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
+                <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
               </div>
             </div>
 
