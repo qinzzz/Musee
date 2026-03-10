@@ -30,6 +30,7 @@ const GridView: React.FC<Props> = ({ items, visit, filteredVisitId, isAnalyzing,
               <img
                 src={item.url}
                 alt={item.artworkName || ''}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                 className={`w-full h-full object-cover transition-all duration-300 group-hover:scale-105 ${item.isAnalyzing ? 'blur-sm opacity-50' : ''}`}
               />
               {item.isAnalyzing && (

@@ -138,6 +138,7 @@ const AlbumView: React.FC<Props> = ({ items, onInterpret, onDelete }) => {
                   <img
                     src={item.url}
                     alt={item.artworkName || ''}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                     className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
