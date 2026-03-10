@@ -257,7 +257,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setMessages(item.conversation || []);
     setSuggestedTopics([]);
     setRightMode('metadata'); // Reset to metadata view for the new piece
-    setIsImageCollapsed(false);
+    if (window.innerWidth < 640) setMobileImageHeight(window.innerWidth * 0.75);
     setIsEditing(false);
     setTagInput('');
     setShowAlbumDropdown(false);
@@ -1133,14 +1133,14 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     {/* Album dropdown — rendered via portal to escape modal overflow-hidden */}
     {showAlbumDropdown && albumDropdownPos && createPortal(
       <>
-        <div className="fixed inset-0 z-[200]" onClick={() => { setShowAlbumDropdown(false); setCreatingAlbum(false); setNewAlbumName(''); }} />
+        <div className="fixed inset-0 z-[200]" onClick={() => { setShowAlbumDropdown(false); setNewAlbumName(''); }} />
         <div
           className="fixed z-[201] bg-white rounded-2xl shadow-2xl border border-neutral-100 w-60 py-2 animate-in fade-in zoom-in-95 duration-150"
           style={{ top: albumDropdownPos.top, right: albumDropdownPos.right }}
         >
           <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold px-4 pt-1.5 pb-2.5">Save to album</p>
 
-          {(albums || []).length === 0 && !creatingAlbum && (
+          {(albums || []).length === 0 && (
             <p className="text-[12px] text-neutral-400 px-4 pb-2">No albums yet</p>
           )}
 
