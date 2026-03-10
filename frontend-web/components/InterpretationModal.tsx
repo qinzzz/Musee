@@ -943,6 +943,20 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         {/* ── BOTTOM: Chat Input (always visible) ── */}
         <div className="shrink-0 border-t border-neutral-100 p-3 sm:p-4">
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* History toggle — expands conversation on the right panel */}
+            <button
+              onClick={() => setRightMode(m => m === 'chat' ? 'metadata' : 'chat')}
+              title={rightMode === 'chat' ? 'Back to analysis' : 'View conversation'}
+              className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-all border ${
+                rightMode === 'chat'
+                  ? 'bg-neutral-900 border-neutral-900 text-white'
+                  : 'border-neutral-200 text-neutral-400 hover:border-neutral-400 hover:text-neutral-700'
+              }`}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="18 15 12 9 6 15"/>
+              </svg>
+            </button>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
