@@ -68,7 +68,7 @@ const HoverTag: React.FC<{
       <span
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className="text-[10px] tracking-wide text-neutral-500 bg-neutral-50 px-3 py-1 rounded-full border border-neutral-100 hover:bg-neutral-100 hover:text-neutral-700 transition-colors cursor-default"
+        className="text-[10px] tracking-wide text-neutral-500 bg-neutral-50 px-3 py-1 rounded-full border border-neutral-100 hover:bg-neutral-100 hover:text-neutral-700 transition-colors cursor-default whitespace-nowrap"
       >
         {tag}
       </span>
@@ -96,11 +96,11 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [newAnnotationPos, setNewAnnotationPos] = useState<{ x: number, y: number } | null>(null);
   const [annotationInput, setAnnotationInput] = useState('');
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageAspect, setImageAspect] = useState<number>(1); // width/height ratio
+  const [imageAspect, setImageAspect] = useState<number>(1);
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
-  const [showMetadata, setShowMetadata] = useState(true);
-  const [mobileSection, setMobileSection] = useState<'analysis' | 'dialogue'>('analysis');
+  // rightMode: 'metadata' shows analysis info, 'chat' shows conversation
+  const [rightMode, setRightMode] = useState<'metadata' | 'chat'>('metadata');
   const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -144,28 +144,21 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const formatDisplayDate = (dateStr: string | null | undefined): string | null => {
     if (!dateStr) return null;
     try {
-      // Handle ISO format (e.g. "2025-11-25T00:00:00")
       if (dateStr.includes('T')) {
         const dt = new Date(dateStr);
         if (!isNaN(dt.getTime())) {
           return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         }
       }
-
-      // If it has a comma followed by time, split it
       if (dateStr.includes(', ')) {
         const parts = dateStr.split(', ');
         if (parts.length >= 2) {
-          // Check if it's "Dec 18, 2024, 8:31 AM"
           if (parts.length >= 3 && parts[2].match(/\d{2}:\d{2}/)) {
             return `${parts[0]}, ${parts[1]}`;
           }
-          // If it's already "Dec 18, 2024" return as is
           return `${parts[0]}, ${parts[1]}`;
         }
       }
-
-      // If it has a space followed by time (e.g. ISO result)
       if (dateStr.includes(' ')) {
         const parts = dateStr.split(' ');
         if (parts[0].includes('-')) {
@@ -174,24 +167,21 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           }
         }
-        // If "Dec 18, 2024 15:30:00"
         if (parts.length >= 3 && parts[1].endsWith(',')) {
           return `${parts[0]} ${parts[1]} ${parts[2]}`;
         }
       }
-
       const dt = new Date(dateStr);
       if (!isNaN(dt.getTime())) {
         return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       }
-
       return dateStr;
     } catch (e) {
       return dateStr;
     }
   };
 
-  // Custom markdown component to make bold text clickable (Google search)
+  // Custom markdown component to make bold/italic text clickable (Google search)
   const markdownComponents = {
     strong: ({ children }: { children?: React.ReactNode }) => {
       const text = String(children);
@@ -239,9 +229,8 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   // Sync internal state when navigating between items in a session
   useEffect(() => {
     setMessages(item.conversation || []);
-    setSuggestedTopics([]); // Reset suggestions for the new item
-    setShowMetadata(true); // Default to showing metadata for the new piece
-    setMobileSection('analysis'); // Reset to analysis view
+    setSuggestedTopics([]);
+    setRightMode('metadata'); // Reset to metadata view for the new piece
     setIsEditing(false);
     setTagInput('');
     const vals = {
@@ -278,7 +267,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
       if (match) result[field] = match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
     }
 
-    // Description may still be streaming (incomplete)
     const descMatch = json.match(/"description"\s*:\s*"/);
     if (descMatch && descMatch.index !== undefined) {
       const afterQuote = descMatch.index + descMatch[0].length;
@@ -322,7 +310,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
   const saveAllFields = async () => {
     if (!item.artworkId || isSavingField) return;
-    // Commit any pending tag input before saving
     const finalTags = tagInput.trim()
       ? [...editTags, tagInput.trim().startsWith('#') ? tagInput.trim() : `#${tagInput.trim()}`]
       : editTags;
@@ -360,13 +347,11 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const fetchSuggestions = async (currentMessages: Message[]) => {
     if (!item.artistName || !item.artworkName) return;
     setIsSuggesting(true);
-    setSuggestedTopics([]); // Clear existing suggestions immediately
+    setSuggestedTopics([]);
     try {
-      // Include the initial description if messages are empty to provide context
       const historyToSuggest = currentMessages.length > 0
         ? currentMessages
         : (item.description ? [{ role: 'model', text: item.description }] as Message[] : []);
-
       const topics = await suggestTopics(item.artistName, item.artworkName, historyToSuggest);
       setSuggestedTopics(topics);
     } catch (e) {
@@ -385,36 +370,27 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
+    setRightMode('chat'); // Switch right panel to chat on send
     const userMsg: Message = { role: 'user', text };
     setMessages(prev => [...prev, userMsg]);
-    setSuggestedTopics([]); // Hide obsolete suggestions immediately
+    setSuggestedTopics([]);
     setInput('');
     setIsTyping(true);
 
     try {
-      // Convert image URL to File for the API
       let imageFile: File | undefined;
-      console.log('Image URL type:', item.url.substring(0, 50) + '...');
-
       if (item.url.startsWith('data:')) {
         imageFile = base64ToFile(item.url, 'artwork.jpg');
-        console.log('Created file from base64:', { size: imageFile.size, type: imageFile.type });
       } else if (item.url.startsWith('blob:')) {
-        // Handle blob URLs - fetch and convert to File
         try {
           const response = await fetch(item.url);
           const blob = await response.blob();
           imageFile = new File([blob], 'artwork.jpg', { type: blob.type || 'image/jpeg' });
-          console.log('Created file from blob:', { size: imageFile.size, type: imageFile.type });
         } catch (e) {
           console.error('Failed to fetch blob URL:', e);
         }
-      } else {
-        console.log('Unsupported URL type, not sending image');
       }
 
-      // Use artworkId mode if available (DB-backed, reliable)
-      // Otherwise fall back to stateless mode with conversation history
       const assistantMsg: Message = { role: 'model', text: '' };
       setMessages(prev => [...prev, assistantMsg]);
       setIsTyping(false);
@@ -435,7 +411,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         },
         (fullResponse) => {
           setIsWaitingForFirstChunk(false);
-          // Final response received - sync local state and update parent
           setMessages(prev => {
             const next = [...prev];
             const last = next[next.length - 1];
@@ -491,42 +466,32 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setAnnotationInput('');
   };
 
-  // Calculate modal dimensions based on image aspect ratio and screen size
+  // Calculate modal dimensions based on screen size
   const getModalStyle = () => {
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
-    const isMobile = viewportWidth < 640; // sm breakpoint
+    const isMobile = viewportWidth < 640;
     const mobileHeight = 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1rem)';
 
     if (!imageLoaded) {
-      // Loading placeholder - responsive
-      if (isMobile) {
-        return { width: '96vw', height: mobileHeight, maxHeight: mobileHeight };
-      }
+      if (isMobile) return { width: '96vw', height: mobileHeight, maxHeight: mobileHeight };
       return { width: '600px', height: '400px' };
     }
 
-    // Mobile: full screen modal with vertical layout
     if (isMobile) {
-      return {
-        width: '96vw',
-        height: mobileHeight,
-        maxHeight: mobileHeight,
-      };
+      return { width: '96vw', height: mobileHeight, maxHeight: mobileHeight };
     }
 
-    // Desktop: side-by-side layout, 50/50 split
+    // Desktop: wide layout
     const maxHeight = viewportWidth > 1200 ? 92 : 88; // vh
     const maxWidth = 94; // vw
-
-    // We target a consistent total width and allow flex-1 to handle the split
     const totalWidth = (maxWidth / 100) * viewportWidth;
     const totalHeight = (maxHeight / 100) * viewportHeight;
 
     return {
       width: `${totalWidth}px`,
       height: `${totalHeight}px`,
-      maxWidth: '1800px' // cap on extremely wide screens
+      maxWidth: '1800px',
     };
   };
 
@@ -549,248 +514,234 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
       )}
 
       <div
-        className={`relative bg-white rounded-2xl sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col sm:flex-row animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`relative bg-white rounded-2xl sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         style={getModalStyle()}
       >
-        {/* Global close/delete — always top-right of modal */}
-        <div className="absolute top-3 right-3 sm:hidden z-50 flex items-center space-x-3">
-          {onDelete && !item.isAnalyzing && (
-            <button
-              onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(item.id); }}
-              className="text-neutral-400 hover:text-red-500 transition-colors"
-              title="Remove from Musee"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-            </button>
-          )}
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900 transition-colors text-lg">✕</button>
-        </div>
+        {/* ── MAIN AREA: left photo panel + right content panel ── */}
+        <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
 
-        {/* Visual Reference & Annotation Canvas Panel */}
-        <div className={`${mobileSection === 'analysis' ? 'flex-1 min-h-0' : ''} sm:flex-1 bg-neutral-50 overflow-hidden relative group/canvas min-w-0 flex flex-col`}>
-          {/* Mobile: collapsed header when dialogue is active */}
-          <button
-            className={`${mobileSection === 'analysis' ? 'hidden' : 'flex'} sm:hidden items-center justify-between w-full px-4 py-2.5 bg-neutral-50 border-b border-neutral-100 shrink-0`}
-            onClick={() => setMobileSection('analysis')}
+          {/* ── LEFT / TOP PANEL: Location + Time + Photo ── */}
+          <div
+            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] min-h-0 h-[42vh] sm:h-auto"
           >
-            <div className="flex items-center space-x-2.5">
-              <img src={item.url} className="w-7 h-7 rounded object-cover" alt="" />
-              <span className="text-[8px] tracking-[0.2em] uppercase text-neutral-500 font-bold truncate">
-                {item.artistName || 'Artwork Analysis'}
-              </span>
-            </div>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-          </button>
-          {/* Analysis content wrapper */}
-          <div className={`${mobileSection !== 'analysis' ? 'hidden sm:flex' : 'flex'} flex-1 items-center justify-center p-4 sm:p-12 relative min-h-0 overflow-hidden`}>
-          <div className="relative cursor-crosshair w-full h-full flex items-center justify-center">
-            <img
-              ref={imageRef}
-              src={item.url}
-              onClick={handleImageClick}
-              className="max-w-full max-h-full object-contain shadow-xl rounded-lg"
-              alt="Interpretation target"
-            />
-
-            {/* Existing Annotations */}
-            {item.annotations.map(an => (
-              <div
-                key={an.id}
-                className="absolute group/an -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                style={{ left: `${an.x}%`, top: `${an.y}%` }}
-              >
-                <div className="w-6 h-6 rounded-full border border-white bg-white/20 backdrop-blur animate-pulse shadow-lg group-hover/an:scale-150 transition-transform duration-500"></div>
-                <div className="absolute left-8 top-1/2 -translate-y-1/2 w-48 opacity-0 group-hover/an:opacity-100 transition-opacity bg-white/90 backdrop-blur p-4 rounded-xl shadow-xl border border-neutral-100 pointer-events-none z-10">
-                  <p className="text-[11px] leading-relaxed text-neutral-800 font-serif italic">"{an.comment}"</p>
-                </div>
-              </div>
-            ))}
-
-            {/* New Annotation Indicator */}
-            {newAnnotationPos && (
-              <div
-                className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
-                style={{ left: `${newAnnotationPos.x}%`, top: `${newAnnotationPos.y}%` }}
-              >
-                <div className="w-8 h-8 rounded-full border-2 border-neutral-900 bg-white shadow-xl flex items-center justify-center">
-                  <span className="text-xl">+</span>
-                </div>
-                <div className="absolute top-10 left-1/2 -translate-x-1/2 w-64 bg-white p-4 rounded-2xl shadow-2xl border border-neutral-100">
-                  <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 mb-2 font-bold">Mark Area of Interest</p>
-                  <textarea
-                    autoFocus
-                    value={annotationInput}
-                    onChange={(e) => setAnnotationInput(e.target.value)}
-                    placeholder="Capture a structural thought..."
-                    className="w-full text-[12px] p-3 bg-neutral-50 rounded-xl outline-none border border-neutral-100 focus:ring-1 focus:ring-neutral-200 resize-none h-20"
-                  />
-                  <div className="flex justify-end space-x-2 mt-3">
-                    <button onClick={() => setNewAnnotationPos(null)} className="text-[10px] uppercase tracking-widest text-neutral-400 p-2 hover:text-neutral-900">Cancel</button>
-                    <button onClick={submitAnnotation} className="bg-neutral-900 text-white text-[10px] uppercase tracking-widest px-4 py-2 rounded-full hover:scale-105 transition-transform">Place</button>
+            {/* Location + Time row */}
+            {!item.isAnalyzing && (displayLocation || item.photoTime) && (
+              <div className="px-4 pt-3 pb-1.5 shrink-0 flex flex-wrap gap-x-5 gap-y-0.5 border-b border-neutral-100/60">
+                {displayLocation && (
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400 shrink-0">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                    </svg>
+                    <span className="text-[11px] text-neutral-500 truncate">{displayLocation}</span>
                   </div>
-                </div>
+                )}
+                {item.photoTime && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400">
+                      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span className="text-[11px] text-neutral-500">{formatDisplayDate(item.photoTime)}</span>
+                  </div>
+                )}
               </div>
             )}
 
-          </div>
+            {/* Photo — takes remaining space */}
+            <div className="flex-1 relative flex items-center justify-center p-3 sm:p-5 cursor-crosshair min-h-0 overflow-hidden">
+              <img
+                ref={imageRef}
+                src={item.url}
+                onClick={handleImageClick}
+                className="max-w-full max-h-full object-contain shadow-xl rounded-lg"
+                alt="Interpretation target"
+              />
 
-          {/* Info/Label Toggle Button (Switch to Details) - Only visible when metadata is hidden and not analyzing */}
-          {!item.isAnalyzing && !showMetadata && (item.artistName || item.artworkName || item.description || item.keywords) && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMetadata(true);
-              }}
-              className="absolute top-6 right-6 z-40 w-20 h-24 sm:w-24 sm:h-[8.5rem] bg-white rounded-lg shadow-2xl border border-neutral-200 p-3 flex flex-col space-y-2 hover:scale-110 transition-all duration-300 group overflow-hidden"
-              title="View Artwork Label"
-            >
-              <div className="w-1/2 h-1 bg-neutral-200 rounded-full" />
-              <div className="w-full h-1 bg-neutral-100 rounded-full" />
-              <div className="w-3/4 h-1 bg-neutral-100 rounded-full" />
-              <div className="mt-auto flex justify-between items-end">
-                <div className="w-2 h-2 bg-neutral-100 rounded-full shrink-0" />
-                <div className="text-[6px] tracking-widest text-neutral-300 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">Info</div>
-              </div>
-              {/* Subtle hover overlay */}
-              <div className="absolute inset-0 bg-neutral-500/0 group-hover:bg-neutral-500/5 transition-colors" />
-            </button>
-          )}
-
-          {/* Metadata / Streaming Analysis Overlay (includes error state: streamingText with no artist) */}
-          {(item.isAnalyzing || (item.streamingText && !item.artistName && !item.isAnalyzing) || (showMetadata && (displayArtist || displayTitle || displayDescription || item.keywords))) && (
-            <div className="absolute inset-0 bg-white/95 backdrop-blur-md p-5 sm:p-12 overflow-y-auto z-30 scrollbar-hide animate-in fade-in duration-500">
-              {/* Thumbnail: static preview during analysis, toggle back to image otherwise */}
-              {item.isAnalyzing ? (
-                <div className="absolute top-6 right-6 w-20 h-24 sm:w-24 sm:h-[8.5rem] rounded-lg overflow-hidden border-2 border-white shadow-2xl z-50">
-                  <img src={item.url} className="w-full h-full object-cover" alt="" />
-                </div>
-              ) : (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMetadata(false);
-                  }}
-                  className="absolute top-6 right-6 w-20 h-24 sm:w-24 sm:h-[8.5rem] rounded-lg overflow-hidden border-2 border-white shadow-2xl hover:scale-110 transition-transform active:scale-95 z-50 group"
-                  title="Back to Artwork"
-                >
-                  <img src={item.url} className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all" alt="Back to artwork" />
-                  <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors flex items-center justify-center">
-                    <span className="text-[6px] tracking-widest text-white font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">Image</span>
+              {/* Analyzing overlay badge on photo */}
+              {item.isAnalyzing && (
+                <div className="absolute inset-0 flex items-end justify-start p-3 pointer-events-none">
+                  <div className="flex items-center gap-2 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
+                    <div className="relative w-3 h-3 shrink-0">
+                      <div className="absolute inset-0 border-[1.5px] border-neutral-200 rounded-full"></div>
+                      <div className="absolute inset-0 border-t-[1.5px] border-neutral-800 rounded-full animate-spin"></div>
+                    </div>
+                    <span className="text-[9px] tracking-[0.2em] uppercase text-neutral-500 font-bold">Analyzing</span>
                   </div>
-                </button>
+                </div>
               )}
 
-              <div className="max-w-xl mx-auto space-y-4 sm:space-y-8">
-
-                {/* Analyzing indicator */}
-                {item.isAnalyzing && (
-                  <div className="flex items-center space-x-3 pb-2">
-                    <div className="relative shrink-0">
-                      <div className="w-5 h-5 border-2 border-neutral-100 rounded-full"></div>
-                      <div className="absolute inset-0 w-5 h-5 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
-                    </div>
-                    <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold">Analyzing Material</p>
+              {/* Existing Annotations */}
+              {item.annotations.map(an => (
+                <div
+                  key={an.id}
+                  className="absolute group/an -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                  style={{ left: `${an.x}%`, top: `${an.y}%` }}
+                >
+                  <div className="w-6 h-6 rounded-full border border-white bg-white/20 backdrop-blur animate-pulse shadow-lg group-hover/an:scale-150 transition-transform duration-500"></div>
+                  <div className="absolute left-8 top-1/2 -translate-y-1/2 w-48 opacity-0 group-hover/an:opacity-100 transition-opacity bg-white/90 backdrop-blur p-4 rounded-xl shadow-xl border border-neutral-100 pointer-events-none z-10">
+                    <p className="text-[11px] leading-relaxed text-neutral-800 font-serif italic">"{an.comment}"</p>
                   </div>
-                )}
+                </div>
+              ))}
 
-                {/* Error from backend (e.g. quota, rate limit, API error) */}
+              {/* New Annotation Indicator */}
+              {newAnnotationPos && (
+                <div
+                  className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
+                  style={{ left: `${newAnnotationPos.x}%`, top: `${newAnnotationPos.y}%` }}
+                >
+                  <div className="w-8 h-8 rounded-full border-2 border-neutral-900 bg-white shadow-xl flex items-center justify-center">
+                    <span className="text-xl">+</span>
+                  </div>
+                  <div className="absolute top-10 left-1/2 -translate-x-1/2 w-64 bg-white p-4 rounded-2xl shadow-2xl border border-neutral-100">
+                    <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 mb-2 font-bold">Mark Area of Interest</p>
+                    <textarea
+                      autoFocus
+                      value={annotationInput}
+                      onChange={(e) => setAnnotationInput(e.target.value)}
+                      placeholder="Capture a structural thought..."
+                      className="w-full text-[12px] p-3 bg-neutral-50 rounded-xl outline-none border border-neutral-100 focus:ring-1 focus:ring-neutral-200 resize-none h-20"
+                    />
+                    <div className="flex justify-end space-x-2 mt-3">
+                      <button onClick={() => setNewAnnotationPos(null)} className="text-[10px] uppercase tracking-widest text-neutral-400 p-2 hover:text-neutral-900">Cancel</button>
+                      <button onClick={submitAnnotation} className="bg-neutral-900 text-white text-[10px] uppercase tracking-widest px-4 py-2 rounded-full hover:scale-105 transition-transform">Place</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── RIGHT PANEL: Analysis Metadata OR Curator Dialogue ── */}
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white">
+
+            {/* Right panel header */}
+            <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between shrink-0">
+              {/* Left side: mode label / back button */}
+              {rightMode === 'chat' ? (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setRightMode('metadata')}
+                    className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors flex items-center gap-1"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                    Info
+                  </button>
+                  <div className="w-px h-3 bg-neutral-200" />
+                  <span className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Curator Dialogue</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  {item.isAnalyzing && (
+                    <div className="relative w-3 h-3 shrink-0">
+                      <div className="absolute inset-0 border-[1.5px] border-neutral-100 rounded-full"></div>
+                      <div className="absolute inset-0 border-t-[1.5px] border-neutral-800 rounded-full animate-spin"></div>
+                    </div>
+                  )}
+                  <span className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">
+                    {item.isAnalyzing ? 'Analyzing…' : 'Analysis'}
+                  </span>
+                </div>
+              )}
+
+              {/* Right side: edit / delete / close */}
+              <div className="flex items-center gap-3">
+                {rightMode === 'metadata' && !item.isAnalyzing && item.artworkId && (
+                  isEditing ? (
+                    <>
+                      <button
+                        onClick={cancelEditing}
+                        className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors"
+                      >Cancel</button>
+                      <button
+                        onClick={saveAllFields}
+                        disabled={isSavingField}
+                        className="text-[9px] tracking-[0.3em] uppercase text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
+                      >{isSavingField ? 'Saving…' : 'Save'}</button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={startEditing}
+                      className="opacity-40 hover:opacity-80 transition-opacity"
+                      title="Edit artwork info"
+                    >
+                      <img src={pencilIcon} width="15" height="15" alt="Edit" />
+                    </button>
+                  )
+                )}
+                {onDelete && !item.isAnalyzing && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(item.id); }}
+                    className="text-neutral-300 hover:text-red-500 transition-colors"
+                    title="Remove from Musee"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                  </button>
+                )}
+                <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
+              </div>
+            </div>
+
+            {/* Right panel scrollable content */}
+            {rightMode === 'metadata' ? (
+              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0">
+
+                {/* Error state */}
                 {!item.isAnalyzing && item.streamingText && !item.artistName && (
-                  <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 sm:p-6 mb-4">
+                  <div className="rounded-xl border border-red-200 bg-red-50/80 p-4">
                     <p className="text-[9px] tracking-[0.3em] uppercase text-red-600 font-bold mb-2">Analysis failed</p>
                     <p className="text-[13px] text-red-800 leading-relaxed">{item.streamingText}</p>
                   </div>
                 )}
 
-                {/* Location and Date Metadata (only when analysis complete) */}
-                {!item.isAnalyzing && (displayLocation || item.photoTime) && (
-                  <div className="pb-6 sm:pb-8 border-b border-neutral-100 space-y-4">
-                    {displayLocation && (
-                      <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1 font-bold">Location</p>
-                        <p className="text-[14px] font-serif italic text-neutral-800">{displayLocation}</p>
-                      </div>
-                    )}
-                    {item.photoTime && (
-                      <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1 font-bold">Time</p>
-                        <p className="text-[14px] font-serif italic text-neutral-800">{formatDisplayDate(item.photoTime)}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {displayArtist && (
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Artist</p>
-                      {!item.isAnalyzing && item.artworkId && (
-                        isEditing ? (
-                          <div className="flex items-center space-x-3">
-                            <button
-                              onClick={cancelEditing}
-                              className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors"
-                            >Cancel</button>
-                            <button
-                              onClick={saveAllFields}
-                              disabled={isSavingField}
-                              className="text-[9px] tracking-[0.3em] uppercase text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
-                            >{isSavingField ? 'Saving…' : 'Save'}</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={startEditing}
-                            className="group opacity-40 hover:opacity-80 transition-opacity"
-                            title="Edit artwork info"
-                          >
-                            <img src={pencilIcon} width="15" height="15" alt="Edit" />
-                          </button>
-                        )
-                      )}
-                    </div>
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-2">Artist</p>
                     {isEditing ? (
                       <input
                         ref={firstEditInputRef}
                         value={editValues.artist}
                         onChange={e => setEditValues(v => ({ ...v, artist: e.target.value }))}
                         onKeyDown={handleEditKeyDown}
-                        className="text-[17px] sm:text-[24px] font-medium text-neutral-900 tracking-tight leading-tight bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
+                        className="text-[17px] sm:text-[22px] font-medium text-neutral-900 tracking-tight leading-tight bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
                       />
                     ) : (
-                      <p className="text-[17px] sm:text-[24px] font-medium text-neutral-900 tracking-tight leading-tight">
+                      <p className="text-[17px] sm:text-[22px] font-medium text-neutral-900 tracking-tight leading-tight">
                         {editValues.artist || displayArtist}
                       </p>
                     )}
                   </div>
                 )}
+
                 {displayTitle && (
                   <div>
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Title</p>
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-2">Title</p>
                     {isEditing ? (
                       <input
                         value={editValues.title}
                         onChange={e => setEditValues(v => ({ ...v, title: e.target.value }))}
                         onKeyDown={handleEditKeyDown}
-                        className="text-[15px] sm:text-[22px] font-serif italic text-neutral-700 leading-tight bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
+                        className="text-[15px] sm:text-[19px] font-serif italic text-neutral-700 leading-tight bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
                       />
                     ) : (
-                      <p className="text-[15px] sm:text-[22px] font-serif italic text-neutral-700 leading-tight">
+                      <p className="text-[15px] sm:text-[19px] font-serif italic text-neutral-700 leading-tight">
                         {editValues.title || displayTitle}
                       </p>
                     )}
                   </div>
                 )}
+
                 {(displayDate || displayMedium) && (
-                  <div className="flex flex-wrap gap-8 sm:gap-12">
+                  <div className="flex flex-wrap gap-6 sm:gap-10">
                     {displayDate && (
                       <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Date</p>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1.5 font-bold">Date</p>
                         {isEditing ? (
                           <input
                             value={editValues.date}
                             onChange={e => setEditValues(v => ({ ...v, date: e.target.value }))}
                             onKeyDown={handleEditKeyDown}
                             placeholder="e.g. 1889"
-                            className="text-[14px] text-neutral-600 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 w-32"
+                            className="text-[14px] text-neutral-600 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 w-28"
                           />
                         ) : (
                           <p className="text-[14px] text-neutral-600">
@@ -801,39 +752,37 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     )}
                     {displayMedium && (
                       <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Medium</p>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1.5 font-bold">Medium</p>
                         {isEditing ? (
                           <input
                             value={editValues.medium}
                             onChange={e => setEditValues(v => ({ ...v, medium: e.target.value }))}
                             onKeyDown={handleEditKeyDown}
                             placeholder="e.g. Oil on canvas"
-                            className="text-[14px] text-neutral-600 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 w-48"
+                            className="text-[14px] text-neutral-600 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 w-44"
                           />
                         ) : (
-                          <p className="text-[14px] text-neutral-600">
-                            {editValues.medium || displayMedium}
-                          </p>
+                          <p className="text-[14px] text-neutral-600">{editValues.medium || displayMedium}</p>
                         )}
                       </div>
                     )}
                   </div>
                 )}
+
                 {displayDescription && (
                   <div>
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Analysis</p>
-                    <div className="text-[12px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
-                      <ReactMarkdown components={markdownComponents}>
-                        {displayDescription}
-                      </ReactMarkdown>
+                    <div className="text-[12px] sm:text-[13px] leading-relaxed text-neutral-600 font-serif">
+                      <ReactMarkdown components={markdownComponents}>{displayDescription}</ReactMarkdown>
                       {item.isAnalyzing && (
                         <span className="inline-block w-1.5 h-3 bg-neutral-400 animate-pulse ml-0.5"></span>
                       )}
                     </div>
                   </div>
                 )}
+
                 {!item.isAnalyzing && (editTags.length > 0 || isEditing) && (
-                  <div className="pt-2">
+                  <div className="pb-2">
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Tags</p>
                     {isEditing ? (
                       <div className="flex flex-wrap gap-2 items-center">
@@ -870,143 +819,138 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {editTags.map((tag, idx) => (
-                          <HoverTag
-                            key={idx}
-                            tag={tag}
-                            artworkId={item.artworkId}
-                          />
+                          <HoverTag key={idx} tag={tag} artworkId={item.artworkId} />
                         ))}
                       </div>
                     )}
                   </div>
                 )}
-              </div>
-            </div>
-          )}
-          </div>
-        </div>
 
-        {/* Chat Interface - Curator Dialogue */}
-        <div className={`${mobileSection === 'dialogue' ? 'flex-1 min-h-0' : ''} sm:flex-1 w-full sm:w-1/2 flex flex-col bg-white border-t sm:border-t-0 sm:border-l border-neutral-100 min-w-0`}>
-          <div
-            className="p-4 sm:p-6 border-b border-neutral-50 flex justify-between items-center shrink-0 cursor-pointer sm:cursor-default"
-            onClick={() => { if (window.innerWidth < 640) setMobileSection(mobileSection === 'dialogue' ? 'analysis' : 'dialogue'); }}
-          >
-            <div className="flex items-center space-x-2">
-              <h3 className="text-[9px] sm:text-[10px] tracking-[0.4em] sm:tracking-[0.5em] uppercase text-neutral-400 font-bold">curator dialogue</h3>
-              <svg className={`sm:hidden transition-transform ${mobileSection === 'dialogue' ? 'rotate-180' : ''}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-            </div>
-            <div className="hidden sm:flex items-center space-x-4">
-              {onDelete && !item.isAnalyzing && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    onDelete(item.id);
-                  }}
-                  className="text-neutral-300 hover:text-red-500 transition-colors"
-                  title="Remove from Musee"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                </button>
-              )}
-              <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="text-neutral-300 hover:text-neutral-900 transition-colors text-xl">✕</button>
-            </div>
-          </div>
-
-          <div className={`${mobileSection !== 'dialogue' ? 'hidden sm:flex' : 'flex'} flex-col flex-1 min-h-0`}>
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0">
-            {!item.isAnalyzing && messages.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
-                <div className="w-12 h-px bg-neutral-200 mb-6 font-serif tracking-[0.4em]">...</div>
-                <p className="text-[11px] text-neutral-400 italic mb-4 font-serif leading-relaxed px-8">
-                  The curator awaits your spatial and conceptual queries.
-                </p>
-              </div>
-            )}
-            {messages.map((m, idx) => (
-              <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-3 sm:p-4 text-[13px] leading-relaxed tracking-wide ${m.role === 'user'
-                  ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-none'
-                  : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-none font-serif'
-                  }`}>
-                  {m.text ? (
-                    m.role === 'model' ? (
-                      <div className="prose prose-sm max-w-none prose-neutral prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
-                        <ReactMarkdown components={markdownComponents}>{m.text}</ReactMarkdown>
-                      </div>
-                    ) : m.text
-                  ) : (m.role === 'model' && isWaitingForFirstChunk && idx === messages.length - 1 ? (
-                    <div className="flex space-x-1.5 py-1">
-                      <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse"></div>
-                      <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-75"></div>
-                      <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-150"></div>
+                {/* Suggested explorations — clicking sends and switches to chat */}
+                {!item.isAnalyzing && suggestedTopics.length > 0 && (
+                  <div className="pt-2 border-t border-neutral-50 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <p className="text-[8px] tracking-[0.3em] uppercase text-neutral-300 mb-3 font-bold">Suggested Explorations</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedTopics.map((topic, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSend(topic)}
+                          className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-left"
+                        >
+                          {topic}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => fetchSuggestions(messages)}
+                        disabled={isSuggesting}
+                        className="text-[11px] text-neutral-400 p-2 hover:text-neutral-900 transition-colors disabled:opacity-30"
+                        title="Suggest more topics"
+                      >
+                        {isSuggesting ? '...' : '↺'}
+                      </button>
                     </div>
-                  ) : null)}
-                </div>
+                  </div>
+                )}
               </div>
-            ))}
+            ) : (
+              /* ── CHAT MODE ── */
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0">
+                {messages.length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
+                    <div className="w-12 h-px bg-neutral-200 mb-6"></div>
+                    <p className="text-[11px] text-neutral-400 italic mb-4 font-serif leading-relaxed px-8">
+                      The curator awaits your spatial and conceptual queries.
+                    </p>
+                  </div>
+                )}
+                {messages.map((m, idx) => (
+                  <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] p-3 sm:p-4 text-[13px] leading-relaxed tracking-wide ${m.role === 'user'
+                      ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-none'
+                      : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-none font-serif'
+                    }`}>
+                      {m.text ? (
+                        m.role === 'model' ? (
+                          <div className="prose prose-sm max-w-none prose-neutral prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
+                            <ReactMarkdown components={markdownComponents}>{m.text}</ReactMarkdown>
+                          </div>
+                        ) : m.text
+                      ) : (m.role === 'model' && isWaitingForFirstChunk && idx === messages.length - 1 ? (
+                        <div className="flex space-x-1.5 py-1">
+                          <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse"></div>
+                          <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-75"></div>
+                          <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-150"></div>
+                        </div>
+                      ) : null)}
+                    </div>
+                  </div>
+                ))}
 
-            {isTyping && !isWaitingForFirstChunk && (
-              <div className="flex justify-start px-2">
-                <div className="flex space-x-1.5 py-4">
-                  <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce"></div>
-                  <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce delay-100"></div>
-                  <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce delay-200"></div>
-                </div>
+                {isTyping && !isWaitingForFirstChunk && (
+                  <div className="flex justify-start px-2">
+                    <div className="flex space-x-1.5 py-4">
+                      <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce"></div>
+                      <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce delay-100"></div>
+                      <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce delay-200"></div>
+                    </div>
+                  </div>
+                )}
+
+                {!item.isAnalyzing && suggestedTopics.length > 0 && !isTyping && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <p className="text-[8px] tracking-[0.3em] uppercase text-neutral-300 mb-3 font-bold px-1">Suggested Explorations</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedTopics.map((topic, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSend(topic)}
+                          className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-left"
+                        >
+                          {topic}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => fetchSuggestions(messages)}
+                        disabled={isSuggesting}
+                        className="text-[11px] text-neutral-400 p-2 hover:text-neutral-900 transition-colors disabled:opacity-30"
+                        title="Suggest more topics"
+                      >
+                        {isSuggesting ? '...' : '↺'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-
-            {/* Suggested Topics Chips */}
-            {!item.isAnalyzing && suggestedTopics.length > 0 && !isTyping && (
-              <div className="pt-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <p className="text-[8px] tracking-[0.3em] uppercase text-neutral-300 mb-3 font-bold px-1">Suggested Explorations</p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedTopics.map((topic, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleSend(topic)}
-                      className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-left"
-                    >
-                      {topic}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => fetchSuggestions(messages)}
-                    disabled={isSuggesting}
-                    className="text-[11px] text-neutral-400 p-2 hover:text-neutral-900 transition-colors disabled:opacity-30"
-                    title="Suggest more topics"
-                  >
-                    {isSuggesting ? '...' : '↺'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="p-3 sm:p-6 border-t border-neutral-50">
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !item.isAnalyzing && handleSend(input)}
-                placeholder={item.isAnalyzing ? "Analyzing artwork..." : "ask anything..."}
-                disabled={item.isAnalyzing}
-                className={`flex-1 text-[13px] bg-neutral-50 p-2.5 px-4 sm:p-3 sm:px-5 rounded-full outline-none focus:ring-1 focus:ring-neutral-200 transition-all border border-neutral-100 ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
-              />
-              <button
-                onClick={() => handleSend(input)}
-                disabled={item.isAnalyzing}
-                className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center transition-transform shadow-lg ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : 'hover:scale-110 active:scale-95'}`}
-              >
-                ↑
-              </button>
-            </div>
-          </div>
           </div>
         </div>
 
-        {/* Navigation Arrows */}
+        {/* ── BOTTOM: Chat Input (always visible) ── */}
+        <div className="shrink-0 border-t border-neutral-100 p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !item.isAnalyzing && input.trim()) {
+                  handleSend(input);
+                }
+              }}
+              placeholder={item.isAnalyzing ? 'Analyzing artwork…' : 'ask anything…'}
+              disabled={item.isAnalyzing}
+              className={`flex-1 text-[13px] bg-neutral-50 p-2.5 px-4 sm:p-3 sm:px-5 rounded-full outline-none focus:ring-1 focus:ring-neutral-200 transition-all border border-neutral-100 ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            />
+            <button
+              onClick={() => { if (!item.isAnalyzing && input.trim()) handleSend(input); }}
+              disabled={item.isAnalyzing || !input.trim()}
+              className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center shadow-lg transition-all ${item.isAnalyzing || !input.trim() ? 'opacity-40 cursor-not-allowed' : 'hover:scale-110 active:scale-95'}`}
+            >
+              ↑
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation Arrows (visit sessions) */}
         {allVisitItems && allVisitItems.length > 1 && onNavigate && (
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col items-center space-y-2 z-50 pointer-events-none">
             <button

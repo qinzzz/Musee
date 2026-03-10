@@ -33,7 +33,7 @@ const OrganizeView: React.FC<Props> = ({
   return (
     <div className="w-full h-full relative overflow-hidden">
       {/* Content area */}
-      <div className="w-full h-full overflow-hidden relative">
+      <div className="w-full h-full relative">
         {layout === 'grid' ? (
           <GridView
             items={items}
