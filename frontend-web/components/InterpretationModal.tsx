@@ -110,7 +110,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   // rightMode: 'metadata' shows analysis info, 'chat' shows conversation
   const [rightMode, setRightMode] = useState<'metadata' | 'chat'>('metadata');
   const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
-  const [isImageCollapsed, setIsImageCollapsed] = useState(false);
+  const [mobileImageHeight, setMobileImageHeight] = useState(-1); // -1 = unset (uses CSS). Set on mount for mobile = 4:3 aspect ratio
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const albumButtonRef = useRef<HTMLButtonElement>(null);
@@ -231,6 +231,13 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   };
 
   // Load image to get aspect ratio; open modal even if image fails
+  // Set initial mobile image height (4:3 = 75vw) and reset on item navigate
+  useEffect(() => {
+    if (window.innerWidth < 640) {
+      setMobileImageHeight(window.innerWidth * 0.75);
+    }
+  }, [item.id]);
+
   useEffect(() => {
     setImageError(false);
     const img = new Image();
@@ -489,11 +496,14 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setAnnotationInput('');
   };
 
-  // Collapse image when user scrolls down in info panel (mobile)
+  // Collapse image as user scrolls — height tracks scroll position (mobile only)
   const handleInfoScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (window.innerWidth >= 640) return;
     const scrollTop = e.currentTarget.scrollTop;
-    if (scrollTop > 30 && !isImageCollapsed) setIsImageCollapsed(true);
-    else if (scrollTop <= 5 && isImageCollapsed) setIsImageCollapsed(false);
+    const fullH = window.innerWidth * 0.75; // 4:3
+    const collapseDistance = fullH * 0.6;   // scroll 60% of full height to fully collapse
+    const newH = Math.max(0, fullH - scrollTop * (fullH / collapseDistance));
+    setMobileImageHeight(newH);
   };
 
   // Calculate modal dimensions based on screen size
@@ -558,31 +568,32 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             <div className="w-16" />
           )}
 
-          {/* Center: piece counter */}
-          {allVisitItems && allVisitItems.length > 1 ? (
-            <span className="text-[9px] font-mono text-neutral-400 tracking-[0.2em] font-bold">
-              PIECE {allVisitItems.findIndex(i => i.id === item.id) + 1} / {allVisitItems.length}
-            </span>
-          ) : (
-            <div />
-          )}
-
-          {/* Right: Next + Close */}
-          <div className="flex items-center">
-            {allVisitItems && allVisitItems.length > 1 && onNavigate && (
-              <button
-                onClick={() => onNavigate('next')}
-                className="flex items-center gap-1 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
-              >
-                <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
+          {/* Center: Back button (replaces ✕) */}
+          <button
+            onClick={onClose}
+            className="flex flex-col items-center justify-center gap-0.5 text-neutral-500 active:text-neutral-900 transition-colors py-1"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="19 12 5 12"/><polyline points="12 19 5 12 12 5"/></svg>
+            <span className="text-[9px] tracking-[0.2em] uppercase font-bold">Back</span>
+            {allVisitItems && allVisitItems.length > 1 && (
+              <span className="text-[8px] font-mono text-neutral-400 tracking-wider">
+                {allVisitItems.findIndex(i => i.id === item.id) + 1}/{allVisitItems.length}
+              </span>
             )}
+          </button>
+
+          {/* Right: Next or spacer */}
+          {allVisitItems && allVisitItems.length > 1 && onNavigate ? (
             <button
-              onClick={onClose}
-              className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-400 hover:text-neutral-900 transition-colors text-lg leading-none"
-            >✕</button>
-          </div>
+              onClick={() => onNavigate('next')}
+              className="flex items-center gap-1 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
+            >
+              <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          ) : (
+            <div className="w-16" />
+          )}
         </div>
 
         {/* ── MAIN AREA: left photo panel + right content panel ── */}
@@ -590,7 +601,8 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
           {/* ── LEFT / TOP PANEL: Location + Time + Photo ── */}
           <div
-            className={`shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] min-h-0 sm:h-auto overflow-hidden transition-all duration-300 ease-in-out ${isImageCollapsed ? 'h-0' : 'h-[35vh]'}`}
+            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] sm:h-auto overflow-hidden"
+            style={mobileImageHeight >= 0 ? { height: `${mobileImageHeight}px` } : {}}
           >
             {/* Location + Time row */}
             {!item.isAnalyzing && (displayLocation || item.photoTime) && (
