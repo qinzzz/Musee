@@ -492,15 +492,14 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
     const isMobile = viewportWidth < 640;
-    const mobileHeight = 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1rem)';
 
     if (!imageLoaded) {
-      if (isMobile) return { width: '96vw', height: mobileHeight, maxHeight: mobileHeight };
+      if (isMobile) return { width: '100vw', height: '100dvh' };
       return { width: '600px', height: '400px' };
     }
 
     if (isMobile) {
-      return { width: '96vw', height: mobileHeight, maxHeight: mobileHeight };
+      return { width: '100vw', height: '100dvh' };
     }
 
     // Desktop: wide layout
@@ -519,11 +518,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   return (
     <>
     <div
-      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-12"
-      style={{
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)',
-        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)'
-      }}
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center sm:overflow-y-auto sm:p-12"
     >
       <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xl" onClick={onClose} />
 
@@ -536,15 +531,38 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
       )}
 
       <div
-        className={`relative bg-white rounded-2xl sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`relative bg-white sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         style={getModalStyle()}
       >
+        {/* ── MOBILE NAV BAR: prev/next piece (mobile only) ── */}
+        {allVisitItems && allVisitItems.length > 1 && onNavigate && (
+          <div className="sm:hidden flex items-center justify-between px-3 shrink-0 bg-white border-b border-neutral-100" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.5rem)', paddingBottom: '0.5rem' }}>
+            <button
+              onClick={() => onNavigate('prev')}
+              className="flex items-center gap-1.5 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Prev</span>
+            </button>
+            <span className="text-[9px] font-mono text-neutral-400 tracking-[0.2em] font-bold">
+              PIECE {allVisitItems.findIndex(i => i.id === item.id) + 1} / {allVisitItems.length}
+            </span>
+            <button
+              onClick={() => onNavigate('next')}
+              className="flex items-center gap-1.5 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
+            >
+              <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        )}
+
         {/* ── MAIN AREA: left photo panel + right content panel ── */}
         <div className="flex flex-col sm:flex-row flex-1 min-h-0">
 
           {/* ── LEFT / TOP PANEL: Location + Time + Photo ── */}
           <div
-            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] min-h-0 h-[42vh] sm:h-auto"
+            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] min-h-0 h-[35vh] sm:h-auto"
           >
             {/* Location + Time row */}
             {!item.isAnalyzing && (displayLocation || item.photoTime) && (
@@ -996,7 +1014,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         </div>
 
         {/* ── BOTTOM: Chat Input (always visible) ── */}
-        <div className="shrink-0 border-t border-neutral-100 p-3 sm:p-4">
+        <div className="shrink-0 border-t border-neutral-100 p-3 sm:p-4" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}>
           <div className="flex items-center gap-2 sm:gap-3">
             {/* History toggle — expands conversation on the right panel */}
             <button
@@ -1008,9 +1026,18 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                   : 'border-neutral-200 text-neutral-400 hover:border-neutral-400 hover:text-neutral-700'
               }`}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="18 15 12 9 6 15"/>
-              </svg>
+              {rightMode === 'chat' ? (
+                /* In chat mode: show info/list icon to go back to metadata */
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                  <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+              ) : (
+                /* In metadata mode: show chat bubble icon to open chat */
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              )}
             </button>
             <input
               value={input}
@@ -1034,9 +1061,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           </div>
         </div>
 
-        {/* Navigation Arrows (visit sessions) */}
+        {/* Navigation Arrows (visit sessions) — desktop only */}
         {allVisitItems && allVisitItems.length > 1 && onNavigate && (
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col items-center space-y-2 z-50 pointer-events-none">
+          <div className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 flex-col items-center space-y-2 z-50 pointer-events-none">
             <button
               onClick={() => onNavigate('prev')}
               className="w-12 h-12 rounded-full bg-neutral-900/80 backdrop-blur-md border border-white/20 text-white flex flex-col items-center justify-center hover:bg-neutral-900 transition-all hover:scale-110 group pointer-events-auto shadow-2xl"
