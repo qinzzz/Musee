@@ -135,11 +135,15 @@ const AlbumView: React.FC<Props> = ({ items, onInterpret, onDelete }) => {
                   className="group relative aspect-square cursor-pointer overflow-hidden rounded-sm bg-neutral-100"
                   onClick={() => onInterpret(item)}
                 >
+                  {/* Spinner behind img; shows on error */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-4 h-4 border-2 border-neutral-200 border-t-neutral-400 rounded-full animate-spin" />
+                  </div>
                   <img
                     src={item.url}
                     alt={item.artworkName || ''}
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                    className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
+                    className="relative w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                   <button

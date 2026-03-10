@@ -27,17 +27,16 @@ const GridView: React.FC<Props> = ({ items, visit, filteredVisitId, isAnalyzing,
               className="group relative aspect-square cursor-pointer overflow-hidden rounded bg-neutral-100"
               onClick={() => onInterpret(item)}
             >
+              {/* Spinner sits behind the img; visible when img hides on error or while analyzing */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-neutral-200 border-t-neutral-400 rounded-full animate-spin" />
+              </div>
               <img
                 src={item.url}
                 alt={item.artworkName || ''}
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                className={`w-full h-full object-cover transition-all duration-300 group-hover:scale-105 ${item.isAnalyzing ? 'blur-sm opacity-50' : ''}`}
+                className={`relative w-full h-full object-cover transition-all duration-300 group-hover:scale-105 ${item.isAnalyzing ? 'blur-sm opacity-50' : ''}`}
               />
-              {item.isAnalyzing && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-700 rounded-full animate-spin" />
-                </div>
-              )}
               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-1.5">
                 {item.artworkName && (
                   <p className="text-white text-[8px] font-medium leading-tight truncate">{item.artworkName}</p>

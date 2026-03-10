@@ -1143,7 +1143,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className={`relative z-10 flex-1 transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-10'} ${(interpretingItem || exhibitionContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
+        <div className={`relative z-10 flex-1 min-h-0 overflow-hidden transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-10'} ${(interpretingItem || exhibitionContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
           {activeTab === 'understand' ? (
             <UnderstandView
               items={items}
