@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
-import { GalleryItem, Visit, TagCoordinate, NeighborItem } from '../types';
+import React, { useState, useMemo } from 'react';
+import { GalleryItem, Visit, TagCoordinate, NeighborItem, Album } from '../types';
 import GridView from './GridView';
 import AlbumView from './AlbumView';
 import TopographyView from './TopographyView';
 
 type SubLayout = 'grid' | 'album' | 'topography';
+type ActiveFilter = 'all' | 'liked' | string; // string = album id
 
 interface Props {
   items: GalleryItem[];
@@ -14,6 +15,8 @@ interface Props {
   isAnalyzing: boolean;
   tagPositions: Record<string, TagCoordinate>;
   neighborItems: NeighborItem[];
+  likedIds?: Set<string>;
+  albums?: Album[];
   onInterpret: (item: GalleryItem) => void;
   onDelete: (id: string) => void;
 }
@@ -25,18 +28,75 @@ const OrganizeView: React.FC<Props> = ({
   isAnalyzing,
   tagPositions,
   neighborItems,
+  likedIds,
+  albums,
   onInterpret,
   onDelete,
 }) => {
   const [layout, setLayout] = useState<SubLayout>('grid');
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
+
+  const likedCount = useMemo(() => likedIds ? items.filter(i => likedIds.has(i.id)).length : 0, [items, likedIds]);
+  const activeAlbums = useMemo(() => (albums || []).filter(a => a.itemIds.some(id => items.find(i => i.id === id))), [albums, items]);
+  const showFilterBar = likedCount > 0 || activeAlbums.length > 0;
+
+  const filteredItems = useMemo(() => {
+    if (activeFilter === 'all') return items;
+    if (activeFilter === 'liked') return items.filter(i => likedIds?.has(i.id));
+    const album = (albums || []).find(a => a.id === activeFilter);
+    return album ? items.filter(i => album.itemIds.includes(i.id)) : items;
+  }, [items, activeFilter, likedIds, albums]);
 
   return (
-    <div className="w-full h-full relative overflow-hidden">
+    <div className="w-full h-full relative overflow-hidden flex flex-col">
+      {/* Filter chips — only shown when there are liked items or named albums */}
+      {showFilterBar && layout !== 'topography' && (
+        <div className="shrink-0 px-4 pt-3 pb-1 flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <button
+            onClick={() => setActiveFilter('all')}
+            className={`shrink-0 text-[10px] tracking-[0.2em] uppercase px-3 py-1 rounded-full border transition-all ${
+              activeFilter === 'all'
+                ? 'bg-neutral-900 text-white border-neutral-900'
+                : 'border-neutral-200 text-neutral-500 hover:border-neutral-400 hover:text-neutral-700'
+            }`}
+          >All</button>
+
+          {likedCount > 0 && (
+            <button
+              onClick={() => setActiveFilter('liked')}
+              className={`shrink-0 flex items-center gap-1 text-[10px] tracking-[0.2em] uppercase px-3 py-1 rounded-full border transition-all ${
+                activeFilter === 'liked'
+                  ? 'bg-red-500 text-white border-red-500'
+                  : 'border-neutral-200 text-neutral-500 hover:border-red-300 hover:text-red-500'
+              }`}
+            >
+              <svg width="9" height="9" viewBox="0 0 24 24" fill={activeFilter === 'liked' ? 'white' : 'currentColor'} stroke="none">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+              Liked
+              <span className="opacity-60">{likedCount}</span>
+            </button>
+          )}
+
+          {activeAlbums.map(album => (
+            <button
+              key={album.id}
+              onClick={() => setActiveFilter(album.id)}
+              className={`shrink-0 text-[10px] tracking-[0.2em] uppercase px-3 py-1 rounded-full border transition-all ${
+                activeFilter === album.id
+                  ? 'bg-neutral-900 text-white border-neutral-900'
+                  : 'border-neutral-200 text-neutral-500 hover:border-neutral-400 hover:text-neutral-700'
+              }`}
+            >{album.name}</button>
+          ))}
+        </div>
+      )}
+
       {/* Content area */}
-      <div className="w-full h-full relative">
+      <div className="flex-1 relative min-h-0">
         {layout === 'grid' ? (
           <GridView
-            items={items}
+            items={filteredItems}
             visit={visit}
             filteredVisitId={filteredVisitId}
             isAnalyzing={isAnalyzing}
@@ -45,7 +105,7 @@ const OrganizeView: React.FC<Props> = ({
           />
         ) : layout === 'album' ? (
           <AlbumView
-            items={items}
+            items={filteredItems}
             onInterpret={onInterpret}
             onDelete={onDelete}
           />
@@ -60,9 +120,11 @@ const OrganizeView: React.FC<Props> = ({
           </div>
         )}
 
-        {items.length === 0 && layout !== 'topography' && (
+        {filteredItems.length === 0 && layout !== 'topography' && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No pieces yet</p>
+            <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">
+              {activeFilter === 'liked' ? 'No liked pieces yet' : activeFilter !== 'all' ? 'No pieces in this album' : 'No pieces yet'}
+            </p>
           </div>
         )}
       </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import ExifReader from 'exifreader';
-import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, Annotation, CuratorConversation } from './types';
+import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, Annotation, CuratorConversation, Album } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import GoogleLogin from './components/GoogleLogin';
 import {
@@ -260,6 +260,16 @@ const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
+  const [likedIds, setLikedIds] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('musee_liked_ids') || '[]')); }
+    catch { return new Set(); }
+  });
+
+  const [albums, setAlbums] = useState<Album[]>(() => {
+    try { return JSON.parse(localStorage.getItem('musee_albums') || '[]'); }
+    catch { return []; }
+  });
+
   const handleLoginSuccess = (user: any) => {
     setCurrentUser(user);
     // Reload artworks list for the new user
@@ -270,6 +280,38 @@ const App: React.FC = () => {
     logout();
     setCurrentUser(null);
     window.location.reload();
+  };
+
+  const handleToggleLike = (id: string) => {
+    setLikedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      localStorage.setItem('musee_liked_ids', JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  const handleSaveToAlbums = (itemId: string, albumIds: string[]) => {
+    setAlbums(prev => {
+      const next = prev.map(album => {
+        const shouldBeIn = albumIds.includes(album.id);
+        const isIn = album.itemIds.includes(itemId);
+        if (shouldBeIn && !isIn) return { ...album, itemIds: [...album.itemIds, itemId] };
+        if (!shouldBeIn && isIn) return { ...album, itemIds: album.itemIds.filter(id => id !== itemId) };
+        return album;
+      });
+      localStorage.setItem('musee_albums', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleCreateAlbum = (name: string, itemId: string) => {
+    const newAlbum: Album = { id: Date.now().toString(), name, itemIds: [itemId] };
+    setAlbums(prev => {
+      const next = [...prev, newAlbum];
+      localStorage.setItem('musee_albums', JSON.stringify(next));
+      return next;
+    });
   };
 
   const [visit, setVisit] = useState<Visit>({
@@ -1178,6 +1220,8 @@ const App: React.FC = () => {
               isAnalyzing={isAnalyzing}
               tagPositions={tagPositions}
               neighborItems={MOCK_NEIGHBORS}
+              likedIds={likedIds}
+              albums={albums}
               onInterpret={(item) => {
                 const activeId = filteredVisitId || (visit.active ? visit.id : null);
                 const sessionItems = activeId ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id))) : undefined;
@@ -1323,6 +1367,12 @@ const App: React.FC = () => {
             sessionId={visit.id}
             allVisitItems={interpretingItem.allVisitItems}
             onNavigate={handleNavigateInterpretation}
+            isLiked={likedIds.has(interpretingItem.id)}
+            albums={albums}
+            itemAlbumIds={albums.filter(a => a.itemIds.includes(interpretingItem.id)).map(a => a.id)}
+            onToggleLike={() => handleToggleLike(interpretingItem.id)}
+            onSaveToAlbum={(albumIds) => handleSaveToAlbums(interpretingItem.id, albumIds)}
+            onCreateAlbum={(name) => handleCreateAlbum(name, interpretingItem.id)}
           />
         )}
 

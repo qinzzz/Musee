@@ -78,6 +78,12 @@ export interface NeighborItem {
   coordinate: TagCoordinate; // New field for spatial mapping
 }
 
+export interface Album {
+  id: string;
+  name: string;
+  itemIds: string[];
+}
+
 export enum ViewMode {
   GALLERY = 'gallery',
   TOPOGRAPHY = 'topography',

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
-import { Message, Annotation } from '../types';
+import { Message, Annotation, Album } from '../types';
 import { chatWithArtwork, chatWithArtworkStream, base64ToFile, getTagExplanation, suggestTopics, updateArtwork } from '../apiService';
 import pencilIcon from '../assets/pencil-line.svg';
 
@@ -32,6 +33,12 @@ interface Props {
   sessionId?: string;
   allVisitItems?: any[];
   onNavigate?: (direction: 'prev' | 'next') => void;
+  isLiked?: boolean;
+  albums?: Album[];
+  itemAlbumIds?: string[];
+  onToggleLike?: () => void;
+  onSaveToAlbum?: (albumIds: string[]) => void;
+  onCreateAlbum?: (name: string) => void;
 }
 
 // Tag component with explanation tooltip on hover
@@ -89,7 +96,7 @@ const HoverTag: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onUpdateMetadata, onDelete, sessionId, allVisitItems, onNavigate }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onUpdateMetadata, onDelete, sessionId, allVisitItems, onNavigate, isLiked, albums, itemAlbumIds, onToggleLike, onSaveToAlbum, onCreateAlbum }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -105,6 +112,11 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const albumButtonRef = useRef<HTMLButtonElement>(null);
+  const [showAlbumDropdown, setShowAlbumDropdown] = useState(false);
+  const [albumDropdownPos, setAlbumDropdownPos] = useState<{ top: number; right: number } | null>(null);
+  const [creatingAlbum, setCreatingAlbum] = useState(false);
+  const [newAlbumName, setNewAlbumName] = useState('');
 
   // Inline editing state
   const [isEditing, setIsEditing] = useState(false);
@@ -239,6 +251,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setRightMode('metadata'); // Reset to metadata view for the new piece
     setIsEditing(false);
     setTagInput('');
+    setShowAlbumDropdown(false);
+    setCreatingAlbum(false);
+    setNewAlbumName('');
     const vals = {
       artist: item.artistName || '',
       title: item.artworkName || '',
@@ -502,6 +517,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   };
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-12"
       style={{
@@ -653,13 +669,53 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     </div>
                   )}
                   <span className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">
-                    {item.isAnalyzing ? 'Analyzing…' : 'Analysis'}
+                    {item.isAnalyzing ? 'Analyzing…' : 'Info'}
                   </span>
                 </div>
               )}
 
-              {/* Right side: edit / delete / close */}
+              {/* Right side: like / album / edit / delete / close */}
               <div className="flex items-center gap-3">
+                {/* Heart / Like button */}
+                {onToggleLike && (
+                  <button
+                    onClick={onToggleLike}
+                    title={isLiked ? 'Unlike' : 'Like'}
+                    className={`flex items-center justify-center transition-all ${
+                      isLiked ? 'text-red-500 hover:text-red-600' : 'text-neutral-300 hover:text-neutral-600'
+                    }`}
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                    </svg>
+                  </button>
+                )}
+
+                {/* Album / Save to board button */}
+                {onSaveToAlbum && (
+                  <button
+                    ref={albumButtonRef}
+                    onClick={() => {
+                      if (albumButtonRef.current) {
+                        const rect = albumButtonRef.current.getBoundingClientRect();
+                        setAlbumDropdownPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                      }
+                      setShowAlbumDropdown(prev => !prev);
+                    }}
+                    title="Save to album"
+                    className={`flex items-center justify-center transition-all ${
+                      (itemAlbumIds && itemAlbumIds.length > 0) ? 'text-neutral-700' : 'text-neutral-300 hover:text-neutral-600'
+                    }`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                  </button>
+                )}
+
+                {/* Separator */}
+                {(onToggleLike || onSaveToAlbum) && <div className="w-px h-3.5 bg-neutral-200" />}
+
                 {rightMode === 'metadata' && !item.isAnalyzing && item.artworkId && (
                   isEditing ? (
                     <>
@@ -686,10 +742,10 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 {onDelete && !item.isAnalyzing && (
                   <button
                     onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(item.id); }}
-                    className="text-neutral-300 hover:text-red-500 transition-colors"
-                    title="Remove from Musee"
+                    className="text-neutral-500 hover:text-red-500 transition-colors"
+                    title="Delete from Musee"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                   </button>
                 )}
                 <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
@@ -786,7 +842,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
                 {displayDescription && (
                   <div>
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Analysis</p>
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Interpretation</p>
                     <div className="text-[12px] sm:text-[13px] leading-relaxed text-neutral-600 font-serif">
                       <ReactMarkdown components={markdownComponents}>{displayDescription}</ReactMarkdown>
                       {item.isAnalyzing && (
@@ -1007,6 +1063,91 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         )}
       </div>
     </div>
+
+    {/* Album dropdown — rendered via portal to escape modal overflow-hidden */}
+    {showAlbumDropdown && albumDropdownPos && createPortal(
+      <>
+        <div className="fixed inset-0 z-[200]" onClick={() => { setShowAlbumDropdown(false); setCreatingAlbum(false); setNewAlbumName(''); }} />
+        <div
+          className="fixed z-[201] bg-white rounded-2xl shadow-2xl border border-neutral-100 w-60 py-2 animate-in fade-in zoom-in-95 duration-150"
+          style={{ top: albumDropdownPos.top, right: albumDropdownPos.right }}
+        >
+          <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold px-4 pt-1.5 pb-2.5">Save to album</p>
+
+          {(albums || []).length === 0 && !creatingAlbum && (
+            <p className="text-[12px] text-neutral-400 px-4 pb-2">No albums yet</p>
+          )}
+
+          {(albums || []).map(album => {
+            const checked = (itemAlbumIds || []).includes(album.id);
+            return (
+              <button
+                key={album.id}
+                onClick={() => {
+                  const current = itemAlbumIds || [];
+                  const newIds = checked ? current.filter(id => id !== album.id) : [...current, album.id];
+                  onSaveToAlbum?.(newIds);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors text-left"
+              >
+                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-neutral-900 border-neutral-900' : 'border-neutral-300'}`}>
+                  {checked && (
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
+                </div>
+                <span className="text-[13px] text-neutral-700 truncate">{album.name}</span>
+              </button>
+            );
+          })}
+
+          {/* Create album section */}
+          <div className="border-t border-neutral-100 mt-1 pt-2 px-4 pb-1">
+            {creatingAlbum ? (
+              <div className="flex items-center gap-2 py-1">
+                <input
+                  autoFocus
+                  value={newAlbumName}
+                  onChange={e => setNewAlbumName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newAlbumName.trim()) {
+                      onCreateAlbum?.(newAlbumName.trim());
+                      setNewAlbumName('');
+                      setCreatingAlbum(false);
+                      setShowAlbumDropdown(false);
+                    }
+                    if (e.key === 'Escape') { setCreatingAlbum(false); setNewAlbumName(''); }
+                  }}
+                  placeholder="Album name…"
+                  className="flex-1 text-[12px] border-b border-neutral-300 outline-none py-1 bg-transparent"
+                />
+                <button
+                  onClick={() => {
+                    if (newAlbumName.trim()) {
+                      onCreateAlbum?.(newAlbumName.trim());
+                      setNewAlbumName('');
+                      setCreatingAlbum(false);
+                      setShowAlbumDropdown(false);
+                    }
+                  }}
+                  className="text-[11px] text-neutral-900 font-medium hover:text-neutral-500 transition-colors shrink-0"
+                >Create</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setCreatingAlbum(true)}
+                className="text-[12px] text-neutral-500 hover:text-neutral-900 flex items-center gap-1.5 py-1 transition-colors"
+              >
+                <span className="text-base leading-none">+</span> New album
+              </button>
+            )}
+          </div>
+        </div>
+      </>,
+      document.body
+    )}
+    </>
   );
 };
 
