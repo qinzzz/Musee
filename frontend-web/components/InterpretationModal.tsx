@@ -110,6 +110,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   // rightMode: 'metadata' shows analysis info, 'chat' shows conversation
   const [rightMode, setRightMode] = useState<'metadata' | 'chat'>('metadata');
   const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
+  const [isImageCollapsed, setIsImageCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const albumButtonRef = useRef<HTMLButtonElement>(null);
@@ -249,6 +250,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setMessages(item.conversation || []);
     setSuggestedTopics([]);
     setRightMode('metadata'); // Reset to metadata view for the new piece
+    setIsImageCollapsed(false);
     setIsEditing(false);
     setTagInput('');
     setShowAlbumDropdown(false);
@@ -487,6 +489,13 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setAnnotationInput('');
   };
 
+  // Collapse image when user scrolls down in info panel (mobile)
+  const handleInfoScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const scrollTop = e.currentTarget.scrollTop;
+    if (scrollTop > 30 && !isImageCollapsed) setIsImageCollapsed(true);
+    else if (scrollTop <= 5 && isImageCollapsed) setIsImageCollapsed(false);
+  };
+
   // Calculate modal dimensions based on screen size
   const getModalStyle = () => {
     const viewportHeight = window.innerHeight;
@@ -534,35 +543,54 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         className={`relative bg-white sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         style={getModalStyle()}
       >
-        {/* ── MOBILE NAV BAR: prev/next piece (mobile only) ── */}
-        {allVisitItems && allVisitItems.length > 1 && onNavigate && (
-          <div className="sm:hidden flex items-center justify-between px-3 shrink-0 bg-white border-b border-neutral-100" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.5rem)', paddingBottom: '0.5rem' }}>
+        {/* ── MOBILE HEADER BAR (mobile only): prev/next + close ── */}
+        <div className="sm:hidden flex items-center justify-between px-2 shrink-0 bg-white border-b border-neutral-100" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.5rem)', paddingBottom: '0.25rem' }}>
+          {/* Left: Prev or spacer */}
+          {allVisitItems && allVisitItems.length > 1 && onNavigate ? (
             <button
               onClick={() => onNavigate('prev')}
-              className="flex items-center gap-1.5 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
+              className="flex items-center gap-1 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Prev</span>
             </button>
+          ) : (
+            <div className="w-16" />
+          )}
+
+          {/* Center: piece counter */}
+          {allVisitItems && allVisitItems.length > 1 ? (
             <span className="text-[9px] font-mono text-neutral-400 tracking-[0.2em] font-bold">
               PIECE {allVisitItems.findIndex(i => i.id === item.id) + 1} / {allVisitItems.length}
             </span>
+          ) : (
+            <div />
+          )}
+
+          {/* Right: Next + Close */}
+          <div className="flex items-center">
+            {allVisitItems && allVisitItems.length > 1 && onNavigate && (
+              <button
+                onClick={() => onNavigate('next')}
+                className="flex items-center gap-1 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
+              >
+                <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            )}
             <button
-              onClick={() => onNavigate('next')}
-              className="flex items-center gap-1.5 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
-            >
-              <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
+              onClick={onClose}
+              className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-400 hover:text-neutral-900 transition-colors text-lg leading-none"
+            >✕</button>
           </div>
-        )}
+        </div>
 
         {/* ── MAIN AREA: left photo panel + right content panel ── */}
         <div className="flex flex-col sm:flex-row flex-1 min-h-0">
 
           {/* ── LEFT / TOP PANEL: Location + Time + Photo ── */}
           <div
-            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] min-h-0 h-[35vh] sm:h-auto"
+            className={`shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] min-h-0 sm:h-auto overflow-hidden transition-all duration-300 ease-in-out ${isImageCollapsed ? 'h-0' : 'h-[35vh]'}`}
           >
             {/* Location + Time row */}
             {!item.isAnalyzing && (displayLocation || item.photoTime) && (
@@ -765,13 +793,13 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     <div className="w-px h-3 bg-neutral-200" />
                   </>
                 )}
-                <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
+                <button onClick={onClose} className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
               </div>
             </div>
 
             {/* Right panel scrollable content */}
             {rightMode === 'metadata' ? (
-              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0" onScroll={handleInfoScroll}>
 
                 {/* Error state */}
                 {!item.isAnalyzing && item.streamingText && !item.artistName && (
@@ -942,7 +970,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               </div>
             ) : (
               /* ── CHAT MODE ── */
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0" onScroll={handleInfoScroll}>
                 {messages.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
                     <div className="w-12 h-px bg-neutral-200 mb-6"></div>
