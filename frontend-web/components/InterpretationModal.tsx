@@ -646,37 +646,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white">
 
             {/* Right panel header */}
-            <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between shrink-0">
-              {/* Left side: mode label / back button */}
-              {rightMode === 'chat' ? (
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setRightMode('metadata')}
-                    className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors flex items-center gap-1"
-                  >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-                    Info
-                  </button>
-                  <div className="w-px h-3 bg-neutral-200" />
-                  <span className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Curator Dialogue</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  {item.isAnalyzing && (
-                    <div className="relative w-3 h-3 shrink-0">
-                      <div className="absolute inset-0 border-[1.5px] border-neutral-100 rounded-full"></div>
-                      <div className="absolute inset-0 border-t-[1.5px] border-neutral-800 rounded-full animate-spin"></div>
-                    </div>
-                  )}
-                  <span className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">
-                    {item.isAnalyzing ? 'Analyzing…' : ''}
-                  </span>
-                </div>
-              )}
-
-              {/* Right side: like / album / edit / delete / close */}
-              <div className="flex items-center gap-3">
-                {/* Heart / Like button */}
+            <div className="px-2 py-1.5 border-b border-neutral-100 flex items-center justify-between shrink-0">
+              {/* LEFT: action icons */}
+              <div className="flex items-center">
                 {onToggleLike && (
                   <button
                     onClick={onToggleLike}
@@ -685,13 +657,12 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                       isLiked ? 'text-red-500 hover:text-red-600' : 'text-neutral-300 hover:text-neutral-600'
                     }`}
                   >
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                     </svg>
                   </button>
                 )}
 
-                {/* Album / Save to board button */}
                 {onSaveToAlbum && (
                   <button
                     ref={albumButtonRef}
@@ -704,21 +675,22 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     }}
                     title="Save to album"
                     className={`w-9 h-9 flex items-center justify-center rounded-full transition-all ${
-                      (itemAlbumIds && itemAlbumIds.length > 0) ? 'text-neutral-700' : 'text-neutral-300 hover:text-neutral-600'
+                      (itemAlbumIds && itemAlbumIds.length > 0) ? 'text-neutral-600 hover:text-neutral-800' : 'text-neutral-300 hover:text-neutral-600'
                     }`}
                   >
-                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                     </svg>
                   </button>
                 )}
 
-                {/* Separator */}
-                {(onToggleLike || onSaveToAlbum) && <div className="w-px h-4 bg-neutral-200" />}
+                {(onToggleLike || onSaveToAlbum) && !item.isAnalyzing && (onDelete || item.artworkId) && (
+                  <div className="w-px h-4 bg-neutral-150 mx-0.5" />
+                )}
 
                 {rightMode === 'metadata' && !item.isAnalyzing && item.artworkId && (
                   isEditing ? (
-                    <>
+                    <div className="flex items-center gap-2 px-2">
                       <button
                         onClick={cancelEditing}
                         className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors"
@@ -728,25 +700,55 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                         disabled={isSavingField}
                         className="text-[9px] tracking-[0.3em] uppercase text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
                       >{isSavingField ? 'Saving…' : 'Save'}</button>
-                    </>
+                    </div>
                   ) : (
                     <button
                       onClick={startEditing}
                       title="Edit artwork info"
-                      className="w-9 h-9 flex items-center justify-center rounded-full opacity-30 hover:opacity-70 transition-opacity"
+                      className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-300 hover:text-neutral-600 transition-colors"
                     >
-                      <img src={pencilIcon} width="22" height="22" alt="Edit" />
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                      </svg>
                     </button>
                   )
                 )}
+
                 {onDelete && !item.isAnalyzing && (
                   <button
                     onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(item.id); }}
-                    className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-400 hover:text-red-500 transition-colors"
+                    className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-300 hover:text-red-500 transition-colors"
                     title="Delete from Musee"
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    </svg>
                   </button>
+                )}
+              </div>
+
+              {/* RIGHT: analyzing indicator + mode label + close */}
+              <div className="flex items-center gap-1">
+                {item.isAnalyzing && (
+                  <div className="flex items-center gap-1.5 mr-1">
+                    <div className="relative w-3 h-3 shrink-0">
+                      <div className="absolute inset-0 border-[1.5px] border-neutral-100 rounded-full"></div>
+                      <div className="absolute inset-0 border-t-[1.5px] border-neutral-800 rounded-full animate-spin"></div>
+                    </div>
+                    <span className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold">Analyzing…</span>
+                  </div>
+                )}
+                {rightMode === 'chat' && (
+                  <>
+                    <button
+                      onClick={() => setRightMode('metadata')}
+                      className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors flex items-center gap-1 px-2 py-1"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                      Info
+                    </button>
+                    <div className="w-px h-3 bg-neutral-200" />
+                  </>
                 )}
                 <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
               </div>
