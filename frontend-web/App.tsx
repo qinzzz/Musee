@@ -219,7 +219,7 @@ const App: React.FC = () => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
-  const [activeTab, setActiveTab] = useState<'explore' | 'understand' | 'organize'>('explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'learn' | 'collect'>('explore');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showEntrance, setShowEntrance] = useState(false);
   const [interpretingItem, setInterpretingItem] = useState<{
@@ -256,7 +256,8 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(getCurrentUser());
   const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
@@ -442,6 +443,36 @@ const App: React.FC = () => {
       }))
       .filter((entry) => Boolean(entry.url));
   }, [corridorEntries]);
+
+  // Active item for metadata / tags display
+  const activeDisplayItem = useMemo(() => {
+    const entry = corridorEntries[thumbEntries[activeThumbIndex]?.sourceIndex ?? 0];
+    if (!entry) return null;
+    return entry.type === 'item' ? entry.item : entry.items[entry.items.length - 1] ?? null;
+  }, [corridorEntries, thumbEntries, activeThumbIndex]);
+
+  const parseDisplayLocation = (loc: any): string | null => {
+    if (!loc) return null;
+    try {
+      const data = typeof loc === 'object' ? loc : (typeof loc === 'string' && loc.startsWith('{') ? JSON.parse(loc) : null);
+      if (data) {
+        const parts: string[] = [];
+        if (data.museum) parts.push(data.museum);
+        if (data.city) parts.push(data.city);
+        else if (data.country) parts.push(data.country);
+        return parts.join(', ') || null;
+      }
+      return typeof loc === 'string' ? loc : null;
+    } catch { return typeof loc === 'string' ? loc : null; }
+  };
+
+  const parseDisplayDate = (dateStr: string): string => {
+    try {
+      const dt = new Date(dateStr);
+      if (!isNaN(dt.getTime())) return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return dateStr;
+    } catch { return dateStr; }
+  };
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -968,27 +999,124 @@ const App: React.FC = () => {
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <div className="relative w-screen h-screen bg-[#fdfdfd] overflow-hidden flex flex-col transition-colors duration-1000">
-        {/* User Auth Info */}
-        <div className="fixed top-2 right-3 sm:right-4 z-50 flex items-center space-x-4">
+        {/* Bottom-left user panel */}
+        <div className="fixed bottom-4 left-4 z-50">
           {currentUser ? (
-            <div className="relative group">
+            <div className="relative">
+              {/* Avatar trigger */}
               <button
-                onClick={() => setSettingsOpen(!settingsOpen)}
-                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden border-2 border-white shadow-lg hover:scale-110 transition-all active:scale-95"
-                title={`${currentUser.full_name} — settings`}
+                onClick={() => setShowUserMenu(v => !v)}
+                className="w-9 h-9 rounded-full overflow-hidden border-2 border-white/30 shadow-lg hover:scale-105 active:scale-95 transition-all"
               >
-                <img
-                  src={currentUser.profile_picture_url}
-                  alt={currentUser.full_name}
-                  className="w-full h-full object-cover"
-                />
+                <img src={currentUser.profile_picture_url} alt={currentUser.full_name} className="w-full h-full object-cover" />
               </button>
-              <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-xl border border-neutral-100 px-3 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                <span className="text-[8px] tracking-[0.2em] uppercase text-neutral-500">{currentUser.full_name.split(' ')[0]} · Settings</span>
-              </div>
+
+              {/* Dropdown */}
+              {showUserMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                  <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-neutral-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    {/* User header */}
+                    <div className="px-4 pt-4 pb-3">
+                      <div className="flex items-center gap-3">
+                        <img src={currentUser.profile_picture_url} alt={currentUser.full_name} className="w-9 h-9 rounded-full object-cover shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold text-neutral-900 truncate leading-tight">{currentUser.full_name}</p>
+                          <p className="text-[11px] text-neutral-400 truncate leading-tight mt-0.5">{currentUser.email}</p>
+                        </div>
+                        <span className="text-[10px] bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-md font-semibold shrink-0">Free</span>
+                      </div>
+                      {(() => {
+                        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+                        const todayCount = items.filter(i => i.timestamp >= todayStart.getTime()).length;
+                        const pct = Math.min(todayCount / 60, 1);
+                        return (
+                          <div className="mt-3">
+                            <div className="h-1 bg-neutral-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-neutral-900 rounded-full transition-all" style={{ width: `${pct * 100}%` }} />
+                            </div>
+                            <p className="text-[11px] text-neutral-400 mt-1.5">{todayCount}/60 analyses today</p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="h-px bg-neutral-100 mx-3" />
+
+                    {/* Language row */}
+                    <div className="px-4 py-3 flex items-center justify-between">
+                      <span className="text-[13px] text-neutral-600">Language</span>
+                      <div className="flex bg-neutral-100 rounded-full p-0.5 gap-0.5">
+                        <button
+                          onClick={() => { setLanguage('en'); localStorage.setItem('musee_language', 'en'); }}
+                          className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all ${language === 'en' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-700'}`}
+                        >EN</button>
+                        <button
+                          onClick={() => { setLanguage('zh'); localStorage.setItem('musee_language', 'zh'); }}
+                          className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all ${language === 'zh' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-700'}`}
+                        >中文</button>
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-neutral-100 mx-3" />
+
+                    {/* Menu items */}
+                    <div className="py-1.5">
+                      {[
+                        {
+                          label: 'Account Settings',
+                          icon: <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>,
+                          action: () => { setShowUserMenu(false); setShowAccountModal('account'); },
+                          extra: <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        },
+                        {
+                          label: 'Personalization',
+                          icon: <path d="M12 20h9"/>,
+                          action: () => { setShowUserMenu(false); setShowAccountModal('personalization'); },
+                          extra: <><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></>
+                        },
+                        {
+                          label: 'Give feedback',
+                          icon: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>,
+                          action: () => setShowUserMenu(false),
+                          extra: null
+                        },
+                        {
+                          label: 'Terms and Privacy',
+                          icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>,
+                          action: () => { setShowUserMenu(false); window.open('/terms.html', '_blank'); },
+                          extra: null
+                        },
+                      ].map(({ label, icon, extra, action }) => (
+                        <button key={label} onClick={action} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors text-left">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400 shrink-0">
+                            {icon}{extra}
+                          </svg>
+                          <span className="text-[13px] text-neutral-700">{label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="h-px bg-neutral-100 mx-3" />
+
+                    {/* Log out */}
+                    <div className="py-1.5">
+                      <button
+                        onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors text-left"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400 shrink-0">
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                        <span className="text-[13px] text-neutral-700">Log out</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
-            <div className="bg-white/10 backdrop-blur-md p-1 rounded-full border border-white/20 shadow-xl">
+            <div className="bg-white border border-neutral-200 p-1 rounded-full shadow-lg">
               <GoogleLogin
                 onLoginSuccess={handleLoginSuccess}
                 onLoginError={(err) => alert(`Login Error: ${err}`)}
@@ -997,77 +1125,84 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Settings backdrop */}
-        {settingsOpen && (
-          <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setSettingsOpen(false)} />
+        {/* Account Settings / Personalization Modal */}
+        {showAccountModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAccountModal(null)} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border border-neutral-200">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+                <h2 className="text-[15px] font-semibold text-neutral-900">{showAccountModal === 'account' ? 'Account settings' : 'Personalization'}</h2>
+                <button onClick={() => setShowAccountModal(null)} className="w-7 h-7 flex items-center justify-center rounded-full text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors text-base">✕</button>
+              </div>
+
+              {showAccountModal === 'account' ? (
+                <div className="px-5 py-5 flex flex-col gap-5">
+                  <div>
+                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Display name</label>
+                    <div className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-900">{currentUser?.full_name || '—'}</div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Username</label>
+                    <div className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-900">{currentUser?.full_name?.toLowerCase().replace(/\s+/g, '') || '—'}</div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Email</label>
+                    <div className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-500">{currentUser?.email || '—'}</div>
+                  </div>
+                  <div className="border-t border-neutral-100 pt-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] text-neutral-700">Keep analyses private</span>
+                          <span className="text-[9px] bg-neutral-200 text-neutral-500 px-1.5 py-0.5 rounded-md font-semibold">Pro</span>
+                        </div>
+                        <p className="text-[11px] text-neutral-400 mt-0.5 leading-snug">Your gallery won't be visible to others</p>
+                      </div>
+                      <div className="w-10 h-6 bg-neutral-200 rounded-full relative shrink-0 opacity-50 cursor-not-allowed mt-0.5">
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow-sm" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-5 py-5 flex flex-col gap-5">
+                  <div>
+                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Gallery theme</label>
+                    <select className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-600 outline-none appearance-none">
+                      <option value="">Minimal (default)</option>
+                      <option value="warm">Warm</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Card density</label>
+                    <select className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-600 outline-none appearance-none">
+                      <option value="">Comfortable (default)</option>
+                      <option value="compact">Compact</option>
+                      <option value="spacious">Spacious</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Analysis language</label>
+                    <select className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-600 outline-none appearance-none">
+                      <option value="en">English</option>
+                      <option value="zh">中文</option>
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-neutral-300 text-center">More personalization options coming soon</p>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
-        {/* Settings panel */}
-        <div className={`fixed top-0 right-0 h-full w-72 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out ${settingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-          {currentUser && (
-            <>
-              {/* User header */}
-              <div className="p-6 pt-8 border-b border-neutral-100">
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={currentUser.profile_picture_url}
-                    alt={currentUser.full_name}
-                    className="w-12 h-12 rounded-full object-cover border border-neutral-200"
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-neutral-900 truncate">{currentUser.full_name}</p>
-                    <p className="text-[11px] text-neutral-400 truncate">{currentUser.email}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Options */}
-              <div className="p-5 space-y-5">
-                {/* Language toggle */}
-                <div>
-                  <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Language</label>
-                  <div className="flex mt-2 bg-neutral-100 rounded-full p-0.5">
-                    <button
-                      onClick={() => { setLanguage('en'); localStorage.setItem('musee_language', 'en'); }}
-                      className={`flex-1 px-4 py-1.5 rounded-full text-xs font-medium transition-all ${language === 'en' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
-                    >
-                      EN
-                    </button>
-                    <button
-                      onClick={() => { setLanguage('zh'); localStorage.setItem('musee_language', 'zh'); }}
-                      className={`flex-1 px-4 py-1.5 rounded-full text-xs font-medium transition-all ${language === 'zh' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
-                    >
-                      中文
-                    </button>
-                  </div>
-                </div>
-
-                {/* Personalization placeholder */}
-                <div>
-                  <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Personalization</label>
-                  <p className="text-xs text-neutral-300 mt-1.5">Coming soon</p>
-                </div>
-              </div>
-
-              {/* Logout */}
-              <div className="absolute bottom-0 w-full p-5 border-t border-neutral-100">
-                <button
-                  onClick={() => { setSettingsOpen(false); handleLogout(); }}
-                  className="w-full py-2.5 rounded-full text-[10px] tracking-[0.2em] uppercase font-bold text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900 transition-all border border-neutral-200"
-                >
-                  Logout
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Top Tab Bar — Explore / Understand / Organize */}
+        {/* Top Tab Bar — Explore / Learn / Collect */}
         <div
           className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-sm px-1 py-1"
           style={{ pointerEvents: 'auto' }}
         >
-          {(['explore', 'understand', 'organize'] as const).map(tab => (
+          {(['explore', 'learn', 'collect'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1083,7 +1218,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Sidebar toggle — same row as tab pill, left-aligned */}
-        {activeTab === 'understand' && (
+        {activeTab === 'learn' && (
           <button
             onClick={() => setSidebarOpen(p => !p)}
             title={sidebarOpen ? 'Hide history' : 'Show history'}
@@ -1186,7 +1321,7 @@ const App: React.FC = () => {
         )}
 
         <div className={`relative z-10 flex-1 min-h-0 overflow-hidden transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-10'} ${(interpretingItem || exhibitionContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
-          {activeTab === 'understand' ? (
+          {activeTab === 'learn' ? (
             <UnderstandView
               items={items}
               sidebarOpen={sidebarOpen}
@@ -1212,7 +1347,7 @@ const App: React.FC = () => {
                 });
               }}
             />
-          ) : activeTab === 'organize' ? (
+          ) : activeTab === 'collect' ? (
             <OrganizeView
               items={items}
               visit={visit}
@@ -1230,128 +1365,143 @@ const App: React.FC = () => {
               onDelete={handleDeleteItem}
             />
           ) : (
-            /* Explore tab — immersive corridor view */
-            <div
-              ref={scrollRef}
-              onScroll={handleScroll}
-              className="horizontal-corridor w-full h-full flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
-            >
-              {/* Initial Gallery State / Empty Room */}
-              {isGalleryEmpty ? (
-                <div className="snap-center shrink-0">
-                  <EmptyWall />
-                </div>
-              ) : (
-                <div className="min-w-[5vw] sm:min-w-[30vw] h-full shrink-0" />
-              )}
+            /* Explore tab — editorial corridor */
+            <div className="flex flex-col w-full h-full">
 
-              {corridorEntries.map((entry, idx) => {
-                return entry.type === 'item' ? (
-                  <div
-                    key={entry.item.id}
-                    className="snap-center shrink-0 opacity-100 transition-all duration-500"
-                    ref={(el) => {
-                      galleryEntryRefs.current[idx] = el;
-                    }}
-                  >
-                    <GalleryCard
-                      item={entry.item}
-                      onInterpret={() => {
-                        const activeId = filteredVisitId || (visit.active ? visit.id : null);
-                        const sessionItems = activeId
-                          ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id)))
-                          : undefined;
+              {/* ① Static metadata row — location · date of active item */}
+              <div className="shrink-0 h-9 flex items-center gap-4 px-10 sm:px-16 overflow-hidden">
+                {activeDisplayItem && (() => {
+                  const loc = parseDisplayLocation(activeDisplayItem.location);
+                  const dt = activeDisplayItem.photoTime ? parseDisplayDate(activeDisplayItem.photoTime) : null;
+                  return (
+                    <>
+                      {loc && <span className="text-[9px] sm:text-[10px] tracking-[0.25em] uppercase text-neutral-500 font-medium truncate">{loc}</span>}
+                      {loc && dt && <span className="text-neutral-200 text-[9px]">·</span>}
+                      {dt && <span className="text-[9px] sm:text-[10px] tracking-[0.18em] uppercase text-neutral-300">{dt}</span>}
+                    </>
+                  );
+                })()}
+              </div>
 
-                        setInterpretingItem({
-                          ...entry.item,
-                          visitId: entry.item.visitId || (visit.active && visit.itemIds.includes(entry.item.id) ? visit.id : undefined),
-                          allVisitItems: sessionItems
-                        });
-                      }}
-                      onDelete={() => handleDeleteItem(entry.item.id)}
-                      onContinueVision={(!visit.active && !filteredVisitId) ? () => handleContinueVision(entry.item) : undefined}
-                    />
+              {/* ② Image strip — fills remaining vertical space */}
+              <div
+                ref={scrollRef}
+                onScroll={handleScroll}
+                className="flex-1 min-h-0 flex items-center overflow-x-auto overflow-y-hidden gap-px snap-x snap-mandatory horizontal-corridor"
+              >
+                {isGalleryEmpty ? (
+                  <div className="snap-center shrink-0 w-screen flex items-center justify-center">
+                    <EmptyWall />
                   </div>
                 ) : (
-                  <div
-                    key={entry.visitId}
-                    className="snap-center shrink-0"
-                    ref={(el) => {
-                      galleryEntryRefs.current[idx] = el;
-                    }}
-                  >
-                    <VisitStack
-                      items={entry.items}
-                      onOpenExhibition={() => setFilteredVisitId(entry.visitId)}
-                      onInterpret={(item) => setInterpretingItem({
-                        ...item,
-                        allVisitItems: entry.items,
-                        visitId: entry.visitId
-                      })}
-                      onResumeVisit={(!visit.active && !filteredVisitId) ? (source) => {
-                        handleResumeVisit(entry.visitId);
-                        setTimeout(() => {
-                          if (source === 'camera') cameraInputRef.current?.click();
-                          else albumInputRef.current?.click();
-                        }, 100);
-                      } : undefined}
-                      onDeleteItem={handleDeleteItem}
-                      onDeleteSession={() => handleDeleteSession(entry.visitId)}
-                    />
+                  <div className="min-w-[calc(50vw-32vh)] sm:min-w-[calc(50vw-28vh)] h-full shrink-0" />
+                )}
+
+                {!isGalleryEmpty && corridorEntries.map((entry, idx) => {
+                  const isActive = idx === (thumbEntries[activeThumbIndex]?.sourceIndex ?? 0);
+                  return entry.type === 'item' ? (
+                    <div
+                      key={entry.item.id}
+                      className="snap-center shrink-0 h-full flex items-center"
+                      ref={(el) => { galleryEntryRefs.current[idx] = el; }}
+                    >
+                      <GalleryCard
+                        item={entry.item}
+                        isActive={isActive}
+                        onInterpret={() => {
+                          const activeId = filteredVisitId || (visit.active ? visit.id : null);
+                          const sessionItems = activeId
+                            ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id)))
+                            : undefined;
+                          setInterpretingItem({
+                            ...entry.item,
+                            visitId: entry.item.visitId || (visit.active && visit.itemIds.includes(entry.item.id) ? visit.id : undefined),
+                            allVisitItems: sessionItems
+                          });
+                        }}
+                        onDelete={() => handleDeleteItem(entry.item.id)}
+                        onContinueVision={(!visit.active && !filteredVisitId) ? () => handleContinueVision(entry.item) : undefined}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      key={entry.visitId}
+                      className="snap-center shrink-0"
+                      ref={(el) => { galleryEntryRefs.current[idx] = el; }}
+                    >
+                      <VisitStack
+                        items={entry.items}
+                        onOpenExhibition={() => setFilteredVisitId(entry.visitId)}
+                        onInterpret={(item) => setInterpretingItem({ ...item, allVisitItems: entry.items, visitId: entry.visitId })}
+                        onResumeVisit={(!visit.active && !filteredVisitId) ? (source) => {
+                          handleResumeVisit(entry.visitId);
+                          setTimeout(() => {
+                            if (source === 'camera') cameraInputRef.current?.click();
+                            else albumInputRef.current?.click();
+                          }, 100);
+                        } : undefined}
+                        onDeleteItem={handleDeleteItem}
+                        onDeleteSession={() => handleDeleteSession(entry.visitId)}
+                      />
+                    </div>
+                  );
+                })}
+
+                {isAnalyzing && (
+                  <div className="min-w-[70vw] sm:min-w-[380px] h-full flex flex-col items-center justify-center gap-3 snap-center shrink-0">
+                    <div className="w-8 h-8 border-t-[1.5px] border-neutral-600 rounded-full animate-spin" />
+                    <p className="text-[9px] tracking-[0.3em] text-neutral-400 uppercase">Analyzing</p>
                   </div>
-                );
-              })}
+                )}
 
-              {isAnalyzing && (
-                <div className="min-w-[80vw] sm:min-w-[400px] h-[60vh] mx-3 sm:mx-12 flex flex-col items-center justify-center space-y-4 snap-center shrink-0">
-                  <div className="w-12 h-12 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
-                  <p className="text-[10px] tracking-widest text-neutral-500 uppercase">Analyzing Material...</p>
-                </div>
-              )}
+                {!isGalleryEmpty && <div className="min-w-[calc(50vw-32vh)] sm:min-w-[calc(50vw-28vh)] h-full shrink-0" />}
+              </div>
 
-              <div className="min-w-[5vw] sm:min-w-[30vw] h-full shrink-0" />
-            </div>
-          )}
-          {activeTab === 'explore' && thumbEntries.length > 0 && (
-            <div
-              className="fixed left-1/2 -translate-x-1/2 z-50 w-40 sm:w-52 pointer-events-auto"
-              style={{ bottom: 'max(calc(env(safe-area-inset-bottom, 0px) + 8.25rem), 9rem)' }}
-            >
-              <div
-                ref={thumbStripRef}
-                className="w-full overflow-x-auto no-scrollbar"
-                style={{
-                  WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)',
-                  maskImage: 'linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)'
-                }}
-              >
-                <div className="flex items-center space-x-2 min-w-max">
-                  <div className="w-20 sm:w-24 h-1 shrink-0" />
-                  {thumbEntries.map((entry, idx) => {
-                    return (
+              {/* ③ Tags row */}
+              <div className="shrink-0 h-8 flex items-center gap-5 px-10 sm:px-16 overflow-x-auto no-scrollbar">
+                {activeDisplayItem?.keywords?.map((kw, i) => (
+                  <span key={i} className="text-[8px] sm:text-[9px] tracking-[0.22em] uppercase text-neutral-400 whitespace-nowrap font-medium">
+                    {kw}
+                  </span>
+                ))}
+              </div>
+
+              {/* ④ Thumbnail strip — in flow, never overlaps images */}
+              {thumbEntries.length > 1 && (
+                <div className="shrink-0 flex items-center gap-4 px-10 sm:px-16 h-11">
+                  {/* Counter */}
+                  <span className="text-[9px] tracking-[0.15em] text-neutral-300 tabular-nums shrink-0 font-medium">
+                    {String(activeThumbIndex + 1).padStart(2, '0')}<span className="text-neutral-200 mx-0.5">/</span>{String(thumbEntries.length).padStart(2, '0')}
+                  </span>
+                  {/* Thumbnails */}
+                  <div
+                    ref={thumbStripRef}
+                    className="flex items-center gap-2 overflow-x-auto no-scrollbar"
+                  >
+                    {thumbEntries.map((entry, idx) => (
                       <button
                         key={entry.id}
                         type="button"
                         onClick={() => {
                           galleryEntryRefs.current[entry.sourceIndex]?.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'nearest',
-                            inline: 'center'
+                            behavior: 'smooth', block: 'nearest', inline: 'center'
                           });
                         }}
-                        className={`overflow-hidden border bg-white/70 transition-all duration-200 ${
+                        className={`overflow-hidden shrink-0 transition-all duration-300 ${
                           idx === activeThumbIndex
-                            ? 'w-8 h-8 rounded-md border-neutral-400 scale-110'
-                            : 'w-6 h-6 rounded-sm border-neutral-200'
+                            ? 'w-7 h-7 opacity-100 outline outline-1 outline-neutral-400 outline-offset-1'
+                            : 'w-5 h-5 opacity-25 hover:opacity-55'
                         }`}
                       >
                         <img src={entry.url} alt="" className="w-full h-full object-cover" />
                       </button>
-                    );
-                  })}
-                  <div className="w-20 sm:w-24 h-1 shrink-0" />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Spacer for fixed controls bar */}
+              <div className="shrink-0" style={{ height: 'max(calc(env(safe-area-inset-bottom, 0px) + 5rem), 5.5rem)' }} />
             </div>
           )}
         </div>

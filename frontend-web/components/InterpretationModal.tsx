@@ -115,7 +115,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const albumButtonRef = useRef<HTMLButtonElement>(null);
   const [showAlbumDropdown, setShowAlbumDropdown] = useState(false);
   const [albumDropdownPos, setAlbumDropdownPos] = useState<{ top: number; right: number } | null>(null);
-  const [creatingAlbum, setCreatingAlbum] = useState(false);
+  const [showCreateAlbumModal, setShowCreateAlbumModal] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState('');
 
   // Inline editing state
@@ -252,7 +252,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setIsEditing(false);
     setTagInput('');
     setShowAlbumDropdown(false);
-    setCreatingAlbum(false);
+    setShowCreateAlbumModal(false);
     setNewAlbumName('');
     const vals = {
       artist: item.artistName || '',
@@ -646,18 +646,18 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white">
 
             {/* Right panel header */}
-            <div className="px-2 py-1.5 border-b border-neutral-100 flex items-center justify-between shrink-0">
+            <div className="px-2 py-2 border-b border-neutral-100 flex items-center justify-between shrink-0">
               {/* LEFT: action icons */}
-              <div className="flex items-center">
+              <div className="flex items-center gap-2">
                 {onToggleLike && (
                   <button
                     onClick={onToggleLike}
                     title={isLiked ? 'Unlike' : 'Like'}
                     className={`w-9 h-9 flex items-center justify-center rounded-full transition-all ${
-                      isLiked ? 'text-red-500 hover:text-red-600' : 'text-neutral-300 hover:text-neutral-600'
+                      isLiked ? 'text-red-500 hover:text-red-600' : 'text-neutral-500 hover:text-neutral-700'
                     }`}
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                     </svg>
                   </button>
@@ -675,21 +675,41 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     }}
                     title="Save to album"
                     className={`w-9 h-9 flex items-center justify-center rounded-full transition-all ${
-                      (itemAlbumIds && itemAlbumIds.length > 0) ? 'text-neutral-600 hover:text-neutral-800' : 'text-neutral-300 hover:text-neutral-600'
+                      (itemAlbumIds && itemAlbumIds.length > 0) ? 'text-neutral-600 hover:text-neutral-800' : 'text-neutral-500 hover:text-neutral-700'
                     }`}
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                     </svg>
                   </button>
                 )}
 
-                {(onToggleLike || onSaveToAlbum) && !item.isAnalyzing && (onDelete || item.artworkId) && (
-                  <div className="w-px h-4 bg-neutral-150 mx-0.5" />
+                {rightMode === 'metadata' && !item.isAnalyzing && item.artworkId && (
+                  (<button
+                      onClick={startEditing}
+                      title="Edit artwork info"
+                      className="w-8 h-9 flex items-center justify-center rounded-full text-neutral-500 hover:text-neutral-700 transition-colors"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                      </svg>
+                    </button>
+                  )
                 )}
 
-                {rightMode === 'metadata' && !item.isAnalyzing && item.artworkId && (
-                  isEditing ? (
+                {onDelete && !item.isAnalyzing && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(item.id); }}
+                    className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-500 hover:text-red-600 transition-colors"
+                    title="Delete from Musee"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    </svg>
+                  </button>
+                )}
+
+                {isEditing && (
                     <div className="flex items-center gap-2 px-2">
                       <button
                         onClick={cancelEditing}
@@ -701,29 +721,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                         className="text-[9px] tracking-[0.3em] uppercase text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
                       >{isSavingField ? 'Saving…' : 'Save'}</button>
                     </div>
-                  ) : (
-                    <button
-                      onClick={startEditing}
-                      title="Edit artwork info"
-                      className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-300 hover:text-neutral-600 transition-colors"
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-                      </svg>
-                    </button>
-                  )
-                )}
-
-                {onDelete && !item.isAnalyzing && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(item.id); }}
-                    className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-300 hover:text-red-500 transition-colors"
-                    title="Delete from Musee"
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                    </svg>
-                  </button>
                 )}
               </div>
 
@@ -1104,49 +1101,70 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             );
           })}
 
-          {/* Create album section */}
+          {/* New album button */}
           <div className="border-t border-neutral-100 mt-1 pt-2 px-4 pb-1">
-            {creatingAlbum ? (
-              <div className="flex items-center gap-2 py-1">
-                <input
-                  autoFocus
-                  value={newAlbumName}
-                  onChange={e => setNewAlbumName(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && newAlbumName.trim()) {
-                      onCreateAlbum?.(newAlbumName.trim());
-                      setNewAlbumName('');
-                      setCreatingAlbum(false);
-                      setShowAlbumDropdown(false);
-                    }
-                    if (e.key === 'Escape') { setCreatingAlbum(false); setNewAlbumName(''); }
-                  }}
-                  placeholder="Album name…"
-                  className="flex-1 text-[12px] border-b border-neutral-300 outline-none py-1 bg-transparent"
-                />
-                <button
-                  onClick={() => {
-                    if (newAlbumName.trim()) {
-                      onCreateAlbum?.(newAlbumName.trim());
-                      setNewAlbumName('');
-                      setCreatingAlbum(false);
-                      setShowAlbumDropdown(false);
-                    }
-                  }}
-                  className="text-[11px] text-neutral-900 font-medium hover:text-neutral-500 transition-colors shrink-0"
-                >Create</button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setCreatingAlbum(true)}
-                className="text-[12px] text-neutral-500 hover:text-neutral-900 flex items-center gap-1.5 py-1 transition-colors"
-              >
-                <span className="text-base leading-none">+</span> New album
-              </button>
-            )}
+            <button
+              onClick={() => {
+                setShowAlbumDropdown(false);
+                setNewAlbumName('');
+                setShowCreateAlbumModal(true);
+              }}
+              className="text-[12px] text-neutral-500 hover:text-neutral-900 flex items-center gap-1.5 py-1 transition-colors"
+            >
+              <span className="text-base leading-none">+</span> New album
+            </button>
           </div>
         </div>
       </>,
+      document.body
+    )}
+
+    {/* Create album modal */}
+    {showCreateAlbumModal && createPortal(
+      <div className="fixed inset-0 z-[300] flex items-center justify-center p-6">
+        <div
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={() => { setShowCreateAlbumModal(false); setNewAlbumName(''); }}
+        />
+        <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-5 animate-in zoom-in-95 duration-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-neutral-900">Create an album</h2>
+            <button
+              onClick={() => { setShowCreateAlbumModal(false); setNewAlbumName(''); }}
+              className="w-8 h-8 flex items-center justify-center rounded-full text-neutral-400 hover:text-neutral-900 transition-colors text-lg"
+            >✕</button>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] tracking-[0.2em] uppercase text-neutral-500 font-medium">Album name</label>
+            <input
+              autoFocus
+              value={newAlbumName}
+              onChange={e => setNewAlbumName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newAlbumName.trim()) {
+                  onCreateAlbum?.(newAlbumName.trim());
+                  setNewAlbumName('');
+                  setShowCreateAlbumModal(false);
+                }
+                if (e.key === 'Escape') { setShowCreateAlbumModal(false); setNewAlbumName(''); }
+              }}
+              placeholder="Name your album"
+              className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:ring-2 focus:ring-neutral-200 focus:border-neutral-400 transition-all"
+            />
+          </div>
+          <button
+            onClick={() => {
+              if (newAlbumName.trim()) {
+                onCreateAlbum?.(newAlbumName.trim());
+                setNewAlbumName('');
+                setShowCreateAlbumModal(false);
+              }
+            }}
+            disabled={!newAlbumName.trim()}
+            className="w-full py-3.5 rounded-2xl text-[13px] font-medium tracking-wide transition-all disabled:bg-neutral-100 disabled:text-neutral-400 bg-neutral-900 text-white hover:bg-neutral-700"
+          >Create</button>
+        </div>
+      </div>,
       document.body
     )}
     </>

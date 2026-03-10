@@ -58,22 +58,6 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
         className="relative w-full h-full flex items-center justify-center"
         onClick={() => onInterpret?.(items[0])}
       >
-        {/* Location and Date Metadata (Above) */}
-        {(displayLocation || timeStr) && (
-          <div className="absolute z-20 flex flex-col items-center -translate-y-[28dvh] sm:-translate-y-[32vh] opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform translate-y-[-23dvh] sm:translate-y-[-28vh] group-hover:-translate-y-[28dvh] sm:group-hover:-translate-y-[32vh]">
-            {displayLocation && (
-              <h3 className="text-lg font-serif text-neutral-800 mb-2 whitespace-nowrap bg-white/80 px-4 py-1 rounded-full backdrop-blur-sm shadow-sm">
-                {displayLocation}
-              </h3>
-            )}
-            {timeStr && (
-              <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-light bg-white/50 px-3 py-1 rounded-full backdrop-blur-sm">
-                {timeStr}
-              </p>
-            )}
-          </div>
-        )}
-
         {displayItems.map((item, idx) => {
           const rotation = (idx - (displayItems.length - 1) / 2) * 5;
           const offset = idx * 12;
@@ -81,15 +65,11 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
           return (
             <div
               key={item.id}
-              className="absolute transition-all duration-700 shadow-2xl overflow-hidden max-w-[80vw]"
+              className="absolute transition-all duration-700 overflow-hidden max-w-[80vw]"
               style={{
-                backgroundColor: item.vibe.backgroundColor,
-                padding: `clamp(${item.vibe.padding * 3}px, ${item.vibe.padding * 1.2}vw, ${item.vibe.padding * 10}px)`,
-                borderRadius: item.vibe.borderRadius,
-                border: `1px solid ${item.vibe.accentColor}22`,
                 transform: `rotate(${rotation}deg) translate(${offset}px, ${-offset}px)`,
                 zIndex: displayItems.length - idx,
-                opacity: 1 - (idx * 0.2)
+                opacity: 1 - (idx * 0.25)
               }}
             >
               <img
