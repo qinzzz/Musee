@@ -1255,24 +1255,10 @@ const App: React.FC = () => {
           <div className="fixed top-10 left-0 right-0 z-30 h-px bg-neutral-100" />
         )}
 
-        {/* 1. Status Pill — top center, informational only */}
-        {(visit.active || filteredVisitId) && (
-          <div className="fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 z-40 bg-neutral-900/80 backdrop-blur-md text-white px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-[8px] sm:text-[9px] tracking-[0.2em] uppercase flex items-center space-x-2 sm:space-x-3 shadow-xl border border-white/10" style={{ pointerEvents: 'none' }}>
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${visit.active && !filteredVisitId ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'}`} />
-            <span className="font-bold whitespace-nowrap">
-              {filteredVisitId ? 'Recorded Visit' : 'Exhibition in Progress'}
-            </span>
-            <span className="text-white/30">·</span>
-            <span className="opacity-70 whitespace-nowrap">
-              {items.filter(i => i.visitId === (filteredVisitId || visit.id)).length} Pieces
-            </span>
-          </div>
-        )}
-
-        {/* 2. Exhibition Hall Input — below status pill, inline input */}
+        {/* Exhibition Hall Input — top center, inline input */}
         {(visit.active || filteredVisitId) && (
           <div
-            className={`fixed top-11 sm:top-12 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur-md px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs tracking-wider flex items-center space-x-2 sm:space-x-3 shadow-lg border transition-all w-[260px] sm:w-[320px] ${exhibitionInputFocused ? 'border-neutral-400 bg-white' : 'border-neutral-200'}`}
+            className={`fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur-md px-5 sm:px-6 py-2.5 sm:py-3 rounded-full text-[12px] sm:text-sm tracking-wider flex items-center space-x-3 shadow-lg border transition-all w-[320px] sm:w-[440px] ${exhibitionInputFocused ? 'border-neutral-400 bg-white' : 'border-neutral-200'}`}
             style={{ pointerEvents: 'auto' }}
             onClick={() => exhibitionInputRef.current?.focus()}
           >
