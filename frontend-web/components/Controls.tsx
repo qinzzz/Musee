@@ -25,31 +25,42 @@ const Controls: React.FC<Props> = ({ onUpload, isAnalyzing, isVisitActive, onTog
     e.target.value = '';
   };
 
-  const trigger = (action: () => void) => {
-    setOpen(false);
-    action();
+  const handleFabClick = () => {
+    if (isAnalyzing) return;
+    if (!open) {
+      // First click: expand menu
+      setOpen(true);
+    } else {
+      // Second click (expanded): open camera and collapse
+      setOpen(false);
+      cameraInputRef.current?.click();
+    }
   };
 
   const handleVisit = () => {
+    setOpen(false);
     onToggleVisit();
     if (!isVisitActive) cameraInputRef.current?.click();
   };
 
   return (
     <div
-      className="fixed z-30 flex flex-col items-center gap-3"
+      className="fixed z-30 flex flex-col items-end gap-3"
       style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)', right: '1.25rem' }}
     >
       {/* Hidden file inputs */}
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCameraChange} disabled={isAnalyzing} />
       <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleGalleryChange} disabled={isAnalyzing} />
 
-      {/* Expanded actions — slide up when open */}
-      <div className={`flex flex-col items-center gap-3 transition-all duration-200 ${open ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+      {/* Tap-outside backdrop */}
+      {open && <div className="fixed inset-0 z-[-1]" onClick={() => setOpen(false)} />}
+
+      {/* Expanded sub-actions — slide up when open */}
+      <div className={`flex flex-col items-center gap-3 transition-all duration-200 ${open ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-3 pointer-events-none'}`}>
 
         {/* Visit */}
         <button
-          onClick={() => trigger(handleVisit)}
+          onClick={handleVisit}
           disabled={isAnalyzing}
           aria-label={isVisitActive ? 'End visit' : 'Start visit'}
           className={`relative w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all active:scale-95 ${isVisitActive ? 'bg-emerald-500 text-white' : 'bg-white text-neutral-600 border border-neutral-200'}`}
@@ -65,7 +76,7 @@ const Controls: React.FC<Props> = ({ onUpload, isAnalyzing, isVisitActive, onTog
 
         {/* Import */}
         <button
-          onClick={() => trigger(() => galleryInputRef.current?.click())}
+          onClick={() => { setOpen(false); galleryInputRef.current?.click(); }}
           disabled={isAnalyzing}
           aria-label="Import from gallery"
           className="w-12 h-12 rounded-full bg-white border border-neutral-200 shadow-lg flex items-center justify-center text-neutral-600 transition-all active:scale-95"
@@ -79,42 +90,23 @@ const Controls: React.FC<Props> = ({ onUpload, isAnalyzing, isVisitActive, onTog
 
       </div>
 
-      {/* Tap-outside backdrop */}
-      {open && <div className="fixed inset-0 z-[-1]" onClick={() => setOpen(false)} />}
-
       {/* Main FAB */}
       <button
-        onClick={() => {
-          if (isAnalyzing) return;
-          if (open) { setOpen(false); return; }
-          // Primary action: camera. Long-hold opens menu — tap just shoots.
-          cameraInputRef.current?.click();
-        }}
-        onContextMenu={(e) => { e.preventDefault(); if (!isAnalyzing) setOpen(true); }}
-        aria-label="Add artwork"
+        onClick={handleFabClick}
+        aria-label={open ? 'Take photo' : 'Open actions'}
         className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 active:scale-95 ${isAnalyzing ? 'opacity-60 pointer-events-none' : ''} ${isVisitActive ? 'bg-emerald-500 text-white' : 'bg-neutral-900 text-white'}`}
       >
         {isAnalyzing ? (
           <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
         ) : (
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <svg
+            width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+            style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 200ms ease' }}
+          >
             <line x1="12" y1="5" x2="12" y2="19"/>
             <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
         )}
-      </button>
-
-      {/* Expand toggle — small pill above FAB to open menu */}
-      <button
-        onClick={() => { if (!isAnalyzing) setOpen(v => !v); }}
-        aria-label="More actions"
-        className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-white border border-neutral-200 shadow flex items-center justify-center text-neutral-400 hover:text-neutral-700 transition-colors"
-        style={{ transform: open ? 'rotate(45deg)' : 'rotate(0deg)', transition: 'transform 200ms' }}
-      >
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
       </button>
 
     </div>
