@@ -719,17 +719,8 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 )}
               </div>
 
-              {/* RIGHT: analyzing indicator + mode label + close */}
+              {/* RIGHT: mode label + close */}
               <div className="flex items-center gap-1">
-                {item.isAnalyzing && (
-                  <div className="flex items-center gap-1.5 mr-1">
-                    <div className="relative w-3 h-3 shrink-0">
-                      <div className="absolute inset-0 border-[1.5px] border-neutral-100 rounded-full"></div>
-                      <div className="absolute inset-0 border-t-[1.5px] border-neutral-800 rounded-full animate-spin"></div>
-                    </div>
-                    <span className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold">Analyzing…</span>
-                  </div>
-                )}
                 {rightMode === 'chat' && (
                   <>
                     <button
@@ -749,6 +740,17 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             {/* Right panel scrollable content */}
             {rightMode === 'metadata' ? (
               <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0" onScroll={handleInfoScroll}>
+
+                {/* Analyzing state — shown at the top of the content area while streaming */}
+                {item.isAnalyzing && !streamingFields && (
+                  <div className="flex items-center gap-2 text-neutral-400">
+                    <div className="relative w-3 h-3 shrink-0">
+                      <div className="absolute inset-0 border-[1.5px] border-neutral-200 rounded-full"></div>
+                      <div className="absolute inset-0 border-t-[1.5px] border-neutral-500 rounded-full animate-spin"></div>
+                    </div>
+                    <span className="text-[11px] tracking-[0.2em] uppercase font-medium">Analyzing…</span>
+                  </div>
+                )}
 
                 {/* Error state */}
                 {!item.isAnalyzing && item.streamingText && !item.artistName && (
