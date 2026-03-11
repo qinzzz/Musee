@@ -1,6 +1,5 @@
 
 import React from 'react';
-import InteractionOverlay from './InteractionOverlay';
 import { GalleryItem } from '../types';
 
 interface Props {
@@ -11,7 +10,7 @@ interface Props {
   onDelete?: () => void;
 }
 
-const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onContinueVision, onDelete }) => {
+const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete }) => {
   const { url } = item;
 
   return (
@@ -48,25 +47,6 @@ const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onContinueV
         <div className="absolute bottom-0 left-0 right-0 bg-neutral-900/90 text-white py-2 px-3 z-20">
           <p className="text-[9px] tracking-wider uppercase font-bold">Analysis failed</p>
         </div>
-      )}
-
-      {/* Interaction overlay — only on active item */}
-      {isActive && !item.isAnalyzing && (
-        <InteractionOverlay
-          isVisible={true}
-          className="opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-          buttons={[
-            {
-              label: 'Consult Curator',
-              primary: true,
-              onClick: (e) => { e.stopPropagation(); onInterpret(); }
-            },
-            ...(onContinueVision ? [{
-              label: 'Continue the Visit',
-              onClick: (e: React.MouseEvent) => { e.stopPropagation(); onContinueVision(); }
-            }] : [])
-          ]}
-        />
       )}
 
       {/* Delete button — only on active, reveals on hover */}
