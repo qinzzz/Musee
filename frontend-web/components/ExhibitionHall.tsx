@@ -89,7 +89,7 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
           <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-2xl">✕</button>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex min-h-0">
           {/* Exhibition Map Thumbnails */}
           <div className="w-48 bg-neutral-50 p-6 overflow-y-auto hidden md:block border-r border-neutral-100">
             <h4 className="text-[8px] tracking-[0.4em] uppercase text-neutral-400 mb-6 font-bold">Curation</h4>
@@ -119,8 +119,8 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
           </div>
 
           {/* Hall Chat */}
-          <div className="flex-1 flex flex-col bg-white">
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-10 space-y-4 sm:space-y-8">
+          <div className="flex-1 flex flex-col bg-white min-h-0">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-10 space-y-4 sm:space-y-8" style={{ WebkitOverflowScrolling: 'touch' }}>
               {messages.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center text-center max-w-sm mx-auto">
                   <div className="w-px h-12 bg-neutral-200 mb-6"></div>
