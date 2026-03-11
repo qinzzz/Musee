@@ -852,7 +852,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 {displayDescription && (
                   <div>
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Interpretation</p>
-                    <div className="text-[12px] sm:text-[13px] leading-relaxed text-neutral-600 font-serif">
+                    <div className="text-[13px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
                       <ReactMarkdown components={markdownComponents}>{displayDescription}</ReactMarkdown>
                       {item.isAnalyzing && (
                         <span className="inline-block w-1.5 h-3 bg-neutral-400 animate-pulse ml-0.5"></span>
@@ -945,24 +945,25 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 )}
                 {messages.map((m, idx) => (
                   <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] p-3 sm:p-4 text-[13px] leading-relaxed tracking-wide ${m.role === 'user'
-                      ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-none'
-                      : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-none font-serif'
-                    }`}>
-                      {m.text ? (
-                        m.role === 'model' ? (
+                    {m.role === 'user' ? (
+                      <div className="max-w-[85%] p-3 sm:p-4 text-[14px] leading-relaxed tracking-wide bg-neutral-900 text-white rounded-2xl rounded-tr-none">
+                        {m.text}
+                      </div>
+                    ) : (
+                      <div className="w-full text-[14px] leading-relaxed text-neutral-800 font-serif">
+                        {m.text ? (
                           <div className="prose prose-sm max-w-none prose-neutral prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
                             <ReactMarkdown components={markdownComponents}>{m.text}</ReactMarkdown>
                           </div>
-                        ) : m.text
-                      ) : (m.role === 'model' && isWaitingForFirstChunk && idx === messages.length - 1 ? (
-                        <div className="flex space-x-1.5 py-1">
-                          <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse"></div>
-                          <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-75"></div>
-                          <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-150"></div>
-                        </div>
-                      ) : null)}
-                    </div>
+                        ) : (isWaitingForFirstChunk && idx === messages.length - 1 ? (
+                          <div className="flex space-x-1.5 py-1">
+                            <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse"></div>
+                            <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-75"></div>
+                            <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-150"></div>
+                          </div>
+                        ) : null)}
+                      </div>
+                    )}
                   </div>
                 ))}
 
