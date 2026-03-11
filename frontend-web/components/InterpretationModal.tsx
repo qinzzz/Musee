@@ -2,9 +2,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
-import { Message, Annotation, Album } from '../types';
+import { Message, Album } from '../types';
 import { chatWithArtwork, chatWithArtworkStream, base64ToFile, getTagExplanation, suggestTopics, updateArtwork } from '../apiService';
-import pencilIcon from '../assets/pencil-line.svg';
 
 interface Props {
   item: {
@@ -27,7 +26,6 @@ interface Props {
   };
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
-  onUpdateAnnotations: (annotations: Annotation[]) => void;
   onUpdateMetadata?: (id: string, updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => void;
   onDelete?: (id: string) => void;
   sessionId?: string;
@@ -96,12 +94,10 @@ const HoverTag: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onUpdateMetadata, onDelete, sessionId, allVisitItems, onNavigate, isLiked, albums, itemAlbumIds, onToggleLike, onSaveToAlbum, onCreateAlbum }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, onDelete, sessionId, allVisitItems, onNavigate, isLiked, albums, itemAlbumIds, onToggleLike, onSaveToAlbum, onCreateAlbum }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [newAnnotationPos, setNewAnnotationPos] = useState<{ x: number, y: number } | null>(null);
-  const [annotationInput, setAnnotationInput] = useState('');
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
@@ -110,11 +106,12 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   // rightMode: 'metadata' shows analysis info, 'chat' shows conversation
   const [rightMode, setRightMode] = useState<'metadata' | 'chat'>('metadata');
   const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
+  const [mobileImageHeight, setMobileImageHeight] = useState(-1); // -1 = unset (uses CSS). Set on mount for mobile = 4:3 aspect ratio
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const albumButtonRef = useRef<HTMLButtonElement>(null);
   const [showAlbumDropdown, setShowAlbumDropdown] = useState(false);
-  const [albumDropdownPos, setAlbumDropdownPos] = useState<{ top: number; right: number } | null>(null);
+  const [albumDropdownPos, setAlbumDropdownPos] = useState<{ top: number; left: number } | null>(null);
   const [showCreateAlbumModal, setShowCreateAlbumModal] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState('');
 
@@ -230,6 +227,13 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   };
 
   // Load image to get aspect ratio; open modal even if image fails
+  // Set initial mobile image height (4:3 = 75vw) and reset on item navigate
+  useEffect(() => {
+    if (window.innerWidth < 640) {
+      setMobileImageHeight(Math.min(window.innerWidth * 0.75, window.innerHeight * 0.6));
+    }
+  }, [item.id]);
+
   useEffect(() => {
     setImageError(false);
     const img = new Image();
@@ -249,6 +253,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     setMessages(item.conversation || []);
     setSuggestedTopics([]);
     setRightMode('metadata'); // Reset to metadata view for the new piece
+    if (window.innerWidth < 640) setMobileImageHeight(window.innerWidth * 0.75);
     setIsEditing(false);
     setTagInput('');
     setShowAlbumDropdown(false);
@@ -466,25 +471,23 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     }
   };
 
-  const handleImageClick = (e: React.MouseEvent) => {
-    if (!imageRef.current) return;
-    const rect = imageRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setNewAnnotationPos({ x, y });
-  };
+  // Initialize mobile image height on mount
+  useEffect(() => {
+    if (window.innerWidth < 640) {
+      setMobileImageHeight(window.innerWidth * 0.75);
+    }
+  }, []);
 
-  const submitAnnotation = () => {
-    if (!newAnnotationPos || !annotationInput.trim()) return;
-    const newAn: Annotation = {
-      id: Math.random().toString(36).substr(2, 9),
-      x: newAnnotationPos.x,
-      y: newAnnotationPos.y,
-      comment: annotationInput,
-    };
-    onUpdateAnnotations([...item.annotations, newAn]);
-    setNewAnnotationPos(null);
-    setAnnotationInput('');
+  // Snap-collapse image on scroll (mobile only) — threshold avoids feedback loop
+  const handleInfoScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (window.innerWidth >= 640) return;
+    const scrollTop = e.currentTarget.scrollTop;
+    const fullH = window.innerWidth * 0.75;
+    if (scrollTop > 60 && mobileImageHeight > 0) {
+      setMobileImageHeight(0);
+    } else if (scrollTop < 20 && mobileImageHeight === 0) {
+      setMobileImageHeight(fullH);
+    }
   };
 
   // Calculate modal dimensions based on screen size
@@ -534,35 +537,60 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         className={`relative bg-white sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         style={getModalStyle()}
       >
-        {/* ── MOBILE NAV BAR: prev/next piece (mobile only) ── */}
-        {allVisitItems && allVisitItems.length > 1 && onNavigate && (
-          <div className="sm:hidden flex items-center justify-between px-3 shrink-0 bg-white border-b border-neutral-100" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.5rem)', paddingBottom: '0.5rem' }}>
+        {/* ── MOBILE HEADER BAR (mobile only): prev/next + close ── */}
+        <div className="sm:hidden flex items-center justify-between px-2 shrink-0 bg-white border-b border-neutral-100" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.5rem)', paddingBottom: '0.25rem' }}>
+          {/* Left: Prev or spacer */}
+          {allVisitItems && allVisitItems.length > 1 && onNavigate ? (
             <button
               onClick={() => onNavigate('prev')}
-              className="flex items-center gap-1.5 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
+              className="flex items-center gap-1 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Prev</span>
             </button>
-            <span className="text-[9px] font-mono text-neutral-400 tracking-[0.2em] font-bold">
-              PIECE {allVisitItems.findIndex(i => i.id === item.id) + 1} / {allVisitItems.length}
-            </span>
+          ) : (
+            <div className="w-16" />
+          )}
+
+          {/* Center: Back button (replaces ✕) */}
+          <button
+            onClick={onClose}
+            className="flex flex-col items-center justify-center gap-0.5 text-neutral-500 active:text-neutral-900 transition-colors py-1"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="19 12 5 12"/><polyline points="12 19 5 12 12 5"/></svg>
+            <span className="text-[9px] tracking-[0.2em] uppercase font-bold">Back</span>
+            {allVisitItems && allVisitItems.length > 1 && (
+              <span className="text-[8px] font-mono text-neutral-400 tracking-wider">
+                {allVisitItems.findIndex(i => i.id === item.id) + 1}/{allVisitItems.length}
+              </span>
+            )}
+          </button>
+
+          {/* Right: Next or spacer */}
+          {allVisitItems && allVisitItems.length > 1 && onNavigate ? (
             <button
               onClick={() => onNavigate('next')}
-              className="flex items-center gap-1.5 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
+              className="flex items-center gap-1 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
             >
               <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
-          </div>
-        )}
+          ) : (
+            <div className="w-16" />
+          )}
+        </div>
 
         {/* ── MAIN AREA: left photo panel + right content panel ── */}
         <div className="flex flex-col sm:flex-row flex-1 min-h-0">
 
           {/* ── LEFT / TOP PANEL: Location + Time + Photo ── */}
           <div
-            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] min-h-0 h-[35vh] sm:h-auto"
+            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] sm:h-auto overflow-hidden"
+            style={mobileImageHeight >= 0 ? {
+              height: `${mobileImageHeight}px`,
+              transition: 'height 320ms cubic-bezier(0.4, 0, 0.2, 1)',
+              visibility: mobileImageHeight === 0 ? 'hidden' : 'visible',
+            } : {}}
           >
             {/* Location + Time row */}
             {!item.isAnalyzing && (displayLocation || item.photoTime) && (
@@ -587,7 +615,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             )}
 
             {/* Photo — takes remaining space */}
-            <div className="flex-1 relative flex items-center justify-center p-3 sm:p-5 cursor-crosshair min-h-0 overflow-hidden">
+            <div className="flex-1 relative flex items-start sm:items-center justify-center p-3 sm:p-5 min-h-0 overflow-hidden">
               {imageError ? (
                 <div className="flex flex-col items-center justify-center gap-3 text-neutral-300 select-none">
                   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
@@ -599,7 +627,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 <img
                   ref={imageRef}
                   src={item.url}
-                  onClick={handleImageClick}
                   className="max-w-full max-h-full object-contain shadow-xl rounded-lg"
                   alt="Interpretation target"
                 />
@@ -618,45 +645,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 </div>
               )}
 
-              {/* Existing Annotations */}
-              {item.annotations.map(an => (
-                <div
-                  key={an.id}
-                  className="absolute group/an -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                  style={{ left: `${an.x}%`, top: `${an.y}%` }}
-                >
-                  <div className="w-6 h-6 rounded-full border border-white bg-white/20 backdrop-blur animate-pulse shadow-lg group-hover/an:scale-150 transition-transform duration-500"></div>
-                  <div className="absolute left-8 top-1/2 -translate-y-1/2 w-48 opacity-0 group-hover/an:opacity-100 transition-opacity bg-white/90 backdrop-blur p-4 rounded-xl shadow-xl border border-neutral-100 pointer-events-none z-10">
-                    <p className="text-[11px] leading-relaxed text-neutral-800 font-serif italic">"{an.comment}"</p>
-                  </div>
-                </div>
-              ))}
-
-              {/* New Annotation Indicator */}
-              {newAnnotationPos && (
-                <div
-                  className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
-                  style={{ left: `${newAnnotationPos.x}%`, top: `${newAnnotationPos.y}%` }}
-                >
-                  <div className="w-8 h-8 rounded-full border-2 border-neutral-900 bg-white shadow-xl flex items-center justify-center">
-                    <span className="text-xl">+</span>
-                  </div>
-                  <div className="absolute top-10 left-1/2 -translate-x-1/2 w-64 bg-white p-4 rounded-2xl shadow-2xl border border-neutral-100">
-                    <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 mb-2 font-bold">Mark Area of Interest</p>
-                    <textarea
-                      autoFocus
-                      value={annotationInput}
-                      onChange={(e) => setAnnotationInput(e.target.value)}
-                      placeholder="Capture a structural thought..."
-                      className="w-full text-[12px] p-3 bg-neutral-50 rounded-xl outline-none border border-neutral-100 focus:ring-1 focus:ring-neutral-200 resize-none h-20"
-                    />
-                    <div className="flex justify-end space-x-2 mt-3">
-                      <button onClick={() => setNewAnnotationPos(null)} className="text-[10px] uppercase tracking-widest text-neutral-400 p-2 hover:text-neutral-900">Cancel</button>
-                      <button onClick={submitAnnotation} className="bg-neutral-900 text-white text-[10px] uppercase tracking-widest px-4 py-2 rounded-full hover:scale-105 transition-transform">Place</button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -687,7 +675,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     onClick={() => {
                       if (albumButtonRef.current) {
                         const rect = albumButtonRef.current.getBoundingClientRect();
-                        setAlbumDropdownPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                        const dropdownWidth = 240;
+                        const left = Math.min(rect.left, window.innerWidth - dropdownWidth - 8);
+                        setAlbumDropdownPos({ top: rect.bottom + 6, left: Math.max(8, left) });
                       }
                       setShowAlbumDropdown(prev => !prev);
                     }}
@@ -742,17 +732,8 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 )}
               </div>
 
-              {/* RIGHT: analyzing indicator + mode label + close */}
+              {/* RIGHT: mode label + close */}
               <div className="flex items-center gap-1">
-                {item.isAnalyzing && (
-                  <div className="flex items-center gap-1.5 mr-1">
-                    <div className="relative w-3 h-3 shrink-0">
-                      <div className="absolute inset-0 border-[1.5px] border-neutral-100 rounded-full"></div>
-                      <div className="absolute inset-0 border-t-[1.5px] border-neutral-800 rounded-full animate-spin"></div>
-                    </div>
-                    <span className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold">Analyzing…</span>
-                  </div>
-                )}
                 {rightMode === 'chat' && (
                   <>
                     <button
@@ -765,13 +746,24 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     <div className="w-px h-3 bg-neutral-200" />
                   </>
                 )}
-                <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
+                <button onClick={onClose} className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
               </div>
             </div>
 
             {/* Right panel scrollable content */}
             {rightMode === 'metadata' ? (
-              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0" onScroll={handleInfoScroll}>
+
+                {/* Analyzing state — shown at the top of the content area while streaming */}
+                {item.isAnalyzing && !streamingFields && (
+                  <div className="flex items-center gap-2 text-neutral-400">
+                    <div className="relative w-3 h-3 shrink-0">
+                      <div className="absolute inset-0 border-[1.5px] border-neutral-200 rounded-full"></div>
+                      <div className="absolute inset-0 border-t-[1.5px] border-neutral-500 rounded-full animate-spin"></div>
+                    </div>
+                    <span className="text-[11px] tracking-[0.2em] uppercase font-medium">Analyzing…</span>
+                  </div>
+                )}
 
                 {/* Error state */}
                 {!item.isAnalyzing && item.streamingText && !item.artistName && (
@@ -860,7 +852,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 {displayDescription && (
                   <div>
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Interpretation</p>
-                    <div className="text-[12px] sm:text-[13px] leading-relaxed text-neutral-600 font-serif">
+                    <div className="text-[13px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
                       <ReactMarkdown components={markdownComponents}>{displayDescription}</ReactMarkdown>
                       {item.isAnalyzing && (
                         <span className="inline-block w-1.5 h-3 bg-neutral-400 animate-pulse ml-0.5"></span>
@@ -942,7 +934,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               </div>
             ) : (
               /* ── CHAT MODE ── */
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0" onScroll={handleInfoScroll}>
                 {messages.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
                     <div className="w-12 h-px bg-neutral-200 mb-6"></div>
@@ -953,24 +945,25 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 )}
                 {messages.map((m, idx) => (
                   <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] p-3 sm:p-4 text-[13px] leading-relaxed tracking-wide ${m.role === 'user'
-                      ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-none'
-                      : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-none font-serif'
-                    }`}>
-                      {m.text ? (
-                        m.role === 'model' ? (
+                    {m.role === 'user' ? (
+                      <div className="max-w-[85%] p-3 sm:p-4 text-[14px] leading-relaxed tracking-wide bg-neutral-900 text-white rounded-2xl rounded-tr-none">
+                        {m.text}
+                      </div>
+                    ) : (
+                      <div className="w-full text-[14px] leading-relaxed text-neutral-800 font-serif">
+                        {m.text ? (
                           <div className="prose prose-sm max-w-none prose-neutral prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
                             <ReactMarkdown components={markdownComponents}>{m.text}</ReactMarkdown>
                           </div>
-                        ) : m.text
-                      ) : (m.role === 'model' && isWaitingForFirstChunk && idx === messages.length - 1 ? (
-                        <div className="flex space-x-1.5 py-1">
-                          <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse"></div>
-                          <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-75"></div>
-                          <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-150"></div>
-                        </div>
-                      ) : null)}
-                    </div>
+                        ) : (isWaitingForFirstChunk && idx === messages.length - 1 ? (
+                          <div className="flex space-x-1.5 py-1">
+                            <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse"></div>
+                            <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-75"></div>
+                            <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-150"></div>
+                          </div>
+                        ) : null)}
+                      </div>
+                    )}
                   </div>
                 ))}
 
@@ -1049,7 +1042,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               }}
               placeholder={item.isAnalyzing ? 'Analyzing artwork…' : 'ask anything…'}
               disabled={item.isAnalyzing}
-              className={`flex-1 text-[13px] bg-neutral-50 p-2.5 px-4 sm:p-3 sm:px-5 rounded-full outline-none focus:ring-1 focus:ring-neutral-200 transition-all border border-neutral-100 ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex-1 text-[15px] sm:text-[13px] bg-neutral-50 p-3 px-5 sm:p-3 sm:px-5 rounded-full outline-none focus:ring-2 focus:ring-neutral-300 transition-all border border-neutral-300 sm:border-neutral-100 ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
             />
             <button
               onClick={() => { if (!item.isAnalyzing && input.trim()) handleSend(input); }}
@@ -1093,14 +1086,14 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     {/* Album dropdown — rendered via portal to escape modal overflow-hidden */}
     {showAlbumDropdown && albumDropdownPos && createPortal(
       <>
-        <div className="fixed inset-0 z-[200]" onClick={() => { setShowAlbumDropdown(false); setCreatingAlbum(false); setNewAlbumName(''); }} />
+        <div className="fixed inset-0 z-[200]" onClick={() => { setShowAlbumDropdown(false); setNewAlbumName(''); }} />
         <div
           className="fixed z-[201] bg-white rounded-2xl shadow-2xl border border-neutral-100 w-60 py-2 animate-in fade-in zoom-in-95 duration-150"
-          style={{ top: albumDropdownPos.top, right: albumDropdownPos.right }}
+          style={{ top: albumDropdownPos.top, left: albumDropdownPos.left }}
         >
           <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold px-4 pt-1.5 pb-2.5">Save to album</p>
 
-          {(albums || []).length === 0 && !creatingAlbum && (
+          {(albums || []).length === 0 && (
             <p className="text-[12px] text-neutral-400 px-4 pb-2">No albums yet</p>
           )}
 

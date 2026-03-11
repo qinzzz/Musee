@@ -245,7 +245,7 @@ const UnderstandView: React.FC<Props> = ({
       </aside>
 
       {/* ── Main panel ──────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="flex-1 flex flex-col min-h-0 relative">
 
         {isInChat ? (
           /* ── Chat view ───────────────────────────────────── */
@@ -253,13 +253,14 @@ const UnderstandView: React.FC<Props> = ({
             {/* Message thread */}
             <div
               ref={scrollRef}
-              className="flex-1 overflow-y-auto px-4 sm:px-8 pt-6 pb-4"
+              className="flex-1 overflow-y-auto min-h-0 px-4 sm:px-8 pt-6 pb-4"
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
               <div className="max-w-2xl mx-auto space-y-5">
                 {localMessages.length === 0 && !isTyping && (
                   <div className="flex flex-col items-center justify-center py-24 text-center">
                     <div className="w-px h-10 bg-neutral-200 mb-5" />
-                    <p className="text-[13px] text-neutral-400 font-serif italic">
+                    <p className="text-[15px] text-neutral-400 font-serif italic">
                       Ask anything about your collection…
                     </p>
                   </div>
@@ -267,32 +268,30 @@ const UnderstandView: React.FC<Props> = ({
 
                 {localMessages.map((m, idx) => (
                   <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] sm:max-w-[78%] px-4 py-3 text-[13px] sm:text-[14px] leading-relaxed ${
-                      m.role === 'user'
-                        ? 'bg-neutral-900 text-white rounded-2xl rounded-tr-sm shadow-sm'
-                        : 'bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-sm border border-neutral-100 font-serif'
-                    }`}>
-                      {m.role === 'model' ? (
+                    {m.role === 'user' ? (
+                      <div className="max-w-[85%] sm:max-w-[78%] px-4 py-3 text-[15px] leading-relaxed bg-neutral-900 text-white rounded-2xl rounded-tr-sm shadow-sm">
+                        {m.text}
+                      </div>
+                    ) : (
+                      <div className="w-full text-[15px] leading-relaxed text-neutral-800 font-serif prose prose-sm max-w-none prose-p:my-1">
                         <ReactMarkdown components={markdownComponents}>{m.text}</ReactMarkdown>
-                      ) : m.text}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 ))}
 
                 {/* Streaming / typing indicator */}
                 {isTyping && (
-                  <div className="flex justify-start">
-                    <div className="max-w-[85%] sm:max-w-[78%] px-4 py-3 text-[13px] sm:text-[14px] leading-relaxed bg-neutral-50 text-neutral-800 rounded-2xl rounded-tl-sm border border-neutral-100 font-serif">
-                      {streamingText ? (
-                        <ReactMarkdown components={markdownComponents}>{streamingText}</ReactMarkdown>
-                      ) : (
-                        <span className="inline-flex items-center space-x-1 py-1">
-                          <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce" style={{ animationDelay: '120ms' }} />
-                          <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce" style={{ animationDelay: '240ms' }} />
-                        </span>
-                      )}
-                    </div>
+                  <div className="w-full text-[15px] leading-relaxed text-neutral-800 font-serif prose prose-sm max-w-none prose-p:my-1">
+                    {streamingText ? (
+                      <ReactMarkdown components={markdownComponents}>{streamingText}</ReactMarkdown>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1 py-1">
+                        <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce" style={{ animationDelay: '120ms' }} />
+                        <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce" style={{ animationDelay: '240ms' }} />
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

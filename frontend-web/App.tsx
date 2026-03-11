@@ -257,6 +257,7 @@ const App: React.FC = () => {
   const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
@@ -941,11 +942,6 @@ const App: React.FC = () => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, conversation: [...item.conversation, ...newMessages] } : item));
   };
 
-  const updateItemAnnotations = (id: string, annotations: Annotation[]) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, annotations } : item));
-    if (interpretingItem?.id === id) setInterpretingItem(prev => prev ? { ...prev, annotations } : null);
-  };
-
   const updateItemMetadata = (id: string, updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
     setInterpretingItem(prev => prev?.id === id ? { ...prev, ...updates } : prev);
@@ -996,9 +992,20 @@ const App: React.FC = () => {
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
 
+  const isVisitMode = visit.active || !!filteredVisitId;
+
+  // ── Visit mode theme — change these to restyle the immersive visit look ──
+  const visitTheme = {
+    bg: '#1a1a1a',
+    text: 'text-white',
+  } as const;
+
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
-      <div className="relative w-screen h-screen bg-[#fdfdfd] overflow-hidden flex flex-col transition-colors duration-1000">
+      <div
+        className={`relative w-screen h-screen overflow-hidden flex flex-col transition-colors duration-700 ${isVisitMode ? visitTheme.text : ''}`}
+        style={{ backgroundColor: isVisitMode ? visitTheme.bg : '#fdfdfd' }}
+      >
         {/* Bottom-left user panel */}
         <div className="fixed bottom-4 left-4 z-50">
           {currentUser ? (
@@ -1116,11 +1123,33 @@ const App: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="bg-white border border-neutral-200 p-1 rounded-full shadow-lg">
-              <GoogleLogin
-                onLoginSuccess={handleLoginSuccess}
-                onLoginError={(err) => alert(`Login Error: ${err}`)}
-              />
+            <div className="relative">
+              {/* Anonymous icon — indicates not signed in */}
+              <button
+                onClick={() => setShowLoginModal(v => !v)}
+                title="Sign in"
+                className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 shadow-lg flex items-center justify-center text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </button>
+              {/* Sign-in popover */}
+              {showLoginModal && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowLoginModal(false)} />
+                  <div className="absolute bottom-full left-0 mb-2 z-50 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 w-64 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <p className="text-[12px] text-neutral-500 mb-3 leading-relaxed">Sign in to save your collection and analysis history.</p>
+                    <div className="flex justify-center">
+                      <GoogleLogin
+                        onLoginSuccess={(user) => { handleLoginSuccess(user); setShowLoginModal(false); }}
+                        onLoginError={(err) => alert(`Login Error: ${err}`)}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1237,24 +1266,10 @@ const App: React.FC = () => {
           <div className="fixed top-10 left-0 right-0 z-30 h-px bg-neutral-100" />
         )}
 
-        {/* 1. Status Pill — top center, informational only */}
-        {(visit.active || filteredVisitId) && (
-          <div className="fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 z-40 bg-neutral-900/80 backdrop-blur-md text-white px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-[8px] sm:text-[9px] tracking-[0.2em] uppercase flex items-center space-x-2 sm:space-x-3 shadow-xl border border-white/10" style={{ pointerEvents: 'none' }}>
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${visit.active && !filteredVisitId ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'}`} />
-            <span className="font-bold whitespace-nowrap">
-              {filteredVisitId ? 'Recorded Visit' : 'Exhibition in Progress'}
-            </span>
-            <span className="text-white/30">·</span>
-            <span className="opacity-70 whitespace-nowrap">
-              {items.filter(i => i.visitId === (filteredVisitId || visit.id)).length} Pieces
-            </span>
-          </div>
-        )}
-
-        {/* 2. Exhibition Hall Input — below status pill, inline input */}
+        {/* Exhibition Hall Input — top center, inline input */}
         {(visit.active || filteredVisitId) && (
           <div
-            className={`fixed top-11 sm:top-12 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur-md px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs tracking-wider flex items-center space-x-2 sm:space-x-3 shadow-lg border transition-all w-[260px] sm:w-[320px] ${exhibitionInputFocused ? 'border-neutral-400 bg-white' : 'border-neutral-200'}`}
+            className={`fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur-md px-5 sm:px-6 py-2.5 sm:py-3 rounded-full text-[12px] sm:text-sm tracking-wider flex items-center space-x-3 shadow-lg border transition-all w-[320px] sm:w-[440px] ${exhibitionInputFocused ? 'border-neutral-400 bg-white' : 'border-neutral-200'}`}
             style={{ pointerEvents: 'auto' }}
             onClick={() => exhibitionInputRef.current?.focus()}
           >
@@ -1293,9 +1308,9 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* 3. Right Side Actions — only actionable buttons */}
+        {/* 3. Bottom-center Actions — End / Continue Visit */}
         {(visit.active || filteredVisitId) && (
-          <div className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center space-y-3 sm:space-y-4" style={{ pointerEvents: 'auto' }}>
+          <div className="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)', pointerEvents: 'auto' }}>
             <button
               onClick={() => {
                 if (filteredVisitId) {
@@ -1320,7 +1335,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className={`relative z-10 flex-1 min-h-0 overflow-hidden transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-10'} ${(interpretingItem || exhibitionContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
+        <div className={`relative z-10 flex-1 min-h-0 overflow-hidden transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-14 sm:pt-10 pb-20 sm:pb-4'} ${(interpretingItem || exhibitionContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
           {activeTab === 'learn' ? (
             <UnderstandView
               items={items}
@@ -1391,7 +1406,7 @@ const App: React.FC = () => {
               >
                 {isGalleryEmpty ? (
                   <div className="snap-center shrink-0 w-screen flex items-center justify-center">
-                    <EmptyWall />
+                    <EmptyWall isVisitMode={isVisitMode} />
                   </div>
                 ) : (
                   <div className="min-w-[calc(50vw-32vh)] sm:min-w-[calc(50vw-28vh)] h-full shrink-0" />
@@ -1511,7 +1526,6 @@ const App: React.FC = () => {
             item={interpretingItem}
             onClose={() => setInterpretingItem(null)}
             onUpdateConversation={updateItemConversation}
-            onUpdateAnnotations={(ans) => updateItemAnnotations(interpretingItem.id, ans)}
             onUpdateMetadata={updateItemMetadata}
             onDelete={handleDeleteItem}
             sessionId={visit.id}
