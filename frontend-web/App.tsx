@@ -992,9 +992,20 @@ const App: React.FC = () => {
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
 
+  const isVisitMode = visit.active || !!filteredVisitId;
+
+  // ── Visit mode theme — change these to restyle the immersive visit look ──
+  const visitTheme = {
+    bg: '#1a1a1a',
+    text: 'text-white',
+  } as const;
+
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
-      <div className="relative w-screen h-screen bg-[#fdfdfd] overflow-hidden flex flex-col transition-colors duration-1000">
+      <div
+        className={`relative w-screen h-screen overflow-hidden flex flex-col transition-colors duration-700 ${isVisitMode ? visitTheme.text : ''}`}
+        style={{ backgroundColor: isVisitMode ? visitTheme.bg : '#fdfdfd' }}
+      >
         {/* Bottom-left user panel */}
         <div className="fixed bottom-4 left-4 z-50">
           {currentUser ? (
