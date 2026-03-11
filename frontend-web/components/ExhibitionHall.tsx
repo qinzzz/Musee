@@ -77,10 +77,10 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-12">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-12">
       <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-2xl" onClick={onClose} />
 
-      <div className="relative w-full max-w-5xl h-[85vh] sm:h-[80vh] bg-white rounded-2xl sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500">
+      <div className="relative w-full max-w-5xl h-[100dvh] sm:h-[80vh] bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500">
         <div className="p-4 sm:p-8 border-b border-neutral-50 flex justify-between items-center bg-neutral-50/50">
           <div>
             <h3 className="text-[11px] sm:text-[12px] tracking-[0.6em] uppercase text-neutral-900 font-bold">The Exhibition Hall</h3>
@@ -132,31 +132,28 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
               )}
               {messages.map((m, idx) => (
                 <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] sm:max-w-[75%] p-3 sm:p-6 text-[13px] sm:text-[14px] leading-relaxed tracking-wide prose prose-sm max-w-none ${m.role === 'user'
-                    ? 'bg-neutral-900 text-white rounded-2xl sm:rounded-[1.5rem] rounded-tr-none sm:rounded-tr-none shadow-xl'
-                    : 'bg-neutral-50 text-neutral-800 rounded-2xl sm:rounded-[1.5rem] rounded-tl-none sm:rounded-tl-none font-serif border border-neutral-100 prose-p:my-1'
-                    }`}>
-                    {m.role === 'model' ? (
+                  {m.role === 'user' ? (
+                    <div className="max-w-[85%] sm:max-w-[75%] p-3 sm:p-5 text-[15px] sm:text-[15px] leading-relaxed tracking-wide bg-neutral-900 text-white rounded-2xl sm:rounded-[1.5rem] rounded-tr-none shadow-xl">
+                      {m.text}
+                    </div>
+                  ) : (
+                    <div className="w-full text-[15px] sm:text-[15px] leading-relaxed text-neutral-800 font-serif prose prose-sm max-w-none prose-p:my-1">
                       <ReactMarkdown components={markdownComponents}>{m.text}</ReactMarkdown>
-                    ) : (
-                      m.text
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               ))}
               {isTyping && (
-                <div className="flex justify-start">
-                  <div className="max-w-[85%] sm:max-w-[75%] p-3 sm:p-6 text-[13px] sm:text-[14px] leading-relaxed tracking-wide bg-neutral-50 text-neutral-800 rounded-2xl sm:rounded-[1.5rem] rounded-tl-none sm:rounded-tl-none font-serif border border-neutral-100 prose prose-sm max-w-none prose-p:my-1">
-                    {streamingText ? (
-                      <ReactMarkdown components={markdownComponents}>{streamingText}</ReactMarkdown>
-                    ) : (
-                      <span className="inline-flex space-x-1">
-                        <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce" />
-                        <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce delay-100" />
-                        <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce delay-200" />
-                      </span>
-                    )}
-                  </div>
+                <div className="w-full text-[15px] leading-relaxed text-neutral-800 font-serif prose prose-sm max-w-none prose-p:my-1">
+                  {streamingText ? (
+                    <ReactMarkdown components={markdownComponents}>{streamingText}</ReactMarkdown>
+                  ) : (
+                    <span className="inline-flex space-x-1">
+                      <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce" />
+                      <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce delay-100" />
+                      <span className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-bounce delay-200" />
+                    </span>
+                  )}
                 </div>
               )}
             </div>
