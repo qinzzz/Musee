@@ -1406,7 +1406,7 @@ const App: React.FC = () => {
               >
                 {isGalleryEmpty ? (
                   <div className="snap-center shrink-0 w-screen flex items-center justify-center">
-                    <EmptyWall />
+                    <EmptyWall isVisitMode={isVisitMode} />
                   </div>
                 ) : (
                   <div className="min-w-[calc(50vw-32vh)] sm:min-w-[calc(50vw-28vh)] h-full shrink-0" />
