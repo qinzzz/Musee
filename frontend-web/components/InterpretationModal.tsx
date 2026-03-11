@@ -234,7 +234,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   // Set initial mobile image height (4:3 = 75vw) and reset on item navigate
   useEffect(() => {
     if (window.innerWidth < 640) {
-      setMobileImageHeight(window.innerWidth * 0.75);
+      setMobileImageHeight(Math.min(window.innerWidth * 0.75, window.innerHeight * 0.6));
     }
   }, [item.id]);
 
@@ -1089,7 +1089,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               }}
               placeholder={item.isAnalyzing ? 'Analyzing artwork…' : 'ask anything…'}
               disabled={item.isAnalyzing}
-              className={`flex-1 text-[13px] bg-neutral-50 p-2.5 px-4 sm:p-3 sm:px-5 rounded-full outline-none focus:ring-1 focus:ring-neutral-200 transition-all border border-neutral-100 ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex-1 text-[15px] sm:text-[13px] bg-neutral-50 p-3 px-5 sm:p-3 sm:px-5 rounded-full outline-none focus:ring-2 focus:ring-neutral-300 transition-all border border-neutral-300 sm:border-neutral-100 ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
             />
             <button
               onClick={() => { if (!item.isAnalyzing && input.trim()) handleSend(input); }}

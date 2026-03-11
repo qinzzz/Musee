@@ -257,6 +257,7 @@ const App: React.FC = () => {
   const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
@@ -1116,11 +1117,33 @@ const App: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="bg-white border border-neutral-200 p-1 rounded-full shadow-lg">
-              <GoogleLogin
-                onLoginSuccess={handleLoginSuccess}
-                onLoginError={(err) => alert(`Login Error: ${err}`)}
-              />
+            <div className="relative">
+              {/* Anonymous icon — indicates not signed in */}
+              <button
+                onClick={() => setShowLoginModal(v => !v)}
+                title="Sign in"
+                className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 shadow-lg flex items-center justify-center text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </button>
+              {/* Sign-in popover */}
+              {showLoginModal && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowLoginModal(false)} />
+                  <div className="absolute bottom-full left-0 mb-2 z-50 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 w-64 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <p className="text-[12px] text-neutral-500 mb-3 leading-relaxed">Sign in to save your collection and analysis history.</p>
+                    <div className="flex justify-center">
+                      <GoogleLogin
+                        onLoginSuccess={(user) => { handleLoginSuccess(user); setShowLoginModal(false); }}
+                        onLoginError={(err) => alert(`Login Error: ${err}`)}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1293,9 +1316,9 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* 3. Right Side Actions — only actionable buttons */}
+        {/* 3. Top-left Actions — End / Continue Visit */}
         {(visit.active || filteredVisitId) && (
-          <div className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center space-y-3 sm:space-y-4" style={{ pointerEvents: 'auto' }}>
+          <div className="fixed left-3 sm:left-4 top-3 sm:top-4 z-50 flex flex-col items-start space-y-2" style={{ pointerEvents: 'auto' }}>
             <button
               onClick={() => {
                 if (filteredVisitId) {
