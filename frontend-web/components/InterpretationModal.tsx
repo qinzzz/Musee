@@ -471,14 +471,23 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     }
   };
 
-  // Collapse image as user scrolls — height tracks scroll position (mobile only)
+  // Initialize mobile image height on mount
+  useEffect(() => {
+    if (window.innerWidth < 640) {
+      setMobileImageHeight(window.innerWidth * 0.75);
+    }
+  }, []);
+
+  // Snap-collapse image on scroll (mobile only) — threshold avoids feedback loop
   const handleInfoScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (window.innerWidth >= 640) return;
     const scrollTop = e.currentTarget.scrollTop;
-    const fullH = window.innerWidth * 0.75; // 4:3
-    const collapseDistance = fullH * 0.6;   // scroll 60% of full height to fully collapse
-    const newH = Math.max(0, fullH - scrollTop * (fullH / collapseDistance));
-    setMobileImageHeight(newH);
+    const fullH = window.innerWidth * 0.75;
+    if (scrollTop > 60 && mobileImageHeight > 0) {
+      setMobileImageHeight(0);
+    } else if (scrollTop < 20 && mobileImageHeight === 0) {
+      setMobileImageHeight(fullH);
+    }
   };
 
   // Calculate modal dimensions based on screen size
@@ -577,7 +586,11 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           {/* ── LEFT / TOP PANEL: Location + Time + Photo ── */}
           <div
             className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] sm:h-auto overflow-hidden"
-            style={mobileImageHeight >= 0 ? { height: `${mobileImageHeight}px` } : {}}
+            style={mobileImageHeight >= 0 ? {
+              height: `${mobileImageHeight}px`,
+              transition: 'height 320ms cubic-bezier(0.4, 0, 0.2, 1)',
+              visibility: mobileImageHeight === 0 ? 'hidden' : 'visible',
+            } : {}}
           >
             {/* Location + Time row */}
             {!item.isAnalyzing && (displayLocation || item.photoTime) && (
