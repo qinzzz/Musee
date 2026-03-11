@@ -1308,9 +1308,9 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* 3. Top-left Actions — End / Continue Visit */}
+        {/* 3. Bottom-center Actions — End / Continue Visit */}
         {(visit.active || filteredVisitId) && (
-          <div className="fixed left-3 sm:left-4 top-3 sm:top-4 z-50 flex flex-col items-start space-y-2" style={{ pointerEvents: 'auto' }}>
+          <div className="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)', pointerEvents: 'auto' }}>
             <button
               onClick={() => {
                 if (filteredVisitId) {
