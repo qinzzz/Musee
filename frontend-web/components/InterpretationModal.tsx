@@ -111,7 +111,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const imageRef = useRef<HTMLImageElement>(null);
   const albumButtonRef = useRef<HTMLButtonElement>(null);
   const [showAlbumDropdown, setShowAlbumDropdown] = useState(false);
-  const [albumDropdownPos, setAlbumDropdownPos] = useState<{ top: number; right: number } | null>(null);
+  const [albumDropdownPos, setAlbumDropdownPos] = useState<{ top: number; left: number } | null>(null);
   const [showCreateAlbumModal, setShowCreateAlbumModal] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState('');
 
@@ -662,7 +662,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                     onClick={() => {
                       if (albumButtonRef.current) {
                         const rect = albumButtonRef.current.getBoundingClientRect();
-                        setAlbumDropdownPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                        const dropdownWidth = 240;
+                        const left = Math.min(rect.left, window.innerWidth - dropdownWidth - 8);
+                        setAlbumDropdownPos({ top: rect.bottom + 6, left: Math.max(8, left) });
                       }
                       setShowAlbumDropdown(prev => !prev);
                     }}
@@ -1071,7 +1073,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
         <div className="fixed inset-0 z-[200]" onClick={() => { setShowAlbumDropdown(false); setNewAlbumName(''); }} />
         <div
           className="fixed z-[201] bg-white rounded-2xl shadow-2xl border border-neutral-100 w-60 py-2 animate-in fade-in zoom-in-95 duration-150"
-          style={{ top: albumDropdownPos.top, right: albumDropdownPos.right }}
+          style={{ top: albumDropdownPos.top, left: albumDropdownPos.left }}
         >
           <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold px-4 pt-1.5 pb-2.5">Save to album</p>
 
