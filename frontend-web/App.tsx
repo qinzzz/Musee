@@ -909,7 +909,8 @@ const App: React.FC = () => {
 
         } catch (error) {
           console.error(`Failed to analyze ${file.name}:`, error);
-          setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false } : item));
+          const message = error instanceof Error ? error.message : 'Analysis failed. Please try again.';
+          setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, streamingText: message } : item));
         }
       });
     }

@@ -70,6 +70,8 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
       },
       (e) => {
         console.error(e);
+        const errorMsg: Message = { role: 'model', text: 'Something went wrong while reaching the curator. Please try again.' };
+        setMessages(prev => [...prev, errorMsg]);
         setStreamingText('');
         setIsTyping(false);
       }
