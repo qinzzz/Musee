@@ -2,9 +2,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
-import { Message, Annotation, Album } from '../types';
+import { Message, Album } from '../types';
 import { chatWithArtwork, chatWithArtworkStream, base64ToFile, getTagExplanation, suggestTopics, updateArtwork } from '../apiService';
-import pencilIcon from '../assets/pencil-line.svg';
 
 interface Props {
   item: {
@@ -27,7 +26,6 @@ interface Props {
   };
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
-  onUpdateAnnotations: (annotations: Annotation[]) => void;
   onUpdateMetadata?: (id: string, updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => void;
   onDelete?: (id: string) => void;
   sessionId?: string;
@@ -96,12 +94,10 @@ const HoverTag: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateAnnotations, onUpdateMetadata, onDelete, sessionId, allVisitItems, onNavigate, isLiked, albums, itemAlbumIds, onToggleLike, onSaveToAlbum, onCreateAlbum }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, onDelete, sessionId, allVisitItems, onNavigate, isLiked, albums, itemAlbumIds, onToggleLike, onSaveToAlbum, onCreateAlbum }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [newAnnotationPos, setNewAnnotationPos] = useState<{ x: number, y: number } | null>(null);
-  const [annotationInput, setAnnotationInput] = useState('');
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
@@ -475,27 +471,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     }
   };
 
-  const handleImageClick = (e: React.MouseEvent) => {
-    if (!imageRef.current) return;
-    const rect = imageRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setNewAnnotationPos({ x, y });
-  };
-
-  const submitAnnotation = () => {
-    if (!newAnnotationPos || !annotationInput.trim()) return;
-    const newAn: Annotation = {
-      id: Math.random().toString(36).substr(2, 9),
-      x: newAnnotationPos.x,
-      y: newAnnotationPos.y,
-      comment: annotationInput,
-    };
-    onUpdateAnnotations([...item.annotations, newAn]);
-    setNewAnnotationPos(null);
-    setAnnotationInput('');
-  };
-
   // Collapse image as user scrolls — height tracks scroll position (mobile only)
   const handleInfoScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (window.innerWidth >= 640) return;
@@ -627,7 +602,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
             )}
 
             {/* Photo — takes remaining space */}
-            <div className="flex-1 relative flex items-start sm:items-center justify-center p-3 sm:p-5 cursor-crosshair min-h-0 overflow-hidden">
+            <div className="flex-1 relative flex items-start sm:items-center justify-center p-3 sm:p-5 min-h-0 overflow-hidden">
               {imageError ? (
                 <div className="flex flex-col items-center justify-center gap-3 text-neutral-300 select-none">
                   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
@@ -639,7 +614,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 <img
                   ref={imageRef}
                   src={item.url}
-                  onClick={handleImageClick}
                   className="max-w-full max-h-full object-contain shadow-xl rounded-lg"
                   alt="Interpretation target"
                 />
@@ -658,45 +632,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 </div>
               )}
 
-              {/* Existing Annotations */}
-              {item.annotations.map(an => (
-                <div
-                  key={an.id}
-                  className="absolute group/an -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                  style={{ left: `${an.x}%`, top: `${an.y}%` }}
-                >
-                  <div className="w-6 h-6 rounded-full border border-white bg-white/20 backdrop-blur animate-pulse shadow-lg group-hover/an:scale-150 transition-transform duration-500"></div>
-                  <div className="absolute left-8 top-1/2 -translate-y-1/2 w-48 opacity-0 group-hover/an:opacity-100 transition-opacity bg-white/90 backdrop-blur p-4 rounded-xl shadow-xl border border-neutral-100 pointer-events-none z-10">
-                    <p className="text-[11px] leading-relaxed text-neutral-800 font-serif italic">"{an.comment}"</p>
-                  </div>
-                </div>
-              ))}
-
-              {/* New Annotation Indicator */}
-              {newAnnotationPos && (
-                <div
-                  className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
-                  style={{ left: `${newAnnotationPos.x}%`, top: `${newAnnotationPos.y}%` }}
-                >
-                  <div className="w-8 h-8 rounded-full border-2 border-neutral-900 bg-white shadow-xl flex items-center justify-center">
-                    <span className="text-xl">+</span>
-                  </div>
-                  <div className="absolute top-10 left-1/2 -translate-x-1/2 w-64 bg-white p-4 rounded-2xl shadow-2xl border border-neutral-100">
-                    <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 mb-2 font-bold">Mark Area of Interest</p>
-                    <textarea
-                      autoFocus
-                      value={annotationInput}
-                      onChange={(e) => setAnnotationInput(e.target.value)}
-                      placeholder="Capture a structural thought..."
-                      className="w-full text-[12px] p-3 bg-neutral-50 rounded-xl outline-none border border-neutral-100 focus:ring-1 focus:ring-neutral-200 resize-none h-20"
-                    />
-                    <div className="flex justify-end space-x-2 mt-3">
-                      <button onClick={() => setNewAnnotationPos(null)} className="text-[10px] uppercase tracking-widest text-neutral-400 p-2 hover:text-neutral-900">Cancel</button>
-                      <button onClick={submitAnnotation} className="bg-neutral-900 text-white text-[10px] uppercase tracking-widest px-4 py-2 rounded-full hover:scale-105 transition-transform">Place</button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 

@@ -942,11 +942,6 @@ const App: React.FC = () => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, conversation: [...item.conversation, ...newMessages] } : item));
   };
 
-  const updateItemAnnotations = (id: string, annotations: Annotation[]) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, annotations } : item));
-    if (interpretingItem?.id === id) setInterpretingItem(prev => prev ? { ...prev, annotations } : null);
-  };
-
   const updateItemMetadata = (id: string, updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
     setInterpretingItem(prev => prev?.id === id ? { ...prev, ...updates } : prev);
@@ -1534,7 +1529,6 @@ const App: React.FC = () => {
             item={interpretingItem}
             onClose={() => setInterpretingItem(null)}
             onUpdateConversation={updateItemConversation}
-            onUpdateAnnotations={(ans) => updateItemAnnotations(interpretingItem.id, ans)}
             onUpdateMetadata={updateItemMetadata}
             onDelete={handleDeleteItem}
             sessionId={visit.id}
