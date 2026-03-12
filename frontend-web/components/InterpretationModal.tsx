@@ -654,7 +654,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white">
 
             {/* Right panel header — tap background (not buttons) to re-expand image on mobile */}
-            <div className="px-2 py-2 border-b border-neutral-100 flex items-center justify-between shrink-0" onClick={handleToolbarClick}
+            <div className="px-2 py-2 border-b border-neutral-100 flex items-center justify-between shrink-0" onClick={handleToolbarClick}>
               {/* LEFT: action icons */}
               <div className="flex items-center gap-2">
                 {onToggleLike && (
