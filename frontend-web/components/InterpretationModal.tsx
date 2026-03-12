@@ -111,6 +111,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const imageRef = useRef<HTMLImageElement>(null);
   const albumButtonRef = useRef<HTMLButtonElement>(null);
   const imageCollapsedAtRef = useRef<number>(0);
+  const swipeTouchStartYRef = useRef<number>(0);
   const [showAlbumDropdown, setShowAlbumDropdown] = useState(false);
   const [albumDropdownPos, setAlbumDropdownPos] = useState<{ top: number; left: number } | null>(null);
   const [showCreateAlbumModal, setShowCreateAlbumModal] = useState(false);
@@ -479,7 +480,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     }
   }, []);
 
-  // Snap-collapse image on scroll (mobile only) — threshold avoids feedback loop
+  // Snap-collapse image on scroll (mobile only)
   const handleInfoScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (window.innerWidth >= 640) return;
     const scrollTop = e.currentTarget.scrollTop;
@@ -487,9 +488,21 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     if (scrollTop > 60 && mobileImageHeight > 0) {
       setMobileImageHeight(0);
       imageCollapsedAtRef.current = Date.now();
-    } else if (scrollTop < 20 && mobileImageHeight === 0 && Date.now() - imageCollapsedAtRef.current > 400) {
-      // Only re-expand on deliberate swipe-down; ignore immediate bounce-back when content is short
-      setMobileImageHeight(fullH);
+    }
+  };
+
+  // Re-expand image on deliberate swipe-down (touch-based, works even when content is short)
+  const handleInfoTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    swipeTouchStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleInfoTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (window.innerWidth >= 640 || mobileImageHeight !== 0) return;
+    const deltaY = e.changedTouches[0].clientY - swipeTouchStartYRef.current;
+    const scrollTop = e.currentTarget.scrollTop;
+    // Re-expand only on deliberate downward swipe (40px+) from the top of the panel
+    if (deltaY > 40 && scrollTop === 0) {
+      setMobileImageHeight(window.innerWidth * 0.75);
     }
   };
 
@@ -755,7 +768,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
             {/* Right panel scrollable content */}
             {rightMode === 'metadata' ? (
-              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0" onScroll={handleInfoScroll}>
+              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0" onScroll={handleInfoScroll} onTouchStart={handleInfoTouchStart} onTouchEnd={handleInfoTouchEnd}>
 
                 {/* Analyzing state — shown at the top of the content area while streaming */}
                 {item.isAnalyzing && !streamingFields && (
@@ -937,7 +950,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               </div>
             ) : (
               /* ── CHAT MODE ── */
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0" onScroll={handleInfoScroll}>
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0" onScroll={handleInfoScroll} onTouchStart={handleInfoTouchStart} onTouchEnd={handleInfoTouchEnd}>
                 {messages.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
                     <div className="w-12 h-px bg-neutral-200 mb-6"></div>
