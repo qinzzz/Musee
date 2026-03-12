@@ -110,8 +110,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const albumButtonRef = useRef<HTMLButtonElement>(null);
-  const imageCollapsedAtRef = useRef<number>(0);
-  const swipeTouchStartYRef = useRef<number>(0);
   const [showAlbumDropdown, setShowAlbumDropdown] = useState(false);
   const [albumDropdownPos, setAlbumDropdownPos] = useState<{ top: number; left: number } | null>(null);
   const [showCreateAlbumModal, setShowCreateAlbumModal] = useState(false);
@@ -480,30 +478,17 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     }
   }, []);
 
-  // Snap-collapse image on scroll (mobile only)
-  const handleInfoScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (window.innerWidth >= 640) return;
-    const scrollTop = e.currentTarget.scrollTop;
-    const fullH = window.innerWidth * 0.75;
-    if (scrollTop > 60 && mobileImageHeight > 0) {
-      setMobileImageHeight(0);
-      imageCollapsedAtRef.current = Date.now();
-    }
+  // Tap image panel to collapse (mobile only)
+  const handleImagePanelClick = () => {
+    if (window.innerWidth >= 640 || mobileImageHeight === 0) return;
+    setMobileImageHeight(0);
   };
 
-  // Re-expand image on deliberate swipe-down (touch-based, works even when content is short)
-  const handleInfoTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    swipeTouchStartYRef.current = e.touches[0].clientY;
-  };
-
-  const handleInfoTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+  // Tap toolbar background to expand image (mobile only); ignore taps on actual buttons
+  const handleToolbarClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (window.innerWidth >= 640 || mobileImageHeight !== 0) return;
-    const deltaY = e.changedTouches[0].clientY - swipeTouchStartYRef.current;
-    const scrollTop = e.currentTarget.scrollTop;
-    // Re-expand only on deliberate downward swipe (40px+) from the top of the panel
-    if (deltaY > 40 && scrollTop === 0) {
-      setMobileImageHeight(window.innerWidth * 0.75);
-    }
+    if ((e.target as Element).closest('button')) return;
+    setMobileImageHeight(window.innerWidth * 0.75);
   };
 
   // Calculate modal dimensions based on screen size
@@ -601,12 +586,13 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
           {/* ── LEFT / TOP PANEL: Location + Time + Photo ── */}
           <div
-            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] sm:h-auto overflow-hidden"
+            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] sm:h-auto overflow-hidden sm:cursor-default cursor-pointer"
             style={mobileImageHeight >= 0 ? {
               height: `${mobileImageHeight}px`,
               transition: 'height 320ms cubic-bezier(0.4, 0, 0.2, 1)',
               visibility: mobileImageHeight === 0 ? 'hidden' : 'visible',
             } : {}}
+            onClick={handleImagePanelClick}
           >
             {/* Location + Time row */}
             {!item.isAnalyzing && (displayLocation || item.photoTime) && (
@@ -667,8 +653,8 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           {/* ── RIGHT PANEL: Analysis Metadata OR Curator Dialogue ── */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white">
 
-            {/* Right panel header */}
-            <div className="px-2 py-2 border-b border-neutral-100 flex items-center justify-between shrink-0">
+            {/* Right panel header — tap background (not buttons) to re-expand image on mobile */}
+            <div className="px-2 py-2 border-b border-neutral-100 flex items-center justify-between shrink-0" onClick={handleToolbarClick}
               {/* LEFT: action icons */}
               <div className="flex items-center gap-2">
                 {onToggleLike && (
@@ -768,7 +754,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
             {/* Right panel scrollable content */}
             {rightMode === 'metadata' ? (
-              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0" onScroll={handleInfoScroll} onTouchStart={handleInfoTouchStart} onTouchEnd={handleInfoTouchEnd}>
+              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0">
 
                 {/* Analyzing state — shown at the top of the content area while streaming */}
                 {item.isAnalyzing && !streamingFields && (
@@ -950,7 +936,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               </div>
             ) : (
               /* ── CHAT MODE ── */
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0" onScroll={handleInfoScroll} onTouchStart={handleInfoTouchStart} onTouchEnd={handleInfoTouchEnd}>
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0">
                 {messages.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
                     <div className="w-12 h-px bg-neutral-200 mb-6"></div>
