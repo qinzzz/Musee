@@ -110,6 +110,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const albumButtonRef = useRef<HTMLButtonElement>(null);
+  const imageCollapsedAtRef = useRef<number>(0);
   const [showAlbumDropdown, setShowAlbumDropdown] = useState(false);
   const [albumDropdownPos, setAlbumDropdownPos] = useState<{ top: number; left: number } | null>(null);
   const [showCreateAlbumModal, setShowCreateAlbumModal] = useState(false);
@@ -485,7 +486,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     const fullH = window.innerWidth * 0.75;
     if (scrollTop > 60 && mobileImageHeight > 0) {
       setMobileImageHeight(0);
-    } else if (scrollTop < 20 && mobileImageHeight === 0) {
+      imageCollapsedAtRef.current = Date.now();
+    } else if (scrollTop < 20 && mobileImageHeight === 0 && Date.now() - imageCollapsedAtRef.current > 400) {
+      // Only re-expand on deliberate swipe-down; ignore immediate bounce-back when content is short
       setMobileImageHeight(fullH);
     }
   };
