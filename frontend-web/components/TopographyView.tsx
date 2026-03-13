@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { GalleryItem, TagCoordinate, NeighborItem } from '../types';
 import TagDefinitionModal from './TagDefinitionModal';
 
@@ -19,8 +19,10 @@ const CANVAS_SIZE = 3000;
 const VIEWPORT_INITIAL_X = 1500;
 const VIEWPORT_INITIAL_Y = 1500;
 const LAYOUT_RADIUS = 700;
+const MIN_ZOOM = 0.15;
+const MAX_ZOOM = 4;
 
-const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = [], onClose }) => {
+const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = [] }) => {
   const [zoom, setZoom] = useState(0.8);
   const [offset, setOffset] = useState<Point>({
     x: -VIEWPORT_INITIAL_X + window.innerWidth / 2,
@@ -34,6 +36,50 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
+
+  // Refs to keep latest values accessible in non-reactive callbacks
+  const containerRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef(zoom);
+  const offsetRef = useRef(offset);
+  const lastTouches = useRef<Touch[]>([]);
+  const isPanningRef = useRef(false);
+
+  zoomRef.current = zoom;
+  offsetRef.current = offset;
+  isPanningRef.current = isPanning;
+
+  // Non-passive wheel listener for zoom-toward-cursor on desktop
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const currentZoom = zoomRef.current;
+      const currentOffset = offsetRef.current;
+
+      const factor = e.deltaMode === 1 ? 0.1 : 0.001; // line vs pixel delta
+      const rawDelta = -e.deltaY * factor;
+      const scaleFactor = Math.exp(rawDelta * 0.8);
+      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom * scaleFactor));
+
+      const rect = el.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const canvasX = (mouseX - currentOffset.x) / currentZoom;
+      const canvasY = (mouseY - currentOffset.y) / currentZoom;
+
+      setOffset({
+        x: mouseX - canvasX * newZoom,
+        y: mouseY - canvasY * newZoom,
+      });
+      setZoom(newZoom);
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
 
   const internalTags = useMemo(() => Object.keys(cachedTagMap), [cachedTagMap]);
 
@@ -90,6 +136,7 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
     });
   }, [items, tagNodes]);
 
+  // ── Mouse handlers ───────────────────────────────────
   const handleMouseDown = () => setIsPanning(true);
   const handleMouseUp = () => setIsPanning(false);
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -98,6 +145,81 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
       x: prev.x + e.movementX,
       y: prev.y + e.movementY
     }));
+  };
+
+  // ── Touch handlers (mobile pan + pinch zoom) ─────────
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // Don't prevent default here — let links/buttons still work
+    if (e.touches.length === 1) {
+      setIsPanning(true);
+      lastTouches.current = [e.touches[0]];
+    } else if (e.touches.length >= 2) {
+      setIsPanning(false);
+      lastTouches.current = [e.touches[0], e.touches[1]];
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault(); // Prevent native scroll / browser zoom
+    const currentZoom = zoomRef.current;
+    const currentOffset = offsetRef.current;
+
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const prev = lastTouches.current[0];
+      if (prev) {
+        const dx = touch.clientX - prev.clientX;
+        const dy = touch.clientY - prev.clientY;
+        setOffset({ x: currentOffset.x + dx, y: currentOffset.y + dy });
+      }
+      lastTouches.current = [touch];
+    } else if (e.touches.length >= 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const p1 = lastTouches.current[0];
+      const p2 = lastTouches.current[1];
+
+      if (p1 && p2) {
+        // Current and previous distances for pinch scale
+        const prevDist = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
+        const currDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const scaleFactor = prevDist > 0 ? currDist / prevDist : 1;
+        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom * scaleFactor));
+
+        // Midpoint in screen coords — zoom toward it
+        const midX = (t1.clientX + t2.clientX) / 2;
+        const midY = (t1.clientY + t2.clientY) / 2;
+        const prevMidX = (p1.clientX + p2.clientX) / 2;
+        const prevMidY = (p1.clientY + p2.clientY) / 2;
+
+        const canvasX = (midX - currentOffset.x) / currentZoom;
+        const canvasY = (midY - currentOffset.y) / currentZoom;
+
+        setOffset({
+          x: midX - canvasX * newZoom + (midX - prevMidX),
+          y: midY - canvasY * newZoom + (midY - prevMidY),
+        });
+        setZoom(newZoom);
+      }
+
+      lastTouches.current = [t1, t2];
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsPanning(false);
+    lastTouches.current = [];
+  };
+
+  // ── Zoom buttons ─────────────────────────────────────
+  const zoomBy = (factor: number) => {
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomRef.current * factor));
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const canvasX = (cx - offsetRef.current.x) / zoomRef.current;
+    const canvasY = (cy - offsetRef.current.y) / zoomRef.current;
+    setOffset({ x: cx - canvasX * newZoom, y: cy - canvasY * newZoom });
+    setZoom(newZoom);
   };
 
   const centerOnTag = (tag: string) => {
@@ -135,11 +257,19 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
   const SIDEBAR_W = 220;
 
   return (
-    <div className="fixed inset-0 z-[60] bg-[#fdfdfd] overflow-hidden cursor-grab active:cursor-grabbing select-none animate-in fade-in duration-700"
-         onMouseDown={handleMouseDown}
-         onMouseUp={handleMouseUp}
-         onMouseLeave={handleMouseUp}
-         onMouseMove={handleMouseMove}>
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-[60] bg-[#fdfdfd] overflow-hidden cursor-grab active:cursor-grabbing select-none animate-in fade-in duration-700"
+      style={{ touchAction: 'none' }}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onMouseMove={handleMouseMove}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+    >
 
       {/* Dot-grid background */}
       <div
@@ -157,6 +287,7 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
           className="absolute inset-0 z-[15] bg-black/20"
           onClick={() => setSidebarOpen(false)}
           onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
         />
       )}
 
@@ -165,6 +296,7 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
         className={`absolute left-0 top-0 bottom-0 z-20 flex flex-col bg-white/97 backdrop-blur-md border-r border-neutral-100 transition-all duration-300 overflow-hidden`}
         style={{ width: sidebarOpen ? SIDEBAR_W : 0 }}
         onMouseDown={e => e.stopPropagation()}
+        onTouchStart={e => e.stopPropagation()}
       >
         {/* Sidebar header */}
         <div className="shrink-0 px-4 pt-4 pb-3 flex items-center justify-between border-b border-neutral-100">
@@ -268,44 +400,49 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
         )}
       </div>
 
-      {/* ── Top-left: sidebar toggle + title ───────────────── */}
-      <div
-        className="absolute top-10 z-10 transition-all duration-300 pointer-events-auto"
-        style={{ left: sidebarOpen ? SIDEBAR_W + 24 : 40 }}
-        onMouseDown={e => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-2">
-          {/* Sidebar toggle button */}
-          {!sidebarOpen && (
-            <button
-              onClick={() => setSidebarOpen(true)}
-              title="Show tags"
-              className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/80 backdrop-blur border border-neutral-200 text-neutral-400 hover:text-neutral-700 hover:bg-white shadow-sm transition-all"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <path d="M9 3v18"/>
-              </svg>
-            </button>
-          )}
-          <h2 className="text-xl font-extralight tracking-[0.4em] uppercase text-neutral-900 pointer-events-none">Semantic Topography</h2>
+      {/* ── Top-left: sidebar toggle ────────────────────────── */}
+      {!sidebarOpen && (
+        <div
+          className="absolute top-10 left-10 z-10 pointer-events-auto"
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+        >
+          <button
+            onClick={() => setSidebarOpen(true)}
+            title="Show tags"
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/80 backdrop-blur border border-neutral-200 text-neutral-400 hover:text-neutral-700 hover:bg-white shadow-sm transition-all"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M9 3v18"/>
+            </svg>
+          </button>
         </div>
-        <div className="flex items-center space-x-4 pointer-events-none">
-          <p className="text-[9px] tracking-[0.2em] text-neutral-400 uppercase">
-            {selectedArtworkId ? "Investigating Specific Resonance" : "Aesthetic Mapping Active"}
-          </p>
-          {neighborItems.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-              <span className="text-[8px] tracking-[0.1em] text-amber-600 uppercase font-bold">Neighboring Signal Detected</span>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
-      {/* Close button */}
-      <div className="absolute top-10 right-10 z-10" onMouseDown={e => e.stopPropagation()}>
-        <button onClick={onClose} className="w-12 h-12 bg-white/80 backdrop-blur border border-neutral-100 rounded-full flex items-center justify-center hover:bg-neutral-900 hover:text-white transition-all shadow-sm">✕</button>
+      {/* ── Zoom controls ───────────────────────────────────── */}
+      <div
+        className="absolute bottom-10 right-10 z-10 flex flex-col gap-1"
+        onMouseDown={e => e.stopPropagation()}
+        onTouchStart={e => e.stopPropagation()}
+      >
+        <button
+          onClick={() => zoomBy(1.3)}
+          title="Zoom in"
+          className="w-9 h-9 bg-white/80 backdrop-blur border border-neutral-200 rounded-lg flex items-center justify-center text-neutral-500 hover:text-neutral-900 hover:bg-white shadow-sm transition-all active:scale-95 text-lg leading-none"
+        >
+          +
+        </button>
+        <button
+          onClick={() => zoomBy(1 / 1.3)}
+          title="Zoom out"
+          className="w-9 h-9 bg-white/80 backdrop-blur border border-neutral-200 rounded-lg flex items-center justify-center text-neutral-500 hover:text-neutral-900 hover:bg-white shadow-sm transition-all active:scale-95 text-lg leading-none"
+        >
+          −
+        </button>
+        <div className="text-[8px] text-neutral-300 tracking-widest text-center mt-0.5 uppercase">
+          {Math.round(zoom * 100)}%
+        </div>
       </div>
 
       {/* ── Pannable canvas ─────────────────────────────────── */}
