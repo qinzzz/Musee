@@ -22,7 +22,7 @@ const LAYOUT_RADIUS = 700;
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 4;
 
-const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = [], onClose }) => {
+const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = [] }) => {
   const [zoom, setZoom] = useState(0.8);
   const [offset, setOffset] = useState<Point>({
     x: -VIEWPORT_INITIAL_X + window.innerWidth / 2,
@@ -400,41 +400,25 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
         )}
       </div>
 
-      {/* ── Top-left: sidebar toggle + title ───────────────── */}
-      <div
-        className="absolute top-10 z-10 transition-all duration-300 pointer-events-auto"
-        style={{ left: sidebarOpen ? SIDEBAR_W + 24 : 40 }}
-        onMouseDown={e => e.stopPropagation()}
-        onTouchStart={e => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-2">
-          {/* Sidebar toggle button */}
-          {!sidebarOpen && (
-            <button
-              onClick={() => setSidebarOpen(true)}
-              title="Show tags"
-              className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/80 backdrop-blur border border-neutral-200 text-neutral-400 hover:text-neutral-700 hover:bg-white shadow-sm transition-all"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <path d="M9 3v18"/>
-              </svg>
-            </button>
-          )}
-          <h2 className="text-xl font-extralight tracking-[0.4em] uppercase text-neutral-900 pointer-events-none">Semantic Topography</h2>
+      {/* ── Top-left: sidebar toggle ────────────────────────── */}
+      {!sidebarOpen && (
+        <div
+          className="absolute top-10 left-10 z-10 pointer-events-auto"
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+        >
+          <button
+            onClick={() => setSidebarOpen(true)}
+            title="Show tags"
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/80 backdrop-blur border border-neutral-200 text-neutral-400 hover:text-neutral-700 hover:bg-white shadow-sm transition-all"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M9 3v18"/>
+            </svg>
+          </button>
         </div>
-        <div className="flex items-center space-x-4 pointer-events-none">
-          <p className="text-[9px] tracking-[0.2em] text-neutral-400 uppercase">
-            {selectedArtworkId ? "Investigating Specific Resonance" : "Aesthetic Mapping Active"}
-          </p>
-          {neighborItems.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-              <span className="text-[8px] tracking-[0.1em] text-amber-600 uppercase font-bold">Neighboring Signal Detected</span>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* ── Zoom controls ───────────────────────────────────── */}
       <div
@@ -459,15 +443,6 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
         <div className="text-[8px] text-neutral-300 tracking-widest text-center mt-0.5 uppercase">
           {Math.round(zoom * 100)}%
         </div>
-      </div>
-
-      {/* Close button */}
-      <div
-        className="absolute top-10 right-10 z-10"
-        onMouseDown={e => e.stopPropagation()}
-        onTouchStart={e => e.stopPropagation()}
-      >
-        <button onClick={onClose} className="w-12 h-12 bg-white/80 backdrop-blur border border-neutral-100 rounded-full flex items-center justify-center hover:bg-neutral-900 hover:text-white transition-all shadow-sm">✕</button>
       </div>
 
       {/* ── Pannable canvas ─────────────────────────────────── */}
