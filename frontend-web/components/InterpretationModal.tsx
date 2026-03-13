@@ -478,16 +478,17 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     }
   }, []);
 
-  // Snap-collapse image on scroll (mobile only) — threshold avoids feedback loop
-  const handleInfoScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (window.innerWidth >= 640) return;
-    const scrollTop = e.currentTarget.scrollTop;
-    const fullH = window.innerWidth * 0.75;
-    if (scrollTop > 60 && mobileImageHeight > 0) {
-      setMobileImageHeight(0);
-    } else if (scrollTop < 20 && mobileImageHeight === 0) {
-      setMobileImageHeight(fullH);
-    }
+  // Tap image panel to collapse (mobile only)
+  const handleImagePanelClick = () => {
+    if (window.innerWidth >= 640 || mobileImageHeight === 0) return;
+    setMobileImageHeight(0);
+  };
+
+  // Tap toolbar background to expand image (mobile only); ignore taps on actual buttons
+  const handleToolbarClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (window.innerWidth >= 640 || mobileImageHeight !== 0) return;
+    if ((e.target as Element).closest('button')) return;
+    setMobileImageHeight(window.innerWidth * 0.75);
   };
 
   // Calculate modal dimensions based on screen size
@@ -585,12 +586,13 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
           {/* ── LEFT / TOP PANEL: Location + Time + Photo ── */}
           <div
-            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] sm:h-auto overflow-hidden"
+            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] sm:h-auto overflow-hidden sm:cursor-default cursor-pointer"
             style={mobileImageHeight >= 0 ? {
               height: `${mobileImageHeight}px`,
               transition: 'height 320ms cubic-bezier(0.4, 0, 0.2, 1)',
               visibility: mobileImageHeight === 0 ? 'hidden' : 'visible',
             } : {}}
+            onClick={handleImagePanelClick}
           >
             {/* Location + Time row */}
             {!item.isAnalyzing && (displayLocation || item.photoTime) && (
@@ -632,6 +634,16 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 />
               )}
 
+              {/* Mobile-only: tap-to-fold hint */}
+              {mobileImageHeight > 0 && (
+                <div className="sm:hidden absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none">
+                  <div className="flex items-center gap-1 bg-black/25 backdrop-blur-sm text-white/80 rounded-full px-2.5 py-1">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <span className="text-[9px] tracking-[0.2em] uppercase font-medium">tap to hide</span>
+                  </div>
+                </div>
+              )}
+
               {/* Analyzing overlay badge on photo */}
               {item.isAnalyzing && (
                 <div className="absolute inset-0 flex items-end justify-start p-3 pointer-events-none">
@@ -651,8 +663,16 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           {/* ── RIGHT PANEL: Analysis Metadata OR Curator Dialogue ── */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white">
 
-            {/* Right panel header */}
-            <div className="px-2 py-2 border-b border-neutral-100 flex items-center justify-between shrink-0">
+            {/* Right panel header — tap background (not buttons) to re-expand image on mobile */}
+            <div className="px-2 py-2 border-b border-neutral-100 flex items-center justify-between shrink-0 relative" onClick={handleToolbarClick}>
+              {/* Mobile-only: tap-to-expand hint (shown only when image is hidden) */}
+              {mobileImageHeight === 0 && (
+                <div className="sm:hidden absolute left-1/2 -translate-x-1/2 pointer-events-none flex items-center gap-1 text-neutral-400">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
+                  <span className="text-[9px] tracking-[0.2em] uppercase font-medium">tap to show photo</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
+                </div>
+              )}
               {/* LEFT: action icons */}
               <div className="flex items-center gap-2">
                 {onToggleLike && (
@@ -752,7 +772,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
 
             {/* Right panel scrollable content */}
             {rightMode === 'metadata' ? (
-              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0" onScroll={handleInfoScroll}>
+              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0">
 
                 {/* Analyzing state — shown at the top of the content area while streaming */}
                 {item.isAnalyzing && !streamingFields && (
@@ -934,7 +954,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
               </div>
             ) : (
               /* ── CHAT MODE ── */
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0" onScroll={handleInfoScroll}>
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0">
                 {messages.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
                     <div className="w-12 h-px bg-neutral-200 mb-6"></div>
