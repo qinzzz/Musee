@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { GalleryItem, TagCoordinate, NeighborItem } from '../types';
 import TagDefinitionModal from './TagDefinitionModal';
 
@@ -23,30 +23,55 @@ const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 4;
 
 const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = [] }) => {
-  const [zoom, setZoom] = useState(0.8);
-  const [offset, setOffset] = useState<Point>({
-    x: -VIEWPORT_INITIAL_X + window.innerWidth / 2,
-    y: -VIEWPORT_INITIAL_Y + window.innerHeight / 2
-  });
-  const [isPanning, setIsPanning] = useState(false);
+  // Only selection/UI state lives in React — pan/zoom live in refs
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
   const [definingTag, setDefiningTag] = useState<string | null>(null);
-
-  // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
 
-  // Refs to keep latest values accessible in non-reactive callbacks
+  // DOM refs for direct manipulation (no re-renders during pan/zoom)
   const containerRef = useRef<HTMLDivElement>(null);
-  const zoomRef = useRef(zoom);
-  const offsetRef = useRef(offset);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const bgRef = useRef<HTMLDivElement>(null);
+  const zoomDisplayRef = useRef<HTMLDivElement>(null);
+
+  // Transform state — mutated directly, never stored in React state
+  const zoomRef = useRef(0.8);
+  const offsetRef = useRef<Point>({
+    x: -VIEWPORT_INITIAL_X + window.innerWidth / 2,
+    y: -VIEWPORT_INITIAL_Y + window.innerHeight / 2,
+  });
   const lastTouches = useRef<Touch[]>([]);
   const isPanningRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
 
-  zoomRef.current = zoom;
-  offsetRef.current = offset;
-  isPanningRef.current = isPanning;
+  // Apply current transform to DOM without going through React
+  const applyTransform = useCallback(() => {
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const { x, y } = offsetRef.current;
+      const z = zoomRef.current;
+
+      if (canvasRef.current) {
+        canvasRef.current.style.transform = `translate(${x}px, ${y}px) scale(${z})`;
+      }
+      if (bgRef.current) {
+        const size = 40 * z;
+        bgRef.current.style.backgroundSize = `${size}px ${size}px`;
+        bgRef.current.style.transform = `translate(${x % size}px, ${y % size}px)`;
+      }
+      if (zoomDisplayRef.current) {
+        zoomDisplayRef.current.textContent = `${Math.round(z * 100)}%`;
+      }
+    });
+  }, []);
+
+  // Set initial transform on mount
+  useEffect(() => {
+    applyTransform();
+  }, [applyTransform]);
 
   // Non-passive wheel listener for zoom-toward-cursor on desktop
   useEffect(() => {
@@ -58,7 +83,7 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
       const currentZoom = zoomRef.current;
       const currentOffset = offsetRef.current;
 
-      const factor = e.deltaMode === 1 ? 0.1 : 0.001; // line vs pixel delta
+      const factor = e.deltaMode === 1 ? 0.1 : 0.001;
       const rawDelta = -e.deltaY * factor;
       const scaleFactor = Math.exp(rawDelta * 0.8);
       const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom * scaleFactor));
@@ -70,16 +95,17 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
       const canvasX = (mouseX - currentOffset.x) / currentZoom;
       const canvasY = (mouseY - currentOffset.y) / currentZoom;
 
-      setOffset({
+      offsetRef.current = {
         x: mouseX - canvasX * newZoom,
         y: mouseY - canvasY * newZoom,
-      });
-      setZoom(newZoom);
+      };
+      zoomRef.current = newZoom;
+      applyTransform();
     };
 
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
-  }, []);
+  }, [applyTransform]);
 
   const internalTags = useMemo(() => Object.keys(cachedTagMap), [cachedTagMap]);
 
@@ -93,8 +119,8 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
         isExternal: false,
         pos: {
           x: center + (coord.x * LAYOUT_RADIUS),
-          y: center + (coord.y * LAYOUT_RADIUS)
-        }
+          y: center + (coord.y * LAYOUT_RADIUS),
+        },
       };
     });
 
@@ -105,8 +131,8 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
         isExternal: true,
         pos: {
           x: center + (coord.x * LAYOUT_RADIUS),
-          y: center + (coord.y * LAYOUT_RADIUS)
-        }
+          y: center + (coord.y * LAYOUT_RADIUS),
+        },
       };
     });
 
@@ -131,36 +157,36 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
 
       return {
         item,
-        pos: { x: finalPos.x + jitterX, y: finalPos.y + jitterY }
+        pos: { x: finalPos.x + jitterX, y: finalPos.y + jitterY },
       };
     });
   }, [items, tagNodes]);
 
   // ── Mouse handlers ───────────────────────────────────
-  const handleMouseDown = () => setIsPanning(true);
-  const handleMouseUp = () => setIsPanning(false);
+  const handleMouseDown = () => { isPanningRef.current = true; };
+  const handleMouseUp = () => { isPanningRef.current = false; };
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isPanning) return;
-    setOffset(prev => ({
-      x: prev.x + e.movementX,
-      y: prev.y + e.movementY
-    }));
+    if (!isPanningRef.current) return;
+    offsetRef.current = {
+      x: offsetRef.current.x + e.movementX,
+      y: offsetRef.current.y + e.movementY,
+    };
+    applyTransform();
   };
 
   // ── Touch handlers (mobile pan + pinch zoom) ─────────
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Don't prevent default here — let links/buttons still work
     if (e.touches.length === 1) {
-      setIsPanning(true);
+      isPanningRef.current = true;
       lastTouches.current = [e.touches[0]];
     } else if (e.touches.length >= 2) {
-      setIsPanning(false);
+      isPanningRef.current = false;
       lastTouches.current = [e.touches[0], e.touches[1]];
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    e.preventDefault(); // Prevent native scroll / browser zoom
+    e.preventDefault();
     const currentZoom = zoomRef.current;
     const currentOffset = offsetRef.current;
 
@@ -168,9 +194,11 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
       const touch = e.touches[0];
       const prev = lastTouches.current[0];
       if (prev) {
-        const dx = touch.clientX - prev.clientX;
-        const dy = touch.clientY - prev.clientY;
-        setOffset({ x: currentOffset.x + dx, y: currentOffset.y + dy });
+        offsetRef.current = {
+          x: currentOffset.x + (touch.clientX - prev.clientX),
+          y: currentOffset.y + (touch.clientY - prev.clientY),
+        };
+        applyTransform();
       }
       lastTouches.current = [touch];
     } else if (e.touches.length >= 2) {
@@ -180,13 +208,11 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
       const p2 = lastTouches.current[1];
 
       if (p1 && p2) {
-        // Current and previous distances for pinch scale
         const prevDist = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
         const currDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
         const scaleFactor = prevDist > 0 ? currDist / prevDist : 1;
         const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom * scaleFactor));
 
-        // Midpoint in screen coords — zoom toward it
         const midX = (t1.clientX + t2.clientX) / 2;
         const midY = (t1.clientY + t2.clientY) / 2;
         const prevMidX = (p1.clientX + p2.clientX) / 2;
@@ -195,11 +221,12 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
         const canvasX = (midX - currentOffset.x) / currentZoom;
         const canvasY = (midY - currentOffset.y) / currentZoom;
 
-        setOffset({
+        offsetRef.current = {
           x: midX - canvasX * newZoom + (midX - prevMidX),
           y: midY - canvasY * newZoom + (midY - prevMidY),
-        });
-        setZoom(newZoom);
+        };
+        zoomRef.current = newZoom;
+        applyTransform();
       }
 
       lastTouches.current = [t1, t2];
@@ -207,7 +234,7 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
   };
 
   const handleTouchEnd = () => {
-    setIsPanning(false);
+    isPanningRef.current = false;
     lastTouches.current = [];
   };
 
@@ -218,8 +245,9 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
     const cy = window.innerHeight / 2;
     const canvasX = (cx - offsetRef.current.x) / zoomRef.current;
     const canvasY = (cy - offsetRef.current.y) / zoomRef.current;
-    setOffset({ x: cx - canvasX * newZoom, y: cy - canvasY * newZoom });
-    setZoom(newZoom);
+    offsetRef.current = { x: cx - canvasX * newZoom, y: cy - canvasY * newZoom };
+    zoomRef.current = newZoom;
+    applyTransform();
   };
 
   const centerOnTag = (tag: string) => {
@@ -227,10 +255,11 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
     if (node) {
       setSelectedTag(tag);
       setSelectedArtworkId(null);
-      setOffset({
-        x: (-node.pos.x * zoom) + window.innerWidth / 2,
-        y: (-node.pos.y * zoom) + window.innerHeight / 2
-      });
+      offsetRef.current = {
+        x: (-node.pos.x * zoomRef.current) + window.innerWidth / 2,
+        y: (-node.pos.y * zoomRef.current) + window.innerHeight / 2,
+      };
+      applyTransform();
     }
   };
 
@@ -243,7 +272,6 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
     items.find(i => i.id === selectedArtworkId), [items, selectedArtworkId]
   );
 
-  // Filtered tag lists for sidebar
   const filteredInternal = useMemo(() => {
     const q = tagSearch.toLowerCase();
     return tagNodes.filter(n => !n.isExternal && n.tag.toLowerCase().includes(q));
@@ -255,6 +283,9 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
   }, [tagNodes, tagSearch]);
 
   const SIDEBAR_W = 220;
+
+  // Pre-compute initial transform string so there's no flash before the effect runs
+  const initialTransform = `translate(${offsetRef.current.x}px, ${offsetRef.current.y}px) scale(${zoomRef.current})`;
 
   return (
     <div
@@ -271,13 +302,13 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
       onTouchCancel={handleTouchEnd}
     >
 
-      {/* Dot-grid background */}
+      {/* Dot-grid background — updated via bgRef, no React re-renders */}
       <div
+        ref={bgRef}
         className="absolute inset-0 pointer-events-none opacity-[0.05]"
         style={{
           backgroundImage: `radial-gradient(#000 1.5px, transparent 0)`,
-          backgroundSize: `${40 * zoom}px ${40 * zoom}px`,
-          transform: `translate(${offset.x % (40 * zoom)}px, ${offset.y % (40 * zoom)}px)`
+          backgroundSize: `${40 * zoomRef.current}px ${40 * zoomRef.current}px`,
         }}
       />
 
@@ -335,7 +366,6 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
 
         {/* Tag list */}
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-4">
-          {/* Your tags */}
           {filteredInternal.length > 0 && (
             <div>
               <p className="text-[8px] tracking-[0.25em] uppercase text-neutral-300 px-2 mb-1.5">
@@ -359,7 +389,6 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
             </div>
           )}
 
-          {/* External / neighboring tags */}
           {filteredExternal.length > 0 && (
             <div>
               <p className="text-[8px] tracking-[0.25em] uppercase text-amber-400 px-2 mb-1.5">
@@ -387,7 +416,6 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
           )}
         </div>
 
-        {/* Reset button at bottom */}
         {(selectedTag || selectedArtworkId) && (
           <div className="shrink-0 px-3 py-3 border-t border-neutral-100">
             <button
@@ -440,15 +468,17 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
         >
           −
         </button>
-        <div className="text-[8px] text-neutral-300 tracking-widest text-center mt-0.5 uppercase">
-          {Math.round(zoom * 100)}%
+        {/* Updated via zoomDisplayRef — no re-render needed */}
+        <div ref={zoomDisplayRef} className="text-[8px] text-neutral-300 tracking-widest text-center mt-0.5 uppercase">
+          {Math.round(zoomRef.current * 100)}%
         </div>
       </div>
 
-      {/* ── Pannable canvas ─────────────────────────────────── */}
+      {/* ── Pannable canvas — transform set via canvasRef, bypasses React ── */}
       <div
-        className="absolute transition-transform duration-75 ease-out will-change-transform"
-        style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`, transformOrigin: '0 0' }}
+        ref={canvasRef}
+        className="absolute will-change-transform"
+        style={{ transform: initialTransform, transformOrigin: '0 0' }}
       >
         <svg width={CANVAS_SIZE} height={CANVAS_SIZE} className="absolute inset-0 pointer-events-none">
           {itemPositions.map(pos =>
@@ -469,7 +499,6 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
                   stroke={tagNode.isExternal ? '#fbbf24' : (isActiveFilament ? pos.item.vibe.accentColor : '#000')}
                   strokeWidth={isActiveFilament ? 2.5 : 0.6}
                   strokeDasharray={tagNode.isExternal ? '4 2' : (isActiveFilament ? 'none' : '2 4')}
-                  className="transition-all duration-500"
                   style={{ opacity: isActiveFilament ? 0.9 : isDimmed ? 0.01 : 0.1 }}
                 />
               );
@@ -518,9 +547,9 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
                   {node.tag}
                 </span>
                 {node.isExternal && (
-                   <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[6px] tracking-[0.3em] uppercase text-amber-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                     External Resonance
-                   </div>
+                  <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[6px] tracking-[0.3em] uppercase text-amber-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                    External Resonance
+                  </div>
                 )}
               </div>
             </div>
@@ -544,11 +573,18 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
                 style={{
                   backgroundColor: item.vibe.backgroundColor,
                   borderRadius: item.vibe.borderRadius,
-                  border: (isHighlighted || isSelected) ? `2px solid ${item.vibe.accentColor}` : `1px solid rgba(0,0,0,0.03)`
+                  border: (isHighlighted || isSelected) ? `2px solid ${item.vibe.accentColor}` : `1px solid rgba(0,0,0,0.03)`,
                 }}
               >
                 <div className="w-16 h-24 overflow-hidden rounded-sm bg-neutral-100">
-                  <img src={item.url} className="w-full h-full object-cover" alt="Thumb" draggable={false} />
+                  <img
+                    src={item.url}
+                    className="w-full h-full object-cover"
+                    alt="Thumb"
+                    draggable={false}
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </div>
               </div>
             </div>
