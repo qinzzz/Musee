@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import ExifReader from 'exifreader';
-import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, Annotation, CuratorConversation, Album } from './types';
+import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, Annotation, CuratorConversation, Album, AestheticVibe } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import GoogleLogin from './components/GoogleLogin';
 import {
@@ -10,21 +10,23 @@ import {
   StreamingMetrics,
   getOrCreateUserId,
   fetchUserArtworks,
-  getBaseDomain,
   resolveImageUrl,
-  deleteArtwork,
   deleteSession,
+  base64ToFile,
   getCurrentUser,
-  logout
+  logout,
+  deleteArtwork
 } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
-import Controls from './components/Controls';
 import InterpretationModal from './components/InterpretationModal';
-import ExhibitionHall from './components/ExhibitionHall';
+import CuratorRoom from './components/CuratorRoom';
+import ExhibitionHallView from './components/ExhibitionHallView';
 import EmptyWall from './components/EmptyWall';
 import UnderstandView from './components/UnderstandView';
 import OrganizeView from './components/OrganizeView';
+import Toast, { ToastAction } from './components/Toast';
+import ContextualActionBar from './components/ContextualActionBar';
 
 // Helper to report metrics (can integrate with @vercel/speed-insights or custom analytics)
 const reportStreamingMetrics = (metrics: StreamingMetrics) => {
@@ -230,16 +232,19 @@ const App: React.FC = () => {
     artistName?: string,
     artworkName?: string,
     description?: string,
-    keywords?: string[],
+    keywords: string[],
     date?: string,
     medium?: string,
     artworkId?: string,
     isAnalyzing?: boolean,
     streamingText?: string,
     visitId?: string,
-    allVisitItems?: GalleryItem[]
+    allVisitItems?: GalleryItem[],
+    is_liked?: boolean,
+    vibe: AestheticVibe,
+    timestamp: number
   } | null>(null);
-  const [exhibitionContext, setExhibitionContext] = useState<{ items: GalleryItem[], visitId?: string, initialMessage?: string } | null>(null);
+  const [curatorRoomContext, setCuratorRoomContext] = useState<{ items: GalleryItem[], visitId?: string, initialMessage?: string } | null>(null);
 
   // Curator conversation history — persisted to localStorage
   const [curatorConversations, setCuratorConversations] = useState<CuratorConversation[]>(() => {
@@ -255,7 +260,93 @@ const App: React.FC = () => {
   const galleryEntryRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(getCurrentUser());
   const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
+  const locationCache = useRef<Map<string, { city: string, country: string, museum: string }>>(new Map());
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
+  const [toast, setToast] = useState<{ message: string, type: 'info' | 'success', action?: ToastAction } | null>(null);
+
+  const showToast = (message: string, type: 'info' | 'success' = 'info', action?: ToastAction) => {
+    setToast({ message, type, action });
+  };
+
+  /** 
+   * Algorithmic Session Determination (Phase 7)
+   * Decides which visitId an artwork belongs to based on view context, time, and location.
+   */
+  const autoDetermineVisit = async (options: {
+    lat?: number,
+    lng?: number,
+    exifTime?: number,
+    contextVisitId?: string | null,
+    isBatch?: boolean
+  }): Promise<{ visitId: string, isNew: boolean, museumName?: string }> => {
+    const { lat, lng, exifTime, contextVisitId, isBatch } = options;
+    const currentTime = exifTime || Date.now();
+
+    // 1. Context-Aware Priority: If inside an Exhibition Hall, always use that visitId.
+    if (contextVisitId) {
+      const visitItems = items.filter(i => i.visitId === contextVisitId);
+      return { 
+        visitId: contextVisitId, 
+        isNew: false, 
+        museumName: visitItems[0]?.sessionTitle 
+      };
+    }
+
+    // 2. Batch Priority: Batch imports (from Corridor) always create a new visit.
+    if (isBatch) {
+      return { visitId: `batch_${Math.random().toString(36).substring(2, 7)}`, isNew: true };
+    }
+
+    // 3. Proximity Logic (Single Upload / Camera):
+    // Search for a visit within 6 hours and 1km proximity.
+    const TIME_WINDOW = 6 * 60 * 60 * 1000; // 6 hours
+    const DISTANCE_THRESHOLD = 1; // 1 km (approximate)
+
+    const findProximitySession = () => {
+      const candidates = items.filter(i => i.visitId);
+      
+      for (const item of candidates) {
+        let currentWindow = TIME_WINDOW;
+        let isMuseumMatch = false;
+
+        // Location check
+        if (lat !== undefined && lng !== undefined && item.location) {
+          try {
+            const itemLoc = JSON.parse(item.location);
+            if (itemLoc.latitude && itemLoc.longitude) {
+              const dLat = (itemLoc.latitude - lat) * 111;
+              const dLng = (itemLoc.longitude - lng) * 111 * Math.cos(lat * Math.PI / 180);
+              const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+              
+              if (dist < DISTANCE_THRESHOLD) {
+                isMuseumMatch = true;
+                // If same museum/landmark, be much more lenient with time (24h)
+                currentWindow = 24 * 60 * 60 * 1000;
+              }
+            }
+          } catch (e) { /* skip malformed */ }
+        }
+
+        // Time check
+        const timeDiff = Math.abs(item.timestamp - currentTime);
+        if (timeDiff > currentWindow) continue;
+
+        if (isMuseumMatch) {
+          const itemLoc = JSON.parse(item.location || '{}');
+          return { visitId: item.visitId!, museumName: itemLoc.museum || item.sessionTitle };
+        }
+      }
+      return null;
+    };
+
+    const match = findProximitySession();
+    if (match) {
+      return { visitId: match.visitId, isNew: false, museumName: match.museumName };
+    }
+
+    // fallback: new visit
+    return { visitId: `visit_${Math.random().toString(36).substring(2, 7)}`, isNew: true };
+  };
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
@@ -316,9 +407,27 @@ const App: React.FC = () => {
     });
   };
 
+  const handleOpenCurator = () => {
+    setCuratorRoomContext({ items: items.slice(0, 10) });
+  };
+
+  const [artworkChatMessage, setArtworkChatMessage] = useState<string | null>(null);
+  const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'chat'>('metadata');
+  const [interpretationAskExpanded, setInterpretationAskExpanded] = useState(false);
+
+  const handleInquiry = (text: string) => {
+    if (interpretingItem) {
+      setArtworkChatMessage(text);
+    } else if (filteredVisitId) {
+      const visitItems = items.filter(i => i.visitId === filteredVisitId);
+      setCuratorRoomContext({ items: visitItems, visitId: filteredVisitId, initialMessage: text });
+    } else {
+      setCuratorRoomContext({ items: items.slice(0, 10), initialMessage: text });
+    }
+  };
+
   const [visit, setVisit] = useState<Visit>({
     id: 'initial-' + Math.random().toString(36).substring(7),
-    active: false,
     itemIds: [],
     globalConversation: []
   });
@@ -351,10 +460,11 @@ const App: React.FC = () => {
               keywords: keywords,
               date: item.date,
               medium: item.medium,
-              timestamp: item.created_at ? new Date(item.created_at).getTime() : Date.now(),
+              timestamp: item.photo_time ? new Date(item.photo_time).getTime() : (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
               visitId: item.session_id,
               location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
               photoTime: item.photo_time,
+              sessionTitle: item.session_title,
               conversation: (item.conversation_history || []).map((msg: any) => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 text: msg.content
@@ -398,40 +508,46 @@ const App: React.FC = () => {
   }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const resolvedLocation = useRef<string | undefined>(undefined);
+
+  // The filtered view of artworks for "The Corridor"
+  const corridorItems = useMemo(() => {
+    if (filteredVisitId) return items.filter(i => i.visitId === filteredVisitId);
+    return items;
+  }, [items, filteredVisitId]);
 
   const corridorEntries = useMemo(() => {
+    // If inside "The Salon" (filteredVisitId), just show individual items
+    if (filteredVisitId) return corridorItems.map(item => ({ type: 'item' as const, item }));
+
     const entries: Array<{ type: 'item', item: GalleryItem } | { type: 'stack', items: GalleryItem[], visitId: string }> = [];
-    let currentStack: GalleryItem[] = [];
-    let currentVisitId: string | null = null;
+    const visitGroups = new Map<string, GalleryItem[]>();
+    const orderOfVisits: string[] = [];
 
-    // Filter items based on active session or manual filter
-    const activeId = filteredVisitId || (visit.active ? visit.id : null);
-    const filteredItems = activeId
-      ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id)))
-      : items;
-
-    filteredItems.forEach(item => {
-      const isFromFinishedVisit = item.visitId && (!visit.active || visit.id !== item.visitId) && item.visitId !== filteredVisitId;
-      if (isFromFinishedVisit) {
-        if (currentVisitId === item.visitId) {
-          currentStack.push(item);
-        } else {
-          if (currentStack.length > 0) entries.push({ type: 'stack', items: [...currentStack], visitId: currentVisitId! });
-          currentStack = [item];
-          currentVisitId = item.visitId!;
+    corridorItems.forEach(item => {
+      if (item.visitId) {
+        if (!visitGroups.has(item.visitId)) {
+          visitGroups.set(item.visitId, []);
+          orderOfVisits.push(item.visitId);
         }
+        visitGroups.get(item.visitId)!.push(item);
       } else {
-        if (currentStack.length > 0) {
-          entries.push({ type: 'stack', items: [...currentStack], visitId: currentVisitId! });
-          currentStack = [];
-          currentVisitId = null;
-        }
+        // Individual item without visit (should be rare)
         entries.push({ type: 'item', item });
       }
     });
-    if (currentStack.length > 0) entries.push({ type: 'stack', items: [...currentStack], visitId: currentVisitId! });
+
+    orderOfVisits.forEach(vid => {
+      const group = visitGroups.get(vid)!;
+      if (group.length === 1) {
+        entries.push({ type: 'item', item: group[0] });
+      } else {
+        entries.push({ type: 'stack', items: group, visitId: vid });
+      }
+    });
+
     return entries;
-  }, [items, visit, filteredVisitId]);
+  }, [corridorItems, filteredVisitId]);
 
   const thumbEntries = useMemo(() => {
     return corridorEntries
@@ -478,16 +594,46 @@ const App: React.FC = () => {
   const handleScroll = () => {
     if (!scrollRef.current) return;
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    
+    // 1. Calculate the horizontal center of the viewport relative to the scrollable content
+    const viewportCenterX = scrollLeft + (clientWidth / 2);
+    
+    // Filter to current corridor length to avoid stale refs
+    const validRefs = galleryEntryRefs.current.slice(0, corridorEntries.length);
+
+    // 2. Find the entry that encompasses this center point using contiguous boundaries
+    const centers = validRefs.map(ref => {
+      if (!ref) return -1;
+      return ref.offsetLeft + ref.offsetWidth / 2;
+    });
+
+    let closestIndex = 0;
+    for (let i = 0; i < centers.length; i++) {
+      // The boundary for item i is halfway between center[i] and center[i+1]
+      const leftBoundary = i === 0 ? 0 : (centers[i-1] + centers[i]) / 2;
+      const rightBoundary = i === centers.length - 1 ? scrollWidth : (centers[i] + centers[i+1]) / 2;
+
+      if (viewportCenterX >= leftBoundary && viewportCenterX <= rightBoundary) {
+        closestIndex = i;
+        break;
+      }
+    }
+
+    // 3. Update the active index based on physical intersection
+    // Resolve this index back to the thumbIndex (which ignores gaps etc)
+    const newThumbIndex = thumbEntries.findIndex(te => te.sourceIndex === closestIndex);
+    if (newThumbIndex !== -1 && newThumbIndex !== activeThumbIndex) {
+      setActiveThumbIndex(newThumbIndex);
+    }
+
     const maxScroll = scrollWidth - clientWidth;
-    if (maxScroll <= 0) return;
-    const progress = scrollLeft / maxScroll;
     const edgeThreshold = 6;
     setGalleryEdges({
       hasPrev: scrollLeft > edgeThreshold,
       hasNext: scrollLeft < maxScroll - edgeThreshold
     });
-    setActiveThumbIndex(Math.round(progress * Math.max(thumbEntries.length - 1, 0)));
-    if (thumbStripRef.current) {
+
+    if (thumbStripRef.current && maxScroll > 0) {
       const thumbMax = thumbStripRef.current.scrollWidth - thumbStripRef.current.clientWidth;
       if (thumbMax > 0) {
         thumbStripRef.current.scrollLeft = (scrollLeft / maxScroll) * thumbMax;
@@ -495,24 +641,10 @@ const App: React.FC = () => {
     }
   };
 
-  const handleStartVisit = () => {
-    setVisit({
-      id: Math.random().toString(36).substring(2, 11),
-      active: true,
-      itemIds: [],
-      globalConversation: []
-    });
-  };
-
-  const handleEndVisit = () => {
-    setVisit(prev => ({ ...prev, active: false }));
-  };
-
   const handleResumeVisit = (visitId: string) => {
     const visitItems = items.filter(i => i.visitId === visitId);
     setVisit({
       id: visitId,
-      active: true,
       itemIds: visitItems.map(i => i.id),
       globalConversation: [] // We don't have global history stored yet, but we can resume adding
     });
@@ -525,10 +657,9 @@ const App: React.FC = () => {
     // Update the local item to use this new visit ID
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, visitId: newVisitId } : i));
 
-    // Set active visit
+    // Set visit context
     setVisit({
       id: newVisitId,
-      active: true,
       itemIds: [item.id],
       globalConversation: []
     });
@@ -553,17 +684,47 @@ const App: React.FC = () => {
     }
   }, [items.length, isAnalyzing, filteredVisitId, activeTab, thumbEntries.length]);
 
-  /* ── EXIF GPS: read lat/lon from image file metadata ─────── */
-  const readExifGps = async (file: File): Promise<{ latitude: number; longitude: number } | undefined> => {
+  /* ── EXIF Metadata: read lat/lon/timestamp from image ──── */
+  const readExifMetadata = async (file: File) => {
     try {
       const tags = await ExifReader.load(file, { expanded: true });
       const lat = tags.gps?.Latitude;
       const lon = tags.gps?.Longitude;
-      if (typeof lat === 'number' && typeof lon === 'number') {
-        return { latitude: lat, longitude: lon };
+      
+      // Try to find the original creation date
+      const exif = tags.exif as any;
+      const dt = exif?.DateTimeOriginal?.description || 
+                 exif?.CreateDate?.description || 
+                 exif?.DateTime?.description;
+      
+      let timestamp: number | undefined = undefined;
+      if (dt) {
+        // EXIF dates are usually "YYYY:MM:DD HH:MM:SS"
+        const parts = dt.split(' ');
+        if (parts.length === 2) {
+          const datePart = parts[0].replace(/:/g, '-');
+          const timePart = parts[1];
+          const parsed = new Date(`${datePart}T${timePart}`);
+          if (!isNaN(parsed.getTime())) {
+            timestamp = parsed.getTime();
+          }
+        }
       }
+
+      return {
+        latitude: typeof lat === 'number' ? lat : undefined,
+        longitude: typeof lon === 'number' ? lon : undefined,
+        timestamp
+      };
     } catch {
-      // No EXIF or no GPS tag — silently ignore
+      return { latitude: undefined, longitude: undefined, timestamp: undefined };
+    }
+  };
+
+  const readExifGps = async (file: File): Promise<{ latitude: number; longitude: number } | undefined> => {
+    const meta = await readExifMetadata(file);
+    if (meta.latitude !== undefined && meta.longitude !== undefined) {
+      return { latitude: meta.latitude, longitude: meta.longitude };
     }
     return undefined;
   };
@@ -605,6 +766,13 @@ const App: React.FC = () => {
     lat: number,
     lon: number
   ): Promise<{ city: string; country: string; museum: string }> => {
+    // 4 decimal places = ~11m precision, perfect for grouping photos in the same museum
+    const cacheKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+    if (locationCache.current.has(cacheKey)) {
+      console.log('Using cached location for', cacheKey);
+      return locationCache.current.get(cacheKey)!;
+    }
+
     let city = '', country = '', museum = '';
     try {
       const res = await fetch(
@@ -635,7 +803,9 @@ const App: React.FC = () => {
       museum = await findMuseumNearby(lat, lon);
     }
 
-    return { city, country, museum };
+    const result = { city, country, museum };
+    locationCache.current.set(cacheKey, result);
+    return result;
   };
 
   const getCurrentLocation = async (): Promise<{ latitude: number, longitude: number } | undefined> => {
@@ -675,24 +845,26 @@ const App: React.FC = () => {
     event: React.ChangeEvent<HTMLInputElement>,
     mode: 'gallery' | 'camera' = 'camera'
   ) => {
-    console.log('handleFileUpload called', mode);
-    const files = Array.from(event.target.files || []);
-    console.log('Files selected:', files.length);
+    const target = event.target as HTMLInputElement;
+    const files = Array.from(target.files || []);
     if (files.length === 0) return;
-
-    // Reset input so the same file can be selected again
-    event.target.value = '';
 
     // Single file upload: Open modal immediately and stream analysis
     if (files.length === 1) {
       const file = files[0];
-      const newItemId = Math.random().toString(36).substring(2, 11);
+      const metadata = mode === 'gallery' ? await readExifMetadata(file) : { latitude: undefined, longitude: undefined, timestamp: undefined };
+      
+      // Fallback to active GPS if camera mode and no EXIF
+      let coords = { latitude: metadata.latitude, longitude: metadata.longitude };
+      if (mode === 'camera' && coords.latitude === undefined) {
+        const current = await getCurrentLocation().catch(() => undefined);
+        if (current) coords = current;
+      }
 
-      // Get location: EXIF GPS for gallery imports, device GPS for camera/visit
-      const coords = mode === 'gallery'
-        ? await readExifGps(file)
-        : await getCurrentLocation();
-      const photoTime = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const photoTimestamp = metadata.timestamp || Date.now();
+      const photoTime = new Date(photoTimestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      
+      setIsAnalyzing(true);
 
       try {
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -702,21 +874,23 @@ const App: React.FC = () => {
           reader.readAsDataURL(file);
         });
 
+        const { visitId, isNew } = await autoDetermineVisit({
+          lat: coords?.latitude,
+          lng: coords?.longitude,
+          exifTime: photoTimestamp,
+          contextVisitId: filteredVisitId
+        });
+
+        const newItemId = Math.random().toString(36).substring(2, 11);
         const placeholderItem: GalleryItem = {
           id: newItemId,
           url: base64,
           keywords: [],
-          vibe: {
-            backgroundColor: '#ffffff',
-            padding: 4,
-            borderRadius: '12px',
-            borderType: 'solid',
-            accentColor: '#000000'
-          },
-          timestamp: Date.now(),
+          vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
+          timestamp: photoTimestamp,
           conversation: [],
           annotations: [],
-          visitId: visit.active ? visit.id : undefined,
+          visitId: visitId,
           isAnalyzing: true,
           streamingText: '',
           location: coords ? JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city: '', country: '', museum: '' }) : undefined,
@@ -724,198 +898,155 @@ const App: React.FC = () => {
         };
 
         setItems(prev => [placeholderItem, ...prev]);
-        if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+        setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
 
-        // Background museum resolution — update location once Nominatim responds
-        if (coords) {
+        if (coords.latitude !== undefined && coords.longitude !== undefined) {
           resolveMuseum(coords.latitude, coords.longitude).then(({ city, country, museum }) => {
             const resolved = JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city, country, museum });
             setItems(prev => prev.map(item => item.id === newItemId ? { ...item, location: resolved } : item));
-          });
+            const contextName = museum || city || 'your collection';
+            if (isNew) showToast(`Created a new visit for ${contextName}`, 'success');
+            else showToast(`Added to ${contextName} collection`, 'info');
+          }).catch(() => showToast(isNew ? 'Created a new visit' : 'Added to collection'));
+        } else {
+          showToast(isNew ? 'Created a new visit' : 'Added to collection');
         }
 
-        // Open modal immediately
         setInterpretingItem({
           ...placeholderItem,
-          visitId: visit.active ? visit.id : undefined,
-          allVisitItems: visit.active
-            ? [...items, placeholderItem].filter(i => i.visitId === visit.id || visit.itemIds.includes(i.id) || i.id === newItemId)
-            : undefined,
+          visitId: visitId,
+          allVisitItems: items.filter(i => i.visitId === visitId).concat([placeholderItem]),
           streamingText: ''
         });
 
-        console.log('Starting streaming analysis for single file:', file.name);
-
+        const safeFile = base64ToFile(base64, file.name);
         await analyzeArtworkStream(
-          file,
-          USER_ID,
-          (chunk) => {
-            // Update streaming text in both places
-            setInterpretingItem(prev => (prev && prev.id === newItemId) ? {
-              ...prev,
-              streamingText: (prev.streamingText || '') + chunk
-            } : prev);
-          },
+          safeFile, USER_ID,
+          (chunk) => setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, streamingText: (prev.streamingText || '') + chunk } : prev),
           (analysis) => {
-            const keywords = analysis.tags.map((tag: string) =>
-              tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
-            );
-
-            // Update tag positions
+            const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
             setTagPositions(prev => {
               const updated = { ...prev };
-              keywords.forEach((tag: string) => {
-                if (!updated[tag]) {
-                  updated[tag] = {
-                    x: (Math.random() * 2 - 1),
-                    y: (Math.random() * 2 - 1)
-                  };
-                }
-              });
+              keywords.forEach((tag: string) => { if (!updated[tag]) updated[tag] = { x: (Math.random() * 2 - 1), y: (Math.random() * 2 - 1) }; });
               return updated;
             });
-
-            const finalItemUpdates = {
-              keywords: keywords,
-              artistName: analysis.artist_name,
-              artworkName: analysis.artwork_name,
-              description: parseAnalysis(analysis.description),
-              date: analysis.date,
-              medium: analysis.medium,
-              artworkId: analysis.artwork_id,
-              isAnalyzing: false,
-              streamingText: undefined,
+            const updates = {
+              keywords, artistName: analysis.artist_name, artworkName: analysis.artwork_name,
+              description: parseAnalysis(analysis.description), date: analysis.date, medium: analysis.medium,
+              artworkId: analysis.artwork_id, isAnalyzing: false, streamingText: undefined,
               location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
               photoTime: analysis.photo_time
             };
-
-            // Update gallery
-            setItems(prev => prev.map(item => item.id === newItemId ? {
-              ...item,
-              ...finalItemUpdates
-            } : item));
-
-            // Update modal
-            setInterpretingItem(prev => (prev && prev.id === newItemId) ? {
-              ...prev,
-              ...finalItemUpdates
-            } : prev);
+            setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
+            setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...updates } : prev);
+            setIsAnalyzing(false);
           },
           (error) => {
-            console.error('Streaming analysis failed:', error);
-            const message = error?.message || 'Analysis failed. Please try again.';
-            const errorUpdates = { isAnalyzing: false, streamingText: message };
-            setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...errorUpdates } : item));
-            setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...errorUpdates } : prev);
+            const msg = error?.message || 'Analysis failed.';
+            setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, streamingText: msg } : item));
+            setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, isAnalyzing: false, streamingText: msg } : prev);
+            setIsAnalyzing(false);
           },
-          visit.active ? visit.id : Math.random().toString(36).substring(2, 11),
-          undefined,
-          undefined,
-          photoTime,
-          coords?.latitude,
-          coords?.longitude
+          visitId, undefined, undefined, photoTime, coords?.latitude, coords?.longitude
         );
-      } catch (error) {
-        console.error('Failed to prepare single upload:', error);
-      }
-    }
-    // Batch upload: Keep current background processing implementation
+      } catch (error) { console.error('Upload failed:', error); }
+    } 
+    // Batch Upload
     else {
-      // Batch is always gallery import — read EXIF per file (each photo may have its own location)
-      const photoTime = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      setIsAnalyzing(true);
+      let finishedCount = 0;
 
-      files.forEach(async (file) => {
-        console.log('Processing batch file:', file.name);
-        const newItemId = Math.random().toString(36).substring(2, 11);
+      const memoryFiles = await Promise.all(files.map(async (file) => {
+        const metadata = await readExifMetadata(file);
+        const base64 = await new Promise<string>(r => { const reader = new FileReader(); reader.onload = e => r(e.target?.result as string); reader.readAsDataURL(file); });
+        return { name: file.name, base64, metadata };
+      }));
+
+      // Determine the session anchor (first file's metadata)
+      const anchorMeta = memoryFiles[0].metadata;
+      const anchorTime = anchorMeta.timestamp || Date.now();
+      const anchorTimeLabel = new Date(anchorTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      const { visitId: batchVisitId } = await autoDetermineVisit({ 
+        isBatch: true, 
+        contextVisitId: filteredVisitId,
+        exifTime: anchorTime,
+        lat: anchorMeta.latitude,
+        lng: anchorMeta.longitude
+      });
+      
+      setVisit(prev => ({ ...prev, id: batchVisitId, itemIds: [], globalConversation: [] }));
+
+      const batchPlaceholders: GalleryItem[] = memoryFiles.map(memFile => {
+        const id = Math.random().toString(36).substring(2, 11);
+        (memFile as any).generatedId = id;
+        const itemTime = memFile.metadata.timestamp || Date.now();
+        const itemTimeLabel = new Date(itemTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+        return {
+          id: id, url: memFile.base64, keywords: [], conversation: [], annotations: [], visitId: batchVisitId,
+          vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
+          timestamp: itemTime, isAnalyzing: true, streamingText: '', photoTime: itemTimeLabel,
+          location: memFile.metadata.latitude ? JSON.stringify({ 
+            latitude: memFile.metadata.latitude, 
+            longitude: memFile.metadata.longitude, 
+            city: '', country: '', museum: '' 
+          }) : undefined
+        };
+      });
+
+      setItems(prev => [...batchPlaceholders, ...prev]);
+      setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, ...batchPlaceholders.map(p => p.id)] }));
+
+      if (anchorMeta.latitude !== undefined && anchorMeta.longitude !== undefined) {
+        resolveMuseum(anchorMeta.latitude, anchorMeta.longitude).then(({ city, country, museum }) => {
+          const resolved = JSON.stringify({ latitude: anchorMeta.latitude, longitude: anchorMeta.longitude, city, country, museum });
+          resolvedLocation.current = resolved;
+          setItems(prev => prev.map(item => batchPlaceholders.some(p => p.id === item.id) ? { ...item, location: resolved } : item));
+          showToast(`Started a new visit at ${museum || city || 'museum'} with ${batchPlaceholders.length} works`, 'success');
+        }).catch(() => showToast(`Started a new visit with ${batchPlaceholders.length} works`, 'success'));
+      } else {
+        showToast(`Started a new visit with ${batchPlaceholders.length} works`, 'success');
+      }
+
+      for (const memFile of memoryFiles) {
+        const newItemId = (memFile as any).generatedId;
+        const itemTimeLabel = new Date(memFile.metadata.timestamp || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
         try {
-          // Read EXIF GPS per file
-          const coords = await readExifGps(file);
-
-          const base64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target?.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          });
-
-          const placeholderItem: GalleryItem = {
-            id: newItemId,
-            url: base64,
-            keywords: [],
-            vibe: {
-              backgroundColor: '#ffffff',
-              padding: 4,
-              borderRadius: '12px',
-              borderType: 'solid',
-              accentColor: '#000000'
-            },
-            timestamp: Date.now(),
-            conversation: [],
-            annotations: [],
-            visitId: visit.active ? visit.id : undefined,
-            isAnalyzing: true,
-            streamingText: '',
-            location: coords ? JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city: '', country: '', museum: '' }) : undefined,
-            photoTime: photoTime
-          };
-
-          setItems(prev => [placeholderItem, ...prev]);
-          if (visit.active) setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
-
-          // Background museum resolution per file
-          if (coords) {
-            resolveMuseum(coords.latitude, coords.longitude).then(({ city, country, museum }) => {
-              const resolved = JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city, country, museum });
-              setItems(prev => prev.map(item => item.id === newItemId ? { ...item, location: resolved } : item));
-            });
-          }
-
+          const safeFile = base64ToFile(memFile.base64, memFile.name);
           const analysis = await analyzeArtwork(
-            file,
-            USER_ID,
-            undefined,
-            visit.active ? visit.id : Math.random().toString(36).substring(2, 11),
-            undefined,
-            photoTime,
-            coords?.latitude,
-            coords?.longitude
+            safeFile, USER_ID, undefined, batchVisitId, 
+            resolvedLocation.current, itemTimeLabel, 
+            memFile.metadata?.latitude, memFile.metadata?.longitude
           );
-          const keywords = analysis.tags.map((tag: string) =>
-            tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
-          );
-
-          setTagPositions(prev => {
-            const updated = { ...prev };
-            keywords.forEach((tag: string) => {
-              if (!updated[tag]) updated[tag] = { x: (Math.random() * 2 - 1), y: (Math.random() * 2 - 1) };
-            });
-            return updated;
-          });
-
-          setItems(prev => prev.map(item => item.id === newItemId ? {
-            ...item,
-            keywords: keywords,
-            artistName: analysis.artist_name,
-            artworkName: analysis.artwork_name,
-            description: parseAnalysis(analysis.description),
-            date: analysis.date,
-            medium: analysis.medium,
-            artworkId: analysis.artwork_id,
-            isAnalyzing: false,
+          const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
+          const updates = {
+            keywords, artistName: analysis.artist_name, artworkName: analysis.artwork_name,
+            description: parseAnalysis(analysis.description), date: analysis.date, medium: analysis.medium,
+            sessionTitle: analysis.session_title, artworkId: analysis.artwork_id, isAnalyzing: false,
             location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
             photoTime: analysis.photo_time
-          } : item));
-
-        } catch (error) {
-          console.error(`Failed to analyze ${file.name}:`, error);
-          const message = error instanceof Error ? error.message : 'Analysis failed. Please try again.';
-          setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, streamingText: message } : item));
+          };
+          setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
+        } catch (e) {
+          setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, description: 'Analysis failed.' } : item));
+        } finally {
+          finishedCount++;
+          if (finishedCount === memoryFiles.length) setIsAnalyzing(false);
         }
-      });
+      }
+      if (batchPlaceholders.length >= 2) setFilteredVisitId(batchVisitId);
     }
-
+    if (target) target.value = '';
   };
+
+  // Reset interpretation panel state when opening a new artwork
+  useEffect(() => {
+    setInterpretationRightMode('metadata');
+    setInterpretationAskExpanded(false);
+    setArtworkChatMessage(null);
+  }, [interpretingItem?.id]);
 
   const handleNavigateInterpretation = (direction: 'prev' | 'next') => {
     if (!interpretingItem || !interpretingItem.allVisitItems || interpretingItem.allVisitItems.length <= 1) return;
@@ -993,7 +1124,7 @@ const App: React.FC = () => {
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
 
-  const isVisitMode = visit.active || !!filteredVisitId;
+  const isVisitMode = !!filteredVisitId;
 
   // ── Visit mode theme — change these to restyle the immersive visit look ──
   const visitTheme = {
@@ -1004,156 +1135,169 @@ const App: React.FC = () => {
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <div
-        className={`relative w-screen h-screen overflow-hidden flex flex-col transition-colors duration-700 ${isVisitMode ? visitTheme.text : ''}`}
-        style={{ backgroundColor: isVisitMode ? visitTheme.bg : '#fdfdfd' }}
+        className={`relative w-screen h-dvh overflow-hidden flex flex-col transition-colors duration-700 ${isVisitMode ? visitTheme.text : ''}`}
+        style={{ backgroundColor: isVisitMode ? visitTheme.bg : '#ffffff' }}
       >
+        {/* Toast Notifier (Phase 7) */}
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            action={toast.action}
+            onClose={() => setToast(null)}
+          />
+        )}
+
         {/* Bottom-left user panel */}
-        <div className="fixed bottom-4 left-4 z-50">
-          {currentUser ? (
-            <div className="relative">
-              {/* Avatar trigger */}
-              <button
-                onClick={() => setShowUserMenu(v => !v)}
-                className="w-9 h-9 rounded-full overflow-hidden border-2 border-white/30 shadow-lg hover:scale-105 active:scale-95 transition-all"
-              >
-                <img src={currentUser.profile_picture_url} alt={currentUser.full_name} className="w-full h-full object-cover" />
-              </button>
+        {!filteredVisitId && (
+          <div className="fixed bottom-4 left-4 z-50">
+            {currentUser ? (
+              <div className="relative">
+                {/* Avatar trigger */}
+                <button
+                  onClick={() => setShowUserMenu(v => !v)}
+                  className="w-9 h-9 rounded-full overflow-hidden border-2 border-white/30 shadow-lg hover:scale-105 active:scale-95 transition-all"
+                >
+                  <img src={currentUser.profile_picture_url} alt={currentUser.full_name} className="w-full h-full object-cover" />
+                </button>
 
-              {/* Dropdown */}
-              {showUserMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                  <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-neutral-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                    {/* User header */}
-                    <div className="px-4 pt-4 pb-3">
-                      <div className="flex items-center gap-3">
-                        <img src={currentUser.profile_picture_url} alt={currentUser.full_name} className="w-9 h-9 rounded-full object-cover shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-semibold text-neutral-900 truncate leading-tight">{currentUser.full_name}</p>
-                          <p className="text-[11px] text-neutral-400 truncate leading-tight mt-0.5">{currentUser.email}</p>
-                        </div>
-                        <span className="text-[10px] bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-md font-semibold shrink-0">Free</span>
-                      </div>
-                      {(() => {
-                        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-                        const todayCount = items.filter(i => i.timestamp >= todayStart.getTime()).length;
-                        const pct = Math.min(todayCount / 60, 1);
-                        return (
-                          <div className="mt-3">
-                            <div className="h-1 bg-neutral-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-neutral-900 rounded-full transition-all" style={{ width: `${pct * 100}%` }} />
-                            </div>
-                            <p className="text-[11px] text-neutral-400 mt-1.5">{todayCount}/60 analyses today</p>
+                {/* Dropdown */}
+                {showUserMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                    <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-neutral-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                      {/* User header */}
+                      <div className="px-4 pt-4 pb-3">
+                        <div className="flex items-center gap-3">
+                          <img src={currentUser.profile_picture_url} alt={currentUser.full_name} className="w-9 h-9 rounded-full object-cover shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-semibold text-neutral-900 truncate leading-tight">{currentUser.full_name}</p>
+                            <p className="text-[11px] text-neutral-400 truncate leading-tight mt-0.5">{currentUser.email}</p>
                           </div>
-                        );
-                      })()}
-                    </div>
+                          <span className="text-[10px] bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-md font-semibold shrink-0">Free</span>
+                        </div>
+                        {(() => {
+                          const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+                          const todayCount = items.filter(i => i.timestamp >= todayStart.getTime()).length;
+                          const pct = Math.min(todayCount / 60, 1);
+                          return (
+                            <div className="mt-3 text-center">
+                              <div className="h-1 bg-neutral-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-neutral-900 rounded-full transition-all" style={{ width: `${pct * 100}%` }} />
+                              </div>
+                              <p className="text-[11px] text-neutral-400 mt-1.5">{todayCount}/60 analyses today</p>
+                            </div>
+                          );
+                        })()}
+                      </div>
 
-                    <div className="h-px bg-neutral-100 mx-3" />
+                      <div className="h-px bg-neutral-100 mx-3" />
 
-                    {/* Language row */}
-                    <div className="px-4 py-3 flex items-center justify-between">
-                      <span className="text-[13px] text-neutral-600">Language</span>
-                      <div className="flex bg-neutral-100 rounded-full p-0.5 gap-0.5">
+                      {/* Language row */}
+                      <div className="px-4 py-3 flex items-center justify-between">
+                        <span className="text-[13px] text-neutral-600">Language</span>
+                        <div className="flex bg-neutral-100 rounded-full p-0.5 gap-0.5">
+                          <button
+                            onClick={() => { setLanguage('en'); localStorage.setItem('musee_language', 'en'); }}
+                            className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all ${language === 'en' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-700'}`}
+                          >EN</button>
+                          <button
+                            onClick={() => { setLanguage('zh'); localStorage.setItem('musee_language', 'zh'); }}
+                            className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all ${language === 'zh' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-700'}`}
+                          >中文</button>
+                        </div>
+                      </div>
+
+                      <div className="h-px bg-neutral-100 mx-3" />
+
+                      {/* Menu items */}
+                      <div className="py-1.5">
+                        {[
+                          {
+                            label: 'Account Settings',
+                            icon: <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>,
+                            action: () => { setShowUserMenu(false); setShowAccountModal('account'); },
+                            extra: <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                          },
+                          {
+                            label: 'Personalization',
+                            icon: <path d="M12 20h9"/>,
+                            action: () => { setShowUserMenu(false); setShowAccountModal('personalization'); },
+                            extra: <><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></>
+                          },
+                          {
+                            label: 'Give feedback',
+                            icon: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>,
+                            action: () => setShowUserMenu(false),
+                            extra: null
+                          },
+                          {
+                            label: 'Terms and Privacy',
+                            icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>,
+                            action: () => { setShowUserMenu(false); window.open('/terms.html', '_blank'); },
+                            extra: null
+                          },
+                        ].map(({ label, icon, extra, action }) => (
+                          <button key={label} onClick={action} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors text-left" style={{ cursor: 'pointer' }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400 shrink-0">
+                              {icon}{extra}
+                            </svg>
+                            <span className="text-[13px] text-neutral-700">{label}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="h-px bg-neutral-100 mx-3" />
+
+                      {/* Log out */}
+                      <div className="py-1.5">
                         <button
-                          onClick={() => { setLanguage('en'); localStorage.setItem('musee_language', 'en'); }}
-                          className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all ${language === 'en' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-700'}`}
-                        >EN</button>
-                        <button
-                          onClick={() => { setLanguage('zh'); localStorage.setItem('musee_language', 'zh'); }}
-                          className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all ${language === 'zh' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-700'}`}
-                        >中文</button>
+                          onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors text-left"
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400 shrink-0">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                          </svg>
+                          <span className="text-[13px] text-neutral-700">Log out</span>
+                        </button>
                       </div>
                     </div>
-
-                    <div className="h-px bg-neutral-100 mx-3" />
-
-                    {/* Menu items */}
-                    <div className="py-1.5">
-                      {[
-                        {
-                          label: 'Account Settings',
-                          icon: <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>,
-                          action: () => { setShowUserMenu(false); setShowAccountModal('account'); },
-                          extra: <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                        },
-                        {
-                          label: 'Personalization',
-                          icon: <path d="M12 20h9"/>,
-                          action: () => { setShowUserMenu(false); setShowAccountModal('personalization'); },
-                          extra: <><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></>
-                        },
-                        {
-                          label: 'Give feedback',
-                          icon: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>,
-                          action: () => setShowUserMenu(false),
-                          extra: null
-                        },
-                        {
-                          label: 'Terms and Privacy',
-                          icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>,
-                          action: () => { setShowUserMenu(false); window.open('/terms.html', '_blank'); },
-                          extra: null
-                        },
-                      ].map(({ label, icon, extra, action }) => (
-                        <button key={label} onClick={action} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors text-left">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400 shrink-0">
-                            {icon}{extra}
-                          </svg>
-                          <span className="text-[13px] text-neutral-700">{label}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="h-px bg-neutral-100 mx-3" />
-
-                    {/* Log out */}
-                    <div className="py-1.5">
-                      <button
-                        onClick={() => { setShowUserMenu(false); handleLogout(); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors text-left"
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400 shrink-0">
-                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-                        </svg>
-                        <span className="text-[13px] text-neutral-700">Log out</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="relative">
-              {/* Anonymous icon — indicates not signed in */}
-              <button
-                onClick={() => setShowLoginModal(v => !v)}
-                title="Sign in"
-                className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 shadow-lg flex items-center justify-center text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-              </button>
-              {/* Sign-in popover */}
-              {showLoginModal && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowLoginModal(false)} />
-                  <div className="absolute bottom-full left-0 mb-2 z-50 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 w-64 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                    <p className="text-[12px] text-neutral-500 mb-3 leading-relaxed">Sign in to save your collection and analysis history.</p>
-                    <div className="flex justify-center">
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="relative">
+                {/* Anonymous icon — indicates not signed in */}
+                <button
+                  onClick={() => setShowLoginModal(v => !v)}
+                  title="Sign in"
+                  className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 shadow-lg flex items-center justify-center text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </button>
+                {/* Sign-in popover */}
+                {showLoginModal && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowLoginModal(false)} />
+                    <div className="absolute bottom-full left-0 mb-2 z-50 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 w-64 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                      <p className="text-[12px] text-neutral-500 mb-3 leading-relaxed">Sign in to save your collection and analysis history.</p>
+                      <div className="flex justify-center">
                       <GoogleLogin
                         onLoginSuccess={(user) => { handleLoginSuccess(user); setShowLoginModal(false); }}
-                        onLoginError={(err) => alert(`Login Error: ${err}`)}
+                        onLoginError={() => alert(`Login Error`)}
                       />
+                      </div>
                     </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Account Settings / Personalization Modal */}
         {showAccountModal && (
@@ -1228,24 +1372,26 @@ const App: React.FC = () => {
         )}
 
         {/* Top Tab Bar — Explore / Learn / Collect */}
-        <div
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-sm px-1 py-1"
-          style={{ pointerEvents: 'auto' }}
-        >
-          {(['explore', 'learn', 'collect'] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-3 sm:px-4 py-1 rounded-full text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-bold transition-all whitespace-nowrap ${
-                activeTab === tab
-                  ? 'bg-neutral-900 text-white'
-                  : 'text-neutral-400 hover:text-neutral-700'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+        {!filteredVisitId && (
+          <div
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center bg-white/80 backdrop-blur-md border border-neutral-200 rounded-full shadow-sm px-1 py-1"
+            style={{ pointerEvents: 'auto' }}
+          >
+            {(['explore', 'learn', 'collect'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-3 sm:px-4 py-1 rounded-full text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-bold transition-all whitespace-nowrap ${
+                  activeTab === tab
+                    ? 'bg-neutral-900 text-white'
+                    : 'text-neutral-400 hover:text-neutral-700'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Sidebar toggle — same row as tab pill, left-aligned */}
         {activeTab === 'learn' && (
@@ -1267,76 +1413,9 @@ const App: React.FC = () => {
           <div className="fixed top-10 left-0 right-0 z-30 h-px bg-neutral-100" />
         )}
 
-        {/* Exhibition Hall Input — top center, inline input */}
-        {(visit.active || filteredVisitId) && (
-          <div
-            className={`fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur-md px-5 sm:px-6 py-2.5 sm:py-3 rounded-full text-[12px] sm:text-sm tracking-wider flex items-center space-x-3 shadow-lg border transition-all w-[320px] sm:w-[440px] ${exhibitionInputFocused ? 'border-neutral-400 bg-white' : 'border-neutral-200'}`}
-            style={{ pointerEvents: 'auto' }}
-            onClick={() => exhibitionInputRef.current?.focus()}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-40">
-              <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-            </svg>
-            <input
-              ref={exhibitionInputRef}
-              value={exhibitionInput}
-              onChange={(e) => setExhibitionInput(e.target.value)}
-              onFocus={() => setExhibitionInputFocused(true)}
-              onBlur={() => setExhibitionInputFocused(false)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && exhibitionInput.trim()) {
-                  const sessionItems = items.filter(i => i.visitId === (filteredVisitId || visit.id));
-                  setExhibitionContext({ items: sessionItems, visitId: filteredVisitId || (visit.active ? visit.id : undefined), initialMessage: exhibitionInput.trim() });
-                  setExhibitionInput('');
-                }
-              }}
-              placeholder="Ask about this exhibition..."
-              className="flex-1 bg-transparent outline-none text-neutral-600 placeholder-neutral-400"
-            />
-            {exhibitionInput.trim() && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const sessionItems = items.filter(i => i.visitId === (filteredVisitId || visit.id));
-                  setExhibitionContext({ items: sessionItems, visitId: filteredVisitId || (visit.active ? visit.id : undefined), initialMessage: exhibitionInput.trim() });
-                  setExhibitionInput('');
-                }}
-                className="shrink-0 w-6 h-6 rounded-full bg-neutral-900 text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
-              >
-                <span className="text-[10px]">↑</span>
-              </button>
-            )}
-          </div>
-        )}
 
-        {/* 3. Bottom-center Actions — End / Continue Visit */}
-        {(visit.active || filteredVisitId) && (
-          <div className="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)', pointerEvents: 'auto' }}>
-            <button
-              onClick={() => {
-                if (filteredVisitId) {
-                  handleResumeVisit(filteredVisitId);
-                  setFilteredVisitId(null);
-                } else {
-                  handleEndVisit();
-                }
-              }}
-              className="bg-neutral-900/80 backdrop-blur-md text-white/80 hover:text-emerald-400 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] tracking-[0.2em] uppercase font-bold shadow-xl border border-white/10 transition-all active:scale-95 whitespace-nowrap"
-            >
-              {filteredVisitId ? (<>Continue<br className="sm:hidden" /> the Visit</>) : (<>End<br className="sm:hidden" /> the Visit</>)}
-            </button>
-            {filteredVisitId && (
-              <button
-                onClick={() => setFilteredVisitId(null)}
-                className="bg-neutral-900/60 backdrop-blur-md text-white/40 hover:text-white/80 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] tracking-[0.2em] uppercase font-medium shadow-lg border border-white/10 transition-all active:scale-95"
-              >
-                Back
-              </button>
-            )}
-          </div>
-        )}
 
-        <div className={`relative z-10 flex-1 min-h-0 overflow-hidden transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-14 sm:pt-10 pb-20 sm:pb-4'} ${(interpretingItem || exhibitionContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
+        <div className={`relative z-10 flex-1 min-h-0 overflow-hidden transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-14 sm:pt-10 pb-20 sm:pb-4'} ${(interpretingItem || curatorRoomContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
           {activeTab === 'learn' ? (
             <UnderstandView
               items={items}
@@ -1374,27 +1453,51 @@ const App: React.FC = () => {
               likedIds={likedIds}
               albums={albums}
               onInterpret={(item) => {
-                const activeId = filteredVisitId || (visit.active ? visit.id : null);
-                const sessionItems = activeId ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id))) : undefined;
+                const activeId = filteredVisitId;
+                const sessionItems = activeId ? items.filter(i => i.visitId === activeId) : [item];
                 setInterpretingItem({ ...item, visitId: item.visitId, allVisitItems: sessionItems });
               }}
               onDelete={handleDeleteItem}
             />
           ) : (
             /* Explore tab — editorial corridor */
-            <div className="flex flex-col w-full h-full">
+            filteredVisitId ? (() => {
+              const activeVisit = filteredVisitId === 'active' ? visit : undefined; // Simplified for now, or fetch from a list if we had one
+              const exhibitionItems = items.filter(i => i.visitId === filteredVisitId || (filteredVisitId === 'active' && i.visitId === visit.id));
+              return (
+                <ExhibitionHallView
+                  items={exhibitionItems}
+                  visit={activeVisit || { id: filteredVisitId, title: exhibitionItems[0]?.sessionTitle || "PERSONAL VISIT", itemIds: exhibitionItems.map(i => i.id), globalConversation: [] }}
+                  onClose={() => setFilteredVisitId(null)}
+                  onInterpret={setInterpretingItem}
+                  onOpenCuratorRoom={(msg) => setCuratorRoomContext({ items: exhibitionItems, visitId: filteredVisitId, initialMessage: msg })}
+                  onDeleteItem={handleDeleteItem}
+                  onContinueVisit={() => {
+                    handleResumeVisit(filteredVisitId);
+                    // Automatically trigger album picker when continuing visit
+                    albumInputRef.current?.click();
+                  }}
+                />
+              );
+            })() : (
+              <div className="flex flex-col w-full h-full">
 
-              {/* ① Static metadata row — location · date of active item */}
-              <div className="shrink-0 h-9 flex items-center gap-4 px-10 sm:px-16 overflow-hidden">
+              {/* ① Dynamic metadata row — Center aligned visit name + date */}
+              <div className="shrink-0 h-auto flex flex-col items-center justify-center px-10 sm:px-16 overflow-hidden py-4">
                 {activeDisplayItem && (() => {
-                  const loc = parseDisplayLocation(activeDisplayItem.location);
+                  const title = activeDisplayItem.sessionTitle || parseDisplayLocation(activeDisplayItem.location) || "Personal Visit";
                   const dt = activeDisplayItem.photoTime ? parseDisplayDate(activeDisplayItem.photoTime) : null;
                   return (
-                    <>
-                      {loc && <span className="text-[9px] sm:text-[10px] tracking-[0.25em] uppercase text-neutral-500 font-medium truncate">{loc}</span>}
-                      {loc && dt && <span className="text-neutral-200 text-[9px]">·</span>}
-                      {dt && <span className="text-[9px] sm:text-[10px] tracking-[0.18em] uppercase text-neutral-300">{dt}</span>}
-                    </>
+                    <div className="text-center" key={activeDisplayItem.id}>
+                      <h2 className="text-[10px] sm:text-[11px] tracking-[0.3em] uppercase text-neutral-800 font-bold mb-1 truncate max-w-[80vw]">
+                        {title}
+                      </h2>
+                      {dt && (
+                        <p className="text-[9px] sm:text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">
+                          {dt}
+                        </p>
+                      )}
+                    </div>
                   );
                 })()}
               </div>
@@ -1403,7 +1506,7 @@ const App: React.FC = () => {
               <div
                 ref={scrollRef}
                 onScroll={handleScroll}
-                className="flex-1 min-h-0 flex items-center overflow-x-auto overflow-y-hidden gap-px snap-x snap-mandatory horizontal-corridor"
+                className="flex-1 min-h-0 flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory horizontal-corridor no-scrollbar"
               >
                 {isGalleryEmpty ? (
                   <div className="snap-center shrink-0 w-screen flex items-center justify-center">
@@ -1415,60 +1518,50 @@ const App: React.FC = () => {
 
                 {!isGalleryEmpty && corridorEntries.map((entry, idx) => {
                   const isActive = idx === (thumbEntries[activeThumbIndex]?.sourceIndex ?? 0);
-                  return entry.type === 'item' ? (
+                  return (
                     <div
-                      key={entry.item.id}
-                      className="snap-center shrink-0 h-full flex items-center"
+                      key={entry.type === 'item' ? entry.item.id : entry.visitId}
+                      className="snap-center shrink-0 h-full flex items-center mx-6 sm:mx-16"
                       ref={(el) => { galleryEntryRefs.current[idx] = el; }}
                     >
-                      <GalleryCard
-                        item={entry.item}
-                        isActive={isActive}
-                        onInterpret={() => {
-                          const activeId = filteredVisitId || (visit.active ? visit.id : null);
-                          const sessionItems = activeId
-                            ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id)))
-                            : undefined;
-                          setInterpretingItem({
-                            ...entry.item,
-                            visitId: entry.item.visitId || (visit.active && visit.itemIds.includes(entry.item.id) ? visit.id : undefined),
-                            allVisitItems: sessionItems
-                          });
-                        }}
-                        onDelete={() => handleDeleteItem(entry.item.id)}
-                        onContinueVision={(!visit.active && !filteredVisitId) ? () => handleContinueVision(entry.item) : undefined}
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      key={entry.visitId}
-                      className="snap-center shrink-0"
-                      ref={(el) => { galleryEntryRefs.current[idx] = el; }}
-                    >
-                      <VisitStack
-                        items={entry.items}
-                        onOpenExhibition={() => setFilteredVisitId(entry.visitId)}
-                        onInterpret={(item) => setInterpretingItem({ ...item, allVisitItems: entry.items, visitId: entry.visitId })}
-                        onResumeVisit={(!visit.active && !filteredVisitId) ? (source) => {
-                          handleResumeVisit(entry.visitId);
-                          setTimeout(() => {
-                            if (source === 'camera') cameraInputRef.current?.click();
-                            else albumInputRef.current?.click();
-                          }, 100);
-                        } : undefined}
-                        onDeleteItem={handleDeleteItem}
-                        onDeleteSession={() => handleDeleteSession(entry.visitId)}
-                      />
+                      {entry.type === 'item' ? (
+                        <GalleryCard
+                          item={entry.item}
+                          isActive={isActive}
+                          onInterpret={() => {
+                            const visitItems = items.filter(i => i.visitId === entry.item.visitId);
+                            setInterpretingItem({
+                              ...entry.item,
+                              visitId: entry.item.visitId,
+                              allVisitItems: visitItems.length > 0 ? visitItems : [entry.item]
+                            });
+                          }}
+                          onDelete={() => handleDeleteItem(entry.item.id)}
+                          onContinueVision={!filteredVisitId ? () => handleContinueVision(entry.item) : undefined}
+                        />
+                      ) : (
+                        <VisitStack
+                          items={entry.items}
+                          isActive={isActive}
+                          onOpenExhibition={() => setFilteredVisitId(entry.visitId)}
+                          onInterpret={(item) => setInterpretingItem({ ...item, allVisitItems: entry.items, visitId: entry.visitId })}
+                          onResumeVisit={!filteredVisitId ? (source) => {
+                            handleResumeVisit(entry.visitId);
+                            setTimeout(() => {
+                              if (source === 'camera') cameraInputRef.current?.click();
+                              else albumInputRef.current?.click();
+                            }, 100);
+                          } : undefined}
+                          onDeleteItem={handleDeleteItem}
+                          onDeleteSession={() => handleDeleteSession(entry.visitId)}
+                        />
+                      )}
                     </div>
                   );
                 })}
 
-                {isAnalyzing && (
-                  <div className="min-w-[70vw] sm:min-w-[380px] h-full flex flex-col items-center justify-center gap-3 snap-center shrink-0">
-                    <div className="w-8 h-8 border-t-[1.5px] border-neutral-600 rounded-full animate-spin" />
-                    <p className="text-[9px] tracking-[0.3em] text-neutral-400 uppercase">Analyzing</p>
-                  </div>
-                )}
+                {/* Global analyzing loader removed from corridor to prevent layout jumps/blinking. 
+                    The FAB loader and modal badges sufficiently cover this state. */}
 
                 {!isGalleryEmpty && <div className="min-w-[calc(50vw-32vh)] sm:min-w-[calc(50vw-28vh)] h-full shrink-0" />}
               </div>
@@ -1484,7 +1577,7 @@ const App: React.FC = () => {
 
               {/* ④ Thumbnail strip — in flow, never overlaps images */}
               {thumbEntries.length > 1 && (
-                <div className="shrink-0 flex items-center gap-4 px-10 sm:px-16 h-11">
+                <div className="shrink-0 flex items-center justify-center gap-4 px-10 sm:px-16 h-11">
                   {/* Counter */}
                   <span className="text-[9px] tracking-[0.15em] text-neutral-300 tabular-nums shrink-0 font-medium">
                     {String(activeThumbIndex + 1).padStart(2, '0')}<span className="text-neutral-200 mx-0.5">/</span>{String(thumbEntries.length).padStart(2, '0')}
@@ -1519,7 +1612,7 @@ const App: React.FC = () => {
               {/* Spacer for fixed controls bar */}
               <div className="shrink-0" style={{ height: 'max(calc(env(safe-area-inset-bottom, 0px) + 5rem), 5.5rem)' }} />
             </div>
-          )}
+          ))}
         </div>
 
         {interpretingItem && (
@@ -1532,6 +1625,10 @@ const App: React.FC = () => {
             sessionId={visit.id}
             allVisitItems={interpretingItem.allVisitItems}
             onNavigate={handleNavigateInterpretation}
+            externalMessage={artworkChatMessage ?? undefined}
+            onExternalMessageConsumed={() => setArtworkChatMessage(null)}
+            rightMode={interpretationRightMode}
+            onRightModeChange={setInterpretationRightMode}
             isLiked={likedIds.has(interpretingItem.id)}
             albums={albums}
             itemAlbumIds={albums.filter(a => a.itemIds.includes(interpretingItem.id)).map(a => a.id)}
@@ -1541,15 +1638,20 @@ const App: React.FC = () => {
           />
         )}
 
-        {exhibitionContext && (
-          <ExhibitionHall
-            items={items.filter(i => exhibitionContext.visitId ? i.visitId === exhibitionContext.visitId : exhibitionContext.items.map(ci => ci.id).includes(i.id))}
+        {curatorRoomContext && (
+          <CuratorRoom
+            items={
+              items.filter(i => 
+                curatorRoomContext.visitId ? i.visitId === curatorRoomContext.visitId : 
+                curatorRoomContext.items.some(ci => ci.id === i.id)
+              )
+            }
             conversation={visit.globalConversation}
-            onClose={() => setExhibitionContext(null)}
+            onClose={() => setCuratorRoomContext(null)}
             onUpdateConversation={(msgs) => setVisit(prev => ({ ...prev, globalConversation: [...prev.globalConversation, ...msgs] }))}
             onDeleteItem={handleDeleteItem}
             onInterpret={setInterpretingItem}
-            initialMessage={exhibitionContext.initialMessage}
+            initialMessage={curatorRoomContext.initialMessage}
           />
         )}
 
@@ -1608,12 +1710,23 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* Universal Contextual Action Bar (Phase 8) */}
         {activeTab === 'explore' && (
-          <Controls
+          <ContextualActionBar
+            mode={interpretingItem ? 'interpretation' : filteredVisitId ? 'hall' : 'corridor'}
             onUpload={handleFileUpload}
             isAnalyzing={isAnalyzing}
-            isVisitActive={visit.active}
-            onToggleVisit={visit.active ? handleEndVisit : handleStartVisit}
+            onChat={handleOpenCurator}
+            onInquiry={handleInquiry}
+            onLike={() => interpretingItem && handleToggleLike(interpretingItem.id)}
+            isLiked={!!(interpretingItem && likedIds.has(interpretingItem.id))}
+            onDelete={() => interpretingItem && setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
+            onCollect={() => interpretingItem && alert('Collection feature coming soon')}
+            activeItem={interpretingItem as unknown as GalleryItem || undefined}
+            placeholder={filteredVisitId ? `Ask about ${items.find(i => i.visitId === filteredVisitId)?.sessionTitle || 'this exhibition'}...` : undefined}
+            isAskExpanded={interpretationAskExpanded}
+            onAskExpand={() => { setInterpretationAskExpanded(true); setInterpretationRightMode('chat'); }}
+            onAskCollapse={() => { setInterpretationAskExpanded(false); setInterpretationRightMode('metadata'); }}
           />
         )}
 

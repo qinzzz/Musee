@@ -10,10 +10,10 @@ interface Props {
   onDeleteItem?: (id: string) => void;
   onDeleteSession?: () => void;
   onInterpret?: (item: GalleryItem) => void;
+  isActive?: boolean;
 }
 
-const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, onDeleteItem, onDeleteSession, onInterpret }) => {
-  const [showResumeMenu, setShowResumeMenu] = React.useState(false);
+const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, onDeleteItem, onDeleteSession, onInterpret, isActive }) => {
   if (items.length === 0) return null;
 
   // We show up to 3 cards in the stack visually
@@ -52,22 +52,21 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
 
   return (
     <div
-      className="min-w-[85vw] sm:min-w-[40vw] h-[72dvh] sm:h-[80vh] mx-3 sm:mx-12 flex items-center justify-center transition-all duration-500 group cursor-pointer hover:scale-[1.02]"
+      className="h-full min-w-[280px] sm:min-w-[320px] flex items-center justify-center transition-all duration-500 group cursor-pointer hover:scale-[1.02]"
     >
       <div
-        className="relative w-full h-full flex items-center justify-center"
-        onClick={() => onInterpret?.(items[0])}
+        className="relative flex items-center justify-center"
+        onClick={() => onOpenExhibition(items)}
       >
         {displayItems.map((item, idx) => {
           const rotation = (idx - (displayItems.length - 1) / 2) * 5;
-          const offset = idx * 12;
 
           return (
             <div
               key={item.id}
-              className="absolute transition-all duration-700 overflow-hidden max-w-[80vw]"
+              className={`${idx === 0 ? 'relative' : 'absolute'} transition-all duration-700 max-w-[80vw]`}
               style={{
-                transform: `rotate(${rotation}deg) translate(${offset}px, ${-offset}px)`,
+                transform: `rotate(${rotation}deg)`,
                 zIndex: displayItems.length - idx,
                 opacity: 1 - (idx * 0.25)
               }}
@@ -75,7 +74,8 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
               <img
                 src={item.url}
                 alt="Stacked item"
-                className="max-h-[52dvh] sm:max-h-[50vh] max-w-full w-auto object-contain"
+                className="max-h-[52dvh] sm:max-h-[50vh] max-w-full w-auto object-contain transition-all duration-700 rounded-[8px]"
+                style={{ filter: isActive ? 'none' : 'saturate(0.1)' }}
               />
             </div>
           );
@@ -83,62 +83,26 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
 
         {/* Center Interaction Overlay */}
         <InteractionOverlay
-          isVisible={true} // Controlled by group-hover visibility in CSS
+          isVisible={true}
           className="opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
-          secondaryText="Tap to re-enter exhibition hall"
-          buttons={[
-            {
-              label: 'Visit Record',
-              primary: true,
-              onClick: (e) => {
-                e.stopPropagation();
-                onOpenExhibition(items);
-              }
-            },
-            ...(onResumeVisit ? [{
-              label: 'Continue the Visit',
-              onClick: (e: React.MouseEvent) => {
-                e.stopPropagation();
-                setShowResumeMenu(!showResumeMenu);
-              }
-            }] : [])
-          ]}
+          secondaryText="View"
+          buttons={[]}
         />
 
         {/* Floating Resume Menu */}
-        {showResumeMenu && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-4 bg-white rounded-xl shadow-2xl border border-neutral-100 p-1 flex items-center space-x-0.5 animate-in zoom-in-95 duration-300 z-50">
-            <button
-              className="flex items-center space-x-1.5 px-2.5 py-1.5 hover:bg-neutral-50 rounded-lg transition-colors text-neutral-600 hover:text-emerald-600"
-              onClick={(e) => {
-                e.stopPropagation();
-                onResumeVisit?.('camera');
-                setShowResumeMenu(false);
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-              <span className="text-[8px] tracking-widest uppercase font-bold">Photo</span>
-            </button>
-            <div className="w-px h-4 bg-neutral-100"></div>
-            <button
-              className="flex items-center space-x-1.5 px-2.5 py-1.5 hover:bg-neutral-50 rounded-lg transition-colors text-neutral-600 hover:text-emerald-600"
-              onClick={(e) => {
-                e.stopPropagation();
-                onResumeVisit?.('album');
-                setShowResumeMenu(false);
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
-              <span className="text-[8px] tracking-widest uppercase font-bold">Upload</span>
-            </button>
-          </div>
-        )}
 
       </div>
 
 
       <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-        <span className="text-[7px] tracking-[0.3em] uppercase font-bold text-neutral-400">
+        <span className="text-[7px] tracking-[0.3em] uppercase font-bold text-neutral-400 flex items-center gap-2">
+          {items.some(i => i.isAnalyzing) && (
+            <span className="flex items-center gap-1.5 text-emerald-500">
+              <span className="w-1 h-1 bg-current rounded-full animate-pulse" />
+              <span>Analyzing</span>
+              <span className="text-neutral-200">—</span>
+            </span>
+          )}
           {count} {count === 1 ? 'Piece' : 'Pieces'}
         </span>
       </div>

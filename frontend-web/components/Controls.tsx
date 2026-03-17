@@ -4,11 +4,9 @@ import React, { useRef, useState } from 'react';
 interface Props {
   onUpload: (e: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   isAnalyzing: boolean;
-  isVisitActive: boolean;
-  onToggleVisit: () => void;
 }
 
-const Controls: React.FC<Props> = ({ onUpload, isAnalyzing, isVisitActive, onToggleVisit }) => {
+const Controls: React.FC<Props> = ({ onUpload, isAnalyzing }) => {
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -16,24 +14,16 @@ const Controls: React.FC<Props> = ({ onUpload, isAnalyzing, isVisitActive, onTog
   const handleGalleryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     onUpload(e, 'gallery');
-    e.target.value = '';
   };
 
   const handleCameraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     onUpload(e, 'camera');
-    e.target.value = '';
   };
 
   const handleFabClick = () => {
     if (isAnalyzing) return;
     setOpen(prev => !prev);
-  };
-
-  const handleVisit = () => {
-    setOpen(false);
-    onToggleVisit();
-    if (!isVisitActive) cameraInputRef.current?.click();
   };
 
   return (
@@ -50,22 +40,6 @@ const Controls: React.FC<Props> = ({ onUpload, isAnalyzing, isVisitActive, onTog
 
       {/* Expanded sub-actions — slide up when open */}
       <div className={`flex flex-col items-center gap-3 transition-all duration-200 ${open ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-3 pointer-events-none'}`}>
-
-        {/* Visit */}
-        <button
-          onClick={handleVisit}
-          disabled={isAnalyzing}
-          aria-label={isVisitActive ? 'End visit' : 'Start visit'}
-          className={`relative w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all active:scale-95 ${isVisitActive ? 'bg-emerald-500 text-white' : 'bg-white text-neutral-600 border border-neutral-200'}`}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-          </svg>
-          {isVisitActive && (
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-300 rounded-full border-2 border-white animate-pulse" />
-          )}
-        </button>
 
         {/* Import */}
         <button
@@ -100,7 +74,7 @@ const Controls: React.FC<Props> = ({ onUpload, isAnalyzing, isVisitActive, onTog
       <button
         onClick={handleFabClick}
         aria-label={open ? 'Close actions' : 'Open actions'}
-        className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 active:scale-95 ${isAnalyzing ? 'opacity-60 pointer-events-none' : ''} ${isVisitActive ? 'bg-emerald-500 text-white' : 'bg-neutral-900 text-white'}`}
+        className={`w-14 h-14 rounded-full bg-neutral-900 text-white shadow-xl flex items-center justify-center transition-all duration-200 active:scale-95 ${isAnalyzing ? 'opacity-60 pointer-events-none' : ''}`}
       >
         {isAnalyzing ? (
           <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />

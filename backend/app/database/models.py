@@ -94,6 +94,7 @@ class SavedArtwork(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "session_id": self.session_id,
+            "session_title": self.session.title if self.session else None,
             "artwork_tags": [tag.to_dict() for tag in self.artwork_tags] if hasattr(self, 'artwork_tags') else [],
             "date": self.params.get('date') if self.params and isinstance(self.params, dict) else None,
             "medium": self.params.get('medium') if self.params and isinstance(self.params, dict) else None
@@ -242,6 +243,7 @@ class Session(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    title = Column(String, nullable=True)  # Visit Name (can be museum, city, or user-provided)
     narrative_summary = Column(Text, nullable=True)  # Compressed thematic distillation
     metadata_json = Column(JSON, nullable=True)  # Renamed from 'metadata' to avoid conflict with Base.metadata
     created_at = Column(DateTime, server_default=func.now())
@@ -256,6 +258,7 @@ class Session(Base):
         result = {
             "id": self.id,
             "user_id": self.user_id,
+            "title": self.title,
             "narrative_summary": self.narrative_summary,
             "metadata": self.metadata_json,
             "created_at": self.created_at.isoformat() if self.created_at else None,

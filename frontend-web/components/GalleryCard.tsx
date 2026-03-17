@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { GalleryItem } from '../types';
+import InteractionOverlay from './InteractionOverlay';
 
 interface Props {
   item: GalleryItem;
@@ -8,28 +9,31 @@ interface Props {
   onInterpret: () => void;
   onContinueVision?: () => void;
   onDelete?: () => void;
+  size?: 'normal' | 'large';
 }
 
-const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete }) => {
+const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, size = 'normal' }) => {
   const { url } = item;
 
   return (
     <div
-      className="relative h-full group cursor-pointer shrink-0"
+      className={`relative h-full min-w-[200px] flex items-center justify-center transition-all duration-500 group cursor-pointer hover:scale-[1.01] ${size === 'large' ? 'p-8 sm:p-12' : 'p-4'}`}
       onClick={onInterpret}
     >
       {/* Image — natural aspect ratio, fills strip height */}
       <img
         src={url}
         alt=""
-        className="h-full w-auto object-cover block max-w-[70vw] transition-all duration-700"
-        style={{ filter: isActive ? 'none' : 'saturate(0.1)' }}
+        className={`${
+          size === 'large' ? 'max-h-[65vh] sm:max-h-[60vh]' : 'max-h-[52dvh] sm:max-h-[50vh]'
+        } w-auto object-contain block max-w-[80vw] transition-all duration-700 mx-auto rounded-[8px] shadow-2xl`}
+        style={{ 
+          filter: isActive ? 'none' : size === 'large' ? 'saturate(0.4) blur(1px)' : 'saturate(0.1)',
+          opacity: isActive ? 1 : size === 'large' ? 0.6 : 1
+        }}
       />
  
-      {/* White fade overlay for inactive */}
-      {!isActive && (
-        <div className="absolute inset-0 bg-white/70 transition-all duration-700 pointer-events-none" />
-      )}
+      {/* No more white fade overlay for inactive — keeping it clean with saturation only */}
 
       {/* Loading state */}
       {item.isAnalyzing && (
@@ -49,14 +53,26 @@ const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete })
         </div>
       )}
 
+      {/* Hover overlay */}
+      {!item.isAnalyzing && (
+        <InteractionOverlay
+          isVisible={true}
+          className="opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
+          secondaryText="View"
+          buttons={[]}
+        />
+      )}
+
       {/* Delete button — only on active, reveals on hover */}
       {onDelete && isActive && (
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
-          className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white/90 hover:bg-white text-neutral-400 hover:text-neutral-900 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 z-30 border border-neutral-200 shadow-sm"
+          className={`absolute w-8 h-8 rounded-full bg-white/90 hover:bg-white text-neutral-400 hover:text-neutral-900 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 z-30 border border-neutral-200 shadow-xl ${
+            size === 'large' ? 'top-10 right-10' : 'top-3 right-3'
+          }`}
           title="Remove"
         >
-          <span className="text-xs leading-none">✕</span>
+          <span className="text-sm leading-none">✕</span>
         </button>
       )}
     </div>

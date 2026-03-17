@@ -319,6 +319,12 @@ export interface ArtworkAnalysisResult {
   photo_uri?: string;   // Server path to stored image (web clients)
   location?: string;
   photo_time?: string;
+  session_title?: string;
+}
+
+export interface TopicSuggestionResponse {
+  suggested_topics: string[];
+  model_used: string;
 }
 
 /**
@@ -349,7 +355,7 @@ export function getOrCreateUserId(): string {
  * @returns Analysis result containing artist, title, description, tags, and artwork_id
  */
 export async function analyzeArtwork(
-  imageFile: File,
+  imageSource: File,
   userId?: string,
   photoUri?: string,
   sessionId?: string,
@@ -359,7 +365,8 @@ export async function analyzeArtwork(
   longitude?: number
 ): Promise<ArtworkAnalysisResult> {
   const formData = new FormData();
-  formData.append('image', imageFile);
+  formData.append('image', imageSource);
+  
   formData.append('client_type', 'web');  // Tell backend to store image on server
 
   if (userId) {
@@ -422,6 +429,7 @@ export async function analyzeArtwork(
     photo_uri: data.photo_uri,
     location: data.location,
     photo_time: data.photo_time,
+    session_title: data.session_title,
   };
 }
 
@@ -465,9 +473,11 @@ export async function analyzeArtworkStream(
   latitude?: number,
   longitude?: number
 ): Promise<void> {
+
   const formData = new FormData();
   formData.append('image', imageFile);
-  formData.append('client_type', 'web');
+  
+  formData.append('client_type', 'web');  // Tell backend to store image on server
 
   if (userId) {
     formData.append('user_id', userId);
@@ -563,8 +573,8 @@ export async function analyzeArtworkStream(
             const result: ArtworkAnalysisResult = {
               artist_name: data.artist_name || 'Unknown Artist',
               artwork_name: data.artwork_name || 'Untitled',
-              description: data.description || '',
-              tags: tags,
+              description: data.analysis || '',
+              tags: Array.isArray(data.tags) ? data.tags : [],
               date: data.date,
               medium: data.medium,
               model_used: data.model_used || 'unknown',
@@ -572,6 +582,7 @@ export async function analyzeArtworkStream(
               photo_uri: data.photo_uri,
               location: data.location,
               photo_time: data.photo_time,
+              session_title: data.session_title,
             };
 
             onComplete(result);

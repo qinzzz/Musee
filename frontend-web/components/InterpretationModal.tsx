@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
-import { Message, Album } from '../types';
-import { chatWithArtwork, chatWithArtworkStream, base64ToFile, getTagExplanation, suggestTopics, updateArtwork } from '../apiService';
+import { Message, Album, Annotation, NeighborItem, Visit, GalleryItem } from '../types';
+import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile } from '../apiService';
 
 interface Props {
   item: {
@@ -27,16 +27,13 @@ interface Props {
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
   onUpdateMetadata?: (id: string, updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => void;
-  onDelete?: (id: string) => void;
   sessionId?: string;
   allVisitItems?: any[];
   onNavigate?: (direction: 'prev' | 'next') => void;
-  isLiked?: boolean;
-  albums?: Album[];
-  itemAlbumIds?: string[];
-  onToggleLike?: () => void;
-  onSaveToAlbum?: (albumIds: string[]) => void;
-  onCreateAlbum?: (name: string) => void;
+  externalMessage?: string;
+  onExternalMessageConsumed?: () => void;
+  rightMode: 'metadata' | 'chat';
+  onRightModeChange: (mode: 'metadata' | 'chat') => void;
 }
 
 // Tag component with explanation tooltip on hover
@@ -94,26 +91,18 @@ const HoverTag: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, onDelete, sessionId, allVisitItems, onNavigate, isLiked, albums, itemAlbumIds, onToggleLike, onSaveToAlbum, onCreateAlbum }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
-  const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
-  // rightMode: 'metadata' shows analysis info, 'chat' shows conversation
-  const [rightMode, setRightMode] = useState<'metadata' | 'chat'>('metadata');
-  const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
+const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const [mobileImageHeight, setMobileImageHeight] = useState(-1); // -1 = unset (uses CSS). Set on mount for mobile = 4:3 aspect ratio
   const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
-  const albumButtonRef = useRef<HTMLButtonElement>(null);
-  const [showAlbumDropdown, setShowAlbumDropdown] = useState(false);
-  const [albumDropdownPos, setAlbumDropdownPos] = useState<{ top: number; left: number } | null>(null);
-  const [showCreateAlbumModal, setShowCreateAlbumModal] = useState(false);
-  const [newAlbumName, setNewAlbumName] = useState('');
 
   // Inline editing state
   const [isEditing, setIsEditing] = useState(false);
@@ -252,13 +241,10 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   useEffect(() => {
     setMessages(item.conversation || []);
     setSuggestedTopics([]);
-    setRightMode('metadata'); // Reset to metadata view for the new piece
+    onRightModeChange('metadata'); // Reset to metadata view for the new piece
     if (window.innerWidth < 640) setMobileImageHeight(window.innerWidth * 0.75);
     setIsEditing(false);
     setTagInput('');
-    setShowAlbumDropdown(false);
-    setShowCreateAlbumModal(false);
-    setNewAlbumName('');
     const vals = {
       artist: item.artistName || '',
       title: item.artworkName || '',
@@ -394,13 +380,20 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
     }
   }, [item.isAnalyzing, item.artistName, item.artworkName]);
 
+  // Handle message sent from the external action bar
+  useEffect(() => {
+    if (externalMessage) {
+      handleSend(externalMessage);
+      onExternalMessageConsumed?.();
+    }
+  }, [externalMessage]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
-    setRightMode('chat'); // Switch right panel to chat on send
+    onRightModeChange('chat'); // Switch right panel to chat on send
     const userMsg: Message = { role: 'user', text };
     setMessages(prev => [...prev, userMsg]);
     setSuggestedTopics([]);
-    setInput('');
     setIsTyping(true);
 
     try {
@@ -674,44 +667,19 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 </div>
               )}
               {/* LEFT: action icons */}
-              <div className="flex items-center gap-2">
-                {onToggleLike && (
+              <div className="flex items-center gap-1">
+                {rightMode === 'metadata' && messages.length > 0 && (
                   <button
-                    onClick={onToggleLike}
-                    title={isLiked ? 'Unlike' : 'Like'}
-                    className={`w-9 h-9 flex items-center justify-center rounded-full transition-all ${
-                      isLiked ? 'text-red-500 hover:text-red-600' : 'text-neutral-500 hover:text-neutral-700'
-                    }`}
+                    onClick={() => onRightModeChange('chat')}
+                    title="View conversation"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-neutral-400 hover:text-neutral-700 hover:bg-neutral-50 transition-all"
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                     </svg>
+                    <span className="text-[9px] tracking-[0.2em] uppercase font-bold">{messages.length}</span>
                   </button>
                 )}
-
-                {onSaveToAlbum && (
-                  <button
-                    ref={albumButtonRef}
-                    onClick={() => {
-                      if (albumButtonRef.current) {
-                        const rect = albumButtonRef.current.getBoundingClientRect();
-                        const dropdownWidth = 240;
-                        const left = Math.min(rect.left, window.innerWidth - dropdownWidth - 8);
-                        setAlbumDropdownPos({ top: rect.bottom + 6, left: Math.max(8, left) });
-                      }
-                      setShowAlbumDropdown(prev => !prev);
-                    }}
-                    title="Save to album"
-                    className={`w-9 h-9 flex items-center justify-center rounded-full transition-all ${
-                      (itemAlbumIds && itemAlbumIds.length > 0) ? 'text-neutral-600 hover:text-neutral-800' : 'text-neutral-500 hover:text-neutral-700'
-                    }`}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                    </svg>
-                  </button>
-                )}
-
                 {rightMode === 'metadata' && !item.isAnalyzing && item.artworkId && (
                   (<button
                       onClick={startEditing}
@@ -723,18 +691,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                       </svg>
                     </button>
                   )
-                )}
-
-                {onDelete && !item.isAnalyzing && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(item.id); }}
-                    className="w-9 h-9 flex items-center justify-center rounded-full text-neutral-500 hover:text-red-600 transition-colors"
-                    title="Delete from Musee"
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                    </svg>
-                  </button>
                 )}
 
                 {isEditing && (
@@ -757,7 +713,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
                 {rightMode === 'chat' && (
                   <>
                     <button
-                      onClick={() => setRightMode('metadata')}
+                      onClick={() => onRightModeChange('metadata')}
                       className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors flex items-center gap-1 px-2 py-1"
                     >
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
@@ -1026,53 +982,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
           </div>
         </div>
 
-        {/* ── BOTTOM: Chat Input (always visible) ── */}
-        <div className="shrink-0 border-t border-neutral-100 p-3 sm:p-4" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}>
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* History toggle — expands conversation on the right panel */}
-            <button
-              onClick={() => setRightMode(m => m === 'chat' ? 'metadata' : 'chat')}
-              title={rightMode === 'chat' ? 'Back to analysis' : 'View conversation'}
-              className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-all border ${
-                rightMode === 'chat'
-                  ? 'bg-neutral-900 border-neutral-900 text-white'
-                  : 'border-neutral-200 text-neutral-400 hover:border-neutral-400 hover:text-neutral-700'
-              }`}
-            >
-              {rightMode === 'chat' ? (
-                /* In chat mode: show info/list icon to go back to metadata */
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-                  <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-                </svg>
-              ) : (
-                /* In metadata mode: show chat bubble icon to open chat */
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-              )}
-            </button>
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !item.isAnalyzing && input.trim()) {
-                  handleSend(input);
-                }
-              }}
-              placeholder={item.isAnalyzing ? 'Analyzing artwork…' : 'ask anything…'}
-              disabled={item.isAnalyzing}
-              className={`flex-1 text-[15px] sm:text-[13px] bg-neutral-50 p-3 px-5 sm:p-3 sm:px-5 rounded-full outline-none focus:ring-2 focus:ring-neutral-300 transition-all border border-neutral-300 sm:border-neutral-100 ${item.isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            />
-            <button
-              onClick={() => { if (!item.isAnalyzing && input.trim()) handleSend(input); }}
-              disabled={item.isAnalyzing || !input.trim()}
-              className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center shadow-lg transition-all ${item.isAnalyzing || !input.trim() ? 'opacity-40 cursor-not-allowed' : 'hover:scale-110 active:scale-95'}`}
-            >
-              ↑
-            </button>
-          </div>
-        </div>
 
         {/* Navigation Arrows (visit sessions) — desktop only */}
         {allVisitItems && allVisitItems.length > 1 && onNavigate && (
@@ -1103,110 +1012,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
       </div>
     </div>
 
-    {/* Album dropdown — rendered via portal to escape modal overflow-hidden */}
-    {showAlbumDropdown && albumDropdownPos && createPortal(
-      <>
-        <div className="fixed inset-0 z-[200]" onClick={() => { setShowAlbumDropdown(false); setNewAlbumName(''); }} />
-        <div
-          className="fixed z-[201] bg-white rounded-2xl shadow-2xl border border-neutral-100 w-60 py-2 animate-in fade-in zoom-in-95 duration-150"
-          style={{ top: albumDropdownPos.top, left: albumDropdownPos.left }}
-        >
-          <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 font-bold px-4 pt-1.5 pb-2.5">Save to album</p>
-
-          {(albums || []).length === 0 && (
-            <p className="text-[12px] text-neutral-400 px-4 pb-2">No albums yet</p>
-          )}
-
-          {(albums || []).map(album => {
-            const checked = (itemAlbumIds || []).includes(album.id);
-            return (
-              <button
-                key={album.id}
-                onClick={() => {
-                  const current = itemAlbumIds || [];
-                  const newIds = checked ? current.filter(id => id !== album.id) : [...current, album.id];
-                  onSaveToAlbum?.(newIds);
-                }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors text-left"
-              >
-                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-neutral-900 border-neutral-900' : 'border-neutral-300'}`}>
-                  {checked && (
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                  )}
-                </div>
-                <span className="text-[13px] text-neutral-700 truncate">{album.name}</span>
-              </button>
-            );
-          })}
-
-          {/* New album button */}
-          <div className="border-t border-neutral-100 mt-1 pt-2 px-4 pb-1">
-            <button
-              onClick={() => {
-                setShowAlbumDropdown(false);
-                setNewAlbumName('');
-                setShowCreateAlbumModal(true);
-              }}
-              className="text-[12px] text-neutral-500 hover:text-neutral-900 flex items-center gap-1.5 py-1 transition-colors"
-            >
-              <span className="text-base leading-none">+</span> New album
-            </button>
-          </div>
-        </div>
-      </>,
-      document.body
-    )}
-
-    {/* Create album modal */}
-    {showCreateAlbumModal && createPortal(
-      <div className="fixed inset-0 z-[300] flex items-center justify-center p-6">
-        <div
-          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-          onClick={() => { setShowCreateAlbumModal(false); setNewAlbumName(''); }}
-        />
-        <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-5 animate-in zoom-in-95 duration-200">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-neutral-900">Create an album</h2>
-            <button
-              onClick={() => { setShowCreateAlbumModal(false); setNewAlbumName(''); }}
-              className="w-8 h-8 flex items-center justify-center rounded-full text-neutral-400 hover:text-neutral-900 transition-colors text-lg"
-            >✕</button>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] tracking-[0.2em] uppercase text-neutral-500 font-medium">Album name</label>
-            <input
-              autoFocus
-              value={newAlbumName}
-              onChange={e => setNewAlbumName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && newAlbumName.trim()) {
-                  onCreateAlbum?.(newAlbumName.trim());
-                  setNewAlbumName('');
-                  setShowCreateAlbumModal(false);
-                }
-                if (e.key === 'Escape') { setShowCreateAlbumModal(false); setNewAlbumName(''); }
-              }}
-              placeholder="Name your album"
-              className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:ring-2 focus:ring-neutral-200 focus:border-neutral-400 transition-all"
-            />
-          </div>
-          <button
-            onClick={() => {
-              if (newAlbumName.trim()) {
-                onCreateAlbum?.(newAlbumName.trim());
-                setNewAlbumName('');
-                setShowCreateAlbumModal(false);
-              }
-            }}
-            disabled={!newAlbumName.trim()}
-            className="w-full py-3.5 rounded-2xl text-[13px] font-medium tracking-wide transition-all disabled:bg-neutral-100 disabled:text-neutral-400 bg-neutral-900 text-white hover:bg-neutral-700"
-          >Create</button>
-        </div>
-      </div>,
-      document.body
-    )}
     </>
   );
 };
