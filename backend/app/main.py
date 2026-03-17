@@ -86,6 +86,7 @@ app = FastAPI(
 allowed_origins = [
     "https://musee-web.vercel.app",
     "http://localhost:3000",
+    "http://localhost:3002",
     "http://localhost:5173",
 ]
 

@@ -45,13 +45,16 @@ export interface GalleryItem {
   streamingText?: string;
   location?: any;
   photoTime?: string;
+  sessionTitle?: string;
 }
 
 export interface Visit {
   id: string;
-  active: boolean;
   itemIds: string[];
   globalConversation: Message[];
+  title?: string;
+  date?: string;
+  updatedAt?: number;
 }
 
 export interface CuratorConversation {

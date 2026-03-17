@@ -23,10 +23,11 @@ interface Props {
   onUpdateConversation: (newMessages: Message[]) => void;
   onDeleteItem?: (id: string) => void;
   onInterpret?: (item: GalleryItem) => void;
+  onEndVisit?: () => void;
   initialMessage?: string;
 }
 
-const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdateConversation, onDeleteItem, onInterpret, initialMessage }) => {
+const CuratorRoom: React.FC<Props> = ({ items, conversation, onClose, onUpdateConversation, onDeleteItem, onInterpret, onEndVisit, initialMessage }) => {
   const [messages, setMessages] = useState<Message[]>(conversation);
   const [streamingText, setStreamingText] = useState('');
   const [input, setInput] = useState('');
@@ -79,16 +80,29 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-12">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-12">
       <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-2xl" onClick={onClose} />
 
       <div className="relative w-full max-w-5xl h-[100dvh] sm:h-[80vh] bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500">
         <div className="p-4 sm:p-8 border-b border-neutral-50 flex justify-between items-center bg-neutral-50/50">
           <div>
-            <h3 className="text-[11px] sm:text-[12px] tracking-[0.6em] uppercase text-neutral-900 font-bold">The Exhibition Hall</h3>
+            <h3 className="text-[11px] sm:text-[12px] tracking-[0.6em] uppercase text-neutral-900 font-bold">The Curator Room</h3>
             <p className="text-[9px] sm:text-[10px] text-neutral-400 tracking-widest mt-1 uppercase">{items.length} works under review</p>
           </div>
-          <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-2xl">✕</button>
+          <div className="flex items-center space-x-4">
+            {onEndVisit && (
+              <button
+                onClick={() => {
+                  onEndVisit();
+                  onClose();
+                }}
+                className="px-4 py-2 bg-neutral-900 text-white text-[9px] tracking-[0.2em] uppercase font-bold rounded-lg hover:bg-neutral-800 transition-colors shadow-sm"
+              >
+                End Visit
+              </button>
+            )}
+            <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-2xl">✕</button>
+          </div>
         </div>
 
         <div className="flex-1 flex min-h-0">
@@ -127,7 +141,7 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
                 <div className="h-full flex flex-col items-center justify-center text-center max-w-sm mx-auto">
                   <div className="w-px h-12 bg-neutral-200 mb-6"></div>
                   <p className="text-[13px] text-neutral-400 font-serif italic leading-relaxed">
-                    "The collective voice of an exhibition is often louder than its parts."
+                    "Deep inquiry reveals the hidden threads that bind a collection."
                   </p>
                   <p className="mt-4 text-[10px] tracking-widest uppercase text-neutral-300">Ask about themes, contrasts, or the narrative flow of your visit.</p>
                 </div>
@@ -184,4 +198,4 @@ const ExhibitionHall: React.FC<Props> = ({ items, conversation, onClose, onUpdat
   );
 };
 
-export default ExhibitionHall;
+export default CuratorRoom;

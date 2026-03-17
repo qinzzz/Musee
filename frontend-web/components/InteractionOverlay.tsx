@@ -39,7 +39,7 @@ const InteractionOverlay: React.FC<InteractionOverlayProps> = ({
             ))}
 
             {secondaryText && (
-                <p className="mt-6 text-[8px] tracking-[0.3em] text-white/50 uppercase font-light animate-pulse">
+                <p className={`${buttons.length > 0 ? 'mt-6' : ''} text-[11px] tracking-[0.35em] text-white/75 uppercase font-medium`}>
                     {secondaryText}
                 </p>
             )}

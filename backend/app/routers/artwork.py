@@ -138,9 +138,9 @@ async def analyze_artist(
     identity: Optional[str] = Form("default"),
     language: Optional[str] = Form(None),
     user_id: Optional[str] = Form(None),
-    session_id: Optional[str] = Form(None),
     photo_uri: Optional[str] = Form(None),
     client_type: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
     photo_time: Optional[str] = Form(None),
     latitude: Optional[float] = Form(None),
@@ -150,24 +150,22 @@ async def analyze_artist(
 ):
     """
     Analyze artwork image to identify artist
-
-    - **image**: Image file to analyze (JPG, PNG, WebP)
-    - **model**: Preferred AI model (openai, claude, gemini)
-    - **identity**: AI identity/persona
-    - **language**: Language code for response
-    - **user_id**: If provided, saves artwork to DB and returns artwork_id
-    - **session_id**: Optional ID to group artworks and share context
-    - **photo_uri**: URI/path for the photo (iOS clients provide local path)
-    - **client_type**: "web" or "ios" - web clients will have images stored on server
     """
+    # Enforce session_id existence
+    if not session_id:
+        import uuid as uuid_mod
+        session_id = f"sess_{uuid_mod.uuid4().hex[:8]}"
+        logger.info(f"Auto-generated session_id for standalone upload: {session_id}")
     ai_provider = determine_ai_provider(model)
     logger.info(f"analyze_artist received session_id: {session_id}, user_id: {user_id}")
 
     try:
         image_bytes, image_metadata = await process_image(image)
         
-        # Determine location source
-        if image_metadata.get("location_data"):
+        # Determine location source (Priority: Client provided string > EXIF > Coordinate Resolution)
+        if location:
+            logger.info(f"Metadata Source [Location]: FRONTEND (Value: {location})")
+        elif image_metadata.get("location_data"):
             location = json.dumps(image_metadata["location_data"])
             logger.info(f"Metadata Source [Location]: PHOTO EXIF (Resolved: {location})")
         elif latitude is not None and longitude is not None:
@@ -176,7 +174,7 @@ async def analyze_artist(
             location = json.dumps(location_data)
             logger.info(f"Metadata Source [Location]: FRONTEND COORDS (Resolved: {location})")
         else:
-            logger.info(f"Metadata Source [Location]: FRONTEND (Value: {location})")
+            logger.info(f"Metadata Source [Location]: NONE")
         
         # Determine time source
         if image_metadata.get("exif_timestamp"):
@@ -272,13 +270,25 @@ async def analyze_artist(
                         local_db.add(usr)
                         local_db.flush()
                     
-                    # Ensure session exists
-                    if s_id:
-                        sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
-                        if not sess_record:
-                            sess_record = SessionModel(id=s_id, user_id=u_id or "anonymous")
-                            local_db.add(sess_record)
-                            local_db.flush()
+                    # Ensure session exists (Mandatory in Visit-Only Architecture)
+                    s_id = s_id or f"sess_{uuid.uuid4().hex[:8]}"
+                    sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
+                    if not sess_record:
+                        # Determine initial title from location
+                        initial_title = "Personal Visit"
+                        if loc:
+                            try:
+                                loc_data = json.loads(loc) if isinstance(loc, str) else loc
+                                initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
+                            except: pass
+                        
+                        sess_record = SessionModel(
+                            id=s_id, 
+                            user_id=u_id or "anonymous",
+                            title=initial_title
+                        )
+                        local_db.add(sess_record)
+                        local_db.flush()
                     
                     # Create artwork
                     art = SavedArtwork(
@@ -382,15 +392,12 @@ async def analyze_artist_stream(
 ):
     """
     Stream artwork analysis with SSE (Server-Sent Events)
-
-    Returns streaming text chunks as 'chunk' events, followed by a 'complete' event
-    with the full result including artwork_id if user_id was provided.
-
-    SSE Format:
-    - event: chunk, data: {"type": "text", "content": "..."}
-    - event: complete, data: {"type": "result", "artist_name": "...", ...}
-    - event: metrics, data: {"type": "metrics", ...}
     """
+    # Enforce session_id existence
+    if not session_id:
+        import uuid as uuid_mod
+        session_id = f"sess_{uuid_mod.uuid4().hex[:8]}"
+        logger.info(f"Auto-generated session_id for streaming upload: {session_id}")
     # TIMING: Request received
     t_request_received = time.time()
     request_id = f"stream_{int(t_request_received * 1000)}"
@@ -400,8 +407,10 @@ async def analyze_artist_stream(
     try:
         image_bytes, image_metadata = await process_image(image)
         
-        # Determine location source
-        if image_metadata.get("location_data"):
+        # Determine location source (Priority: Client provided string > EXIF > Coordinate Resolution)
+        if location:
+            logger.info(f"Metadata Source [Streaming Location]: FRONTEND (Value: {location})")
+        elif image_metadata.get("location_data"):
             location = json.dumps(image_metadata["location_data"])
             logger.info(f"Metadata Source [Streaming Location]: PHOTO EXIF (Resolved: {location})")
         elif latitude is not None and longitude is not None:
@@ -409,7 +418,7 @@ async def analyze_artist_stream(
             location = json.dumps(location_data)
             logger.info(f"Metadata Source [Streaming Location]: FRONTEND COORDS (Resolved: {location})")
         else:
-            logger.info(f"Metadata Source [Streaming Location]: FRONTEND (Value: {location})")
+            logger.info(f"Metadata Source [Streaming Location]: NONE")
         
         # Determine time source
         if image_metadata.get("exif_timestamp"):
@@ -561,13 +570,25 @@ async def analyze_artist_stream(
                         local_db.add(usr)
                         local_db.flush()
 
-                    # Ensure session exists
-                    if s_id:
-                        sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
-                        if not sess_record:
-                            sess_record = SessionModel(id=s_id, user_id=u_id)
-                            local_db.add(sess_record)
-                            local_db.flush()
+                    # Ensure session exists (Mandatory in Visit-Only Architecture)
+                    s_id = s_id or f"sess_{uuid.uuid4().hex[:8]}"
+                    sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
+                    if not sess_record:
+                        # Determine initial title from location
+                        initial_title = "Personal Visit"
+                        if loc:
+                            try:
+                                loc_data = json.loads(loc) if isinstance(loc, str) else loc
+                                initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
+                            except: pass
+
+                        sess_record = SessionModel(
+                            id=s_id, 
+                            user_id=u_id or "anonymous",
+                            title=initial_title
+                        )
+                        local_db.add(sess_record)
+                        local_db.flush()
 
                     # Create artwork record
                     art = SavedArtwork(
@@ -1571,8 +1592,19 @@ async def delete_artwork(artwork_id: str, db: Session = Depends(get_db)):
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
+    session_id = artwork.session_id
     db.delete(artwork)
     db.commit()
+
+    # Auto-cleanup: if session is now empty, delete it
+    if session_id:
+        remaining = db.query(SavedArtwork).filter(SavedArtwork.session_id == session_id).count()
+        if remaining == 0:
+            session_to_del = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            if session_to_del:
+                db.delete(session_to_del)
+                db.commit()
+                logger.info(f"Auto-deleted empty session: {session_id}")
 
     return {"message": "Artwork deleted successfully"}
 
@@ -1590,11 +1622,29 @@ async def batch_delete_artworks(
     - **user_id**: User ID (for ownership verification)
     """
     try:
+        # Identify affected sessions before deletion
+        affected_sessions = db.query(SavedArtwork.session_id).filter(
+            SavedArtwork.id.in_(artwork_ids),
+            SavedArtwork.user_id == user_id
+        ).distinct().all()
+        affected_session_ids = [s[0] for s in affected_sessions if s[0]]
+
         deleted_count = db.query(SavedArtwork).filter(
             SavedArtwork.id.in_(artwork_ids),
             SavedArtwork.user_id == user_id
         ).delete(synchronize_session=False)
 
+        db.commit()
+
+        # Cleanup empty sessions
+        for sid in affected_session_ids:
+            remaining = db.query(SavedArtwork).filter(SavedArtwork.session_id == sid).count()
+            if remaining == 0:
+                s_to_del = db.query(SessionModel).filter(SessionModel.id == sid).first()
+                if s_to_del:
+                    db.delete(s_to_del)
+                    logger.info(f"Auto-deleted empty session (batch): {sid}")
+        
         db.commit()
 
         return {
