@@ -33,5 +33,5 @@ RESONANCE::Ineffable (something is there but you can't explain it)
 
 {language_instruction}
 
-Return only valid JSON, no other text:
-{"skills":[{"name":"exact skill name from list","desc":"exact description from list","cat":"CATEGORY_NAME"}]}
+Return only valid JSON, no other text. The "name" field must be ONLY the skill name — never include the category prefix or description. Correct example:
+{"skills":[{"name":"Site","desc":"where it's placed is part of its meaning","cat":"STRUCTURE"},{"name":"Color Tension","desc":"warm-cool contrast and emotional charge","cat":"PERCEPTION"},{"name":"Life Traces","desc":"traces of the artist's personal experience","cat":"INTENT"}]}

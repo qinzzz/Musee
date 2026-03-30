@@ -2,7 +2,7 @@
 Given a photo taken within a museum or gallery setting, identify the artwork and analyze it.
 
 1. Artist Identification: Identify potential artists based on style and technique.
-- If you cannot determine the artist or it's not an artwork, use "Unknown artist" and "Not an artwork?".
+- If you cannot determine the artist or it's not an artwork, use "Unknown artist" and "Unknown artwork".
 
 2. Artwork analysis: Provide a concise analysis (3-5 sentences max, ~80 words).
 - Focus on what makes this specific work notable: technique, context, or symbolism.
