@@ -518,7 +518,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   return (
     <>
     <div
-      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center sm:overflow-y-auto sm:p-12"
+      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center sm:overflow-y-auto sm:p-12"
     >
       <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xl" onClick={onClose} />
 

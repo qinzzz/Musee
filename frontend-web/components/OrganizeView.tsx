@@ -1,10 +1,9 @@
 
 import React, { useState, useMemo } from 'react';
-import { GalleryItem, Visit, TagCoordinate, NeighborItem, Album } from '../types';
+import { GalleryItem, Visit, Album } from '../types';
 import GridView from './GridView';
-import TopographyView from './TopographyView';
 
-type MainTab = 'saved' | 'boards' | 'taste-map';
+type MainTab = 'saved' | 'boards';
 type SavedLayout = 'grid' | 'grouped';
 type ActiveFilter = 'all' | 'liked' | string;
 
@@ -13,8 +12,6 @@ interface Props {
   visit: Visit;
   filteredVisitId: string | null;
   isAnalyzing: boolean;
-  tagPositions: Record<string, TagCoordinate>;
-  neighborItems: NeighborItem[];
   likedIds?: Set<string>;
   albums?: Album[];
   onInterpret: (item: GalleryItem) => void;
@@ -22,7 +19,7 @@ interface Props {
 }
 
 const OrganizeView: React.FC<Props> = ({
-  items, visit, filteredVisitId, isAnalyzing, tagPositions, neighborItems,
+  items, visit, filteredVisitId, isAnalyzing,
   likedIds, albums, onInterpret, onDelete,
 }) => {
   const [mainTab, setMainTab] = useState<MainTab>('saved');
@@ -77,7 +74,6 @@ const OrganizeView: React.FC<Props> = ({
   const TABS: { id: MainTab; label: string }[] = [
     { id: 'saved', label: 'Saved' },
     { id: 'boards', label: 'Boards' },
-    { id: 'taste-map', label: 'Taste Map' },
   ];
 
   return (
@@ -89,7 +85,7 @@ const OrganizeView: React.FC<Props> = ({
           <button
             key={tab.id}
             onClick={() => { setMainTab(tab.id); setSelectedBoard(null); }}
-            className={`pb-3 text-[11px] sm:text-[12px] tracking-[0.14em] uppercase font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
+            className={`pt-3 pb-3 text-[11px] sm:text-[12px] tracking-[0.14em] uppercase font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
               mainTab === tab.id
                 ? 'border-neutral-900 text-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-700'
@@ -318,17 +314,7 @@ const OrganizeView: React.FC<Props> = ({
           </div>
         )}
 
-        {/* ── TASTE MAP ── */}
-        {mainTab === 'taste-map' && (
-          <div className="absolute inset-0 flex items-center justify-center p-8 sm:p-12 bg-white/80 backdrop-blur-md animate-in fade-in duration-500">
-            <TopographyView
-              items={items}
-              cachedTagMap={tagPositions}
-              neighborItems={neighborItems}
-              onClose={() => setMainTab('saved')}
-            />
-          </div>
-        )}
+
       </div>
     </div>
   );
