@@ -165,7 +165,8 @@ class ClaudeAPIClient(AIClientInterface):
         image_data: Any,
         max_tokens: int,
         temperature: float,
-        response_schema: Optional[Dict[str, Any]] = None
+        response_schema: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """Stream Claude API call with image and text"""
         try:

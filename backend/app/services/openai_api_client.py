@@ -20,15 +20,12 @@ DEFAULT_OPENAI_MODEL = "gpt-5"
 class OpenAIAPIClient(AIClientInterface):
     """OpenAI-specific API client - only handles API calls"""
 
-    def __init__(self):
+    def __init__(self, model: Optional[str] = None):
         if not settings.openai_api_key:
             raise ValueError("OpenAI API key not configured")
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = settings.ai_model_override or DEFAULT_OPENAI_MODEL
-        if settings.ai_model_override:
-            logger.info(f"OpenAI using model override: {self.model}")
-        else:
-            logger.info(f"OpenAI using default model: {self.model}")
+        self.model = model or settings.ai_model_override or DEFAULT_OPENAI_MODEL
+        logger.info(f"OpenAI client initialised with model: {self.model}")
 
     def _get_common_params(self, **kwargs):
         """Get common parameters for API calls"""
@@ -57,13 +54,10 @@ class OpenAIAPIClient(AIClientInterface):
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
+                    {"role": "system", "content": prompt},
                     {
                         "role": "user",
                         "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
                             {
                                 "type": "image_url",
                                 "image_url": {
@@ -111,7 +105,10 @@ class OpenAIAPIClient(AIClientInterface):
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": "Please proceed."},
+                ],
                 **self._get_common_params()
             )
             return response.choices[0].message.content
@@ -136,8 +133,9 @@ class OpenAIAPIClient(AIClientInterface):
                 }
             }
 
-        content_parts = [{"type": "text", "text": initial_prompt}]
+        messages = [{"role": "system", "content": initial_prompt}]
 
+        content_parts = []
         if image_data:
             payloads = image_data if isinstance(image_data, list) else [image_data]
             for data in payloads:
@@ -145,7 +143,7 @@ class OpenAIAPIClient(AIClientInterface):
                     continue
                 content_parts.append(_image_part(data))
 
-        messages = [{"role": "user", "content": content_parts}]
+        messages.append({"role": "user", "content": content_parts if content_parts else "Please proceed."})
 
         if previous_messages:
             for msg in previous_messages:
@@ -180,21 +178,22 @@ class OpenAIAPIClient(AIClientInterface):
         image_data: Any,
         max_tokens: int,
         temperature: float,
-        response_schema: Optional[Dict[str, Any]] = None
+        response_schema: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """Stream OpenAI API call with image and text"""
-        logger.info(f"OpenAI streaming API call: model={self.model}, max_tokens={max_tokens}")
+        logger.info(f"OpenAI streaming API call: model={self.model}, max_tokens={max_tokens}, reasoning_effort={reasoning_effort or '(default)'}")
         try:
+            params = self._get_common_params()
+            if reasoning_effort:
+                params["reasoning_effort"] = reasoning_effort
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
+                    {"role": "system", "content": prompt},
                     {
                         "role": "user",
                         "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
                             {
                                 "type": "image_url",
                                 "image_url": {
@@ -206,7 +205,7 @@ class OpenAIAPIClient(AIClientInterface):
                     }
                 ],
                 stream=True,
-                **self._get_common_params()
+                **params
             )
             async for chunk in response:
                 if chunk.choices and chunk.choices[0].delta.content:

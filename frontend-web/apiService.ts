@@ -461,7 +461,7 @@ export interface StreamingMetrics {
  * @param onMetrics - Optional callback for timing metrics (for Vercel Speed Insights)
  */
 export async function analyzeArtworkStream(
-  imageFile: File,
+  imageFile: File | null,
   userId: string | undefined,
   onChunk: (text: string) => void,
   onComplete: (result: ArtworkAnalysisResult) => void,
@@ -471,12 +471,18 @@ export async function analyzeArtworkStream(
   location?: string,
   photoTime?: string,
   latitude?: number,
-  longitude?: number
+  longitude?: number,
+  reasoningEffort?: string,
+  photoUri?: string,
 ): Promise<void> {
 
   const formData = new FormData();
-  formData.append('image', imageFile);
-  
+  if (imageFile) {
+    formData.append('image', imageFile);
+  } else if (photoUri) {
+    appendImageToFormData(formData, photoUri);
+  }
+
   formData.append('client_type', 'web');  // Tell backend to store image on server
 
   if (userId) {
@@ -496,6 +502,9 @@ export async function analyzeArtworkStream(
   }
   if (longitude !== undefined) {
     formData.append('longitude', longitude.toString());
+  }
+  if (reasoningEffort) {
+    formData.append('reasoning_effort', reasoningEffort);
   }
 
   const lang = getLanguage();
@@ -970,6 +979,19 @@ export async function deleteArtwork(artworkId: string): Promise<any> {
 const _skillsCache = new Map<string, Promise<Omit<ArtworkSkill, 'id' | 'observations' | 'more'>[]>>();
 const _observationCache = new Map<string, Promise<string>>();
 
+/**
+ * Append an image to a FormData object safely.
+ * Base64 data URLs are converted to a File upload to avoid Starlette's 1 MB
+ * text-field limit; server URLs are passed as the photo_uri text field.
+ */
+function appendImageToFormData(formData: FormData, photoUri: string): void {
+  if (photoUri.startsWith('data:')) {
+    formData.append('image', base64ToFile(photoUri, 'artwork.jpg'));
+  } else {
+    formData.append('photo_uri', photoUri);
+  }
+}
+
 /** Select 3 observation skill angles for an artwork image. */
 export function selectArtworkSkills(
   photoUri: string,
@@ -981,7 +1003,7 @@ export function selectArtworkSkills(
 
   const promise = (async () => {
     const formData = new FormData();
-    formData.append('photo_uri', photoUri);
+    appendImageToFormData(formData, photoUri);
     const lang = getLanguage();
     if (lang) formData.append('language', lang);
     if (artistName) formData.append('artist_name', artistName);
@@ -1022,7 +1044,7 @@ export function fetchSkillObservation(
     const formData = new FormData();
     formData.append('skill_name', skillName);
     formData.append('skill_desc', skillDesc);
-    formData.append('photo_uri', photoUri);
+    appendImageToFormData(formData, photoUri);
     if (prevObservations.length > 0) {
       formData.append('prev_observations', JSON.stringify(prevObservations));
     }
@@ -1080,7 +1102,7 @@ export function fetchSkillDeepDive(
     const formData = new FormData();
     formData.append('skill_name', skillName);
     formData.append('skill_desc', skillDesc);
-    formData.append('photo_uri', photoUri);
+    appendImageToFormData(formData, photoUri);
     const lang = getLanguage();
     if (lang) formData.append('language', lang);
 
