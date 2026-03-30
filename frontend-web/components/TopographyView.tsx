@@ -284,7 +284,8 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
       {/* ── Backdrop — tap/click outside sidebar to close ────── */}
       {sidebarOpen && (
         <div
-          className="absolute inset-0 z-[15] bg-black/20"
+          className="absolute inset-x-0 bottom-0 z-[15] bg-black/20"
+          style={{ top: 88 }}
           onClick={() => setSidebarOpen(false)}
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
@@ -293,8 +294,8 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
 
       {/* ── Collapsible Tag Sidebar ─────────────────────────── */}
       <div
-        className={`absolute left-0 top-0 bottom-0 z-20 flex flex-col bg-white/97 backdrop-blur-md border-r border-neutral-100 transition-all duration-300 overflow-hidden`}
-        style={{ width: sidebarOpen ? SIDEBAR_W : 0 }}
+        className={`absolute left-0 bottom-0 z-20 flex flex-col bg-white/97 backdrop-blur-md border-r border-neutral-100 transition-all duration-300 overflow-hidden`}
+        style={{ width: sidebarOpen ? SIDEBAR_W : 0, top: 88 }}
         onMouseDown={e => e.stopPropagation()}
         onTouchStart={e => e.stopPropagation()}
       >
@@ -403,7 +404,7 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
       {/* ── Top-left: sidebar toggle ────────────────────────── */}
       {!sidebarOpen && (
         <div
-          className="absolute top-10 left-10 z-10 pointer-events-auto"
+          className="absolute top-[100px] left-4 z-10 pointer-events-auto"
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
         >

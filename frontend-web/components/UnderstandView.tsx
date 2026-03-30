@@ -8,6 +8,7 @@ interface Props {
   items: GalleryItem[];
   sidebarOpen: boolean;
   onCloseSidebar: () => void;
+  onToggleSidebar: () => void;
   conversations: CuratorConversation[];
   onSaveConversation: (convId: string, newMsgs: Message[], itemIds: string[]) => void;
   onDeleteConversation: (id: string) => void;
@@ -47,6 +48,7 @@ const UnderstandView: React.FC<Props> = ({
   items,
   sidebarOpen,
   onCloseSidebar,
+  onToggleSidebar,
   conversations,
   onSaveConversation,
   onDeleteConversation,
@@ -248,6 +250,17 @@ const UnderstandView: React.FC<Props> = ({
 
       {/* ── Main panel ──────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-h-0 relative">
+        {/* Sidebar toggle — lives inside curator panel */}
+        <button
+          onClick={onToggleSidebar}
+          title={sidebarOpen ? 'Hide history' : 'Show history'}
+          className="absolute top-3 left-3 z-10 w-7 h-7 flex items-center justify-center rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M9 3v18"/>
+          </svg>
+        </button>
 
         {isInChat ? (
           /* ── Chat view ───────────────────────────────────── */
