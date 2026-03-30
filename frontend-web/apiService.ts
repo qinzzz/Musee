@@ -1,4 +1,4 @@
-import { Message } from './types';
+import { Message, ArtworkSkill } from './types';
 
 /**
  * Suggested topic API endpoint
@@ -963,9 +963,146 @@ export async function deleteArtwork(artworkId: string): Promise<any> {
   return response.json();
 }
 
+// ── Interactive Explore mode ──────────────────────────────────────────────────
+
+// Module-level Promise caches — keyed by photoUri (skills) or "name||uri" (observations).
+// Caching the Promise (not just the result) means concurrent callers share the same in-flight request.
+const _skillsCache = new Map<string, Promise<Omit<ArtworkSkill, 'id' | 'observations' | 'more'>[]>>();
+const _observationCache = new Map<string, Promise<string>>();
+
+/** Select 3 observation skill angles for an artwork image. */
+export function selectArtworkSkills(
+  photoUri: string,
+  artistName?: string,
+  artworkName?: string,
+): Promise<Omit<ArtworkSkill, 'id' | 'observations' | 'more'>[]> {
+  const cacheKey = `${photoUri}||${artistName ?? ''}||${artworkName ?? ''}`;
+  if (_skillsCache.has(cacheKey)) return _skillsCache.get(cacheKey)!;
+
+  const promise = (async () => {
+    const formData = new FormData();
+    formData.append('photo_uri', photoUri);
+    const lang = getLanguage();
+    if (lang) formData.append('language', lang);
+    if (artistName) formData.append('artist_name', artistName);
+    if (artworkName) formData.append('artwork_name', artworkName);
+
+    const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-explore-skills`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`artwork-explore-skills error (${response.status}): ${errorText}`);
+    }
+    const data = await response.json();
+    return data.skills ?? [];
+  })();
+
+  // Remove from cache on failure so a retry is possible
+  promise.catch(() => _skillsCache.delete(cacheKey));
+  _skillsCache.set(cacheKey, promise);
+  return promise;
+}
+
+/** Get a single observation for a skill.
+ *  First observations (prevObservations=[]) are cached per skill+image so prefetching works transparently.
+ */
+export function fetchSkillObservation(
+  skillName: string,
+  skillDesc: string,
+  prevObservations: string[],
+  photoUri: string
+): Promise<string> {
+  // Only cache the first observation (no prior context)
+  const cacheKey = prevObservations.length === 0 ? `${skillName}||${photoUri}` : null;
+  if (cacheKey && _observationCache.has(cacheKey)) return _observationCache.get(cacheKey)!;
+
+  const promise = (async () => {
+    const formData = new FormData();
+    formData.append('skill_name', skillName);
+    formData.append('skill_desc', skillDesc);
+    formData.append('photo_uri', photoUri);
+    if (prevObservations.length > 0) {
+      formData.append('prev_observations', JSON.stringify(prevObservations));
+    }
+    const lang = getLanguage();
+    if (lang) formData.append('language', lang);
+
+    const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-skill-observation`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`artwork-skill-observation error (${response.status}): ${errorText}`);
+    }
+    const data = await response.json();
+    return data.observation ?? '';
+  })();
+
+  if (cacheKey) {
+    promise.catch(() => _observationCache.delete(cacheKey));
+    _observationCache.set(cacheKey, promise);
+  }
+  return promise;
+}
+
+/**
+ * Prefetch explore data: selects skills (with optional artist context) then fetches first
+ * observation for all skills in parallel. Cached so the component resolves instantly.
+ */
+export async function prefetchExploreDataWithContext(
+  photoUri: string,
+  artistName?: string,
+  artworkName?: string,
+): Promise<void> {
+  try {
+    const skills = await selectArtworkSkills(photoUri, artistName, artworkName);
+    await Promise.all(skills.map(s => fetchSkillObservation(s.name, s.desc, [], photoUri)));
+  } catch {
+    // Silent — component will retry on demand
+  }
+}
+
+const _deepDiveCache = new Map<string, Promise<{ text: string; question: string }>>();
+
+/** Get a deep-dive reading and open question for a skill. */
+export function fetchSkillDeepDive(
+  skillName: string,
+  skillDesc: string,
+  photoUri: string
+): Promise<{ text: string; question: string }> {
+  const cacheKey = `${skillName}||${photoUri}`;
+  if (_deepDiveCache.has(cacheKey)) return _deepDiveCache.get(cacheKey)!;
+
+  const promise = (async () => {
+    const formData = new FormData();
+    formData.append('skill_name', skillName);
+    formData.append('skill_desc', skillDesc);
+    formData.append('photo_uri', photoUri);
+    const lang = getLanguage();
+    if (lang) formData.append('language', lang);
+
+    const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-skill-deepdive`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`artwork-skill-deepdive error (${response.status}): ${errorText}`);
+    }
+    return response.json();
+  })();
+
+  promise.catch(() => _deepDiveCache.delete(cacheKey));
+  _deepDiveCache.set(cacheKey, promise);
+  return promise;
+}
+
 /**
  * Delete an entire session and its artworks
- * 
+ *
  * @param sessionId - The ID of the session to delete
  * @returns Status message
  */

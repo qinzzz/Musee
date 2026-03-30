@@ -213,25 +213,10 @@ def compose_prompt(identity_name: str, instruction_name: str, language: str = No
         placeholder = "{" + key + "}"
         prompt = prompt.replace(placeholder, str(value))
     
-    # Add language instruction if specified
-    if language:
-        language_map = {
-            "en": "English",
-            "es": "Spanish",
-            "fr": "French",
-            "de": "German",
-            "it": "Italian",
-            "pt": "Portuguese",
-            "zh": "Chinese",
-            "ja": "Japanese",
-            "ko": "Korean",
-            "ru": "Russian",
-            "ar": "Arabic",
-            "hi": "Hindi"
-        }
-        language_name = language_map.get(language.lower(), language)
-        prompt += f"\n\nIMPORTANT: Respond in {language_name} ({language}). All your output should be in {language_name}."
-    
+    lang_instr = _build_language_instruction(language)
+    if lang_instr:
+        prompt += f"\n\n{lang_instr}"
+
     return prompt
 
 
@@ -341,4 +326,79 @@ def get_suggest_topics_prompt_v2(
         artist_name=artist_name,
         artwork_name=artwork_name,
         previous_insights=insights_text
+    )
+
+
+# ===== Interactive Explore mode prompts =====
+
+@lru_cache(maxsize=1)
+def _load_explore_skill_select_template() -> str:
+    return _load_prompt_file(INSTRUCTIONS_DIR / "explore_skill_select.txt")
+
+@lru_cache(maxsize=1)
+def _load_explore_observation_template() -> str:
+    return _load_prompt_file(INSTRUCTIONS_DIR / "explore_observation.txt")
+
+@lru_cache(maxsize=1)
+def _load_explore_deepdive_template() -> str:
+    return _load_prompt_file(INSTRUCTIONS_DIR / "explore_deepdive.txt")
+
+
+def _build_language_instruction(language) -> str:
+    if not language:
+        return ""
+    language_map = {
+        "en": "English", "es": "Spanish", "fr": "French", "de": "German",
+        "it": "Italian", "pt": "Portuguese", "zh": "Chinese", "ja": "Japanese",
+        "ko": "Korean", "ru": "Russian", "ar": "Arabic", "hi": "Hindi"
+    }
+    name = language_map.get(language.lower(), language)
+    return f"IMPORTANT: Respond in {name} ({language}). All your output should be in {name}."
+
+
+def get_explore_skill_select_prompt(language=None, artist_name=None, artwork_name=None) -> str:
+    template = _load_explore_skill_select_template()
+    lang_instr = _build_language_instruction(language)
+    if artist_name:
+        ctx = f'Artwork context: "{artwork_name or "Unknown"}" by {artist_name}. Use this to select the most relevant and insightful skills.\n'
+    else:
+        ctx = ""
+    return (template
+        .replace("{artwork_context}", ctx)
+        .replace("{language_instruction}", lang_instr))
+
+
+def get_explore_observation_prompt(
+    skill_name: str,
+    skill_desc: str,
+    prev_observations=None,
+    language=None
+) -> str:
+    template = _load_explore_observation_template()
+    lang_instr = _build_language_instruction(language)
+    if prev_observations:
+        prev_text = "Already shared with the visitor (do not repeat or rephrase):\n" + "\n".join(f"- {o}" for o in prev_observations)
+    else:
+        prev_text = ""
+    return (
+        template
+        .replace("{skill_name}", skill_name)
+        .replace("{skill_desc}", skill_desc)
+        .replace("{prev_observations_instruction}", prev_text)
+        .replace("{language_instruction}", lang_instr)
+    )
+
+
+def get_explore_deepdive_prompt(
+    skill_name: str,
+    skill_desc: str,
+    language=None
+) -> str:
+    template = _load_explore_deepdive_template()
+    lang_instr = _build_language_instruction(language)
+    return (
+        template
+        .replace("{skill_name}", skill_name)
+        .replace("{skill_desc}", skill_desc)
+        .replace("{language_instruction}", lang_instr)
     )

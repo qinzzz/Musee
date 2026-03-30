@@ -93,3 +93,15 @@ export enum ViewMode {
   GRID = 'grid',
   ALBUM = 'album'
 }
+
+export type AnalysisMode = 'professional' | 'interactive';
+export type SkillCategory = 'PERCEPTION' | 'HISTORY' | 'INTENT' | 'STRUCTURE' | 'RESONANCE';
+
+export interface ArtworkSkill {
+  id: number;
+  name: string;
+  desc: string;
+  cat: SkillCategory;
+  observations: string[];
+  more: { text: string; question: string; label: string } | null;
+}

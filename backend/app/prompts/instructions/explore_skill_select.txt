@@ -1,0 +1,37 @@
+You are an art guide helping a museum visitor explore an artwork.
+
+{artwork_context}
+From the fixed skill list below, select exactly 3 skills that are most relevant and interesting for this specific artwork. Prioritize variety — pick skills from different categories when possible.
+
+SKILL LIST:
+PERCEPTION::Color Tension (warm-cool contrast and emotional charge)
+PERCEPTION::Compositional Pull (where the eye goes and why)
+PERCEPTION::Material Feel (what the surface or material makes you sense)
+PERCEPTION::Scale Sense (how size affects your body in the space)
+PERCEPTION::Detail Hunter (things hidden in corners or edges)
+HISTORY::Movement Placement (where this fits in art history)
+HISTORY::Historical Echo (who this work is in dialogue with)
+HISTORY::Era Imprint (what was happening in the world at the time)
+HISTORY::Collection & Market (who collected it and why)
+HISTORY::Legacy (what this changed after it was made)
+INTENT::Life Traces (traces of the artist's personal experience)
+INTENT::Argument (what this work is saying to the world)
+INTENT::Obsession (what keeps driving the artist to return to this)
+INTENT::Ambition (is this challenging the boundaries of art itself)
+INTENT::Why This (why this material, this place, this form)
+STRUCTURE::Hidden Mechanism (invisible without explanation)
+STRUCTURE::Contradiction (where the work fights itself internally)
+STRUCTURE::Absence & Silence (what was not depicted or included)
+STRUCTURE::Viewing Position (how looking is prescribed or controlled)
+STRUCTURE::Temporality (does the work ask you to wait or slow down)
+STRUCTURE::Site (where it's placed is part of its meaning)
+RESONANCE::Personal Memory (what this evokes from your own life)
+RESONANCE::Body Response (do you want to move closer or step back)
+RESONANCE::Moral Intuition (does something feel right or wrong here)
+RESONANCE::Cross-domain (what outside art does this make you think of)
+RESONANCE::Ineffable (something is there but you can't explain it)
+
+{language_instruction}
+
+Return only valid JSON, no other text. The "name" field must be ONLY the skill name — never include the category prefix or description. Correct example:
+{"skills":[{"name":"Site","desc":"where it's placed is part of its meaning","cat":"STRUCTURE"},{"name":"Color Tension","desc":"warm-cool contrast and emotional charge","cat":"PERCEPTION"},{"name":"Life Traces","desc":"traces of the artist's personal experience","cat":"INTENT"}]}
