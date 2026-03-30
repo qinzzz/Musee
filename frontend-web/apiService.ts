@@ -1049,25 +1049,12 @@ export function fetchSkillObservation(
 }
 
 /**
- * Prefetch explore data for an artwork (no artist context — fires immediately on upload).
- * Results are cached so subsequent calls from InteractiveExplorationView resolve instantly.
- */
-export async function prefetchExploreData(photoUri: string): Promise<void> {
-  try {
-    const skills = await selectArtworkSkills(photoUri);
-    await Promise.all(skills.map(s => fetchSkillObservation(s.name, s.desc, [], photoUri)));
-  } catch {
-    // Prefetch failures are silent — the component will retry on demand
-  }
-}
-
-/**
- * Prefetch explore data with artist context (fired when artist name becomes known from the stream).
- * Uses a separate cache slot from the context-free prefetch.
+ * Prefetch explore data: selects skills (with optional artist context) then fetches first
+ * observation for all skills in parallel. Cached so the component resolves instantly.
  */
 export async function prefetchExploreDataWithContext(
   photoUri: string,
-  artistName: string,
+  artistName?: string,
   artworkName?: string,
 ): Promise<void> {
   try {

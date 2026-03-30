@@ -153,25 +153,24 @@ function ActionBtn({
 // ── Main Component ────────────────────────────────────────────────────────────
 
 const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
-  // Restore from localStorage before first render
-  const persisted = loadPersistedState(item.id);
+  const [initialPersisted] = useState(() => loadPersistedState(item.id));
 
-  const [skills, setSkills] = useState<ArtworkSkill[]>(persisted?.skills ?? []);
-  const [messages, setMessages] = useState<Msg[]>(persisted?.messages ?? []);
-  const [ready, setReady] = useState(persisted != null);
+  const [skills, setSkills] = useState<ArtworkSkill[]>(initialPersisted?.skills ?? []);
+  const [messages, setMessages] = useState<Msg[]>(initialPersisted?.messages ?? []);
+  const [ready, setReady] = useState(initialPersisted != null);
   const [resetKey, setResetKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(persisted?.done ?? false);
-  const [usedSkills, setUsedSkills] = useState<Set<number>>(new Set(persisted?.usedSkillIds ?? []));
-  const [lockedResponses, setLockedResponses] = useState<Set<number>>(new Set(persisted?.lockedResponseIds ?? []));
-  const [heartedIds, setHeartedIds] = useState<Set<number>>(new Set(persisted?.heartedIds ?? []));
+  const [done, setDone] = useState(initialPersisted?.done ?? false);
+  const [usedSkills, setUsedSkills] = useState<Set<number>>(new Set(initialPersisted?.usedSkillIds ?? []));
+  const [lockedResponses, setLockedResponses] = useState<Set<number>>(new Set(initialPersisted?.lockedResponseIds ?? []));
+  const [heartedIds, setHeartedIds] = useState<Set<number>>(new Set(initialPersisted?.heartedIds ?? []));
   const [editingDeepId, setEditingDeepId] = useState<number | null>(null);
   const [draftNote, setDraftNote] = useState('');
 
-  const skillsRef = useRef<ArtworkSkill[]>(persisted?.skills ?? []);
-  const usedSkillsRef = useRef<Set<number>>(new Set(persisted?.usedSkillIds ?? []));
-  const msgIdRef = useRef(persisted?.maxMsgId ?? 0);
+  const skillsRef = useRef<ArtworkSkill[]>(initialPersisted?.skills ?? []);
+  const usedSkillsRef = useRef<Set<number>>(new Set(initialPersisted?.usedSkillIds ?? []));
+  const msgIdRef = useRef(initialPersisted?.maxMsgId ?? 0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const nextId = () => ++msgIdRef.current;
@@ -236,7 +235,7 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
     }
     loadSkills();
     return () => { cancelled = true; };
-  }, [item.url, resetKey]);
+  }, [item.url, item.artistName, item.artworkName, resetKey]);
 
   // ── Pick a skill ───────────────────────────────────────────────────────────
   async function pickSkill(idx: number) {
@@ -315,6 +314,8 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
   }
 
   // ── Render messages ────────────────────────────────────────────────────────
+  const availableSkills = skills.filter((_, i) => !usedSkills.has(i));
+
   function renderMsg(msg: Msg) {
     const locked = lockedResponses.has(msg.id) || ('respFor' in msg && lockedResponses.has((msg as any).respFor));
 
@@ -430,10 +431,8 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
       case 'responses': {
         const respMsg = msg as MsgResp;
         const isHearted = heartedIds.has(respMsg.respFor);
-        const available = skillsRef.current.filter((_, i) => !usedSkillsRef.current.has(i));
         return (
           <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: '1.25rem' }}>
-            {/* Row: +1 toggle + Tell me more */}
             <div style={{ display: 'flex', gap: 6 }}>
               <button
                 onClick={() => toggleHeart(respMsg.respFor)}
@@ -454,18 +453,17 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
               </ActionBtn>
             </div>
 
-            {/* Unexplored skill chips */}
-            {available.length > 0 && (
+            {availableSkills.length > 0 && (
               <>
                 <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '.08em', color: '#9a9590', textTransform: 'uppercase' as const, padding: '.3rem 0 .1rem' }}>
                   Explore another angle
                 </div>
-                {available.map(s => {
-                  const idx = skillsRef.current.indexOf(s);
+                {availableSkills.map((s, availIdx) => {
+                  const idx = skills.indexOf(s);
                   const cs = CAT_STYLE[s.cat] ?? CAT_STYLE.STRUCTURE;
                   return (
                     <button
-                      key={idx}
+                      key={availIdx}
                       disabled={locked}
                       className="explore-chip"
                       onClick={() => { setLockedResponses(prev => new Set([...prev, respMsg.respFor])); pickSkill(idx); }}
@@ -497,13 +495,12 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
 
       case 'pickAnother': {
         const pickMsg = msg as MsgPick;
-        const available = skillsRef.current.filter((_, i) => !usedSkillsRef.current.has(i));
-        if (available.length === 0) return null;
+        if (availableSkills.length === 0) return null;
         return (
           <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: '1.25rem' }}>
             <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '.08em', color: '#9a9590', textTransform: 'uppercase' as const, padding: '.3rem 0 .1rem' }}>Explore another angle</div>
-            {available.map(s => {
-              const idx = skillsRef.current.indexOf(s);
+            {availableSkills.map(s => {
+              const idx = skills.indexOf(s);
               return (
                 <ActionBtn key={idx} disabled={locked} onClick={() => { setLockedResponses(prev => new Set([...prev, pickMsg.respFor])); pickSkill(idx); }}>
                   <span style={{ fontWeight: 500 }}>{s.name}</span>

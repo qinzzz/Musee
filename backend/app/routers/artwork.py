@@ -1229,17 +1229,8 @@ async def _image_url_to_bytes(url: str) -> Optional[bytes]:
     except Exception:
         return None
 
-@router.post("/artwork-explore-skills")
-async def artwork_explore_skills(
-    photo_uri: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
-    model: Optional[AIProvider] = Form(None),
-    language: Optional[str] = Form(None),
-    artist_name: Optional[str] = Form(None),
-    artwork_name: Optional[str] = Form(None),
-):
-    """Select 3 observation skill angles for an artwork (Interactive Explore mode)."""
-    ai_provider = determine_ai_provider(model)
+async def _resolve_image_bytes(image: Optional[UploadFile], photo_uri: Optional[str]) -> bytes:
+    """Load image bytes from an uploaded file or URI, raising 400 if neither works."""
     image_bytes = None
     if image and image.filename:
         content = await image.read()
@@ -1256,6 +1247,21 @@ async def artwork_explore_skills(
                 logger.warning(f"Could not load image from storage: {e}")
     if not image_bytes:
         raise HTTPException(status_code=400, detail="No image provided or loadable")
+    return image_bytes
+
+
+@router.post("/artwork-explore-skills")
+async def artwork_explore_skills(
+    photo_uri: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    model: Optional[AIProvider] = Form(None),
+    language: Optional[str] = Form(None),
+    artist_name: Optional[str] = Form(None),
+    artwork_name: Optional[str] = Form(None),
+):
+    """Select 3 observation skill angles for an artwork (Interactive Explore mode)."""
+    ai_provider = determine_ai_provider(model)
+    image_bytes = await _resolve_image_bytes(image, photo_uri)
     try:
         ai_service = AIServiceFactory.get_service(ai_provider)
         skills = await ai_service.select_explore_skills(
@@ -1281,22 +1287,7 @@ async def artwork_skill_observation(
 ):
     """Get one observation for a given skill (Interactive Explore mode)."""
     ai_provider = determine_ai_provider(model)
-    image_bytes = None
-    if image and image.filename:
-        content = await image.read()
-        if content:
-            image_bytes = content
-    if not image_bytes and photo_uri:
-        image_bytes = await _image_url_to_bytes(photo_uri)
-        if not image_bytes:
-            try:
-                storage = StorageFactory.get_service_for_uri(photo_uri)
-                if storage:
-                    image_bytes = await storage.load(photo_uri)
-            except Exception as e:
-                logger.warning(f"Could not load image from storage: {e}")
-    if not image_bytes:
-        raise HTTPException(status_code=400, detail="No image provided or loadable")
+    image_bytes = await _resolve_image_bytes(image, photo_uri)
     prev = json.loads(prev_observations) if prev_observations else []
     try:
         ai_service = AIServiceFactory.get_service(ai_provider)
@@ -1320,22 +1311,7 @@ async def artwork_skill_deepdive(
 ):
     """Get a deep-dive reading and open question for a given skill (Interactive Explore mode)."""
     ai_provider = determine_ai_provider(model)
-    image_bytes = None
-    if image and image.filename:
-        content = await image.read()
-        if content:
-            image_bytes = content
-    if not image_bytes and photo_uri:
-        image_bytes = await _image_url_to_bytes(photo_uri)
-        if not image_bytes:
-            try:
-                storage = StorageFactory.get_service_for_uri(photo_uri)
-                if storage:
-                    image_bytes = await storage.load(photo_uri)
-            except Exception as e:
-                logger.warning(f"Could not load image from storage: {e}")
-    if not image_bytes:
-        raise HTTPException(status_code=400, detail="No image provided or loadable")
+    image_bytes = await _resolve_image_bytes(image, photo_uri)
     try:
         ai_service = AIServiceFactory.get_service(ai_provider)
         result = await ai_service.get_skill_deepdive(

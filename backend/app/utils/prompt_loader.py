@@ -213,25 +213,10 @@ def compose_prompt(identity_name: str, instruction_name: str, language: str = No
         placeholder = "{" + key + "}"
         prompt = prompt.replace(placeholder, str(value))
     
-    # Add language instruction if specified
-    if language:
-        language_map = {
-            "en": "English",
-            "es": "Spanish",
-            "fr": "French",
-            "de": "German",
-            "it": "Italian",
-            "pt": "Portuguese",
-            "zh": "Chinese",
-            "ja": "Japanese",
-            "ko": "Korean",
-            "ru": "Russian",
-            "ar": "Arabic",
-            "hi": "Hindi"
-        }
-        language_name = language_map.get(language.lower(), language)
-        prompt += f"\n\nIMPORTANT: Respond in {language_name} ({language}). All your output should be in {language_name}."
-    
+    lang_instr = _build_language_instruction(language)
+    if lang_instr:
+        prompt += f"\n\n{lang_instr}"
+
     return prompt
 
 
