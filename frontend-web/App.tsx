@@ -15,7 +15,8 @@ import {
   base64ToFile,
   getCurrentUser,
   logout,
-  deleteArtwork
+  deleteArtwork,
+  prefetchExploreDataWithContext,
 } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
@@ -414,6 +415,9 @@ const App: React.FC = () => {
   const [artworkChatMessage, setArtworkChatMessage] = useState<string | null>(null);
   const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'chat'>('metadata');
   const [interpretationAskExpanded, setInterpretationAskExpanded] = useState(false);
+  const [interpretingMode, setInterpretingMode] = useState<'professional' | 'interactive'>(
+    () => (localStorage.getItem('musee_analysis_mode') as 'professional' | 'interactive') ?? 'professional'
+  );
 
   const handleInquiry = (text: string) => {
     if (interpretingItem) {
@@ -919,10 +923,29 @@ const App: React.FC = () => {
           streamingText: ''
         });
 
+        // Prefetch skills with artist context as soon as it appears in the stream (~2-5s in)
+        const exploreContextFired = { current: false };
+
         const safeFile = base64ToFile(base64, file.name);
         await analyzeArtworkStream(
           safeFile, USER_ID,
-          (chunk) => setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, streamingText: (prev.streamingText || '') + chunk } : prev),
+          (chunk) => setInterpretingItem(prev => {
+            if (!prev || prev.id !== newItemId) return prev;
+            const newText = (prev.streamingText || '') + chunk;
+            if (!exploreContextFired.current) {
+              const jsonStart = newText.indexOf('{');
+              if (jsonStart !== -1) {
+                const json = newText.substring(jsonStart);
+                const artistMatch = json.match(/"artist"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                const titleMatch  = json.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                if (artistMatch) {
+                  exploreContextFired.current = true;
+                  prefetchExploreDataWithContext(base64, artistMatch[1], titleMatch?.[1]);
+                }
+              }
+            }
+            return { ...prev, streamingText: newText };
+          }),
           (analysis) => {
             const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
             setTagPositions(prev => {
@@ -1635,6 +1658,12 @@ const App: React.FC = () => {
             onToggleLike={() => handleToggleLike(interpretingItem.id)}
             onSaveToAlbum={(albumIds) => handleSaveToAlbums(interpretingItem.id, albumIds)}
             onCreateAlbum={(name) => handleCreateAlbum(name, interpretingItem.id)}
+            interpretingMode={interpretingMode}
+            onSwitchMode={() => {
+              const next = interpretingMode === 'professional' ? 'interactive' : 'professional';
+              setInterpretingMode(next);
+              localStorage.setItem('musee_analysis_mode', next);
+            }}
           />
         )}
 

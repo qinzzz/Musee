@@ -11,7 +11,10 @@ from app.utils.prompt_loader import (
     get_artist_identification_prompt_v2,
     get_artwork_bite_prompt_v2,
     get_suggest_topics_prompt_v2,
-    get_exhibition_chat_prompt
+    get_exhibition_chat_prompt,
+    get_explore_skill_select_prompt,
+    get_explore_observation_prompt,
+    get_explore_deepdive_prompt,
 )
 from app.services.ai_client_interface import AIClientInterface
 import anyio
@@ -563,6 +566,76 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 temperature=0.7,
             ):
                 yield chunk
+
+    # ── Interactive Explore mode ──────────────────────────────────────────────
+
+    async def select_explore_skills(
+        self,
+        image_bytes: bytes,
+        language: Optional[str] = None,
+        artist_name: Optional[str] = None,
+        artwork_name: Optional[str] = None,
+    ) -> List[Dict[str, str]]:
+        """Select 3 observation skills for the artwork from the fixed skill tree."""
+        image_data = self.ai_client.prepare_image(image_bytes)
+        prompt = get_explore_skill_select_prompt(language=language, artist_name=artist_name, artwork_name=artwork_name)
+        with anyio.fail_after(settings.ai_timeout):
+            response = await self.ai_client.call_with_image_and_text(
+                prompt=prompt,
+                image_data=image_data,
+                max_tokens=400,
+                temperature=0.7,
+            )
+        parsed = self.parse_json_response(response)
+        return parsed.get("skills", [])
+
+    async def get_skill_observation(
+        self,
+        image_bytes: bytes,
+        skill_name: str,
+        skill_desc: str,
+        prev_observations: Optional[List[str]] = None,
+        language: Optional[str] = None,
+    ) -> str:
+        """Return a single observation string for the given skill."""
+        image_data = self.ai_client.prepare_image(image_bytes)
+        prompt = get_explore_observation_prompt(
+            skill_name=skill_name,
+            skill_desc=skill_desc,
+            prev_observations=prev_observations or [],
+            language=language,
+        )
+        with anyio.fail_after(settings.ai_timeout):
+            response = await self.ai_client.call_with_image_and_text(
+                prompt=prompt,
+                image_data=image_data,
+                max_tokens=200,
+                temperature=0.8,
+            )
+        return response.strip()
+
+    async def get_skill_deepdive(
+        self,
+        image_bytes: bytes,
+        skill_name: str,
+        skill_desc: str,
+        language: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """Return a deep-dive dict with 'text' and 'question' keys."""
+        image_data = self.ai_client.prepare_image(image_bytes)
+        prompt = get_explore_deepdive_prompt(
+            skill_name=skill_name,
+            skill_desc=skill_desc,
+            language=language,
+        )
+        with anyio.fail_after(settings.ai_timeout):
+            response = await self.ai_client.call_with_image_and_text(
+                prompt=prompt,
+                image_data=image_data,
+                max_tokens=400,
+                temperature=0.7,
+            )
+        return self.parse_json_response(response)
 
     def get_provider_name(self) -> AIProvider:
         """Return the AI provider name"""

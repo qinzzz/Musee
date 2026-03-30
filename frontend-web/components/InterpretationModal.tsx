@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, Annotation, NeighborItem, Visit, GalleryItem } from '../types';
 import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile } from '../apiService';
+import InteractiveExplorationView from './InteractiveExplorationView';
 
 interface Props {
   item: {
@@ -34,6 +35,8 @@ interface Props {
   onExternalMessageConsumed?: () => void;
   rightMode: 'metadata' | 'chat';
   onRightModeChange: (mode: 'metadata' | 'chat') => void;
+  onSwitchMode?: () => void;
+  interpretingMode?: 'professional' | 'interactive';
 }
 
 // Tag component with explanation tooltip on hover
@@ -91,7 +94,7 @@ const HoverTag: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -569,6 +572,17 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
               <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
+          ) : onSwitchMode ? (
+            <button
+              onClick={onSwitchMode}
+              className="flex items-center transition-colors px-2 py-1.5 border rounded text-[9px] tracking-[0.2em] uppercase font-bold"
+              style={interpretingMode === 'interactive'
+                ? { color: '#3C3489', borderColor: '#EEEDFE', background: '#EEEDFE' }
+                : { color: '#6b7280', borderColor: '#e5e7eb', background: 'transparent' }
+              }
+            >
+              {interpretingMode === 'interactive' ? '← Standard mode' : 'Interactive mode →'}
+            </button>
           ) : (
             <div className="w-16" />
           )}
@@ -638,7 +652,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
               )}
 
               {/* Analyzing overlay badge on photo */}
-              {item.isAnalyzing && (
+              {item.isAnalyzing && interpretingMode !== 'interactive' && (
                 <div className="absolute inset-0 flex items-end justify-start p-3 pointer-events-none">
                   <div className="flex items-center gap-2 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
                     <div className="relative w-3 h-3 shrink-0">
@@ -722,12 +736,27 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                     <div className="w-px h-3 bg-neutral-200" />
                   </>
                 )}
+                {onSwitchMode && (
+                  <button
+                    onClick={onSwitchMode}
+                    className="hidden sm:flex items-center gap-1 text-[9px] tracking-[0.25em] uppercase hover:text-neutral-700 transition-colors border rounded px-2 py-1"
+                    style={interpretingMode === 'interactive'
+                      ? { color: '#3C3489', borderColor: '#EEEDFE', background: '#EEEDFE' }
+                      : { color: '#9a9590', borderColor: 'rgb(229 231 235)', background: 'transparent' }
+                    }
+                    title={interpretingMode === 'interactive' ? 'Switch to Professional mode' : 'Switch to Interactive Explore mode'}
+                  >
+                    {interpretingMode === 'interactive' ? '← Standard mode' : 'Interactive mode →'}
+                  </button>
+                )}
                 <button onClick={onClose} className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
               </div>
             </div>
 
             {/* Right panel scrollable content */}
-            {rightMode === 'metadata' ? (
+            {interpretingMode === 'interactive' ? (
+              <InteractiveExplorationView item={item as any} />
+            ) : rightMode === 'metadata' ? (
               <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0">
 
                 {/* Analyzing state — shown at the top of the content area while streaming */}
