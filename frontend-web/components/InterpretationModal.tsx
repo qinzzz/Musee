@@ -37,6 +37,7 @@ interface Props {
   onRightModeChange: (mode: 'metadata' | 'chat') => void;
   onSwitchMode?: () => void;
   interpretingMode?: 'professional' | 'interactive';
+  onRetryHarder?: () => void;
 }
 
 // Tag component with explanation tooltip on hover
@@ -94,9 +95,10 @@ const HoverTag: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onRetryHarder }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
@@ -775,6 +777,20 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   <div className="rounded-xl border border-red-200 bg-red-50/80 p-4">
                     <p className="text-[9px] tracking-[0.3em] uppercase text-red-600 font-bold mb-2">Analysis failed</p>
                     <p className="text-[13px] text-red-800 leading-relaxed">{item.streamingText}</p>
+                    {onRetryHarder && (
+                      <button
+                        onClick={async () => {
+                          if (isRetrying) return;
+                          setIsRetrying(true);
+                          try { await onRetryHarder(); } catch { /* keep current results */ } finally { setIsRetrying(false); }
+                        }}
+                        disabled={isRetrying}
+                        className="mt-3 flex items-center gap-1.5 text-[9px] tracking-[0.2em] uppercase text-red-700 border border-red-300 px-3 py-1.5 rounded-full hover:bg-red-100 transition-colors disabled:opacity-50"
+                      >
+                        {isRetrying && <span className="inline-block w-2.5 h-2.5 border-t border-red-500 rounded-full animate-spin shrink-0" />}
+                        {isRetrying ? 'Retrying…' : 'Retry with higher reasoning'}
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -856,7 +872,24 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
                 {displayDescription && (
                   <div>
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Interpretation</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Interpretation</p>
+                      {!item.isAnalyzing && onRetryHarder && (
+                        <button
+                          onClick={async () => {
+                            if (isRetrying) return;
+                            setIsRetrying(true);
+                            try { await onRetryHarder(); } catch { /* keep current results */ } finally { setIsRetrying(false); }
+                          }}
+                          disabled={isRetrying}
+                          title="Retry analysis with higher reasoning effort"
+                          className="flex items-center gap-1.5 text-[9px] tracking-[0.2em] uppercase text-neutral-400 hover:text-neutral-700 border border-neutral-200 hover:border-neutral-400 px-2.5 py-1 rounded-full transition-colors disabled:opacity-50"
+                        >
+                          {isRetrying && <span className="inline-block w-2.5 h-2.5 border-t border-neutral-400 rounded-full animate-spin shrink-0" />}
+                          {isRetrying ? 'Retrying…' : 'Retry with higher reasoning'}
+                        </button>
+                      )}
+                    </div>
                     <div className="text-[13px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
                       <ReactMarkdown components={markdownComponents}>{displayDescription}</ReactMarkdown>
                       {item.isAnalyzing && (

@@ -279,7 +279,8 @@ Return ONLY the updated narrative text.{language_instruction}"""
         image_bytes: bytes,
         identity: str = "default",
         language: Optional[str] = None,
-        session_context: Optional[Dict[str, Any]] = None
+        session_context: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """
         Stream identify the artist and artwork details
@@ -306,7 +307,8 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 image_data=image_data,
                 max_tokens=2000,
                 temperature=0.7,
-                response_schema=ARTWORK_ANALYSIS_SCHEMA
+                response_schema=ARTWORK_ANALYSIS_SCHEMA,
+                reasoning_effort=reasoning_effort
             ):
                 yield chunk
 
@@ -650,18 +652,32 @@ class AIServiceFactory:
     """Factory for creating AI service instances"""
 
     _clients: Dict[AIProvider, AIClientInterface] = {}
+    _fast_clients: Dict[AIProvider, AIClientInterface] = {}
 
     @classmethod
     def register_client(cls, provider: AIProvider, client: AIClientInterface):
-        """Register an AI client implementation"""
+        """Register the power AI client for a provider."""
         cls._clients[provider] = client
 
     @classmethod
+    def register_fast_client(cls, provider: AIProvider, client: AIClientInterface):
+        """Register a fast/cheap AI client for a provider (used by skills endpoints)."""
+        cls._fast_clients[provider] = client
+
+    @classmethod
     def get_service(cls, provider: AIProvider) -> AIService:
-        """Get AI service by provider name"""
+        """Get AI service using the power client."""
         if provider not in cls._clients:
             raise ValueError(f"AI client '{provider}' not registered")
         return AIService(cls._clients[provider])
+
+    @classmethod
+    def get_fast_service(cls, provider: AIProvider) -> AIService:
+        """Get AI service using the fast client; falls back to power client if no fast client registered."""
+        client = cls._fast_clients.get(provider) or cls._clients.get(provider)
+        if not client:
+            raise ValueError(f"AI client '{provider}' not registered")
+        return AIService(client)
 
     @classmethod
     def get_available_providers(cls) -> list[AIProvider]:

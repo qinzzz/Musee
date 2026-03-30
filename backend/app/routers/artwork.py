@@ -21,7 +21,7 @@ from app.services.openai_api_client import OpenAIAPIClient
 from app.services.claude_api_client import ClaudeAPIClient
 from app.services.gemini_api_client import GeminiAPIClient
 from app.services.photoroom_service import photoroom_service
-from app.utils.image_processing import process_image, reverse_geocode
+from app.utils.image_processing import process_image, reverse_geocode, compress_for_ai
 from app.services.storage import get_storage_service, StorageFactory
 from app.config.settings import settings
 from app.utils.conversation_storage import ConversationMessage
@@ -35,8 +35,15 @@ def initialize_ai_services():
     """Initialize available AI clients based on configuration"""
     try:
         if settings.openai_api_key:
-            AIServiceFactory.register_client(AIProvider.OPENAI, OpenAIAPIClient())
-            logger.info("OpenAI client initialized successfully")
+            power_model = settings.ai_model_power  # e.g. "gpt-5"
+            fast_model = settings.ai_model_fast    # e.g. "gpt-5-mini"
+            AIServiceFactory.register_client(AIProvider.OPENAI, OpenAIAPIClient(model=power_model))
+            print(f"[AI] AI_MODEL_POWER = {power_model or '(unset, using default)'}")
+            if fast_model:
+                AIServiceFactory.register_fast_client(AIProvider.OPENAI, OpenAIAPIClient(model=fast_model))
+                print(f"[AI] AI_MODEL_FAST  = {fast_model}")
+            else:
+                print(f"[AI] AI_MODEL_FAST  = (unset, falling back to power model)")
     except Exception as e:
         logger.error(f"Failed to initialize OpenAI: {e}")
 
@@ -375,7 +382,7 @@ async def analyze_artist(
 
 @router.post("/artwork-analyze-stream")
 async def analyze_artist_stream(
-    image: UploadFile = File(...),
+    image: Optional[UploadFile] = File(None),
     model: Optional[AIProvider] = Form(None),
     identity: Optional[str] = Form("default"),
     language: Optional[str] = Form(None),
@@ -387,6 +394,7 @@ async def analyze_artist_stream(
     photo_time: Optional[str] = Form(None),
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
+    reasoning_effort: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = None
 ):
@@ -405,27 +413,28 @@ async def analyze_artist_stream(
     ai_provider = determine_ai_provider(model)
 
     try:
-        image_bytes, image_metadata = await process_image(image)
-        
-        # Determine location source (Priority: Client provided string > EXIF > Coordinate Resolution)
-        if location:
-            logger.info(f"Metadata Source [Streaming Location]: FRONTEND (Value: {location})")
-        elif image_metadata.get("location_data"):
-            location = json.dumps(image_metadata["location_data"])
-            logger.info(f"Metadata Source [Streaming Location]: PHOTO EXIF (Resolved: {location})")
-        elif latitude is not None and longitude is not None:
-            location_data = await reverse_geocode(latitude, longitude)
-            location = json.dumps(location_data)
-            logger.info(f"Metadata Source [Streaming Location]: FRONTEND COORDS (Resolved: {location})")
+        if image and image.filename:
+            image_bytes, image_metadata = await process_image(image)
+            if not location:
+                if image_metadata.get("location_data"):
+                    location = json.dumps(image_metadata["location_data"])
+                    logger.info(f"Metadata Source [Streaming Location]: PHOTO EXIF (Resolved: {location})")
+                elif latitude is not None and longitude is not None:
+                    location_data = await reverse_geocode(latitude, longitude)
+                    location = json.dumps(location_data)
+                    logger.info(f"Metadata Source [Streaming Location]: FRONTEND COORDS (Resolved: {location})")
+                else:
+                    logger.info(f"Metadata Source [Streaming Location]: NONE")
+            if image_metadata.get("exif_timestamp") and not photo_time:
+                photo_time = image_metadata["exif_timestamp"]
+                logger.info(f"Metadata Source [Streaming Time]: PHOTO EXIF (Timestamp: {photo_time})")
+        elif photo_uri:
+            image_bytes = await _resolve_image_bytes(None, photo_uri)
+            logger.info(f"Analyze stream: loaded image from photo_uri={photo_uri[:60]}…")
         else:
-            logger.info(f"Metadata Source [Streaming Location]: NONE")
-        
-        # Determine time source
-        if image_metadata.get("exif_timestamp"):
-            photo_time = image_metadata["exif_timestamp"]
-            logger.info(f"Metadata Source [Streaming Time]: PHOTO EXIF (Timestamp: {photo_time})")
-        else:
-            logger.info(f"Metadata Source [Streaming Time]: FRONTEND (Value: {photo_time})")
+            raise HTTPException(status_code=400, detail="Either image or photo_uri is required")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
 
@@ -453,7 +462,8 @@ async def analyze_artist_stream(
 
             # Stream the analysis text
             async for chunk in ai_service.identify_artist_stream(
-                image_bytes, identity=identity, language=language, session_context=session_context
+                image_bytes, identity=identity, language=language, session_context=session_context,
+                reasoning_effort=reasoning_effort
             ):
                 # TIMING: First chunk received
                 if not first_chunk_received:
@@ -1247,7 +1257,7 @@ async def _resolve_image_bytes(image: Optional[UploadFile], photo_uri: Optional[
                 logger.warning(f"Could not load image from storage: {e}")
     if not image_bytes:
         raise HTTPException(status_code=400, detail="No image provided or loadable")
-    return image_bytes
+    return compress_for_ai(image_bytes)
 
 
 @router.post("/artwork-explore-skills")
@@ -1263,7 +1273,7 @@ async def artwork_explore_skills(
     ai_provider = determine_ai_provider(model)
     image_bytes = await _resolve_image_bytes(image, photo_uri)
     try:
-        ai_service = AIServiceFactory.get_service(ai_provider)
+        ai_service = AIServiceFactory.get_fast_service(ai_provider)
         skills = await ai_service.select_explore_skills(
             image_bytes, language=language,
             artist_name=artist_name or None,
@@ -1290,7 +1300,7 @@ async def artwork_skill_observation(
     image_bytes = await _resolve_image_bytes(image, photo_uri)
     prev = json.loads(prev_observations) if prev_observations else []
     try:
-        ai_service = AIServiceFactory.get_service(ai_provider)
+        ai_service = AIServiceFactory.get_fast_service(ai_provider)
         observation = await ai_service.get_skill_observation(
             image_bytes, skill_name, skill_desc, prev_observations=prev, language=language
         )
@@ -1313,7 +1323,7 @@ async def artwork_skill_deepdive(
     ai_provider = determine_ai_provider(model)
     image_bytes = await _resolve_image_bytes(image, photo_uri)
     try:
-        ai_service = AIServiceFactory.get_service(ai_provider)
+        ai_service = AIServiceFactory.get_fast_service(ai_provider)
         result = await ai_service.get_skill_deepdive(
             image_bytes, skill_name, skill_desc, language=language
         )

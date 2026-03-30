@@ -1,6 +1,7 @@
 from PIL import Image, ExifTags, ImageOps
 from fastapi import HTTPException, UploadFile
 from typing import Dict, Any, Tuple
+from io import BytesIO
 import os
 import uuid
 import logging
@@ -11,6 +12,24 @@ from datetime import datetime
 from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+def compress_for_ai(image_bytes: bytes, max_dimension: int = 1024, max_kb: int = 900) -> bytes:
+    """Resize and compress raw image bytes to fit AI provider limits."""
+    img = Image.open(BytesIO(image_bytes))
+    img = ImageOps.exif_transpose(img)
+    if img.mode in ('RGBA', 'P'):
+        img = img.convert('RGB')
+    if max(img.size) > max_dimension:
+        img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+    output = BytesIO()
+    img.save(output, format='JPEG', optimize=True, quality=80)
+    result = output.getvalue()
+    if len(result) > max_kb * 1024:
+        output = BytesIO()
+        img.save(output, format='JPEG', optimize=True, quality=60)
+        result = output.getvalue()
+    return result
 
 allowed_extensions = ["jpg","jpeg","png","webp"]
 
@@ -68,7 +87,6 @@ async def process_image(file: UploadFile) -> Tuple[bytes, Dict[str, Any]]:
         raise HTTPException(status_code=400, detail="Uploaded image file is empty")
 
     try:
-        from io import BytesIO
         # Open image for metadata extraction
         image = Image.open(BytesIO(image_bytes))
         

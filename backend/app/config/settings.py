@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     # AI Service Configuration
     ai_provider: str = "openai"
     ai_model_override: Optional[str] = None  # Override model version (e.g., "gpt-4o-mini", "claude-opus-4", "gemini-1.5-pro")
+    ai_model_power: Optional[str] = None  # High-capability model for artwork analysis (e.g. "gpt-5")
+    ai_model_fast: Optional[str] = None   # Fast/cheap model for skills endpoints (e.g. "gpt-5-mini")
     openai_api_key: Optional[str] = None
     openai_reasoning_effort: Optional[str] = None  # Reasoning effort level (e.g., "low", "medium", "high")
     openai_verbosity: Optional[str] = None  # Verbosity level (e.g., "low", "medium", "high")

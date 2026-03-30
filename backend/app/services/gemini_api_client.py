@@ -203,7 +203,8 @@ class GeminiAPIClient(AIClientInterface):
         image_data: Any,
         max_tokens: int,
         temperature: float,
-        response_schema: Optional[Dict[str, Any]] = None
+        response_schema: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """Stream Gemini API call with image and text"""
         logger.debug(f"Gemini streaming call: {prompt[:100]}...")
