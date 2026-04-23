@@ -1714,11 +1714,29 @@ async def get_smart_collections(
         SavedArtwork.is_recognized == 1,
     ).all()
 
+    # For each artist, resolve their dominant movement (plurality) so all their
+    # works land in the same collection even if the AI labeled them inconsistently.
+    artist_movement_counts: dict = {}
+    for aw in artworks:
+        mv = aw.movement
+        if not mv or mv in PERIOD_LABELS or not aw.artist_name:
+            continue
+        artist_movement_counts.setdefault(aw.artist_name, {})
+        artist_movement_counts[aw.artist_name][mv] = artist_movement_counts[aw.artist_name].get(mv, 0) + 1
+
+    dominant_movement: dict = {
+        artist: max(counts, key=counts.get)
+        for artist, counts in artist_movement_counts.items()
+    }
+
     movement_groups: dict = {}
     for aw in artworks:
         mv = aw.movement
         if not mv or mv in PERIOD_LABELS:
             continue
+        # Override with artist's dominant movement if available
+        if aw.artist_name and aw.artist_name in dominant_movement:
+            mv = dominant_movement[aw.artist_name]
         movement_groups.setdefault(mv, []).append(aw)
 
     collections = []
