@@ -269,7 +269,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 prompt=prompt,
                 image_data=image_data,
                 max_tokens=2000,
-                temperature=0.7,
+                temperature=0.1,
                 response_schema=ARTWORK_ANALYSIS_SCHEMA
             )
 
@@ -307,7 +307,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 prompt=prompt,
                 image_data=image_data,
                 max_tokens=2000,
-                temperature=0.7,
+                temperature=0.1,
                 response_schema=ARTWORK_ANALYSIS_SCHEMA,
                 reasoning_effort=reasoning_effort
             ):
