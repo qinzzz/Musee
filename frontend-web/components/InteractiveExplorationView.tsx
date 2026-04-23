@@ -235,7 +235,9 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
     }
     loadSkills();
     return () => { cancelled = true; };
-  }, [item.url, item.artistName, item.artworkName, resetKey]);
+  // item.artistName/artworkName are optional hints — don't re-fire when they arrive after streaming
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.url, resetKey]);
 
   // ── Pick a skill ───────────────────────────────────────────────────────────
   async function pickSkill(idx: number) {
