@@ -23,8 +23,8 @@ const ExhibitionHallView: React.FC<Props> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const thumbStripRef = useRef<HTMLDivElement>(null);
   const galleryEntryRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const scrollDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Track active item by finding which card center is closest to the container center
   const updateActiveIndex = () => {
     const container = scrollRef.current;
     if (!container) return;
@@ -39,6 +39,20 @@ const ExhibitionHallView: React.FC<Props> = ({
     });
     setActiveThumbIndex(closest);
   };
+
+  // Only update active index once scrolling settles at a snap point, not mid-swipe
+  const handleScroll = () => {
+    if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+    scrollDebounceRef.current = setTimeout(updateActiveIndex, 80);
+  };
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // scrollend fires after snap settles on modern browsers (Safari 17.4+, Chrome 114+)
+    el.addEventListener('scrollend', updateActiveIndex);
+    return () => el.removeEventListener('scrollend', updateActiveIndex);
+  }, [items]);
 
   useEffect(() => {
     updateActiveIndex();
@@ -86,7 +100,7 @@ const ExhibitionHallView: React.FC<Props> = ({
       {/* 3. The Main Cinematic Stage */}
       <div
         ref={scrollRef}
-        onScroll={updateActiveIndex}
+        onScroll={handleScroll}
         className="flex-1 min-h-0 flex items-center overflow-x-auto snap-x snap-mandatory horizontal-corridor no-scrollbar overflow-y-visible"
       >
         <div className="min-w-[40vw] sm:min-w-[45vw] h-full shrink-0" />
