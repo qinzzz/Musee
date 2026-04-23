@@ -480,7 +480,7 @@ export async function analyzeArtworkStream(
   if (imageFile) {
     formData.append('image', imageFile);
   } else if (photoUri) {
-    appendImageToFormData(formData, photoUri);
+    await appendImageToFormData(formData, photoUri);
   }
 
   formData.append('client_type', 'web');  // Tell backend to store image on server
@@ -979,14 +979,42 @@ export async function deleteArtwork(artworkId: string): Promise<any> {
 const _skillsCache = new Map<string, Promise<Omit<ArtworkSkill, 'id' | 'observations' | 'more'>[]>>();
 const _observationCache = new Map<string, Promise<string>>();
 
+/** Compress a data: or blob: URL to a JPEG File under maxKB using canvas. */
+function compressImageToFile(photoUri: string, maxDimension = 1024, maxKB = 900): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+      if (Math.max(width, height) > maxDimension) {
+        if (width >= height) { height = Math.round(height * maxDimension / width); width = maxDimension; }
+        else { width = Math.round(width * maxDimension / height); height = maxDimension; }
+      }
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+      const tryQuality = (q: number) => {
+        canvas.toBlob(blob => {
+          if (!blob) { reject(new Error('compression failed')); return; }
+          if (blob.size <= maxKB * 1024 || q <= 0.25) resolve(new File([blob], 'artwork.jpg', { type: 'image/jpeg' }));
+          else tryQuality(Math.max(q - 0.2, 0.25));
+        }, 'image/jpeg', q);
+      };
+      tryQuality(0.8);
+    };
+    img.onerror = reject;
+    img.src = photoUri;
+  });
+}
+
 /**
  * Append an image to a FormData object safely.
- * Base64 data URLs are converted to a File upload to avoid Starlette's 1 MB
- * text-field limit; server URLs are passed as the photo_uri text field.
+ * data:/blob: URLs are compressed client-side before upload to stay under
+ * Starlette's 1 MB multipart part limit; server URLs are passed as photo_uri.
  */
-function appendImageToFormData(formData: FormData, photoUri: string): void {
-  if (photoUri.startsWith('data:')) {
-    formData.append('image', base64ToFile(photoUri, 'artwork.jpg'));
+async function appendImageToFormData(formData: FormData, photoUri: string): Promise<void> {
+  if (photoUri.startsWith('data:') || photoUri.startsWith('blob:')) {
+    formData.append('image', await compressImageToFile(photoUri));
   } else {
     formData.append('photo_uri', photoUri);
   }
@@ -1003,7 +1031,7 @@ export function selectArtworkSkills(
 
   const promise = (async () => {
     const formData = new FormData();
-    appendImageToFormData(formData, photoUri);
+    await appendImageToFormData(formData, photoUri);
     const lang = getLanguage();
     if (lang) formData.append('language', lang);
     if (artistName) formData.append('artist_name', artistName);
@@ -1044,7 +1072,7 @@ export function fetchSkillObservation(
     const formData = new FormData();
     formData.append('skill_name', skillName);
     formData.append('skill_desc', skillDesc);
-    appendImageToFormData(formData, photoUri);
+    await appendImageToFormData(formData, photoUri);
     if (prevObservations.length > 0) {
       formData.append('prev_observations', JSON.stringify(prevObservations));
     }
@@ -1102,7 +1130,7 @@ export function fetchSkillDeepDive(
     const formData = new FormData();
     formData.append('skill_name', skillName);
     formData.append('skill_desc', skillDesc);
-    appendImageToFormData(formData, photoUri);
+    await appendImageToFormData(formData, photoUri);
     const lang = getLanguage();
     if (lang) formData.append('language', lang);
 
