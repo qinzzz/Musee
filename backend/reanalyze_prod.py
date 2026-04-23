@@ -98,22 +98,10 @@ async def main():
             continue
 
         old_mv = aw.movement
-        UNKNOWN_ARTIST = {'unknown artist', 'unknown', 'unknown artist (anonymous)', ''}
 
-        # Only update artist_name if the new value is a real identification (not a generic "Unknown")
-        new_artist = (parsed.get('artist') or '').strip()
-        if new_artist and new_artist.lower() not in UNKNOWN_ARTIST:
-            aw.artist_name = new_artist
-
-        aw.artwork_name = parsed.get('title') or aw.artwork_name
-        if parsed.get('description'):
-            aw.analysis = parsed['description']
-        if parsed.get('date'):
-            aw.params = {**(aw.params or {}), 'date': parsed['date']}
-        if parsed.get('medium'):
-            aw.params = {**(aw.params or {}), 'medium': parsed['medium']}
-
-        # Only update movement if it's a real movement name, not a period label
+        # ONLY update movement + period_bucket — never touch artist/title/analysis.
+        # Re-identification from a compressed stored image is often less accurate than
+        # the original capture-time analysis; overwriting artist names causes regressions.
         new_mv = (parsed.get('movement') or '').strip()
         if new_mv and new_mv not in PERIOD_LABELS:
             aw.movement = new_mv
