@@ -337,10 +337,9 @@ const App: React.FC = () => {
         const timeDiff = Math.abs(item.timestamp - currentTime);
         if (timeDiff > currentWindow) continue;
 
-        if (isMuseumMatch) {
-          const itemLoc = JSON.parse(item.location || '{}');
-          return { visitId: item.visitId!, museumName: itemLoc.museum || item.sessionTitle };
-        }
+        // Within time window — return match regardless of whether GPS matched
+        const itemLoc = (() => { try { return JSON.parse(item.location || '{}'); } catch { return {}; } })();
+        return { visitId: item.visitId!, museumName: itemLoc.museum || item.sessionTitle };
       }
       return null;
     };
