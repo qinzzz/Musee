@@ -1696,6 +1696,65 @@ async def get_artworks(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve artworks: {str(e)}")
 
 
+@router.get("/smart-collections")
+async def get_smart_collections(
+    user_id: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Return auto-generated collection cards for a user, grouped by art movement.
+    Each card has name, rarity, hook text, artwork count, and cover photo URIs.
+    """
+    from app.utils.prompt_loader import get_movement_by_name
+
+    PERIOD_LABELS = {"Unknown", "Historical", "Modern", "Contemporary", "Now"}
+
+    artworks = db.query(SavedArtwork).filter(
+        SavedArtwork.user_id == user_id,
+        SavedArtwork.is_recognized == 1,
+    ).all()
+
+    movement_groups: dict = {}
+    for aw in artworks:
+        mv = aw.movement
+        if not mv or mv in PERIOD_LABELS:
+            continue
+        movement_groups.setdefault(mv, []).append(aw)
+
+    collections = []
+    for movement_name, group in sorted(movement_groups.items(), key=lambda x: -len(x[1])):
+        meta = get_movement_by_name(movement_name)
+        rarity = meta.get("rarity", "common") if meta else "common"
+        description = meta.get("description", "") if meta else ""
+        count = len(group)
+        hook = _movement_hook(movement_name, count)
+        covers = [aw.photo_uri for aw in group[:4]]
+        collections.append({
+            "id": f"movement_{movement_name.lower().replace(' ', '_').replace('/', '_')}",
+            "type": "movement",
+            "name": movement_name,
+            "rarity": rarity,
+            "description": description,
+            "artwork_count": count,
+            "artwork_ids": [aw.id for aw in group],
+            "cover_uris": covers,
+            "hook": hook,
+        })
+
+    return {"collections": collections}
+
+
+def _movement_hook(name: str, count: int) -> str:
+    if count == 1:
+        return f"Your first encounter with {name}."
+    elif count <= 3:
+        return f"A small but sharp {name} thread."
+    elif count <= 6:
+        return f"{count} {name} works — a pattern is forming."
+    else:
+        return f"You keep returning to {name}. {count} works deep."
+
+
 @router.get("/artworks/{artwork_id}")
 async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
     """Get a specific artwork with full conversation history"""

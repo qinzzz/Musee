@@ -473,6 +473,8 @@ const App: React.FC = () => {
               location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
               photoTime: item.photo_time,
               sessionTitle: item.session_title,
+              movement: item.movement,
+              periodBucket: item.period_bucket,
               conversation: (item.conversation_history || []).map((msg: any) => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 text: msg.content
@@ -1515,6 +1517,7 @@ const App: React.FC = () => {
               isAnalyzing={isAnalyzing}
               likedIds={likedIds}
               albums={albums}
+              userId={USER_ID}
               onInterpret={(item) => {
                 const activeId = filteredVisitId;
                 const sessionItems = activeId ? items.filter(i => i.visitId === activeId) : [item];

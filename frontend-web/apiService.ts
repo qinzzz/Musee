@@ -1150,6 +1150,27 @@ export function fetchSkillDeepDive(
   return promise;
 }
 
+export interface SmartCollection {
+  id: string;
+  type: 'movement';
+  name: string;
+  rarity: 'common' | 'uncommon' | 'rare' | 'legendary';
+  description: string;
+  artwork_count: number;
+  artwork_ids: string[];
+  cover_uris: string[];
+  hook: string;
+}
+
+export async function fetchSmartCollections(userId: string): Promise<SmartCollection[]> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/smart-collections?user_id=${encodeURIComponent(userId)}`);
+  if (!response.ok) {
+    throw new Error(`smart-collections error (${response.status})`);
+  }
+  const data = await response.json();
+  return data.collections as SmartCollection[];
+}
+
 /**
  * Delete an entire session and its artworks
  *

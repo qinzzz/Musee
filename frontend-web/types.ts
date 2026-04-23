@@ -46,6 +46,8 @@ export interface GalleryItem {
   location?: any;
   photoTime?: string;
   sessionTitle?: string;
+  movement?: string;
+  periodBucket?: string;
 }
 
 export interface Visit {

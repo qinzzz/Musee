@@ -2,8 +2,9 @@
 import React, { useState, useMemo } from 'react';
 import { GalleryItem, Visit, Album } from '../types';
 import GridView from './GridView';
+import SmartCollectionsView from './SmartCollectionsView';
 
-type MainTab = 'saved' | 'boards';
+type MainTab = 'saved' | 'boards' | 'smart';
 type SavedLayout = 'grid' | 'grouped';
 type ActiveFilter = 'all' | 'liked' | string;
 
@@ -14,13 +15,14 @@ interface Props {
   isAnalyzing: boolean;
   likedIds?: Set<string>;
   albums?: Album[];
+  userId?: string | null;
   onInterpret: (item: GalleryItem) => void;
   onDelete: (id: string) => void;
 }
 
 const OrganizeView: React.FC<Props> = ({
   items, visit, filteredVisitId, isAnalyzing,
-  likedIds, albums, onInterpret, onDelete,
+  likedIds, albums, userId, onInterpret, onDelete,
 }) => {
   const [mainTab, setMainTab] = useState<MainTab>('saved');
   const [savedLayout, setSavedLayout] = useState<SavedLayout>('grid');
@@ -74,6 +76,7 @@ const OrganizeView: React.FC<Props> = ({
   const TABS: { id: MainTab; label: string }[] = [
     { id: 'saved', label: 'Saved' },
     { id: 'boards', label: 'Boards' },
+    { id: 'smart', label: 'Collections' },
   ];
 
   return (
@@ -314,6 +317,15 @@ const OrganizeView: React.FC<Props> = ({
           </div>
         )}
 
+
+        {/* ── SMART COLLECTIONS ── */}
+        {mainTab === 'smart' && (
+          <SmartCollectionsView
+            items={items}
+            userId={userId ?? null}
+            onInterpret={onInterpret}
+          />
+        )}
 
       </div>
     </div>
