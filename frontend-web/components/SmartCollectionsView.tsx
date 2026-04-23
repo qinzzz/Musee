@@ -131,16 +131,16 @@ const SmartCollectionsView: React.FC<Props> = ({ items, userId, onInterpret }) =
                     ))}
                   </div>
 
-                  {/* Name + rarity */}
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <p className="text-[12px] font-semibold text-neutral-900 leading-tight truncate">{col.name}</p>
-                    <span className={`shrink-0 text-[8px] tracking-[0.15em] uppercase font-semibold px-1.5 py-0.5 rounded-full ${rarity.classes}`}>
+                  {/* Name */}
+                  <p className="text-[12px] font-semibold text-neutral-900 leading-tight mb-1">{col.name}</p>
+
+                  {/* Rarity + hook */}
+                  <div className="flex items-start gap-1.5">
+                    <span className={`shrink-0 text-[8px] tracking-[0.15em] uppercase font-semibold px-1.5 py-0.5 rounded-full mt-px ${rarity.classes}`}>
                       {rarity.label}
                     </span>
+                    <p className="text-[10px] text-neutral-400 leading-snug line-clamp-2">{col.hook}</p>
                   </div>
-
-                  {/* Hook */}
-                  <p className="text-[10px] text-neutral-400 leading-snug line-clamp-2">{col.hook}</p>
                 </button>
               );
             })}
