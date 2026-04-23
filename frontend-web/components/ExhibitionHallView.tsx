@@ -24,26 +24,24 @@ const ExhibitionHallView: React.FC<Props> = ({
   const thumbStripRef = useRef<HTMLDivElement>(null);
   const galleryEntryRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  // Handle intersection for active item tracking
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = galleryEntryRefs.current.indexOf(entry.target as HTMLDivElement);
-            if (index !== -1) setActiveThumbIndex(index);
-          }
-        });
-      },
-      { 
-        root: scrollRef.current, 
-        threshold: 0.7,
-        rootMargin: '0px -25% 0px -25%' // Bias towards the center 50% of the screen
-      }
-    );
+  // Track active item by finding which card center is closest to the container center
+  const updateActiveIndex = () => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const containerCenter = container.scrollLeft + container.offsetWidth / 2;
+    let closest = 0;
+    let closestDist = Infinity;
+    galleryEntryRefs.current.forEach((el, idx) => {
+      if (!el) return;
+      const elCenter = el.offsetLeft + el.offsetWidth / 2;
+      const dist = Math.abs(elCenter - containerCenter);
+      if (dist < closestDist) { closestDist = dist; closest = idx; }
+    });
+    setActiveThumbIndex(closest);
+  };
 
-    galleryEntryRefs.current.forEach((ref) => ref && observer.observe(ref));
-    return () => observer.disconnect();
+  useEffect(() => {
+    updateActiveIndex();
   }, [items]);
 
   // Sync thumbnail scroll
@@ -86,8 +84,9 @@ const ExhibitionHallView: React.FC<Props> = ({
       </div>
 
       {/* 3. The Main Cinematic Stage */}
-      <div 
+      <div
         ref={scrollRef}
+        onScroll={updateActiveIndex}
         className="flex-1 min-h-0 flex items-center overflow-x-auto snap-x snap-mandatory horizontal-corridor no-scrollbar overflow-y-visible"
       >
         <div className="min-w-[40vw] sm:min-w-[45vw] h-full shrink-0" />
