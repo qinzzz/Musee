@@ -15,6 +15,7 @@ from app.utils.prompt_loader import (
     get_explore_skill_select_prompt,
     get_explore_observation_prompt,
     get_explore_deepdive_prompt,
+    get_define_aesthetic_term_prompt,
 )
 from app.services.ai_client_interface import AIClientInterface
 import anyio
@@ -638,6 +639,21 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 temperature=0.7,
             )
         return self.parse_json_response(response)
+
+    async def define_aesthetic_term(self, tag: str) -> Dict[str, Any]:
+        """Return a definition and external resonances for an aesthetic term."""
+        prompt = get_define_aesthetic_term_prompt(tag)
+        with anyio.fail_after(settings.ai_timeout):
+            response = await self.ai_client.call_text_only(
+                prompt=prompt,
+                max_tokens=300,
+                temperature=0.7,
+            )
+        parsed = self.parse_json_response(response)
+        return {
+            "definition": parsed.get("definition", ""),
+            "external_resonances": parsed.get("external_resonances", []),
+        }
 
     def get_provider_name(self) -> AIProvider:
         """Return the AI provider name"""

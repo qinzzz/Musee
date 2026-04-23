@@ -402,3 +402,13 @@ def get_explore_deepdive_prompt(
         .replace("{skill_desc}", skill_desc)
         .replace("{language_instruction}", lang_instr)
     )
+
+
+@lru_cache(maxsize=1)
+def _load_define_aesthetic_term_template() -> str:
+    return _load_prompt("instructions/define_aesthetic_term.txt")
+
+
+def get_define_aesthetic_term_prompt(tag: str) -> str:
+    template = _load_define_aesthetic_term_template()
+    return template + f'\n\nTerm: "{tag}"'

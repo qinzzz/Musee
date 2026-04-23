@@ -22,14 +22,18 @@ def compress_for_ai(image_bytes: bytes, max_dimension: int = 1024, max_kb: int =
         img = img.convert('RGB')
     if max(img.size) > max_dimension:
         img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
-    output = BytesIO()
-    img.save(output, format='JPEG', optimize=True, quality=80)
-    result = output.getvalue()
-    if len(result) > max_kb * 1024:
+    limit = max_kb * 1024
+    for quality in [80, 60, 40, 25]:
         output = BytesIO()
-        img.save(output, format='JPEG', optimize=True, quality=60)
+        img.save(output, format='JPEG', optimize=True, quality=quality)
         result = output.getvalue()
-    return result
+        if len(result) <= limit:
+            return result
+    # Last resort: halve dimensions
+    img = img.resize((img.width // 2, img.height // 2), Image.Resampling.LANCZOS)
+    output = BytesIO()
+    img.save(output, format='JPEG', optimize=True, quality=60)
+    return output.getvalue()
 
 allowed_extensions = ["jpg","jpeg","png","webp"]
 

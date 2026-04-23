@@ -1410,14 +1410,11 @@ async def define_aesthetic_term(
     request: DefineTermRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
 ):
-    """Get a concise definition and external resonances for an aesthetic term. Requires Gemini."""
+    """Get a concise definition and external resonances for an aesthetic term."""
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
-    if not isinstance(ai_service.ai_client, GeminiAPIClient):
-        raise HTTPException(status_code=503, detail="Define term requires Gemini")
-    client = ai_service.ai_client
     try:
-        result = await client.define_aesthetic_term(request.tag)
+        result = await ai_service.define_aesthetic_term(request.tag)
         return {
             "definition": result["definition"],
             "externalResonances": result["external_resonances"],
