@@ -45,13 +45,17 @@ async def main():
     ).all()
     print(f"Enriching {len(artworks)} artworks...")
 
+    PERIOD_LABELS = {"Unknown", "Historical", "Modern", "Contemporary", "Now"}
     done = 0
     for i, aw in enumerate(artworks):
         try:
             result = await infer(aw.artist_name, aw.analysis)
             if result:
-                aw.movement = result.get("movement")
-                aw.period_bucket = result.get("period_bucket")
+                mv = result.get("movement")
+                pb = result.get("period_bucket")
+                # Don't store period labels as movement
+                aw.movement = mv if mv and mv not in PERIOD_LABELS else None
+                aw.period_bucket = pb
                 done += 1
                 print(f"  [{i+1}] {aw.artist_name} → {aw.movement} / {aw.period_bucket}")
             if (i + 1) % 10 == 0:

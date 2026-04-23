@@ -67,7 +67,8 @@ async def main():
                         help='Only re-process artworks with Unknown or missing movement')
     args = parser.parse_args()
 
-    model = settings.ai_model_fast or settings.ai_model_power or "gpt-4o-mini"
+    # Use power model — re-analysis should be at least as good as original identification
+    model = settings.ai_model_power or "gpt-4o"
     service = AIService(OpenAIAPIClient(model=model))
 
     db = SessionLocal()
@@ -97,7 +98,13 @@ async def main():
             continue
 
         old_mv = aw.movement
-        aw.artist_name = parsed.get('artist') or aw.artist_name
+        UNKNOWN_ARTIST = {'unknown artist', 'unknown', 'unknown artist (anonymous)', ''}
+
+        # Only update artist_name if the new value is a real identification (not a generic "Unknown")
+        new_artist = (parsed.get('artist') or '').strip()
+        if new_artist and new_artist.lower() not in UNKNOWN_ARTIST:
+            aw.artist_name = new_artist
+
         aw.artwork_name = parsed.get('title') or aw.artwork_name
         if parsed.get('description'):
             aw.analysis = parsed['description']
@@ -105,8 +112,14 @@ async def main():
             aw.params = {**(aw.params or {}), 'date': parsed['date']}
         if parsed.get('medium'):
             aw.params = {**(aw.params or {}), 'medium': parsed['medium']}
-        aw.movement = parsed.get('movement') or aw.movement
-        aw.period_bucket = parsed.get('period_bucket') or aw.period_bucket
+
+        # Only update movement if it's a real movement name, not a period label
+        new_mv = (parsed.get('movement') or '').strip()
+        if new_mv and new_mv not in PERIOD_LABELS:
+            aw.movement = new_mv
+        new_pb = (parsed.get('period_bucket') or '').strip()
+        if new_pb:
+            aw.period_bucket = new_pb
 
         done += 1
         print(f"  [{i+1}/{len(artworks)}] {aw.artist_name} | {old_mv} → {aw.movement} / {aw.period_bucket}")
