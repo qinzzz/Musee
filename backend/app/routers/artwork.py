@@ -216,6 +216,8 @@ async def analyze_artist(
             extracted_analysis = None
             date_val = None
             medium_val = None
+            movement_val = None
+            period_bucket_val = None
 
             try:
                 import re
@@ -235,6 +237,8 @@ async def analyze_artist(
                     extracted_analysis = parsed.get('description', '')
                     date_val = parsed.get('date')
                     medium_val = parsed.get('medium')
+                    movement_val = parsed.get('movement')
+                    period_bucket_val = parsed.get('period_bucket')
             except Exception as e:
                 logger.warning(f"Failed to parse analysis for DB save: {e}")
 
@@ -267,7 +271,7 @@ async def analyze_artist(
 
             # Create artwork record in a thread-safe way
             def _save_artwork_sync(
-                u_id, s_id, p_uri, a_name, w_name, e_analysis, d_val, m_val, loc, p_time
+                u_id, s_id, p_uri, a_name, w_name, e_analysis, d_val, m_val, loc, p_time, mv_val, pb_val
             ):
                 with SessionLocal() as local_db:
                     # Ensure user exists
@@ -308,7 +312,9 @@ async def analyze_artist(
                         params={"date": d_val, "medium": m_val},
                         session_id=s_id,
                         location=loc,
-                        photo_time=p_time
+                        photo_time=p_time,
+                        movement=mv_val,
+                        period_bucket=pb_val,
                     )
                     local_db.add(art)
                     local_db.commit()
@@ -326,7 +332,9 @@ async def analyze_artist(
                 date_val,
                 medium_val,
                 parsed_location,
-                photo_time
+                photo_time,
+                movement_val,
+                period_bucket_val,
             )
 
             # Update session narrative in background
@@ -487,6 +495,8 @@ async def analyze_artist_stream(
             description = ""
             date_val = None
             medium_val = None
+            movement_val = None
+            period_bucket_val = None
 
             try:
                 json_str = full_text
@@ -506,7 +516,9 @@ async def analyze_artist_stream(
                     description = parsed.get('description', '')
                     date_val = parsed.get('date')
                     medium_val = parsed.get('medium')
-                
+                    movement_val = parsed.get('movement')
+                    period_bucket_val = parsed.get('period_bucket')
+
                 # Fallback for old array format
                 elif isinstance(parsed, list) and len(parsed) > 0:
                     artist_info = next(
@@ -536,9 +548,10 @@ async def analyze_artist_stream(
                 "artwork_name": artwork_name,
                 "date": date_val,
                 "medium": medium_val,
+                "movement": movement_val,
+                "period_bucket": period_bucket_val,
                 "description": description,
                 "tags": extracted_tags,
-                "analysis": description or full_text,
                 "analysis": description or full_text,
                 "model_used": ai_provider.value,
                 "location": location,
@@ -570,7 +583,7 @@ async def analyze_artist_stream(
 
             # Create artwork record in a thread Safe way
             def _save_streaming_artwork_sync(
-                u_id, s_id, p_uri, a_name, w_name, desc, full_txt, d_val, m_val, tags, loc, p_time
+                u_id, s_id, p_uri, a_name, w_name, desc, full_txt, d_val, m_val, tags, loc, p_time, mv_val, pb_val
             ):
                 with SessionLocal() as local_db:
                     # Ensure user exists
@@ -611,7 +624,9 @@ async def analyze_artist_stream(
                         params={"date": d_val, "medium": m_val},
                         session_id=s_id,
                         location=loc,
-                        photo_time=p_time
+                        photo_time=p_time,
+                        movement=mv_val,
+                        period_bucket=pb_val,
                     )
                     local_db.add(art)
 
@@ -637,7 +652,9 @@ async def analyze_artist_stream(
                 medium_val,
                 extracted_tags,
                 parsed_location,
-                photo_time
+                photo_time,
+                movement_val,
+                period_bucket_val,
             )
             result["artwork_id"] = artwork_id
             result["photo_uri"] = generated_photo_uri
@@ -1147,6 +1164,68 @@ async def generate_summary(
         if "API error" in str(e):
             raise HTTPException(status_code=503, detail=str(e))
         raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")
+
+
+# =============================================================================
+# Metadata Enrichment Endpoint
+# =============================================================================
+
+@router.post("/artworks/enrich-metadata")
+async def enrich_artwork_metadata(
+    user_id: str = Form(...),
+    batch_size: int = Form(50),
+    db: Session = Depends(get_db)
+):
+    """
+    Fill movement + period_bucket for existing artworks where these fields are null.
+    Uses AI text-only call (no image) against existing analysis text.
+    Safe to call multiple times — only processes artworks with null movement.
+    """
+    from app.utils.prompt_loader import get_movement_names
+
+    artworks = db.query(SavedArtwork).filter(
+        SavedArtwork.user_id == user_id,
+        SavedArtwork.movement == None,
+        SavedArtwork.analysis != None,
+    ).limit(batch_size).all()
+
+    if not artworks:
+        return {"enriched": 0, "message": "No artworks need enrichment"}
+
+    ai_service = AIServiceFactory.get_service()
+    movement_names = get_movement_names()
+
+    enrich_prompt = f"""Given this artwork analysis text, identify:
+1. movement: the single closest art movement from this canonical list — {movement_names}. Use "Unknown" only if nothing fits.
+2. period_bucket: one of "Historical" (pre-1900), "Modern" (1900-1970), "Contemporary" (1970-2010), "Now" (2010-present)
+
+Respond with ONLY valid JSON: {{"movement": "...", "period_bucket": "..."}}
+
+Analysis:
+{{analysis}}"""
+
+    enriched_count = 0
+    for artwork in artworks:
+        try:
+            prompt = enrich_prompt.replace("{analysis}", (artwork.analysis or "")[:1000])
+            response = await ai_service.ai_client.call_text_only(
+                prompt=prompt,
+                max_tokens=100,
+                temperature=0.1,
+            )
+            import re as _re
+            json_match = _re.search(r'\{[^}]+\}', response)
+            if json_match:
+                parsed = json.loads(json_match.group())
+                artwork.movement = parsed.get("movement")
+                artwork.period_bucket = parsed.get("period_bucket")
+                enriched_count += 1
+        except Exception as e:
+            logger.warning(f"Enrichment failed for artwork {artwork.id}: {e}")
+            continue
+
+    db.commit()
+    return {"enriched": enriched_count, "total_processed": len(artworks)}
 
 
 # =============================================================================

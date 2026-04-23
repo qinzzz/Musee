@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from functools import lru_cache
 
@@ -7,6 +8,7 @@ PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 TONES_DIR = PROMPTS_DIR / "tones"
 IDENTITIES_DIR = PROMPTS_DIR / "identities"
 INSTRUCTIONS_DIR = PROMPTS_DIR / "instructions"
+DATA_DIR = Path(__file__).parent.parent / "data"
 
 # Legacy paths (for backward compatibility)
 ARTIST_IDENTIFICATION_PROMPT_PATH = PROMPTS_DIR / "artist_identification.txt"
@@ -259,7 +261,12 @@ def get_artist_identification_prompt_v2(identity: str = "default", language: str
     # Map "default" to the appropriate identity for this task
     if identity == "default":
         identity = DEFAULT_IDENTITY
-    return compose_prompt(identity, "artist_identification_with_analysis", language=language)
+    return compose_prompt(
+        identity,
+        "artist_identification_with_analysis",
+        language=language,
+        movement_list=get_movement_names()
+    )
 
 
 def get_artwork_bite_prompt_v2(
@@ -412,3 +419,29 @@ def _load_define_aesthetic_term_template() -> str:
 def get_define_aesthetic_term_prompt(tag: str) -> str:
     template = _load_define_aesthetic_term_template()
     return template + f'\n\nTerm: "{tag}"'
+
+
+# ===== Art Movement taxonomy =====
+
+@lru_cache(maxsize=1)
+def load_movements() -> list:
+    """Load the canonical art movement taxonomy from data/movements.json."""
+    with open(DATA_DIR / "movements.json", "r") as f:
+        return json.load(f)
+
+
+@lru_cache(maxsize=1)
+def get_movement_names() -> str:
+    """Return a comma-separated string of all canonical movement names for prompt injection."""
+    movements = load_movements()
+    return ", ".join(m["name"] for m in movements)
+
+
+def get_movement_by_name(name: str) -> dict | None:
+    """Look up a movement entry by name (case-insensitive)."""
+    movements = load_movements()
+    name_lower = name.lower()
+    for m in movements:
+        if m["name"].lower() == name_lower:
+            return m
+    return None

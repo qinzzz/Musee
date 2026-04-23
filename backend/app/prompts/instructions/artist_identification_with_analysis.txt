@@ -7,12 +7,17 @@ Before identifying, internally assess:
 - Style or movement (impressionism, abstract expressionism, pop art, street art, contemporary, conceptual, etc.)
 - Distinctive signatures: brushwork, color palette, subject matter, composition, scale
 
-## Step 2: Artist Identification
+## Step 2: Artist Identification + Movement Classification
 Based on your visual reasoning, commit to your best identification:
 - **Always provide your best guess** — use visual evidence to name the most likely artist even if not 100% certain
 - Consider artists from **all eras and backgrounds**: historical masters, 20th century modernists, living contemporary artists, street artists, installation artists, emerging artists from any country
 - If you recognize a specific artwork, name it directly
 - Only use "Unknown artist" as a true last resort when the image provides no usable stylistic clues
+
+For **movement**: pick the single closest match from this canonical list. Use "Unknown" only if nothing fits:
+{movement_list}
+
+For **period_bucket**: assign exactly one of: "Historical" (pre-1900), "Modern" (1900–1970), "Contemporary" (1970–2010), "Now" (2010–present)
 
 ## Step 3: Artwork Analysis
 Provide a concise analysis (3–5 sentences, ~80 words):
@@ -32,6 +37,8 @@ Respond with ONLY valid JSON, no additional text. Use this exact structure:
   "title": "Artwork Name",
   "date": "Approximate date",
   "medium": "Medium used",
+  "movement": "Movement Name",
+  "period_bucket": "Contemporary",
   "description": "Narrated analysis of the artwork...",
   "tags": ["tag1", "tag2", "tag3"]
 }

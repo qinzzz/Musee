@@ -63,6 +63,8 @@ class SavedArtwork(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     session_id = Column(String, ForeignKey('sessions.id', ondelete='SET NULL'), nullable=True, index=True)
+    movement = Column(String, nullable=True)  # Canonical art movement (e.g. "Arte Povera", "Minimalism")
+    period_bucket = Column(String, nullable=True)  # Historical / Modern / Contemporary / Now
 
     # Relationships
     user = relationship("User", back_populates="artworks")
@@ -97,7 +99,9 @@ class SavedArtwork(Base):
             "session_title": self.session.title if self.session else None,
             "artwork_tags": [tag.to_dict() for tag in self.artwork_tags] if hasattr(self, 'artwork_tags') else [],
             "date": self.params.get('date') if self.params and isinstance(self.params, dict) else None,
-            "medium": self.params.get('medium') if self.params and isinstance(self.params, dict) else None
+            "medium": self.params.get('medium') if self.params and isinstance(self.params, dict) else None,
+            "movement": self.movement,
+            "period_bucket": self.period_bucket,
         }
 
         # Include conversation_history for backward compatibility with frontend

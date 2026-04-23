@@ -30,13 +30,15 @@ ARTWORK_ANALYSIS_SCHEMA = {
         "title": {"type": "STRING"},
         "date": {"type": "STRING"},
         "medium": {"type": "STRING"},
+        "movement": {"type": "STRING"},
+        "period_bucket": {"type": "STRING"},
         "description": {"type": "STRING"},
         "tags": {
             "type": "ARRAY",
             "items": {"type": "STRING"}
         }
     },
-    "required": ["artist", "title", "date", "medium", "description", "tags"]
+    "required": ["artist", "title", "date", "medium", "movement", "period_bucket", "description", "tags"]
 }
 
 
