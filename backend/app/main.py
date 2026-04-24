@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -67,16 +68,27 @@ logger.info(f"STORAGE: {settings.storage_type}")
 logger.info("Token: Vercel Blob read-write token configured" if settings.blob_read_write_token else "Token not found. Using local filesystem")
 logger.info(f"=" * 50)
 
-# Initialize database only if enabled
-if settings.use_database:
-    from app.database.connection import engine, Base
-    from sqlalchemy import text
-    Base.metadata.create_all(bind=engine)
-    # Idempotent column migrations for existing tables
-    with engine.connect() as _conn:
-        _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS skill_stats JSONB"))
-        _conn.commit()
-    logger.info("Database initialized and tables created")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.use_database:
+        from app.database.connection import engine, Base
+        from sqlalchemy import text
+        Base.metadata.create_all(bind=engine)
+        with engine.connect() as _conn:
+            _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS skill_stats JSONB"))
+            _conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS skill_events (
+                    id SERIAL PRIMARY KEY,
+                    user_id VARCHAR NOT NULL,
+                    artwork_id VARCHAR,
+                    skill_name VARCHAR NOT NULL,
+                    event_type VARCHAR NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            _conn.commit()
+        logger.info("Database initialized and migrations applied")
+    yield
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -84,7 +96,8 @@ app = FastAPI(
     description="Stateless backend API for Musee artwork analysis application",
     version="1.0.0",
     docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None
+    redoc_url="/redoc" if settings.debug else None,
+    lifespan=lifespan,
 )
 
 allowed_origins = [

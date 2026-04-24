@@ -1479,6 +1479,27 @@ async def artwork_skill_deepdive(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/admin/run-migrations")
+async def run_migrations(db: Session = Depends(get_db)):
+    """One-shot idempotent migration endpoint. Safe to call multiple times."""
+    from sqlalchemy import text as _text
+    from app.database.connection import engine as _engine
+    with _engine.connect() as _conn:
+        _conn.execute(_text("ALTER TABLE users ADD COLUMN IF NOT EXISTS skill_stats JSONB"))
+        _conn.execute(_text("""
+            CREATE TABLE IF NOT EXISTS skill_events (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                artwork_id VARCHAR,
+                skill_name VARCHAR NOT NULL,
+                event_type VARCHAR NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        _conn.commit()
+    return {"status": "ok", "message": "Migrations applied"}
+
+
 @router.get("/taste-profile")
 async def get_taste_profile(user_id: str, db: Session = Depends(get_db)):
     """Return taste profile computed from skill_stats + saved artwork collection."""
