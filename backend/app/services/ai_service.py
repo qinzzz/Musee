@@ -241,7 +241,8 @@ Return ONLY the updated narrative text.{language_instruction}"""
         image_bytes: bytes,
         identity: str = "default",
         language: Optional[str] = None,
-        session_context: Optional[Dict[str, Any]] = None
+        session_context: Optional[Dict[str, Any]] = None,
+        vision_hint: Optional[str] = None,
     ) -> str:
         """
         Identify the artist and artwork details (non-streaming)
@@ -251,6 +252,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
             identity: AI identity/persona to use
             language: Language code for response
             session_context: Optional context from previous session artworks
+            vision_hint: Optional hint from Google Vision Web Detection
 
         Returns:
             str: Complete artist identification analysis
@@ -264,6 +266,10 @@ Return ONLY the updated narrative text.{language_instruction}"""
         # Inject session context if provided
         if session_context:
             prompt = self.inject_session_context(prompt, session_context)
+
+        # Prepend Vision hint when available
+        if vision_hint:
+            prompt = f"HINT — web image search result:\n{vision_hint}\n\nUse these as strong initial clues, but verify against the image.\n\n{prompt}"
 
         # Call API through client
         with anyio.fail_after(settings.ai_timeout):
@@ -283,7 +289,8 @@ Return ONLY the updated narrative text.{language_instruction}"""
         identity: str = "default",
         language: Optional[str] = None,
         session_context: Optional[Dict[str, Any]] = None,
-        reasoning_effort: Optional[str] = None
+        reasoning_effort: Optional[str] = None,
+        vision_hint: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """
         Stream identify the artist and artwork details
@@ -293,6 +300,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
             identity: AI identity/persona to use
             language: Language code for response
             session_context: Optional context from previous session artworks
+            vision_hint: Optional hint from Google Vision Web Detection
 
         Yields:
             str: Text chunks as they arrive
@@ -302,6 +310,14 @@ Return ONLY the updated narrative text.{language_instruction}"""
 
         # Load prompt
         prompt = get_artist_identification_prompt_v2(identity, language=language)
+
+        # Inject session context if provided
+        if session_context:
+            prompt = self.inject_session_context(prompt, session_context)
+
+        # Prepend Vision hint when available
+        if vision_hint:
+            prompt = f"HINT — web image search result:\n{vision_hint}\n\nUse these as strong initial clues, but verify against the image.\n\n{prompt}"
 
         # Stream API through client
         with anyio.fail_after(settings.ai_timeout):

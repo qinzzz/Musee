@@ -16,7 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Default model
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
 
 class GeminiAPIClient(AIClientInterface):
     """Gemini-specific API client - only handles API calls"""

@@ -3,6 +3,7 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Optional, List, Union, Dict, Any
+import asyncio
 import json
 import logging
 import re
@@ -23,6 +24,7 @@ from app.services.gemini_api_client import GeminiAPIClient
 from app.services.photoroom_service import photoroom_service
 from app.utils.image_processing import process_image, reverse_geocode, compress_for_ai
 from app.services.storage import get_storage_service, StorageFactory
+from app.services.vision_service import get_vision_hint
 from app.config.settings import settings
 from app.utils.conversation_storage import ConversationMessage
 
@@ -191,15 +193,18 @@ async def analyze_artist(
             logger.info(f"Metadata Source [Time]: FRONTEND (Value: {photo_time})")
 
         ai_service = AIServiceFactory.get_service(ai_provider)
-        
-        # Get session context if session_id provided
+
+        # Run Vision API and session context fetch in parallel
         session_context = None
-        if session_id:
-            session_context = await get_session_context(session_id)
+        vision_hint, session_context = await asyncio.gather(
+            get_vision_hint(image_bytes),
+            get_session_context(session_id) if session_id else asyncio.sleep(0, result=None),
+        )
 
         ai_service = AIServiceFactory.get_service(ai_provider)
         analysis_text = await ai_service.identify_artist(
-            image_bytes, identity=identity, language=language, session_context=session_context
+            image_bytes, identity=identity, language=language,
+            session_context=session_context, vision_hint=vision_hint,
         )
 
         response = {
@@ -463,15 +468,16 @@ async def analyze_artist_stream(
             # TIMING: Call AI service
             t_ai_call = time.time()
 
-            # Get session context if session_id provided
-            session_context = None
-            if session_id:
-                session_context = await get_session_context(session_id)
+            # Run Vision API and session context fetch in parallel
+            vision_hint, session_context = await asyncio.gather(
+                get_vision_hint(image_bytes),
+                get_session_context(session_id) if session_id else asyncio.sleep(0, result=None),
+            )
 
             # Stream the analysis text
             async for chunk in ai_service.identify_artist_stream(
                 image_bytes, identity=identity, language=language, session_context=session_context,
-                reasoning_effort=reasoning_effort
+                reasoning_effort=reasoning_effort, vision_hint=vision_hint,
             ):
                 # TIMING: First chunk received
                 if not first_chunk_received:
