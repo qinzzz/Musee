@@ -370,7 +370,16 @@ async def analyze_artist(
                         reference_urls=ref_urls or [],
                     )
                     local_db.add(art)
-                    local_db.commit()
+                    try:
+                        local_db.commit()
+                    except Exception as _col_err:
+                        if "reference_urls" in str(_col_err):
+                            local_db.rollback()
+                            art.reference_urls = None
+                            local_db.add(art)
+                            local_db.commit()
+                        else:
+                            raise
                     local_db.refresh(art)
                     return str(art.id)
 
@@ -685,6 +694,16 @@ async def analyze_artist_stream(
                         reference_urls=ref_urls or [],
                     )
                     local_db.add(art)
+                    try:
+                        local_db.flush()
+                    except Exception as _col_err:
+                        if "reference_urls" in str(_col_err):
+                            local_db.rollback()
+                            art.reference_urls = None
+                            local_db.add(art)
+                            local_db.flush()
+                        else:
+                            raise
 
                     # Link tags if parsed
                     if tags:
