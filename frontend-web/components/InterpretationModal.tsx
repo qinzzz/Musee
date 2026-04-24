@@ -788,7 +788,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
             {/* Right panel scrollable content */}
             {rightMode === 'metadata' ? (
-              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0 pb-28 sm:pb-7">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0 pb-20 sm:pb-7">
 
                 {/* Error state */}
                 {!item.isAnalyzing && item.streamingText && !item.artistName && (
@@ -812,102 +812,115 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 )}
 
-                {displayArtist && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Artist</p>
-                      {onReanalyze && item.artworkId && !item.isAnalyzing && !isEditing && (
-                        <button
-                          onClick={async () => {
-                            if (isReanalyzing) return;
-                            setIsReanalyzing(true);
-                            try { await onReanalyze(); } catch { /* keep existing */ } finally { setIsReanalyzing(false); }
-                          }}
-                          disabled={isReanalyzing}
-                          title="Re-identify with AI"
-                          className="w-5 h-5 flex items-center justify-center rounded-full text-neutral-300 hover:text-neutral-500 transition-colors disabled:opacity-40"
-                        >
-                          <svg className={`w-3.5 h-3.5 ${isReanalyzing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 2v6h-6" />
-                            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                            <path d="M3 22v-6h6" />
-                            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                    {isEditing ? (
-                      <input
-                        ref={firstEditInputRef}
-                        value={editValues.artist}
-                        onChange={e => setEditValues(v => ({ ...v, artist: e.target.value }))}
-                        onKeyDown={handleEditKeyDown}
-                        className="text-[17px] sm:text-[22px] font-medium text-neutral-900 tracking-tight leading-tight bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
-                      />
-                    ) : (
-                      <p className="text-[17px] sm:text-[22px] font-medium text-neutral-900 tracking-tight leading-tight">
-                        {editValues.artist || displayArtist}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {displayTitle && (
-                  <div>
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-2">Title</p>
-                    {isEditing ? (
-                      <input
-                        value={editValues.title}
-                        onChange={e => setEditValues(v => ({ ...v, title: e.target.value }))}
-                        onKeyDown={handleEditKeyDown}
-                        className="text-[15px] sm:text-[19px] font-serif italic text-neutral-700 leading-tight bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
-                      />
-                    ) : (
-                      <p className="text-[15px] sm:text-[19px] font-serif italic text-neutral-700 leading-tight">
-                        {editValues.title || displayTitle}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {(displayDate || displayMedium) && (
-                  <div className="flex flex-wrap gap-6 sm:gap-10">
-                    {displayDate && (
+                {/* Metadata — compact horizontal strip in view mode, vertical inputs in edit mode */}
+                {isEditing ? (
+                  <div className="space-y-4">
+                    {displayArtist && (
                       <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1.5 font-bold">Date</p>
-                        {isEditing ? (
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-1.5">Artist</p>
+                        <input
+                          ref={firstEditInputRef}
+                          value={editValues.artist}
+                          onChange={e => setEditValues(v => ({ ...v, artist: e.target.value }))}
+                          onKeyDown={handleEditKeyDown}
+                          className="text-[15px] font-medium text-neutral-900 tracking-tight bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
+                        />
+                      </div>
+                    )}
+                    {displayTitle && (
+                      <div>
+                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-1.5">Title</p>
+                        <input
+                          value={editValues.title}
+                          onChange={e => setEditValues(v => ({ ...v, title: e.target.value }))}
+                          onKeyDown={handleEditKeyDown}
+                          className="text-[14px] font-serif italic text-neutral-700 bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
+                        />
+                      </div>
+                    )}
+                    <div className="flex gap-6">
+                      {displayDate && (
+                        <div>
+                          <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1.5 font-bold">Date</p>
                           <input
                             value={editValues.date}
                             onChange={e => setEditValues(v => ({ ...v, date: e.target.value }))}
                             onKeyDown={handleEditKeyDown}
                             placeholder="e.g. 1889"
-                            className="text-[14px] text-neutral-600 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 w-28"
+                            className="text-[13px] text-neutral-600 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 w-28"
                           />
-                        ) : (
-                          <p className="text-[14px] text-neutral-600">
-                            {editValues.date ? formatDisplayDate(editValues.date) : formatDisplayDate(displayDate)}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    {displayMedium && (
-                      <div>
-                        <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1.5 font-bold">Medium</p>
-                        {isEditing ? (
+                        </div>
+                      )}
+                      {displayMedium && (
+                        <div>
+                          <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1.5 font-bold">Medium</p>
                           <input
                             value={editValues.medium}
                             onChange={e => setEditValues(v => ({ ...v, medium: e.target.value }))}
                             onKeyDown={handleEditKeyDown}
                             placeholder="e.g. Oil on canvas"
-                            className="text-[14px] text-neutral-600 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 w-44"
+                            className="text-[13px] text-neutral-600 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 w-44"
                           />
-                        ) : (
-                          <p className="text-[14px] text-neutral-600">{editValues.medium || displayMedium}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (displayArtist || displayTitle || displayDate || displayMedium) ? (
+                  <div className="flex items-center gap-2 min-w-0">
+                    {onReanalyze && item.artworkId && !item.isAnalyzing && (
+                      <button
+                        onClick={async () => {
+                          if (isReanalyzing) return;
+                          setIsReanalyzing(true);
+                          try { await onReanalyze(); } catch { /* keep existing */ } finally { setIsReanalyzing(false); }
+                        }}
+                        disabled={isReanalyzing}
+                        title="Re-identify with AI"
+                        className="w-5 h-5 shrink-0 flex items-center justify-center rounded-full text-neutral-300 hover:text-neutral-500 transition-colors disabled:opacity-40"
+                      >
+                        <svg className={`w-3.5 h-3.5 ${isReanalyzing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 2v6h-6" />
+                          <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                          <path d="M3 22v-6h6" />
+                          <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                        </svg>
+                      </button>
+                    )}
+                    <div className="overflow-x-auto min-w-0 flex-1" style={{ scrollbarWidth: 'none' }}>
+                      <div className="flex items-baseline gap-0 whitespace-nowrap">
+                        {displayArtist && (
+                          <span className="text-[16px] sm:text-[19px] font-medium text-neutral-900 tracking-tight">
+                            {editValues.artist || displayArtist}
+                          </span>
+                        )}
+                        {displayTitle && (
+                          <>
+                            {displayArtist && <span className="text-neutral-300 mx-2 text-[14px]">·</span>}
+                            <span className="text-[14px] sm:text-[16px] font-serif italic text-neutral-500">
+                              {editValues.title || displayTitle}
+                            </span>
+                          </>
+                        )}
+                        {displayDate && (
+                          <>
+                            <span className="text-neutral-300 mx-2 text-[13px]">·</span>
+                            <span className="text-[12px] text-neutral-400">
+                              {editValues.date ? formatDisplayDate(editValues.date) : formatDisplayDate(displayDate)}
+                            </span>
+                          </>
+                        )}
+                        {displayMedium && (
+                          <>
+                            <span className="text-neutral-300 mx-2 text-[13px]">·</span>
+                            <span className="text-[12px] text-neutral-400">
+                              {editValues.medium || displayMedium}
+                            </span>
+                          </>
                         )}
                       </div>
-                    )}
+                    </div>
                   </div>
-                )}
+                ) : null}
 
                 {displayDescription && (
                   <div>
@@ -1063,7 +1076,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
               </div>
             ) : (
               /* ── CHAT MODE ── */
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0 pb-28 sm:pb-6">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0 pb-20 sm:pb-6">
                 {messages.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
                     <div className="w-12 h-px bg-neutral-200 mb-6"></div>

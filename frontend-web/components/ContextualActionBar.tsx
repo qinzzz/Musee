@@ -146,7 +146,7 @@ const ContextualActionBar: React.FC<Props> = ({
   const renderInterpretation = () => {
     if (isAskExpanded) {
       return (
-        <div className="flex items-center gap-3 w-[min(90vw,560px)] p-2 bg-neutral-900/95 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-2 duration-300">
+        <div className="flex items-center gap-3 px-4 py-3 animate-in slide-in-from-bottom-1 duration-200">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -155,30 +155,29 @@ const ContextualActionBar: React.FC<Props> = ({
                 setAskText('');
               }
             }}
-            className="flex-1 flex items-center"
+            className="flex-1 flex items-center bg-neutral-800 rounded-full h-10 px-4"
           >
             <input
               autoFocus
               value={askText}
               onChange={(e) => setAskText(e.target.value)}
               placeholder="Ask about this artwork…"
-              className="w-full bg-transparent py-3 pl-4 pr-2 text-[14px] text-white placeholder-neutral-500 outline-none"
+              className="flex-1 bg-transparent text-[14px] text-white placeholder-neutral-500 outline-none"
             />
             {askText.length > 0 && (
               <button
                 type="submit"
-                className="w-8 h-8 mr-1 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg"
+                className="w-7 h-7 rounded-full bg-white text-black flex items-center justify-center shrink-0 active:scale-95 transition-all"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="9 18 15 12 9 6"/>
                 </svg>
               </button>
             )}
           </form>
-          <div className="w-px h-6 bg-white/10" />
           <button
             onClick={() => { onAskCollapse?.(); setAskText(''); }}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/5 transition-all"
+            className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -189,46 +188,44 @@ const ContextualActionBar: React.FC<Props> = ({
     }
 
     return (
-      <div className="flex items-center gap-0.5 px-1.5 py-1.5 bg-neutral-900/95 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-4 duration-500">
-        {/* Ask AI — icon + small label */}
+      <div className="flex items-center gap-3 px-4 py-3 animate-in fade-in duration-300">
+        {/* Ask input — tappable placeholder */}
         <button
           onClick={() => onAskExpand?.()}
-          className="flex items-center gap-2 pl-4 pr-5 h-9 rounded-full bg-white text-black transition-all hover:scale-[1.02] active:scale-95 shadow-md"
+          className="flex-1 flex items-center gap-2.5 bg-neutral-800 rounded-full h-10 px-4 text-left"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-500 shrink-0">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
-          <span className="text-[10px] tracking-[0.1em] font-extrabold uppercase">Ask AI</span>
+          <span className="text-[13px] text-neutral-500">Ask AI…</span>
         </button>
-
-        <div className="w-px h-5 bg-white/10 mx-1" />
 
         <button
           onClick={onLike}
-          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isLiked ? 'text-red-400 bg-red-500/10' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
+          className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-all ${isLiked ? 'text-red-400' : 'text-neutral-500 hover:text-white'}`}
           title={isLiked ? "Unlike" : "Like"}
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20.8 4.6a5.5 5.5 0 0 0-7.7 0l-1.1 1.1-1.1-1.1a5.5 5.5 0 0 0-7.7 7.7l1.1 1.1 7.7 7.7 7.7-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.7z"/>
           </svg>
         </button>
 
         <button
           onClick={onCollect}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-neutral-500 hover:text-white hover:bg-white/5 transition-all"
+          className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
           title="Collect"
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 3h18v18H3z"/><path d="M12 8v8"/><path d="M8 12h8"/>
           </svg>
         </button>
 
         <button
           onClick={onDelete}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-neutral-600 hover:text-red-400 hover:bg-red-400/5 transition-all"
+          className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-neutral-600 hover:text-red-400 transition-colors"
           title="Delete"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </svg>
         </button>
@@ -236,29 +233,46 @@ const ContextualActionBar: React.FC<Props> = ({
     );
   };
 
+  const hiddenInputs = (
+    <>
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture={isMobile ? "environment" : undefined}
+        className="hidden"
+        onChange={(e) => onUpload(e, 'camera')}
+        disabled={isAnalyzing}
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => onUpload(e, 'gallery')}
+        disabled={isAnalyzing}
+      />
+    </>
+  );
+
+  if (mode === 'interpretation') {
+    return (
+      <>
+        {hiddenInputs}
+        <div className="fixed bottom-0 left-0 right-0 z-[100] bg-neutral-900/98 backdrop-blur-xl border-t border-white/10 animate-in slide-in-from-bottom-2 duration-300" style={{ paddingBottom: 'env(safe-area-inset-bottom, 8px)' }}>
+          {renderInterpretation()}
+        </div>
+      </>
+    );
+  }
+
   return (
-    <div 
+    <div
       className="fixed left-1/2 -translate-x-1/2 z-[100] transition-all duration-700 ease-out"
       style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 2.5rem)' }}
     >
-      <input 
-        ref={cameraInputRef} 
-        type="file" 
-        accept="image/*" 
-        capture={isMobile ? "environment" : undefined} 
-        className="hidden" 
-        onChange={(e) => onUpload(e, 'camera')} 
-        disabled={isAnalyzing} 
-      />
-      <input 
-        ref={galleryInputRef} 
-        type="file" 
-        accept="image/*" 
-        multiple 
-        className="hidden" 
-        onChange={(e) => onUpload(e, 'gallery')} 
-        disabled={isAnalyzing} 
-      />
+      {hiddenInputs}
 
       {isAnalyzing && (
         <div className="absolute -top-16 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-neutral-900 border border-white/10 px-5 py-2.5 rounded-full shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -269,7 +283,6 @@ const ContextualActionBar: React.FC<Props> = ({
 
       {mode === 'corridor' && renderCorridor()}
       {mode === 'hall' && renderHall()}
-      {mode === 'interpretation' && renderInterpretation()}
     </div>
   );
 };
