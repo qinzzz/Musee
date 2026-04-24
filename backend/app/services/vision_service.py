@@ -39,29 +39,36 @@ _SKIP_DOMAINS = {
 
 def _filter_ref_urls(vision: dict, max_urls: int = 3) -> list[dict]:
     """Return up to max_urls reference dicts {page_url, thumbnail, title} from Vision results."""
-    pages = vision.get("pages", [])
     result = []
     seen_domains = set()
-    for page in pages:
-        page_url = page.get("url", "")
+
+    def _add(page_url: str, thumbnail: str, title: str) -> bool:
         if not page_url:
-            continue
+            return False
         try:
             domain = urlparse(page_url).netloc.lower().lstrip("www.")
         except Exception:
-            continue
+            return False
         if any(domain == d or domain.endswith("." + d) for d in _SKIP_DOMAINS):
-            continue
+            return False
         if domain in seen_domains:
-            continue
+            return False
         seen_domains.add(domain)
-        result.append({
-            "page_url":  page_url,
-            "thumbnail": page.get("thumbnail", ""),
-            "title":     page.get("title", ""),
-        })
+        result.append({"page_url": page_url, "thumbnail": thumbnail, "title": title})
+        return True
+
+    for page in vision.get("pages", []):
         if len(result) >= max_urls:
             break
+        _add(page.get("url", ""), page.get("thumbnail", ""), page.get("title", ""))
+
+    # Fallback: visually similar images (thumbnail = image itself, page_url = image url)
+    if len(result) < max_urls:
+        for img_url in vision.get("similar_urls", []):
+            if len(result) >= max_urls:
+                break
+            _add(img_url, img_url, "")
+
     return result
 
 

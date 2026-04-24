@@ -1078,20 +1078,21 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                             className="shrink-0 w-28 overflow-hidden rounded-xl border border-neutral-100 hover:border-neutral-300 transition-colors shadow-sm hover:shadow-md"
                             title={title || hostname}
                           >
-                            {thumbnail ? (
-                              <img
-                                src={thumbnail}
-                                className="w-full h-[4.5rem] object-cover"
-                                alt={hostname}
-                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                              />
-                            ) : (
-                              <div className="w-full h-[4.5rem] bg-neutral-50 flex items-center justify-center text-neutral-300">
+                            <div className="w-full h-[4.5rem] relative bg-neutral-50 overflow-hidden">
+                              <div className="absolute inset-0 flex items-center justify-center text-neutral-200">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                                   <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
                                 </svg>
                               </div>
-                            )}
+                              {thumbnail && (
+                                <img
+                                  src={thumbnail}
+                                  className="absolute inset-0 w-full h-full object-cover"
+                                  alt={hostname}
+                                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              )}
+                            </div>
                             <div className="px-2 py-1.5">
                               <span className="text-[9px] text-neutral-500 truncate block leading-tight">{hostname}</span>
                             </div>
