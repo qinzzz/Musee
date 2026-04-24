@@ -56,69 +56,93 @@ async def main():
     if args.limit:
         query = query.limit(args.limit)
 
-    artworks = query.all()
-    print(f"Processing {len(artworks)} artworks...\n")
+    artworks = query.order_by(SavedArtwork.session_id, SavedArtwork.created_at).all()
+    total = len(artworks)
+    print(f"Processing {total} artworks (grouped by session)...\n")
+
+    # Build session groups so we can pass prior identifications as context
+    from collections import defaultdict
+    session_groups: dict = defaultdict(list)
+    for aw in artworks:
+        session_groups[aw.session_id or aw.id].append(aw)
 
     done = 0
-    for i, aw in enumerate(artworks):
-        try:
-            image_bytes = await fetch_image(aw.photo_uri)
-        except Exception as e:
-            print(f"  [{i+1}/{len(artworks)}] SKIP {aw.id[:8]} — fetch failed: {e}")
-            continue
+    idx = 0
+    for session_key, group in session_groups.items():
+        if len(group) > 1:
+            print(f"\n  [session {session_key[:8]}] {len(group)} artworks")
+        session_identified: list = []
 
-        try:
-            response = await service.identify_artist(image_bytes)
-            parsed = parse_response(response)
-        except Exception as e:
-            print(f"  [{i+1}/{len(artworks)}] FAIL {aw.id[:8]} — AI error: {e}")
-            continue
+        for aw in group:
+            idx += 1
+            try:
+                image_bytes = await fetch_image(aw.photo_uri)
+            except Exception as e:
+                print(f"  [{idx}/{total}] SKIP {aw.id[:8]} — fetch failed: {e}")
+                continue
 
-        if not parsed:
-            print(f"  [{i+1}/{len(artworks)}] SKIP {aw.id[:8]} — empty response")
-            continue
+            session_context = {"previous_artworks": session_identified} if session_identified else None
 
-        new_artist = (parsed.get('artist') or '').strip()
-        new_title  = (parsed.get('title')  or '').strip()
-        new_mv     = (parsed.get('movement') or '').strip()
-        new_pb     = (parsed.get('period_bucket') or '').strip()
+            try:
+                response = await service.identify_artist(image_bytes, session_context=session_context)
+                parsed = parse_response(response)
+            except Exception as e:
+                print(f"  [{idx}/{total}] FAIL {aw.id[:8]} — AI error: {e}")
+                continue
 
-        changes = []
-        if new_artist and new_artist.lower() not in UNKNOWN_NAMES and new_artist != aw.artist_name:
-            changes.append(f"artist: '{aw.artist_name}' → '{new_artist}'")
-        if new_title and new_title != aw.artwork_name:
-            changes.append(f"title: '{aw.artwork_name}' → '{new_title}'")
-        if new_mv and new_mv not in PERIOD_LABELS and new_mv != aw.movement:
-            changes.append(f"movement: '{aw.movement}' → '{new_mv}'")
-        if new_pb and new_pb != aw.period_bucket:
-            changes.append(f"period: '{aw.period_bucket}' → '{new_pb}'")
+            if not parsed:
+                print(f"  [{idx}/{total}] SKIP {aw.id[:8]} — empty response")
+                continue
 
-        if changes:
-            print(f"  [{i+1}/{len(artworks)}] {aw.id[:8]}")
-            for c in changes:
-                print(f"    {c}")
-        else:
-            print(f"  [{i+1}/{len(artworks)}] {aw.artist_name} — no changes")
+            new_artist = (parsed.get('artist') or '').strip()
+            new_title  = (parsed.get('title')  or '').strip()
+            new_mv     = (parsed.get('movement') or '').strip()
+            new_pb     = (parsed.get('period_bucket') or '').strip()
 
-        if not args.dry_run:
-            if new_artist and new_artist.lower() not in UNKNOWN_NAMES:
-                aw.artist_name = new_artist
-            if new_title:
-                aw.artwork_name = new_title
-            if new_mv and new_mv not in PERIOD_LABELS:
-                aw.movement = new_mv
-            if new_pb:
-                aw.period_bucket = new_pb
+            changes = []
+            if new_artist and new_artist.lower() not in UNKNOWN_NAMES and new_artist != aw.artist_name:
+                changes.append(f"artist: '{aw.artist_name}' → '{new_artist}'")
+            if new_title and new_title != aw.artwork_name:
+                changes.append(f"title: '{aw.artwork_name}' → '{new_title}'")
+            if new_mv and new_mv not in PERIOD_LABELS and new_mv != aw.movement:
+                changes.append(f"movement: '{aw.movement}' → '{new_mv}'")
+            if new_pb and new_pb != aw.period_bucket:
+                changes.append(f"period: '{aw.period_bucket}' → '{new_pb}'")
 
-        done += 1
-        if not args.dry_run and done % 5 == 0:
-            db.commit()
-            print(f"  -- committed {done} --")
+            if changes:
+                print(f"  [{idx}/{total}] {aw.id[:8]}")
+                for c in changes:
+                    print(f"    {c}")
+            else:
+                print(f"  [{idx}/{total}] {aw.artist_name} — no changes")
+
+            if not args.dry_run:
+                if new_artist and new_artist.lower() not in UNKNOWN_NAMES:
+                    aw.artist_name = new_artist
+                if new_title:
+                    aw.artwork_name = new_title
+                if new_mv and new_mv not in PERIOD_LABELS:
+                    aw.movement = new_mv
+                if new_pb:
+                    aw.period_bucket = new_pb
+
+            # Add to session context for next artwork in this session
+            session_identified.append({
+                "artist": aw.artist_name,
+                "title":  aw.artwork_name,
+                "analysis": (aw.analysis or '')[:300],
+                "tags": [],
+            })
+
+            done += 1
+            if not args.dry_run and done % 5 == 0:
+                db.commit()
+                print(f"  -- committed {done} --")
 
     if not args.dry_run:
         db.commit()
     db.close()
-    print(f"\nDone. {done}/{len(artworks)} processed.")
+    print(f"\nDone. {done}/{total} processed.")
 
 
 asyncio.run(main())
