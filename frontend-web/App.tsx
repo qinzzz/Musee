@@ -29,6 +29,7 @@ import UnderstandView from './components/UnderstandView';
 import OrganizeView from './components/OrganizeView';
 import TopographyView from './components/TopographyView';
 import ArtSkillsView from './components/ArtSkillsView';
+import TasteProfileView from './components/TasteProfileView';
 import Toast, { ToastAction } from './components/Toast';
 import ContextualActionBar from './components/ContextualActionBar';
 
@@ -226,7 +227,7 @@ const App: React.FC = () => {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
   const [activeTab, setActiveTab] = useState<'explore' | 'learn' | 'collect'>('explore');
-  const [learnSubTab, setLearnSubTab] = useState<'curator' | 'taste-map' | 'skills'>('curator');
+  const [learnSubTab, setLearnSubTab] = useState<'curator' | 'taste-map' | 'skills' | 'profile'>('curator');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showEntrance, setShowEntrance] = useState(false);
   const [interpretingItem, setInterpretingItem] = useState<{
@@ -1480,7 +1481,7 @@ const App: React.FC = () => {
             <div className="flex flex-col w-full h-full overflow-hidden">
               {/* Learn sub-tab bar */}
               <div className="shrink-0 flex items-end gap-7 px-5 sm:px-8 border-b border-neutral-100 relative z-[70] bg-[#faf9f7]">
-                {(['curator', 'taste-map', 'skills'] as const).map(tab => (
+                {(['curator', 'taste-map', 'skills', 'profile'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setLearnSubTab(tab)}
@@ -1489,7 +1490,7 @@ const App: React.FC = () => {
                         ? 'border-neutral-900 text-neutral-900'
                         : 'border-transparent text-neutral-400 hover:text-neutral-700'
                     }`}
-                  >{tab === 'curator' ? 'Curator' : tab === 'taste-map' ? 'Taste Map' : 'Art Skills'}</button>
+                  >{tab === 'curator' ? 'Curator' : tab === 'taste-map' ? 'Taste Map' : tab === 'skills' ? 'Art Skills' : 'Profile'}</button>
                 ))}
               </div>
               {/* Learn sub-tab content */}
@@ -1524,6 +1525,9 @@ const App: React.FC = () => {
                 )}
                 {learnSubTab === 'skills' && (
                   <ArtSkillsView />
+                )}
+                {learnSubTab === 'profile' && (
+                  <TasteProfileView userId={USER_ID} />
                 )}
               </div>
             </div>
@@ -1709,7 +1713,7 @@ const App: React.FC = () => {
             />
             {/* Sub-tab bar rendered at top level so it sits above TopographyView's z-[60] */}
             <div className="fixed top-11 left-0 right-0 z-[70] flex items-end gap-7 px-5 sm:px-8 border-b border-neutral-100 bg-[#faf9f7]">
-              {(['curator', 'taste-map', 'skills'] as const).map(tab => (
+              {(['curator', 'taste-map', 'skills', 'profile'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setLearnSubTab(tab)}
@@ -1718,7 +1722,7 @@ const App: React.FC = () => {
                       ? 'border-neutral-900 text-neutral-900'
                       : 'border-transparent text-neutral-400 hover:text-neutral-700'
                   }`}
-                >{tab === 'curator' ? 'Curator' : tab === 'taste-map' ? 'Taste Map' : 'Art Skills'}</button>
+                >{tab === 'curator' ? 'Curator' : tab === 'taste-map' ? 'Taste Map' : tab === 'skills' ? 'Art Skills' : 'Profile'}</button>
               ))}
             </div>
           </>

@@ -70,8 +70,12 @@ logger.info(f"=" * 50)
 # Initialize database only if enabled
 if settings.use_database:
     from app.database.connection import engine, Base
-    # Create database tables
+    from sqlalchemy import text
     Base.metadata.create_all(bind=engine)
+    # Idempotent column migrations for existing tables
+    with engine.connect() as _conn:
+        _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS skill_stats JSONB"))
+        _conn.commit()
     logger.info("Database initialized and tables created")
 
 # Initialize FastAPI app

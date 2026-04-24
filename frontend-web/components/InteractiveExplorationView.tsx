@@ -226,7 +226,7 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
         skillsRef.current = loaded;
         setReady(true);
         // Prefetch first observation for all skills — results go into cache so user taps are instant
-        raw.forEach(s => fetchSkillObservation(s.name, s.desc, [], item.url));
+        raw.forEach(s => fetchSkillObservation(s.name, s.desc, [], item.url, item.artworkId));
       } catch (err: any) {
         if (!cancelled) setError(err.message || 'Failed to load. Try again.');
       } finally {
@@ -249,8 +249,8 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
     try {
       const skill = skillsRef.current[idx];
       // Kick off deep-dive prefetch in parallel — result cached for when user taps "Tell me more"
-      fetchSkillDeepDive(skill.name, skill.desc, item.url);
-      const obs = await fetchSkillObservation(skill.name, skill.desc, [], item.url);
+      fetchSkillDeepDive(skill.name, skill.desc, item.url, item.artworkId);
+      const obs = await fetchSkillObservation(skill.name, skill.desc, [], item.url, item.artworkId);
       const updated = [...skillsRef.current];
       updated[idx] = { ...updated[idx], observations: [obs] };
       skillsRef.current = updated;
@@ -285,7 +285,7 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
       if (skill.more) {
         ({ text, question } = skill.more);
       } else {
-        const result = await fetchSkillDeepDive(skill.name, skill.desc, item.url);
+        const result = await fetchSkillDeepDive(skill.name, skill.desc, item.url, item.artworkId);
         text = result.text; question = result.question;
         const updated = [...skillsRef.current];
         updated[skillIdx] = { ...updated[skillIdx], more: { text, question, label: skill.name } };

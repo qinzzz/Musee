@@ -925,6 +925,12 @@ export async function fetchUserArtworks(userId: string): Promise<any> {
   return response.json();
 }
 
+export async function getTasteProfile(userId: string): Promise<any> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/taste-profile?user_id=${encodeURIComponent(userId)}`, {});
+  if (!response.ok) throw new Error('Failed to load taste profile');
+  return response.json();
+}
+
 /**
  * Re-run AI identification on a saved artwork using its stored image.
  */
@@ -1077,7 +1083,8 @@ export function fetchSkillObservation(
   skillName: string,
   skillDesc: string,
   prevObservations: string[],
-  photoUri: string
+  photoUri: string,
+  artworkId?: string,
 ): Promise<string> {
   // Only cache the first observation (no prior context)
   const cacheKey = prevObservations.length === 0 ? `${skillName}||${photoUri}` : null;
@@ -1093,6 +1100,9 @@ export function fetchSkillObservation(
     }
     const lang = getLanguage();
     if (lang) formData.append('language', lang);
+    const userId = getOrCreateUserId();
+    if (userId) formData.append('user_id', userId);
+    if (artworkId) formData.append('artwork_id', artworkId);
 
     const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-skill-observation`, {
       method: 'POST',
@@ -1136,7 +1146,8 @@ const _deepDiveCache = new Map<string, Promise<{ text: string; question: string 
 export function fetchSkillDeepDive(
   skillName: string,
   skillDesc: string,
-  photoUri: string
+  photoUri: string,
+  artworkId?: string,
 ): Promise<{ text: string; question: string }> {
   const cacheKey = `${skillName}||${photoUri}`;
   if (_deepDiveCache.has(cacheKey)) return _deepDiveCache.get(cacheKey)!;
@@ -1148,6 +1159,9 @@ export function fetchSkillDeepDive(
     await appendImageToFormData(formData, photoUri);
     const lang = getLanguage();
     if (lang) formData.append('language', lang);
+    const userId = getOrCreateUserId();
+    if (userId) formData.append('user_id', userId);
+    if (artworkId) formData.append('artwork_id', artworkId);
 
     const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-skill-deepdive`, {
       method: 'POST',

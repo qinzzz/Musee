@@ -20,6 +20,7 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now())
     last_active = Column(DateTime, server_default=func.now(), onupdate=func.now())
     settings = Column(JSON, nullable=True)  # User preferences and settings
+    skill_stats = Column(JSON, nullable=True)  # {"skill_name": {"observations": N, "deepdives": N, "xp": N}}
 
     # Relationship to artworks
     artworks = relationship("SavedArtwork", back_populates="user", cascade="all, delete-orphan")
@@ -271,3 +272,17 @@ class Session(Base):
         if include_artworks:
             result["artworks"] = [artwork.to_dict(include_conversations=False) for artwork in self.artworks]
         return result
+
+
+class SkillEvent(Base):
+    """Log of interactive explore skill usage — drives taste profile."""
+
+    __tablename__ = "skill_events"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False, index=True)
+    artwork_id = Column(String, ForeignKey('saved_artworks.id', ondelete='SET NULL'), nullable=True)
+    skill_name = Column(String, nullable=False)
+    skill_cat = Column(String, nullable=False)   # PERCEPTION | HISTORY | INTENT | STRUCTURE | RESONANCE
+    event_type = Column(String(20), nullable=False)  # "observation" | "deepdive"
+    created_at = Column(DateTime, server_default=func.now())

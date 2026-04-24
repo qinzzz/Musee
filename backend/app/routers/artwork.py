@@ -12,7 +12,7 @@ from datetime import datetime
 import anyio
 
 from app.database.connection import get_db, SessionLocal
-from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel
+from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SkillEvent
 from app.models.artwork import AIProvider, UpdateArtworkRequest
 from pydantic import BaseModel
 import base64
@@ -30,6 +30,53 @@ from app.utils.conversation_storage import ConversationMessage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Skill name → category map (mirrors ArtSkillsView.tsx)
+_SKILL_CAT: dict[str, str] = {
+    "Color Tension": "PERCEPTION", "Compositional Pull": "PERCEPTION",
+    "Materiality": "PERCEPTION", "Scale & Presence": "PERCEPTION", "Detail Hunter": "PERCEPTION",
+    "Art Movement": "HISTORY", "Lineage": "HISTORY", "Historical Context": "HISTORY",
+    "Collection & Market": "HISTORY", "Legacy": "HISTORY",
+    "Life Traces": "INTENT", "Argument": "INTENT", "Obsession": "INTENT",
+    "Ambition": "INTENT", "The Specific": "INTENT",
+    "Hidden Mechanism": "STRUCTURE", "Contradiction": "STRUCTURE",
+    "Absence & Silence": "STRUCTURE", "Controlled Looking": "STRUCTURE",
+    "Temporality": "STRUCTURE", "Site": "STRUCTURE",
+    "Personal Memory": "RESONANCE", "Gut Response": "RESONANCE",
+    "Ethical Discomfort": "RESONANCE", "Wider Resonance": "RESONANCE", "Ineffable": "RESONANCE",
+}
+
+_IDENTITY_LABELS: dict[str | None, tuple[str, str]] = {
+    "PERCEPTION": ("The Observer", "You see what others walk past."),
+    "HISTORY":    ("The Historian", "You read works as documents of their time."),
+    "INTENT":     ("The Interpreter", "You look for the mind behind the work."),
+    "STRUCTURE":  ("The Analyst", "You find meaning in how things are made."),
+    "RESONANCE":  ("The Empath", "Art reaches you before you can explain why."),
+    None:         ("The Wanderer", "Your attention moves in all directions."),
+}
+
+def _xp_to_level(xp: int) -> int:
+    if xp == 0:  return 0
+    if xp < 4:   return 1
+    if xp < 10:  return 2
+    if xp < 20:  return 3
+    if xp < 35:  return 4
+    return 5
+
+def _log_skill_event_sync(user_id: str, skill_name: str, skill_cat: str, event_type: str, artwork_id: Optional[str]):
+    xp_gain = 1 if event_type == "observation" else 3
+    with SessionLocal() as db:
+        db.add(SkillEvent(user_id=user_id, artwork_id=artwork_id, skill_name=skill_name,
+                          skill_cat=skill_cat, event_type=event_type))
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if user:
+            stats = dict(user.skill_stats or {})
+            entry = dict(stats.get(skill_name, {"observations": 0, "deepdives": 0, "xp": 0}))
+            entry[f"{event_type}s"] = entry.get(f"{event_type}s", 0) + 1
+            entry["xp"] = entry.get("xp", 0) + xp_gain
+            stats[skill_name] = entry
+            user.skill_stats = stats
+            db.commit()
 
 
 # Initialize and register AI clients
@@ -1379,6 +1426,9 @@ async def artwork_skill_observation(
     image: Optional[UploadFile] = File(None),
     model: Optional[AIProvider] = Form(None),
     language: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    artwork_id: Optional[str] = Form(None),
+    background_tasks: BackgroundTasks = None,
 ):
     """Get one observation for a given skill (Interactive Explore mode)."""
     ai_provider = determine_ai_provider(model)
@@ -1389,6 +1439,10 @@ async def artwork_skill_observation(
         observation = await ai_service.get_skill_observation(
             image_bytes, skill_name, skill_desc, prev_observations=prev, language=language
         )
+        if user_id and prev == []:  # only log the first observation per skill per session
+            skill_cat = _SKILL_CAT.get(skill_name, "STRUCTURE")
+            if background_tasks:
+                background_tasks.add_task(_log_skill_event_sync, user_id, skill_name, skill_cat, "observation", artwork_id)
         return {"observation": observation}
     except Exception as e:
         logger.error(f"artwork-skill-observation error: {e}")
@@ -1403,6 +1457,9 @@ async def artwork_skill_deepdive(
     image: Optional[UploadFile] = File(None),
     model: Optional[AIProvider] = Form(None),
     language: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    artwork_id: Optional[str] = Form(None),
+    background_tasks: BackgroundTasks = None,
 ):
     """Get a deep-dive reading and open question for a given skill (Interactive Explore mode)."""
     ai_provider = determine_ai_provider(model)
@@ -1412,10 +1469,80 @@ async def artwork_skill_deepdive(
         result = await ai_service.get_skill_deepdive(
             image_bytes, skill_name, skill_desc, language=language
         )
+        if user_id:
+            skill_cat = _SKILL_CAT.get(skill_name, "STRUCTURE")
+            if background_tasks:
+                background_tasks.add_task(_log_skill_event_sync, user_id, skill_name, skill_cat, "deepdive", artwork_id)
         return result
     except Exception as e:
         logger.error(f"artwork-skill-deepdive error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/taste-profile")
+async def get_taste_profile(user_id: str, db: Session = Depends(get_db)):
+    """Return taste profile computed from skill_stats + saved artwork collection."""
+    from sqlalchemy import func as sqlfunc
+
+    user = db.query(User).filter(User.user_id == user_id).first()
+    skill_stats_raw: dict = dict(user.skill_stats or {}) if user else {}
+
+    # Enrich each skill entry with level
+    skill_stats: dict = {}
+    for name, entry in skill_stats_raw.items():
+        e = dict(entry)
+        e["level"] = _xp_to_level(e.get("xp", 0))
+        skill_stats[name] = e
+
+    # Top skills by XP
+    top_skills = sorted(
+        [{"name": k, "cat": _SKILL_CAT.get(k, "STRUCTURE"), **v} for k, v in skill_stats.items()],
+        key=lambda x: x["xp"], reverse=True
+    )[:5]
+
+    # Dominant category by total XP per category
+    cat_xp: dict[str, int] = {}
+    for name, entry in skill_stats.items():
+        cat = _SKILL_CAT.get(name, "STRUCTURE")
+        cat_xp[cat] = cat_xp.get(cat, 0) + entry.get("xp", 0)
+    dominant_cat = max(cat_xp, key=lambda c: cat_xp[c]) if cat_xp else None
+
+    identity_label, identity_desc = _IDENTITY_LABELS.get(dominant_cat, _IDENTITY_LABELS[None])
+
+    # Artwork collection stats
+    total_artworks = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).count()
+
+    top_movements = [
+        {"movement": row[0], "count": row[1]}
+        for row in db.query(SavedArtwork.movement, sqlfunc.count().label("count"))
+            .filter(SavedArtwork.user_id == user_id, SavedArtwork.movement != None)
+            .group_by(SavedArtwork.movement)
+            .order_by(sqlfunc.count().desc())
+            .limit(5)
+    ]
+
+    top_periods = [
+        {"period": row[0], "count": row[1]}
+        for row in db.query(SavedArtwork.period_bucket, sqlfunc.count().label("count"))
+            .filter(SavedArtwork.user_id == user_id, SavedArtwork.period_bucket != None)
+            .group_by(SavedArtwork.period_bucket)
+            .order_by(sqlfunc.count().desc())
+    ]
+
+    total_explore_events = db.query(SkillEvent).filter(SkillEvent.user_id == user_id).count()
+
+    return {
+        "user_id": user_id,
+        "total_artworks": total_artworks,
+        "total_explore_events": total_explore_events,
+        "identity_label": identity_label,
+        "identity_description": identity_desc,
+        "dominant_category": dominant_cat,
+        "skill_stats": skill_stats,
+        "top_skills": top_skills,
+        "top_movements": top_movements,
+        "top_periods": top_periods,
+    }
 
 
 @router.post("/exhibition-chat")
