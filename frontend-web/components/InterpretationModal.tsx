@@ -1004,7 +1004,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
                 {(isLoadingUnlock || unlockPoints.length > 0) && (
                   <div className="border-t border-neutral-50 pt-5">
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-3">The Backstory</p>
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-3">Behind the Frame</p>
                     {isLoadingUnlock ? (
                       <div className="flex items-center gap-2 text-neutral-300">
                         <div className="w-3 h-3 border-t border-neutral-300 rounded-full animate-spin shrink-0" />
