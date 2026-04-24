@@ -957,6 +957,51 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 ) : null}
 
+                {/* Tags — scrollable row between metadata and description */}
+                {!item.isAnalyzing && (editTags.length > 0 || isEditing) && (
+                  <div>
+                    {isEditing ? (
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {editTags.map((tag, idx) => (
+                          <span
+                            key={idx}
+                            className="flex items-center gap-1 text-[10px] tracking-wide text-neutral-500 bg-neutral-50 pl-3 pr-1.5 py-1 rounded-full border border-neutral-200"
+                          >
+                            {tag}
+                            <button
+                              onClick={() => setEditTags(prev => prev.filter((_, i) => i !== idx))}
+                              className="w-4 h-4 flex items-center justify-center text-neutral-400 hover:text-neutral-700 rounded-full hover:bg-neutral-200 transition-colors"
+                              title="Remove tag"
+                            >×</button>
+                          </span>
+                        ))}
+                        <input
+                          value={tagInput}
+                          onChange={e => setTagInput(e.target.value)}
+                          onKeyDown={e => {
+                            if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
+                              e.preventDefault();
+                              const newTag = tagInput.trim().startsWith('#') ? tagInput.trim() : `#${tagInput.trim()}`;
+                              setEditTags(prev => [...prev, newTag]);
+                              setTagInput('');
+                            } else if (e.key === 'Escape') {
+                              cancelEditing();
+                            }
+                          }}
+                          placeholder="add tag…"
+                          className="text-[10px] text-neutral-500 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 min-w-[70px] w-24 py-1"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                        {editTags.map((tag, idx) => (
+                          <HoverTag key={idx} tag={tag} artworkId={item.artworkId} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {displayDescription && (
                   <div>
                     {/* Desktop-only retry button header; mobile uses "..." menu */}
@@ -1008,51 +1053,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                             <UnlockPoint key={idx} pt={pt} idx={idx} c={c} />
                           );
                         })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {!item.isAnalyzing && (editTags.length > 0 || isEditing) && (
-                  <div className="pb-2">
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-2 font-bold">Tags</p>
-                    {isEditing ? (
-                      <div className="flex flex-wrap gap-2 items-center">
-                        {editTags.map((tag, idx) => (
-                          <span
-                            key={idx}
-                            className="flex items-center gap-1 text-[10px] tracking-wide text-neutral-500 bg-neutral-50 pl-3 pr-1.5 py-1 rounded-full border border-neutral-200"
-                          >
-                            {tag}
-                            <button
-                              onClick={() => setEditTags(prev => prev.filter((_, i) => i !== idx))}
-                              className="w-4 h-4 flex items-center justify-center text-neutral-400 hover:text-neutral-700 rounded-full hover:bg-neutral-200 transition-colors"
-                              title="Remove tag"
-                            >×</button>
-                          </span>
-                        ))}
-                        <input
-                          value={tagInput}
-                          onChange={e => setTagInput(e.target.value)}
-                          onKeyDown={e => {
-                            if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
-                              e.preventDefault();
-                              const newTag = tagInput.trim().startsWith('#') ? tagInput.trim() : `#${tagInput.trim()}`;
-                              setEditTags(prev => [...prev, newTag]);
-                              setTagInput('');
-                            } else if (e.key === 'Escape') {
-                              cancelEditing();
-                            }
-                          }}
-                          placeholder="add tag…"
-                          className="text-[10px] text-neutral-500 bg-transparent border-b border-neutral-300 outline-none focus:border-neutral-600 min-w-[70px] w-24 py-1"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {editTags.map((tag, idx) => (
-                          <HoverTag key={idx} tag={tag} artworkId={item.artworkId} />
-                        ))}
                       </div>
                     )}
                   </div>
