@@ -1002,6 +1002,32 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 )}
 
+                {(isLoadingUnlock || unlockPoints.length > 0) && (
+                  <div className="border-t border-neutral-50 pt-5">
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-3">The Backstory</p>
+                    {isLoadingUnlock ? (
+                      <div className="flex items-center gap-2 text-neutral-300">
+                        <div className="w-3 h-3 border-t border-neutral-300 rounded-full animate-spin shrink-0" />
+                        <span className="text-[11px] tracking-wide">Looking up context…</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {unlockPoints.map((pt, idx) => {
+                          const colors = [
+                            { dot: '#7F77DD', bg: '#EEEDFE', border: '#C5C1F0', text: '#3C3489' },
+                            { dot: '#1D9E75', bg: '#E1F5EE', border: '#5DCAA5', text: '#085041' },
+                            { dot: '#D85A30', bg: '#FAECE7', border: '#F0997B', text: '#712B13' },
+                          ];
+                          const c = colors[idx % colors.length];
+                          return (
+                            <UnlockPoint key={idx} pt={pt} idx={idx} c={c} />
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {displayDescription && (
                   <div>
                     {/* Desktop-only retry button header; mobile uses "..." menu */}
@@ -1032,32 +1058,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 )}
 
                 {/* Unlock points — collapsed by default, expand on click */}
-                {(isLoadingUnlock || unlockPoints.length > 0) && (
-                  <div className="border-t border-neutral-50 pt-5">
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-3">Unlock Points</p>
-                    {isLoadingUnlock ? (
-                      <div className="flex items-center gap-2 text-neutral-300">
-                        <div className="w-3 h-3 border-t border-neutral-300 rounded-full animate-spin shrink-0" />
-                        <span className="text-[11px] tracking-wide">Looking up context…</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {unlockPoints.map((pt, idx) => {
-                          const colors = [
-                            { dot: '#7F77DD', bg: '#EEEDFE', border: '#C5C1F0', text: '#3C3489' },
-                            { dot: '#1D9E75', bg: '#E1F5EE', border: '#5DCAA5', text: '#085041' },
-                            { dot: '#D85A30', bg: '#FAECE7', border: '#F0997B', text: '#712B13' },
-                          ];
-                          const c = colors[idx % colors.length];
-                          return (
-                            <UnlockPoint key={idx} pt={pt} idx={idx} c={c} />
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {/* Reference sources from Vision web detection — thumbnail cards */}
                 {!item.isAnalyzing && item.referenceUrls && item.referenceUrls.length > 0 && (
                   <div className="pt-1 pb-2">
