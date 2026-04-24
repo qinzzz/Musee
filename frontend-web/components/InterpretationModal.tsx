@@ -788,18 +788,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
             {/* Right panel scrollable content */}
             {rightMode === 'metadata' ? (
-              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0">
-
-                {/* Analyzing state — shown at the top of the content area while streaming */}
-                {item.isAnalyzing && !streamingFields && (
-                  <div className="flex items-center gap-2 text-neutral-400">
-                    <div className="relative w-3 h-3 shrink-0">
-                      <div className="absolute inset-0 border-[1.5px] border-neutral-200 rounded-full"></div>
-                      <div className="absolute inset-0 border-t-[1.5px] border-neutral-500 rounded-full animate-spin"></div>
-                    </div>
-                    <span className="text-[11px] tracking-[0.2em] uppercase font-medium">Analyzing…</span>
-                  </div>
-                )}
+              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0 pb-28 sm:pb-7">
 
                 {/* Error state */}
                 {!item.isAnalyzing && item.streamingText && !item.artistName && (
@@ -1074,7 +1063,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
               </div>
             ) : (
               /* ── CHAT MODE ── */
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0 pb-28 sm:pb-6">
                 {messages.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
                     <div className="w-12 h-px bg-neutral-200 mb-6"></div>

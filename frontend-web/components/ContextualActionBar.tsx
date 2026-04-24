@@ -189,46 +189,47 @@ const ContextualActionBar: React.FC<Props> = ({
     }
 
     return (
-      <div className="flex items-center gap-1 p-2 bg-neutral-900/95 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center gap-0.5 px-1.5 py-1.5 bg-neutral-900/95 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-4 duration-500">
+        {/* Ask AI — icon + small label */}
         <button
           onClick={() => onAskExpand?.()}
-          className="pl-5 pr-6 py-2.5 rounded-full bg-white text-black flex items-center gap-2.5 transition-all hover:scale-[1.02] active:scale-95 shadow-lg group"
+          className="flex items-center gap-2 pl-4 pr-5 h-9 rounded-full bg-white text-black transition-all hover:scale-[1.02] active:scale-95 shadow-md"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
-          <span className="text-[11px] tracking-[0.1em] font-extrabold uppercase">Ask AI</span>
+          <span className="text-[10px] tracking-[0.1em] font-extrabold uppercase">Ask AI</span>
         </button>
 
-        <div className="w-px h-6 bg-white/10 mx-2" />
+        <div className="w-px h-5 bg-white/10 mx-1" />
 
         <button
           onClick={onLike}
-          className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${isLiked ? 'text-red-500 bg-red-500/10' : 'text-neutral-400 hover:text-white hover:bg-white/5'}`}
+          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isLiked ? 'text-red-400 bg-red-500/10' : 'text-neutral-500 hover:text-white hover:bg-white/5'}`}
           title={isLiked ? "Unlike" : "Like"}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20.8 4.6a5.5 5.5 0 0 0-7.7 0l-1.1 1.1-1.1-1.1a5.5 5.5 0 0 0-7.7 7.7l1.1 1.1 7.7 7.7 7.7-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.7z"/>
           </svg>
         </button>
 
         <button
           onClick={onCollect}
-          className="w-11 h-11 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/5 transition-all"
+          className="w-9 h-9 rounded-full flex items-center justify-center text-neutral-500 hover:text-white hover:bg-white/5 transition-all"
           title="Collect"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 3h18v18H3z"/><path d="M12 8v8"/><path d="M8 12h8"/>
           </svg>
         </button>
 
         <button
           onClick={onDelete}
-          className="w-11 h-11 rounded-full flex items-center justify-center text-neutral-600 hover:text-red-400 hover:bg-red-400/5 transition-all"
+          className="w-9 h-9 rounded-full flex items-center justify-center text-neutral-600 hover:text-red-400 hover:bg-red-400/5 transition-all"
           title="Delete"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </svg>
         </button>
       </div>
