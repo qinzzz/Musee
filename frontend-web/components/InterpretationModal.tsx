@@ -144,6 +144,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [unlockPoints, setUnlockPoints] = useState<Array<{ title: string; text: string }>>([]);
   const [isLoadingUnlock, setIsLoadingUnlock] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
@@ -718,10 +719,10 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
               </div>
             )}
 
-            {/* Photo — takes remaining space */}
-            <div className="relative flex items-start sm:items-center justify-center p-3 sm:p-5 sm:flex-1 sm:min-h-0 overflow-hidden">
+            {/* Photo — 4:3 center-crop on mobile, contain in panel on desktop */}
+            <div className="relative p-3 sm:flex sm:items-center sm:justify-center sm:p-5 sm:flex-1 sm:min-h-0 sm:overflow-hidden">
               {imageError ? (
-                <div className="flex flex-col items-center justify-center gap-3 text-neutral-300 select-none">
+                <div className="w-full aspect-[4/3] sm:aspect-auto sm:w-auto sm:h-40 flex flex-col items-center justify-center gap-3 text-neutral-300 select-none">
                   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
                   </svg>
@@ -731,7 +732,8 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 <img
                   ref={imageRef}
                   src={item.url}
-                  className="max-w-full h-auto sm:max-h-full object-contain shadow-xl rounded-lg"
+                  onClick={() => setLightboxOpen(true)}
+                  className="w-full aspect-[4/3] object-cover object-center rounded-xl shadow-lg cursor-zoom-in sm:w-auto sm:aspect-auto sm:max-w-full sm:max-h-full sm:object-contain sm:shadow-xl sm:rounded-lg sm:cursor-default"
                   alt="Interpretation target"
                 />
               )}
@@ -1210,6 +1212,29 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
         )}
       </div>
     </div>
+
+    {/* Lightbox — tap image on mobile to view full */}
+    {lightboxOpen && createPortal(
+      <div
+        className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center cursor-zoom-out"
+        onClick={() => setLightboxOpen(false)}
+      >
+        <img
+          src={item.url}
+          className="max-w-full max-h-full object-contain"
+          alt="Full view"
+        />
+        <button
+          className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>,
+      document.body
+    )}
 
     </>
   );
