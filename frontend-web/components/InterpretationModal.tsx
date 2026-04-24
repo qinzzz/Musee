@@ -23,6 +23,7 @@ interface Props {
     location?: any;
     photoTime?: string;
     visitId?: string;
+    referenceUrls?: string[];
   };
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
@@ -1017,6 +1018,31 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Reference sources from Vision web detection */}
+                {!item.isAnalyzing && item.referenceUrls && item.referenceUrls.length > 0 && (
+                  <div className="pt-1 pb-2">
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-2">Sources</p>
+                    <div className="flex flex-wrap gap-2">
+                      {item.referenceUrls.map((url, idx) => {
+                        let label = url;
+                        try { label = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+                        return (
+                          <a
+                            key={idx}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-neutral-500 bg-neutral-50 border border-neutral-100 px-3 py-1 rounded-full hover:bg-neutral-100 hover:text-neutral-700 hover:border-neutral-200 transition-colors truncate max-w-[200px]"
+                            title={url}
+                          >
+                            ↗ {label}
+                          </a>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 

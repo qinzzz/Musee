@@ -320,6 +320,7 @@ export interface ArtworkAnalysisResult {
   location?: string;
   photo_time?: string;
   session_title?: string;
+  reference_urls?: string[];
 }
 
 export interface TopicSuggestionResponse {
@@ -430,6 +431,7 @@ export async function analyzeArtwork(
     location: data.location,
     photo_time: data.photo_time,
     session_title: data.session_title,
+    reference_urls: data.reference_urls || [],
   };
 }
 
@@ -592,6 +594,7 @@ export async function analyzeArtworkStream(
               location: data.location,
               photo_time: data.photo_time,
               session_title: data.session_title,
+              reference_urls: data.reference_urls || [],
             };
 
             onComplete(result);

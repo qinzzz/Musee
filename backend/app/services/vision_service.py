@@ -2,12 +2,14 @@
 Google Cloud Vision Web Detection — artwork hint extraction.
 
 Calls Vision API, filters generic labels, and returns a formatted hint
-string ready to prepend to an LLM identification prompt.
+string ready to prepend to an LLM identification prompt, plus filtered
+reference URLs for the artwork.
 """
 
 import base64
 import logging
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -25,6 +27,35 @@ _GENERIC_LABELS = {
     "lighting", "floor", "room", "building", "architecture", "window", "facade",
     "audience", "mattress", "sheet", "bed", "anime", "manga",
 }
+
+# Domains to skip — stock photo sites and social media add noise
+_SKIP_DOMAINS = {
+    "shutterstock.com", "gettyimages.com", "alamy.com", "stock.adobe.com",
+    "dreamstime.com", "istockphoto.com", "depositphotos.com", "bigstockphoto.com",
+    "pinterest.com", "pinterest.co.uk", "tumblr.com", "instagram.com",
+    "facebook.com", "twitter.com", "x.com", "reddit.com",
+    "flickr.com", "500px.com", "deviantart.com",
+}
+
+def _filter_ref_urls(vision: dict, max_urls: int = 3) -> list[str]:
+    """Return up to max_urls quality reference URLs from Vision results."""
+    candidates = vision.get("matching_urls", []) or vision.get("similar_urls", [])
+    result = []
+    seen_domains = set()
+    for url in candidates:
+        try:
+            domain = urlparse(url).netloc.lower().lstrip("www.")
+        except Exception:
+            continue
+        if any(domain == d or domain.endswith("." + d) for d in _SKIP_DOMAINS):
+            continue
+        if domain in seen_domains:
+            continue
+        seen_domains.add(domain)
+        result.append(url)
+        if len(result) >= max_urls:
+            break
+    return result
 
 
 def _is_generic(labels: list[str]) -> bool:
@@ -85,25 +116,26 @@ def _build_hint(vision: dict) -> str:
     return "\n".join(parts)
 
 
-async def get_vision_hint(image_bytes: bytes) -> Optional[str]:
+async def get_vision_hint(image_bytes: bytes) -> tuple[Optional[str], list[str]]:
     """
-    Run Google Vision Web Detection and return a hint string for LLM injection.
-    Returns None if Vision is not configured, or an empty string if no useful signal.
-    Failures are logged and swallowed so the caller can proceed without a hint.
+    Run Google Vision Web Detection.
+    Returns (hint_string, ref_urls) — hint for LLM injection, ref_urls for display.
+    Returns (None, []) if Vision is not configured; failures are swallowed.
     """
     api_key = settings.google_vision_api_key
     if not api_key:
-        return None
+        return None, []
 
     try:
         vision = await _call_vision_api(image_bytes, api_key)
         hint = _build_hint(vision)
+        ref_urls = _filter_ref_urls(vision)
         if hint:
-            logger.info("Vision hint generated (%d entities, %d best_guess, %d page_titles)",
-                        len(vision["entities"]), len(vision["best_guess"]), len(vision["page_titles"]))
+            logger.info("Vision hint generated (%d entities, %d best_guess, %d ref_urls)",
+                        len(vision["entities"]), len(vision["best_guess"]), len(ref_urls))
         else:
             logger.debug("Vision hint suppressed (generic or empty labels)")
-        return hint
+        return hint, ref_urls
     except Exception as e:
         logger.warning("Vision API failed, proceeding without hint: %s", e)
-        return None
+        return None, []

@@ -66,6 +66,7 @@ class SavedArtwork(Base):
     session_id = Column(String, ForeignKey('sessions.id', ondelete='SET NULL'), nullable=True, index=True)
     movement = Column(String, nullable=True)  # Canonical art movement (e.g. "Arte Povera", "Minimalism")
     period_bucket = Column(String, nullable=True)  # Historical / Modern / Contemporary / Now
+    reference_urls = Column(JSON, nullable=True)  # Top reference URLs from Vision web detection
 
     # Relationships
     user = relationship("User", back_populates="artworks")
@@ -103,6 +104,7 @@ class SavedArtwork(Base):
             "medium": self.params.get('medium') if self.params and isinstance(self.params, dict) else None,
             "movement": self.movement,
             "period_bucket": self.period_bucket,
+            "reference_urls": self.reference_urls or [],
         }
 
         # Include conversation_history for backward compatibility with frontend

@@ -48,6 +48,7 @@ export interface GalleryItem {
   sessionTitle?: string;
   movement?: string;
   periodBucket?: string;
+  referenceUrls?: string[];
 }
 
 export interface Visit {

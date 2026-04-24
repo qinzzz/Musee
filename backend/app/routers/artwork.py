@@ -243,7 +243,7 @@ async def analyze_artist(
 
         # Run Vision API and session context fetch in parallel
         session_context = None
-        vision_hint, session_context = await asyncio.gather(
+        (vision_hint, vision_ref_urls), session_context = await asyncio.gather(
             get_vision_hint(image_bytes),
             get_session_context(session_id) if session_id else asyncio.sleep(0, result=None),
         )
@@ -323,7 +323,7 @@ async def analyze_artist(
 
             # Create artwork record in a thread-safe way
             def _save_artwork_sync(
-                u_id, s_id, p_uri, a_name, w_name, e_analysis, d_val, m_val, loc, p_time, mv_val, pb_val
+                u_id, s_id, p_uri, a_name, w_name, e_analysis, d_val, m_val, loc, p_time, mv_val, pb_val, ref_urls
             ):
                 with SessionLocal() as local_db:
                     # Ensure user exists
@@ -367,6 +367,7 @@ async def analyze_artist(
                         photo_time=p_time,
                         movement=mv_val,
                         period_bucket=pb_val,
+                        reference_urls=ref_urls or [],
                     )
                     local_db.add(art)
                     local_db.commit()
@@ -387,6 +388,7 @@ async def analyze_artist(
                 photo_time,
                 movement_val,
                 period_bucket_val,
+                vision_ref_urls,
             )
 
             # Update session narrative in background
@@ -516,7 +518,7 @@ async def analyze_artist_stream(
             t_ai_call = time.time()
 
             # Run Vision API and session context fetch in parallel
-            vision_hint, session_context = await asyncio.gather(
+            (vision_hint, vision_ref_urls), session_context = await asyncio.gather(
                 get_vision_hint(image_bytes),
                 get_session_context(session_id) if session_id else asyncio.sleep(0, result=None),
             )
@@ -636,7 +638,7 @@ async def analyze_artist_stream(
 
             # Create artwork record in a thread Safe way
             def _save_streaming_artwork_sync(
-                u_id, s_id, p_uri, a_name, w_name, desc, full_txt, d_val, m_val, tags, loc, p_time, mv_val, pb_val
+                u_id, s_id, p_uri, a_name, w_name, desc, full_txt, d_val, m_val, tags, loc, p_time, mv_val, pb_val, ref_urls
             ):
                 with SessionLocal() as local_db:
                     # Ensure user exists
@@ -680,6 +682,7 @@ async def analyze_artist_stream(
                         photo_time=p_time,
                         movement=mv_val,
                         period_bucket=pb_val,
+                        reference_urls=ref_urls or [],
                     )
                     local_db.add(art)
 
@@ -708,9 +711,11 @@ async def analyze_artist_stream(
                 photo_time,
                 movement_val,
                 period_bucket_val,
+                vision_ref_urls,
             )
             result["artwork_id"] = artwork_id
             result["photo_uri"] = generated_photo_uri
+            result["reference_urls"] = vision_ref_urls
 
             # Update session narrative in background
             if session_id and background_tasks:
@@ -2050,7 +2055,7 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
     ai_provider = determine_ai_provider()
     ai_service = AIServiceFactory.get_service(ai_provider)
 
-    vision_hint = await get_vision_hint(image_bytes)
+    vision_hint, vision_ref_urls = await get_vision_hint(image_bytes)
 
     analysis_text = await ai_service.identify_artist(
         image_bytes, identity="default", vision_hint=vision_hint,
@@ -2096,6 +2101,8 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
     artwork.is_recognized = 1 if (
         artist_name.lower() != "unknown artist" and artwork_name.lower() != "unknown"
     ) else 0
+    if vision_ref_urls:
+        artwork.reference_urls = vision_ref_urls
     current_params = dict(artwork.params) if isinstance(artwork.params, dict) else {}
     if date_val is not None:
         current_params['date'] = date_val
@@ -2106,15 +2113,16 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
     db.refresh(artwork)
 
     return {
-        "artist_name":   artist_name,
-        "artwork_name":  artwork_name,
-        "analysis":      extracted_analysis,
-        "date":          date_val,
-        "medium":        medium_val,
-        "movement":      movement_val,
-        "period_bucket": period_bucket_val,
-        "tags":          extracted_tags,
-        "artwork_id":    str(artwork.id),
+        "artist_name":    artist_name,
+        "artwork_name":   artwork_name,
+        "analysis":       extracted_analysis,
+        "date":           date_val,
+        "medium":         medium_val,
+        "movement":       movement_val,
+        "period_bucket":  period_bucket_val,
+        "tags":           extracted_tags,
+        "artwork_id":     str(artwork.id),
+        "reference_urls": vision_ref_urls,
     }
 
 

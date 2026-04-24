@@ -477,6 +477,7 @@ const App: React.FC = () => {
               sessionTitle: item.session_title,
               movement: item.movement,
               periodBucket: item.period_bucket,
+              referenceUrls: item.reference_urls || [],
               conversation: (item.conversation_history || []).map((msg: any) => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 text: msg.content
@@ -966,7 +967,8 @@ const App: React.FC = () => {
               description: parseAnalysis(analysis.description), date: analysis.date, medium: analysis.medium,
               artworkId: analysis.artwork_id, isAnalyzing: false, streamingText: undefined,
               location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
-              photoTime: analysis.photo_time
+              photoTime: analysis.photo_time,
+              referenceUrls: analysis.reference_urls || [],
             };
             setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
             setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...updates } : prev);
@@ -1057,7 +1059,8 @@ const App: React.FC = () => {
             description: parseAnalysis(analysis.description), date: analysis.date, medium: analysis.medium,
             sessionTitle: analysis.session_title, artworkId: analysis.artwork_id, isAnalyzing: false,
             location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
-            photoTime: analysis.photo_time
+            photoTime: analysis.photo_time,
+            referenceUrls: analysis.reference_urls || [],
           };
           setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
         } catch (e) {
@@ -1129,6 +1132,7 @@ const App: React.FC = () => {
           keywords, artistName: analysis.artist_name, artworkName: analysis.artwork_name,
           description: parseAnalysis(analysis.description), date: analysis.date, medium: analysis.medium,
           artworkId: analysis.artwork_id || retryItem.artworkId,
+          referenceUrls: analysis.reference_urls || [],
         };
         setItems(prev => prev.map(item => item.id === retryItem.id ? { ...item, ...updates } : item));
         setInterpretingItem(prev => (prev && prev.id === retryItem.id) ? { ...prev, ...updates } : prev);
@@ -1151,6 +1155,7 @@ const App: React.FC = () => {
       date: result.date,
       medium: result.medium,
       keywords,
+      referenceUrls: result.reference_urls || [],
     };
     setItems(prev => prev.map(item => item.id === targetItem.id ? { ...item, ...updates } : item));
     setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, ...updates } : prev);
