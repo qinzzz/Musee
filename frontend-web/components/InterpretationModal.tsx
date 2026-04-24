@@ -993,7 +993,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                         />
                       </div>
                     ) : (
-                      <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                      <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}>
                         {editTags.map((tag, idx) => (
                           <HoverTag key={idx} tag={tag} artworkId={item.artworkId} />
                         ))}
@@ -1062,7 +1062,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 {!item.isAnalyzing && item.referenceUrls && item.referenceUrls.length > 0 && (
                   <div className="pt-1 pb-2">
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-2">Sources</p>
-                    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}>
                       {item.referenceUrls.map((ref, idx) => {
                         const pageUrl = typeof ref === 'string' ? ref : ref.page_url;
                         const thumbnail = typeof ref === 'string' ? undefined : ref.thumbnail;
