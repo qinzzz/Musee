@@ -1847,6 +1847,102 @@ async def update_artwork(
         raise HTTPException(status_code=500, detail=f"Failed to update artwork: {str(e)}")
 
 
+@router.post("/artworks/{artwork_id}/reanalyze")
+async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
+    """
+    Re-run AI identification on a saved artwork using its stored photo_uri.
+    Updates artist_name, artwork_name, analysis, movement, period_bucket in DB.
+    Does NOT re-upload the image to storage.
+    """
+    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+    # Load image bytes from stored URI (no storage write)
+    image_bytes = await _image_url_to_bytes(artwork.photo_uri)
+    if not image_bytes:
+        try:
+            storage = StorageFactory.get_service_for_uri(artwork.photo_uri)
+            if storage:
+                image_bytes = await storage.load(artwork.photo_uri)
+        except Exception as e:
+            logger.warning(f"Could not load image for reanalysis: {e}")
+    if not image_bytes:
+        raise HTTPException(status_code=422, detail="Could not load stored image for reanalysis")
+
+    image_bytes = compress_for_ai(image_bytes)
+
+    ai_provider = determine_ai_provider()
+    ai_service = AIServiceFactory.get_service(ai_provider)
+
+    vision_hint = await get_vision_hint(image_bytes)
+
+    analysis_text = await ai_service.identify_artist(
+        image_bytes, identity="default", vision_hint=vision_hint,
+    )
+
+    # Parse structured response
+    artist_name = artwork.artist_name
+    artwork_name = artwork.artwork_name
+    extracted_analysis = None
+    date_val = None
+    medium_val = None
+    movement_val = None
+    period_bucket_val = None
+    extracted_tags: list = []
+
+    try:
+        json_str = analysis_text
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', analysis_text)
+        if json_match:
+            json_str = json_match.group(1).strip()
+        parsed = json.loads(json_str)
+        if isinstance(parsed, dict):
+            artist_name    = parsed.get('artist', artist_name)
+            artwork_name   = parsed.get('title', artwork_name)
+            extracted_tags = parsed.get('tags', [])
+            extracted_analysis = parsed.get('description', '')
+            date_val       = parsed.get('date')
+            medium_val     = parsed.get('medium')
+            movement_val   = parsed.get('movement')
+            period_bucket_val = parsed.get('period_bucket')
+    except Exception as e:
+        logger.warning(f"Failed to parse reanalysis response: {e}")
+
+    if not extracted_analysis:
+        extracted_analysis = analysis_text
+
+    # Update DB record (no storage touch)
+    artwork.artist_name   = artist_name
+    artwork.artwork_name  = artwork_name
+    artwork.analysis      = extracted_analysis
+    artwork.movement      = movement_val
+    artwork.period_bucket = period_bucket_val
+    artwork.is_recognized = 1 if (
+        artist_name.lower() != "unknown artist" and artwork_name.lower() != "unknown"
+    ) else 0
+    current_params = dict(artwork.params) if isinstance(artwork.params, dict) else {}
+    if date_val is not None:
+        current_params['date'] = date_val
+    if medium_val is not None:
+        current_params['medium'] = medium_val
+    artwork.params = current_params
+    db.commit()
+    db.refresh(artwork)
+
+    return {
+        "artist_name":   artist_name,
+        "artwork_name":  artwork_name,
+        "analysis":      extracted_analysis,
+        "date":          date_val,
+        "medium":        medium_val,
+        "movement":      movement_val,
+        "period_bucket": period_bucket_val,
+        "tags":          extracted_tags,
+        "artwork_id":    str(artwork.id),
+    }
+
+
 @router.delete("/artworks/{artwork_id}")
 async def delete_artwork(artwork_id: str, db: Session = Depends(get_db)):
     """Delete a saved artwork"""

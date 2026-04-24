@@ -926,6 +926,21 @@ export async function fetchUserArtworks(userId: string): Promise<any> {
 }
 
 /**
+ * Re-run AI identification on a saved artwork using its stored image.
+ */
+export async function reanalyzeArtwork(artworkId: string): Promise<any> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}/reanalyze`, {
+    method: 'POST',
+    timeout: 120000,
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || 'Reanalysis failed');
+  }
+  return response.json();
+}
+
+/**
  * Update artwork metadata (artist, title, date, medium, tags)
  */
 export async function updateArtwork(

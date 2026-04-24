@@ -17,6 +17,7 @@ import {
   logout,
   deleteArtwork,
   prefetchExploreDataWithContext,
+  reanalyzeArtwork,
 } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
@@ -1137,6 +1138,23 @@ const App: React.FC = () => {
     );
   };
 
+  const handleReanalyze = async () => {
+    if (!interpretingItem?.artworkId) return;
+    const targetItem = interpretingItem;
+    const result = await reanalyzeArtwork(targetItem.artworkId);
+    const keywords = (result.tags || []).map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
+    const updates = {
+      artistName: result.artist_name,
+      artworkName: result.artwork_name,
+      description: parseAnalysis(result.analysis),
+      date: result.date,
+      medium: result.medium,
+      keywords,
+    };
+    setItems(prev => prev.map(item => item.id === targetItem.id ? { ...item, ...updates } : item));
+    setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, ...updates } : prev);
+  };
+
   const confirmDeleteItem = async (id: string) => {
     try {
       const itemToDelete = items.find(item => item.id === id);
@@ -1733,6 +1751,7 @@ const App: React.FC = () => {
               localStorage.setItem('musee_analysis_mode', next);
             }}
             onRetryHarder={handleRetryHarder}
+            onReanalyze={handleReanalyze}
           />
         )}
 

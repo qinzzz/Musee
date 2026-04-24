@@ -38,6 +38,7 @@ interface Props {
   onSwitchMode?: () => void;
   interpretingMode?: 'professional' | 'interactive';
   onRetryHarder?: () => void;
+  onReanalyze?: () => Promise<void>;
 }
 
 // Tag component with explanation tooltip on hover
@@ -95,10 +96,11 @@ const HoverTag: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onRetryHarder }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onRetryHarder, onReanalyze }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
@@ -796,7 +798,28 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
                 {displayArtist && (
                   <div>
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-2">Artist</p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Artist</p>
+                      {onReanalyze && item.artworkId && !item.isAnalyzing && !isEditing && (
+                        <button
+                          onClick={async () => {
+                            if (isReanalyzing) return;
+                            setIsReanalyzing(true);
+                            try { await onReanalyze(); } catch { /* keep existing */ } finally { setIsReanalyzing(false); }
+                          }}
+                          disabled={isReanalyzing}
+                          title="Re-identify with AI"
+                          className="w-5 h-5 flex items-center justify-center rounded-full text-neutral-300 hover:text-neutral-500 transition-colors disabled:opacity-40"
+                        >
+                          <svg className={`w-3.5 h-3.5 ${isReanalyzing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 2v6h-6" />
+                            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                            <path d="M3 22v-6h6" />
+                            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                     {isEditing ? (
                       <input
                         ref={firstEditInputRef}
