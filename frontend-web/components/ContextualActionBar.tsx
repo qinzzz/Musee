@@ -220,9 +220,10 @@ const ContextualActionBar: React.FC<Props> = ({
           </svg>
         </button>
 
+        {/* Delete hidden on mobile — accessible via "..." menu in the modal header */}
         <button
           onClick={onDelete}
-          className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-neutral-600 hover:text-red-400 transition-colors"
+          className="hidden sm:flex w-10 h-10 shrink-0 rounded-full items-center justify-center text-neutral-600 hover:text-red-400 transition-colors"
           title="Delete"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

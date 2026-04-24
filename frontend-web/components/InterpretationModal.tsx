@@ -39,6 +39,7 @@ interface Props {
   interpretingMode?: 'professional' | 'interactive';
   onRetryHarder?: () => void;
   onReanalyze?: () => Promise<void>;
+  onDelete?: () => void;
 }
 
 // Tag component with explanation tooltip on hover
@@ -135,13 +136,14 @@ const UnlockPoint: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onRetryHarder, onReanalyze }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onRetryHarder, onReanalyze, onDelete }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [unlockPoints, setUnlockPoints] = useState<Array<{ title: string; text: string }>>([]);
   const [isLoadingUnlock, setIsLoadingUnlock] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
@@ -609,18 +611,77 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
             )}
           </button>
 
-          {/* Right: Next or spacer */}
-          {allVisitItems && allVisitItems.length > 1 && onNavigate ? (
-            <button
-              onClick={() => onNavigate('next')}
-              className="flex items-center gap-1 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
-            >
-              <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          ) : (
-            <div className="w-16" />
-          )}
+          {/* Right: Next (if multi-item) + overflow "..." menu */}
+          <div className="flex items-center gap-1 min-w-[4rem] justify-end">
+            {allVisitItems && allVisitItems.length > 1 && onNavigate && (
+              <button
+                onClick={() => onNavigate('next')}
+                className="flex items-center gap-0.5 text-neutral-500 active:text-neutral-900 transition-colors px-1 py-1.5"
+              >
+                <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            )}
+            {/* Overflow menu — edit, refresh, retry, delete */}
+            {item.artworkId && (
+              <div className="relative">
+                <button
+                  onClick={() => setMoreMenuOpen(o => !o)}
+                  className="w-9 h-9 flex items-center justify-center text-neutral-500 active:text-neutral-900 transition-colors"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+                </button>
+                {moreMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[90]" onClick={() => setMoreMenuOpen(false)} />
+                    <div className="absolute top-full right-0 mt-1 z-[91] bg-white border border-neutral-100 rounded-2xl shadow-2xl overflow-hidden min-w-[180px] animate-in fade-in zoom-in-95 duration-150">
+                      {!item.isAnalyzing && (
+                        <button
+                          onClick={() => { setMoreMenuOpen(false); startEditing(); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                          Edit info
+                        </button>
+                      )}
+                      {onReanalyze && !item.isAnalyzing && (
+                        <button
+                          onClick={async () => { setMoreMenuOpen(false); setIsReanalyzing(true); try { await onReanalyze(); } catch {} finally { setIsReanalyzing(false); } }}
+                          disabled={isReanalyzing}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left disabled:opacity-40"
+                        >
+                          <svg width="15" height="15" className={isReanalyzing ? 'animate-spin' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                          {isReanalyzing ? 'Refreshing…' : 'Refresh ID'}
+                        </button>
+                      )}
+                      {onRetryHarder && !item.isAnalyzing && (
+                        <button
+                          onClick={async () => { setMoreMenuOpen(false); setIsRetrying(true); try { await onRetryHarder(); } catch {} finally { setIsRetrying(false); } }}
+                          disabled={isRetrying}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left disabled:opacity-40"
+                        >
+                          <svg width="15" height="15" className={isRetrying ? 'animate-spin' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.2-9.2L23 10"/></svg>
+                          {isRetrying ? 'Retrying…' : 'Retry deeper'}
+                        </button>
+                      )}
+                      {onDelete && (
+                        <>
+                          <div className="h-px bg-neutral-100 mx-3" />
+                          <button
+                            onClick={() => { setMoreMenuOpen(false); onDelete(); }}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-red-500 hover:bg-red-50 transition-colors text-left"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── MAIN AREA: left photo panel + right content panel ── */}
@@ -838,6 +899,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 ) : (displayArtist || displayTitle || displayDate || displayMedium) ? (
                   <div className="flex items-center gap-2 min-w-0">
+                    {/* Reanalyze button — desktop only; mobile uses "..." menu */}
                     {onReanalyze && item.artworkId && !item.isAnalyzing && (
                       <button
                         onClick={async () => {
@@ -847,7 +909,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                         }}
                         disabled={isReanalyzing}
                         title="Re-identify with AI"
-                        className="w-5 h-5 shrink-0 flex items-center justify-center rounded-full text-neutral-300 hover:text-neutral-500 transition-colors disabled:opacity-40"
+                        className="hidden sm:flex w-5 h-5 shrink-0 items-center justify-center rounded-full text-neutral-300 hover:text-neutral-500 transition-colors disabled:opacity-40"
                       >
                         <svg className={`w-3.5 h-3.5 ${isReanalyzing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M21 2v6h-6" />
@@ -890,26 +952,14 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                         )}
                       </div>
                     </div>
-                    {/* Edit button — mobile only, lives in metadata strip since toolbar is hidden */}
-                    {!item.isAnalyzing && item.artworkId && (
-                      <button
-                        onClick={startEditing}
-                        title="Edit artwork info"
-                        className="sm:hidden w-7 h-7 shrink-0 flex items-center justify-center text-neutral-300 hover:text-neutral-600 transition-colors"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-                        </svg>
-                      </button>
-                    )}
                   </div>
                 ) : null}
 
                 {displayDescription && (
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Interpretation</p>
-                      {!item.isAnalyzing && onRetryHarder && (
+                    {/* Desktop-only retry button header; mobile uses "..." menu */}
+                    {!item.isAnalyzing && onRetryHarder && (
+                      <div className="hidden sm:flex justify-end mb-2">
                         <button
                           onClick={async () => {
                             if (isRetrying) return;
@@ -923,8 +973,8 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                           {isRetrying && <span className="inline-block w-2.5 h-2.5 border-t border-neutral-400 rounded-full animate-spin shrink-0" />}
                           {isRetrying ? 'Retrying…' : 'Retry with higher reasoning'}
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                     <div className="text-[13px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
                       <ReactMarkdown components={markdownComponents}>{displayDescription}</ReactMarkdown>
                       {item.isAnalyzing && (
