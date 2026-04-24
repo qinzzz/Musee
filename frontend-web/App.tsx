@@ -1527,7 +1527,7 @@ const App: React.FC = () => {
                   <ArtSkillsView />
                 )}
                 {learnSubTab === 'profile' && (
-                  <TasteProfileView userId={USER_ID} />
+                  <TasteProfileView userId={currentUser?.user_id || USER_ID} />
                 )}
               </div>
             </div>
