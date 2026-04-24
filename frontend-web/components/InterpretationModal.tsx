@@ -263,12 +263,8 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     ),
   };
 
-  // Load image to get aspect ratio; open modal even if image fails
-  // Set initial mobile image height (4:3 = 75vw) and reset on item navigate
   useEffect(() => {
-    if (window.innerWidth < 640) {
-      setMobileImageHeight(Math.min(window.innerWidth * 0.75, window.innerHeight * 0.6));
-    }
+    // mobileImageHeight no longer used; mobile image scrolls naturally
   }, [item.id]);
 
   useEffect(() => {
@@ -291,7 +287,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     setSuggestedTopics([]);
     setUnlockPoints([]);
     onRightModeChange('metadata'); // Reset to metadata view for the new piece
-    if (window.innerWidth < 640) setMobileImageHeight(window.innerWidth * 0.75);
+    // mobileImageHeight no longer used for mobile
     setIsEditing(false);
     setTagInput('');
     const vals = {
@@ -531,17 +527,10 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     }
   }, []);
 
-  // Tap image panel to collapse (mobile only)
-  const handleImagePanelClick = () => {
-    if (window.innerWidth >= 640 || mobileImageHeight === 0) return;
-    setMobileImageHeight(0);
-  };
+  const handleImagePanelClick = () => { /* no-op; mobile image now scrolls naturally */ };
 
-  // Tap toolbar background to expand image (mobile only); ignore taps on actual buttons
   const handleToolbarClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (window.innerWidth >= 640 || mobileImageHeight !== 0) return;
-    if ((e.target as Element).closest('button')) return;
-    setMobileImageHeight(window.innerWidth * 0.75);
+    // desktop-only: clicking toolbar does nothing special
   };
 
   // Calculate modal dimensions based on screen size
@@ -635,17 +624,16 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
         </div>
 
         {/* ── MAIN AREA: left photo panel + right content panel ── */}
-        <div className="flex flex-col sm:flex-row flex-1 min-h-0">
+        <div className="flex flex-col sm:flex-row flex-1 sm:min-h-0 overflow-y-auto sm:overflow-hidden">
 
           {/* ── LEFT / TOP PANEL: Location + Time + Photo ── */}
           <div
-            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] sm:h-auto overflow-hidden sm:cursor-default cursor-pointer"
+            className="shrink-0 flex flex-col bg-neutral-50 border-b sm:border-b-0 sm:border-r border-neutral-100 sm:w-[44%] sm:h-auto overflow-hidden"
             style={mobileImageHeight >= 0 ? {
               height: `${mobileImageHeight}px`,
               transition: 'height 320ms cubic-bezier(0.4, 0, 0.2, 1)',
               visibility: mobileImageHeight === 0 ? 'hidden' : 'visible',
             } : {}}
-            onClick={handleImagePanelClick}
           >
             {/* Location + Time row */}
             {!item.isAnalyzing && (displayLocation || item.photoTime) && (
@@ -670,7 +658,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
             )}
 
             {/* Photo — takes remaining space */}
-            <div className="flex-1 relative flex items-start sm:items-center justify-center p-3 sm:p-5 min-h-0 overflow-hidden">
+            <div className="relative flex items-start sm:items-center justify-center p-3 sm:p-5 sm:flex-1 sm:min-h-0 overflow-hidden">
               {imageError ? (
                 <div className="flex flex-col items-center justify-center gap-3 text-neutral-300 select-none">
                   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
@@ -682,20 +670,11 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 <img
                   ref={imageRef}
                   src={item.url}
-                  className="max-w-full max-h-full object-contain shadow-xl rounded-lg"
+                  className="max-w-full h-auto sm:max-h-full object-contain shadow-xl rounded-lg"
                   alt="Interpretation target"
                 />
               )}
 
-              {/* Mobile-only: tap-to-fold hint */}
-              {mobileImageHeight > 0 && (
-                <div className="sm:hidden absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none">
-                  <div className="flex items-center gap-1 bg-black/25 backdrop-blur-sm text-white/80 rounded-full px-2.5 py-1">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <span className="text-[9px] tracking-[0.2em] uppercase font-medium">tap to hide</span>
-                  </div>
-                </div>
-              )}
 
               {/* Analyzing overlay badge on photo */}
               {item.isAnalyzing && interpretingMode !== 'interactive' && (
@@ -714,18 +693,10 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
           </div>
 
           {/* ── RIGHT PANEL: Analysis Metadata OR Curator Dialogue ── */}
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white">
+          <div className="flex flex-col sm:flex-1 sm:min-h-0 min-w-0 bg-white">
 
-            {/* Right panel header — tap background (not buttons) to re-expand image on mobile */}
-            <div className="px-2 py-2 border-b border-neutral-100 flex items-center justify-between shrink-0 relative" onClick={handleToolbarClick}>
-              {/* Mobile-only: tap-to-expand hint (shown only when image is hidden) */}
-              {mobileImageHeight === 0 && (
-                <div className="sm:hidden absolute left-1/2 -translate-x-1/2 pointer-events-none flex items-center gap-1 text-neutral-400">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
-                  <span className="text-[9px] tracking-[0.2em] uppercase font-medium">tap to show photo</span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
-                </div>
-              )}
+            {/* Right panel header — hidden on mobile when not editing (toolbar merged into metadata strip) */}
+            <div className={`px-2 py-2 border-b border-neutral-100 items-center justify-between shrink-0 relative ${isEditing ? 'flex' : 'hidden sm:flex'}`} onClick={handleToolbarClick}>
               {/* LEFT: action icons */}
               <div className="flex items-center gap-1">
                 {rightMode === 'metadata' && messages.length > 0 && (
@@ -788,7 +759,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
             {/* Right panel scrollable content */}
             {rightMode === 'metadata' ? (
-              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0 pb-20 sm:pb-7">
+              <div className="sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-5 sm:p-7 space-y-5 sm:space-y-7 pb-20 sm:pb-7">
 
                 {/* Error state */}
                 {!item.isAnalyzing && item.streamingText && !item.artistName && (
@@ -919,6 +890,18 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                         )}
                       </div>
                     </div>
+                    {/* Edit button — mobile only, lives in metadata strip since toolbar is hidden */}
+                    {!item.isAnalyzing && item.artworkId && (
+                      <button
+                        onClick={startEditing}
+                        title="Edit artwork info"
+                        className="sm:hidden w-7 h-7 shrink-0 flex items-center justify-center text-neutral-300 hover:text-neutral-600 transition-colors"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 ) : null}
 
@@ -1076,7 +1059,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
               </div>
             ) : (
               /* ── CHAT MODE ── */
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth min-h-0 pb-20 sm:pb-6">
+              <div ref={scrollRef} className="sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth pb-20 sm:pb-6">
                 {messages.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
                     <div className="w-12 h-px bg-neutral-200 mb-6"></div>
