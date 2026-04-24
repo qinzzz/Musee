@@ -37,14 +37,17 @@ _SKIP_DOMAINS = {
     "flickr.com", "500px.com", "deviantart.com",
 }
 
-def _filter_ref_urls(vision: dict, max_urls: int = 3) -> list[str]:
-    """Return up to max_urls quality reference URLs from Vision results."""
-    candidates = vision.get("matching_urls", []) or vision.get("similar_urls", [])
+def _filter_ref_urls(vision: dict, max_urls: int = 3) -> list[dict]:
+    """Return up to max_urls reference dicts {page_url, thumbnail, title} from Vision results."""
+    pages = vision.get("pages", [])
     result = []
     seen_domains = set()
-    for url in candidates:
+    for page in pages:
+        page_url = page.get("url", "")
+        if not page_url:
+            continue
         try:
-            domain = urlparse(url).netloc.lower().lstrip("www.")
+            domain = urlparse(page_url).netloc.lower().lstrip("www.")
         except Exception:
             continue
         if any(domain == d or domain.endswith("." + d) for d in _SKIP_DOMAINS):
@@ -52,7 +55,11 @@ def _filter_ref_urls(vision: dict, max_urls: int = 3) -> list[str]:
         if domain in seen_domains:
             continue
         seen_domains.add(domain)
-        result.append(url)
+        result.append({
+            "page_url":  page_url,
+            "thumbnail": page.get("thumbnail", ""),
+            "title":     page.get("title", ""),
+        })
         if len(result) >= max_urls:
             break
     return result
@@ -75,14 +82,26 @@ async def _call_vision_api(image_bytes: bytes, api_key: str) -> dict:
         resp.raise_for_status()
 
     web = resp.json()["responses"][0].get("webDetection", {})
-    matching_pages = web.get("pagesWithMatchingImages", [])
+    raw_pages = web.get("pagesWithMatchingImages", [])
     similar_images = web.get("visuallySimilarImages", [])
+
+    # Build page entries with thumbnail from the matching image on that page
+    pages = []
+    for p in raw_pages[:10]:
+        thumb_list = p.get("fullMatchingImages") or p.get("partialMatchingImages") or []
+        thumbnail = thumb_list[0].get("url", "") if thumb_list else ""
+        pages.append({
+            "url":       p.get("url", ""),
+            "title":     p.get("pageTitle", ""),
+            "thumbnail": thumbnail,
+        })
+
     return {
-        "entities":      [e["description"] for e in web.get("webEntities", []) if e.get("description")],
-        "best_guess":    [lbl["label"] for lbl in web.get("bestGuessLabels", [])],
-        "page_titles":   [p["pageTitle"] for p in matching_pages if p.get("pageTitle")][:10],
-        "matching_urls": [p["url"] for p in matching_pages[:5]],
-        "similar_urls":  [img["url"] for img in similar_images[:5]],
+        "entities":    [e["description"] for e in web.get("webEntities", []) if e.get("description")],
+        "best_guess":  [lbl["label"] for lbl in web.get("bestGuessLabels", [])],
+        "page_titles": [p["title"] for p in pages if p.get("title")][:10],
+        "pages":       pages,
+        "similar_urls": [img["url"] for img in similar_images[:5]],
     }
 
 
@@ -104,10 +123,10 @@ def _build_hint(vision: dict) -> str:
     if vision.get("page_titles"):
         parts.append("Matching page titles: " + " | ".join(vision["page_titles"][:5]))
 
-    urls = vision.get("matching_urls") or vision.get("similar_urls", [])
-    if urls:
-        url_type = "Pages containing this exact image" if vision.get("matching_urls") else "Visually similar images"
-        parts.append(f"{url_type}:\n" + "\n".join(f"  {u}" for u in urls))
+    page_urls = [p["url"] for p in vision.get("pages", [])] or vision.get("similar_urls", [])
+    if page_urls:
+        url_type = "Pages containing this exact image" if vision.get("pages") else "Visually similar images"
+        parts.append(f"{url_type}:\n" + "\n".join(f"  {u}" for u in page_urls))
         parts.append(
             "(You may visit these URLs for additional context — "
             "URL paths and page content often reveal the artist or artwork name.)"

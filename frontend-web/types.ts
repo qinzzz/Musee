@@ -1,4 +1,10 @@
 
+export interface ReferenceItem {
+  page_url: string;
+  thumbnail?: string;
+  title?: string;
+}
+
 export interface AestheticVibe {
   backgroundColor: string;
   padding: number; // 0 to 10 scale
@@ -48,7 +54,7 @@ export interface GalleryItem {
   sessionTitle?: string;
   movement?: string;
   periodBucket?: string;
-  referenceUrls?: string[];
+  referenceUrls?: ReferenceItem[];
 }
 
 export interface Visit {

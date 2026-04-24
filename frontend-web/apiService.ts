@@ -1,4 +1,4 @@
-import { Message, ArtworkSkill } from './types';
+import { Message, ArtworkSkill, ReferenceItem } from './types';
 
 /**
  * Suggested topic API endpoint
@@ -320,7 +320,7 @@ export interface ArtworkAnalysisResult {
   location?: string;
   photo_time?: string;
   session_title?: string;
-  reference_urls?: string[];
+  reference_urls?: ReferenceItem[];
 }
 
 export interface TopicSuggestionResponse {

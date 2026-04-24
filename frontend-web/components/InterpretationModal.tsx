@@ -23,7 +23,7 @@ interface Props {
     location?: any;
     photoTime?: string;
     visitId?: string;
-    referenceUrls?: string[];
+    referenceUrls?: import('../types').ReferenceItem[];
   };
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
@@ -1058,24 +1058,43 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 )}
 
-                {/* Reference sources from Vision web detection */}
+                {/* Reference sources from Vision web detection — thumbnail cards */}
                 {!item.isAnalyzing && item.referenceUrls && item.referenceUrls.length > 0 && (
                   <div className="pt-1 pb-2">
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-2">Sources</p>
-                    <div className="flex flex-wrap gap-2">
-                      {item.referenceUrls.map((url, idx) => {
-                        let label = url;
-                        try { label = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+                    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                      {item.referenceUrls.map((ref, idx) => {
+                        const pageUrl = typeof ref === 'string' ? ref : ref.page_url;
+                        const thumbnail = typeof ref === 'string' ? undefined : ref.thumbnail;
+                        const title = typeof ref === 'string' ? undefined : ref.title;
+                        let hostname = pageUrl;
+                        try { hostname = new URL(pageUrl).hostname.replace(/^www\./, ''); } catch {}
                         return (
                           <a
                             key={idx}
-                            href={url}
+                            href={pageUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[10px] text-neutral-500 bg-neutral-50 border border-neutral-100 px-3 py-1 rounded-full hover:bg-neutral-100 hover:text-neutral-700 hover:border-neutral-200 transition-colors truncate max-w-[200px]"
-                            title={url}
+                            className="shrink-0 w-28 overflow-hidden rounded-xl border border-neutral-100 hover:border-neutral-300 transition-colors shadow-sm hover:shadow-md"
+                            title={title || hostname}
                           >
-                            ↗ {label}
+                            {thumbnail ? (
+                              <img
+                                src={thumbnail}
+                                className="w-full h-[4.5rem] object-cover"
+                                alt={hostname}
+                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="w-full h-[4.5rem] bg-neutral-50 flex items-center justify-center text-neutral-300">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                                </svg>
+                              </div>
+                            )}
+                            <div className="px-2 py-1.5">
+                              <span className="text-[9px] text-neutral-500 truncate block leading-tight">{hostname}</span>
+                            </div>
                           </a>
                         );
                       })}
