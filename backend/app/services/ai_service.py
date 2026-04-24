@@ -16,6 +16,7 @@ from app.utils.prompt_loader import (
     get_explore_observation_prompt,
     get_explore_deepdive_prompt,
     get_define_aesthetic_term_prompt,
+    get_unlock_points_prompt,
 )
 from app.services.ai_client_interface import AIClientInterface
 import anyio
@@ -657,6 +658,23 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 temperature=0.7,
             )
         return self.parse_json_response(response)
+
+    async def get_unlock_points(
+        self,
+        artist_name: str,
+        artwork_name: str,
+        language: Optional[str] = None,
+    ) -> List[Dict[str, str]]:
+        """Return 0–3 unlock points for the given artwork. Returns [] if AI has no reliable knowledge."""
+        prompt = get_unlock_points_prompt(artist_name=artist_name, artwork_name=artwork_name, language=language)
+        with anyio.fail_after(settings.ai_timeout):
+            response = await self.ai_client.call_text_only(
+                prompt=prompt,
+                max_tokens=600,
+                temperature=0.4,
+            )
+        parsed = self.parse_json_response(response)
+        return parsed.get("points", [])
 
     async def define_aesthetic_term(self, tag: str) -> Dict[str, Any]:
         """Return a definition and external resonances for an aesthetic term."""

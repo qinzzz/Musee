@@ -3,8 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, Annotation, NeighborItem, Visit, GalleryItem } from '../types';
-import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile } from '../apiService';
-import InteractiveExplorationView from './InteractiveExplorationView';
+import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchUnlockPoints } from '../apiService';
 
 interface Props {
   item: {
@@ -101,6 +100,8 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [isTyping, setIsTyping] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [unlockPoints, setUnlockPoints] = useState<Array<{ title: string; text: string }>>([]);
+  const [isLoadingUnlock, setIsLoadingUnlock] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
@@ -248,6 +249,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   useEffect(() => {
     setMessages(item.conversation || []);
     setSuggestedTopics([]);
+    setUnlockPoints([]);
     onRightModeChange('metadata'); // Reset to metadata view for the new piece
     if (window.innerWidth < 640) setMobileImageHeight(window.innerWidth * 0.75);
     setIsEditing(false);
@@ -264,6 +266,17 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     originalValuesRef.current = vals;
     originalTagsRef.current = tags;
   }, [item.id]);
+
+  // Fetch unlock points when artist is identified
+  useEffect(() => {
+    if (!item.isAnalyzing && item.artistName && item.artistName.toLowerCase() !== 'unknown') {
+      setIsLoadingUnlock(true);
+      fetchUnlockPoints(item.artistName, item.artworkName || '', undefined)
+        .then(pts => setUnlockPoints(pts))
+        .catch(() => setUnlockPoints([]))
+        .finally(() => setIsLoadingUnlock(false));
+    }
+  }, [item.artistName, item.isAnalyzing]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -576,17 +589,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
               <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
-          ) : onSwitchMode ? (
-            <button
-              onClick={onSwitchMode}
-              className="flex items-center transition-colors px-2 py-1.5 border rounded text-[9px] tracking-[0.2em] uppercase font-bold"
-              style={interpretingMode === 'interactive'
-                ? { color: '#3C3489', borderColor: '#EEEDFE', background: '#EEEDFE' }
-                : { color: '#6b7280', borderColor: '#e5e7eb', background: 'transparent' }
-              }
-            >
-              {interpretingMode === 'interactive' ? '← Standard mode' : 'Interactive mode →'}
-            </button>
           ) : (
             <div className="w-16" />
           )}
@@ -740,27 +742,12 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                     <div className="w-px h-3 bg-neutral-200" />
                   </>
                 )}
-                {onSwitchMode && (
-                  <button
-                    onClick={onSwitchMode}
-                    className="hidden sm:flex items-center gap-1 text-[9px] tracking-[0.25em] uppercase hover:text-neutral-700 transition-colors border rounded px-2 py-1"
-                    style={interpretingMode === 'interactive'
-                      ? { color: '#3C3489', borderColor: '#EEEDFE', background: '#EEEDFE' }
-                      : { color: '#9a9590', borderColor: 'rgb(229 231 235)', background: 'transparent' }
-                    }
-                    title={interpretingMode === 'interactive' ? 'Switch to Professional mode' : 'Switch to Interactive Explore mode'}
-                  >
-                    {interpretingMode === 'interactive' ? '← Standard mode' : 'Interactive mode →'}
-                  </button>
-                )}
                 <button onClick={onClose} className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
               </div>
             </div>
 
             {/* Right panel scrollable content */}
-            {interpretingMode === 'interactive' ? (
-              <InteractiveExplorationView item={item as any} />
-            ) : rightMode === 'metadata' ? (
+            {rightMode === 'metadata' ? (
               <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5 sm:space-y-7 min-h-0">
 
                 {/* Analyzing state — shown at the top of the content area while streaming */}
@@ -919,6 +906,33 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                         <span className="inline-block w-1.5 h-3 bg-neutral-400 animate-pulse ml-0.5"></span>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {/* Unlock points — loaded after artist is identified */}
+                {(isLoadingUnlock || unlockPoints.length > 0) && (
+                  <div className="border-t border-neutral-50 pt-5">
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-4">Unlock Points</p>
+                    {isLoadingUnlock ? (
+                      <div className="flex items-center gap-2 text-neutral-300">
+                        <div className="w-3 h-3 border-t border-neutral-300 rounded-full animate-spin shrink-0" />
+                        <span className="text-[11px] tracking-wide">Looking up context…</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {unlockPoints.map((pt, idx) => (
+                          <div key={idx} className="flex gap-3">
+                            <div className="mt-1 w-4 h-4 shrink-0 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+                              <span className="text-[9px] font-mono font-bold">{idx + 1}</span>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-semibold text-neutral-700 tracking-wide mb-1">{pt.title}</p>
+                              <p className="text-[13px] leading-relaxed text-neutral-500 font-serif">{pt.text}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

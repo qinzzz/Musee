@@ -412,6 +412,20 @@ def get_explore_deepdive_prompt(
 
 
 @lru_cache(maxsize=1)
+def _load_unlock_points_template() -> str:
+    return _load_prompt_file(INSTRUCTIONS_DIR / "unlock_points.txt")
+
+
+def get_unlock_points_prompt(artist_name: str, artwork_name: str, language: str = None) -> str:
+    template = _load_unlock_points_template()
+    lang_instr = _build_language_instruction(language)
+    return (template
+        .replace("{artist_name}", artist_name)
+        .replace("{artwork_name}", artwork_name)
+        .replace("{language_instruction}", lang_instr))
+
+
+@lru_cache(maxsize=1)
 def _load_define_aesthetic_term_template() -> str:
     return _load_prompt("instructions/define_aesthetic_term.txt")
 

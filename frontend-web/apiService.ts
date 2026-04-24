@@ -931,6 +931,22 @@ export async function getTasteProfile(userId: string): Promise<any> {
   return response.json();
 }
 
+export async function fetchUnlockPoints(
+  artistName: string,
+  artworkName: string,
+  language?: string,
+): Promise<Array<{ title: string; text: string }>> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-unlock-points`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ artist_name: artistName, artwork_name: artworkName, language: language || null }),
+    timeout: 30000,
+  });
+  if (!response.ok) return [];
+  const data = await response.json();
+  return data.points ?? [];
+}
+
 /**
  * Re-run AI identification on a saved artwork using its stored image.
  */

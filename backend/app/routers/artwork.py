@@ -1635,6 +1635,33 @@ async def define_aesthetic_term(
         logger.exception("Define aesthetic term failed")
         raise HTTPException(status_code=500, detail=str(e))
 
+class UnlockPointsRequest(BaseModel):
+    artist_name: str
+    artwork_name: str
+    language: Optional[str] = None
+
+@router.post("/artwork-unlock-points")
+async def artwork_unlock_points(
+    request: UnlockPointsRequest = Body(...),
+    model: Optional[AIProvider] = Query(None),
+):
+    """Return 0–3 unlock points anchored on the artist's known biography/intent."""
+    if not request.artist_name or request.artist_name.lower() in ("unknown", "unknown artist", ""):
+        return {"points": []}
+    ai_provider = determine_ai_provider(model)
+    ai_service = AIServiceFactory.get_service(ai_provider)
+    try:
+        points = await ai_service.get_unlock_points(
+            artist_name=request.artist_name,
+            artwork_name=request.artwork_name or "Untitled",
+            language=request.language,
+        )
+        return {"points": points}
+    except Exception as e:
+        logger.exception("Unlock points failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class GenerateSpeechRequest(BaseModel):
     text: str
 
