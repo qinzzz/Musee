@@ -1761,6 +1761,7 @@ const App: React.FC = () => {
             }}
             onRetryHarder={handleRetryHarder}
             onReanalyze={handleReanalyze}
+            userId={currentUser?.user_id || USER_ID}
           />
         )}
 

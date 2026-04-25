@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, Annotation, NeighborItem, Visit, GalleryItem } from '../types';
-import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchUnlockPoints } from '../apiService';
+import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchUnlockPoints, fetchCommunity, publishComment, deleteCommunityComment, type PublicComment, type CommunityData } from '../apiService';
 
 interface Props {
   item: {
@@ -40,6 +40,7 @@ interface Props {
   onRetryHarder?: () => void;
   onReanalyze?: () => Promise<void>;
   onDelete?: () => void;
+  userId?: string;
 }
 
 // Tag component with explanation tooltip on hover
@@ -136,7 +137,7 @@ const UnlockPoint: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onRetryHarder, onReanalyze, onDelete }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onRetryHarder, onReanalyze, onDelete, userId }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -145,6 +146,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [isLoadingUnlock, setIsLoadingUnlock] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [community, setCommunity] = useState<CommunityData | null>(null);
+  const [commentInput, setCommentInput] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
@@ -316,6 +320,15 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
         .finally(() => setIsLoadingUnlock(false));
     }
   }, [item.artistName, item.isAnalyzing]);
+
+  // Fetch community comments when artwork is identified and saved
+  useEffect(() => {
+    if (!item.isAnalyzing && item.artworkId) {
+      fetchCommunity(item.artworkId)
+        .then(data => setCommunity(data.entity ? data : null))
+        .catch(() => {});
+    }
+  }, [item.artworkId, item.isAnalyzing]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -1100,6 +1113,90 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                         );
                       })}
                     </div>
+                  </div>
+                )}
+
+                {/* Community comments — only shown when other users have also collected this artwork */}
+                {!item.isAnalyzing && community && (community.comments.length > 0 || userId) && (
+                  <div className="pt-4 border-t border-neutral-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">
+                        {community.entity && community.entity.instance_count > 1
+                          ? `${community.entity.instance_count} people collected this`
+                          : 'Community'}
+                      </p>
+                    </div>
+
+                    {/* Existing comments */}
+                    {community.comments.length > 0 && (
+                      <div className="space-y-3 mb-3">
+                        {community.comments.map(c => (
+                          <div key={c.id} className="flex gap-2.5 items-start">
+                            {c.author_avatar ? (
+                              <img src={c.author_avatar} className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5" alt={c.author_name} />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-neutral-100 shrink-0 mt-0.5 flex items-center justify-center text-[10px] text-neutral-400 font-medium">
+                                {c.author_name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[10px] font-semibold text-neutral-600">{c.author_name}</span>
+                              <p className="text-[12px] text-neutral-700 leading-relaxed mt-0.5">{c.text}</p>
+                            </div>
+                            {userId && c.user_id === userId && (
+                              <button
+                                onClick={async () => {
+                                  await deleteCommunityComment(item.artworkId!, c.id, userId);
+                                  setCommunity(prev => prev ? { ...prev, comments: prev.comments.filter(x => x.id !== c.id) } : prev);
+                                }}
+                                className="text-neutral-300 hover:text-red-400 transition-colors shrink-0 mt-0.5"
+                                title="Delete comment"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Publish comment box */}
+                    {userId && (
+                      <div className="flex gap-2 items-center">
+                        <input
+                          value={commentInput}
+                          onChange={e => setCommentInput(e.target.value)}
+                          onKeyDown={async e => {
+                            if (e.key === 'Enter' && commentInput.trim() && !isPublishing) {
+                              e.preventDefault();
+                              setIsPublishing(true);
+                              try {
+                                const c = await publishComment(item.artworkId!, userId, commentInput.trim());
+                                setCommunity(prev => prev ? { ...prev, comments: [c, ...prev.comments] } : prev);
+                                setCommentInput('');
+                              } catch {} finally { setIsPublishing(false); }
+                            }
+                          }}
+                          placeholder="Share your thought publicly…"
+                          className="flex-1 text-[11px] text-neutral-700 bg-neutral-50 border border-neutral-200 rounded-full px-3 py-1.5 outline-none focus:border-neutral-400 placeholder-neutral-300 transition-colors"
+                        />
+                        <button
+                          disabled={!commentInput.trim() || isPublishing}
+                          onClick={async () => {
+                            if (!commentInput.trim() || isPublishing) return;
+                            setIsPublishing(true);
+                            try {
+                              const c = await publishComment(item.artworkId!, userId, commentInput.trim());
+                              setCommunity(prev => prev ? { ...prev, comments: [c, ...prev.comments] } : prev);
+                              setCommentInput('');
+                            } catch {} finally { setIsPublishing(false); }
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded-full bg-neutral-900 text-white disabled:opacity-30 transition-opacity shrink-0"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 

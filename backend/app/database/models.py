@@ -67,9 +67,11 @@ class SavedArtwork(Base):
     movement = Column(String, nullable=True)  # Canonical art movement (e.g. "Arte Povera", "Minimalism")
     period_bucket = Column(String, nullable=True)  # Historical / Modern / Contemporary / Now
     reference_urls = Column(JSON, nullable=True)  # Top reference URLs from Vision web detection
+    artwork_entity_id = Column(String, ForeignKey('artwork_entities.id', ondelete='SET NULL'), nullable=True, index=True)
 
     # Relationships
     user = relationship("User", back_populates="artworks")
+    artwork_entity = relationship("ArtworkEntity", back_populates="instances")
     conversations = relationship("Conversation", back_populates="artwork", cascade="all, delete-orphan", order_by="Conversation.sequence_number")
     collections = relationship("Collection", secondary="collection_artworks", back_populates="artworks")
     artwork_tags = relationship("Tag", secondary="artwork_tags", back_populates="artworks")
@@ -274,6 +276,62 @@ class Session(Base):
         if include_artworks:
             result["artworks"] = [artwork.to_dict(include_conversations=False) for artwork in self.artworks]
         return result
+
+
+class ArtworkEntity(Base):
+    """Canonical artwork entity — shared across all users' instances of the same work."""
+
+    __tablename__ = "artwork_entities"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    canonical_artist = Column(String, nullable=False)  # normalized lowercase
+    canonical_title = Column(String, nullable=False)   # normalized lowercase
+    display_artist = Column(String, nullable=False)    # original casing from first recognition
+    display_title = Column(String, nullable=False)
+    instance_count = Column(Integer, default=1)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('canonical_artist', 'canonical_title', name='uq_entity_artist_title'),
+    )
+
+    instances = relationship("SavedArtwork", back_populates="artwork_entity")
+    public_comments = relationship("PublicComment", back_populates="entity", cascade="all, delete-orphan")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "display_artist": self.display_artist,
+            "display_title": self.display_title,
+            "instance_count": self.instance_count,
+        }
+
+
+class PublicComment(Base):
+    """A comment published by a user to a shared artwork entity."""
+
+    __tablename__ = "public_comments"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    entity_id = Column(String, ForeignKey('artwork_entities.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+    entity = relationship("ArtworkEntity", back_populates="public_comments")
+    author = relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "entity_id": self.entity_id,
+            "user_id": self.user_id,
+            "author_name": self.author.full_name or self.author.username or "Anonymous" if self.author else "Anonymous",
+            "author_avatar": self.author.profile_picture_url if self.author else None,
+            "text": self.text,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 class SkillEvent(Base):

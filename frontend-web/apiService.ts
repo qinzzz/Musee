@@ -1237,3 +1237,42 @@ export async function deleteSession(sessionId: string): Promise<any> {
 
   return response.json();
 }
+
+export interface PublicComment {
+  id: string;
+  entity_id: string;
+  user_id: string;
+  author_name: string;
+  author_avatar?: string;
+  text: string;
+  created_at: string;
+}
+
+export interface CommunityData {
+  entity: { id: string; display_artist: string; display_title: string; instance_count: number } | null;
+  comments: PublicComment[];
+}
+
+export async function fetchCommunity(artworkId: string): Promise<CommunityData> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}/community`);
+  if (!response.ok) throw new Error(`API error (${response.status})`);
+  return response.json();
+}
+
+export async function publishComment(artworkId: string, userId: string, text: string): Promise<PublicComment> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}/community/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, text }),
+  });
+  if (!response.ok) throw new Error(`API error (${response.status})`);
+  return response.json();
+}
+
+export async function deleteCommunityComment(artworkId: string, commentId: string, userId: string): Promise<void> {
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/artworks/${artworkId}/community/comments/${commentId}?user_id=${encodeURIComponent(userId)}`,
+    { method: 'DELETE' }
+  );
+  if (!response.ok) throw new Error(`API error (${response.status})`);
+}

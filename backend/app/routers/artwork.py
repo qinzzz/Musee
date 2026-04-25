@@ -12,7 +12,7 @@ from datetime import datetime
 import anyio
 
 from app.database.connection import get_db, SessionLocal
-from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SkillEvent
+from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SkillEvent, ArtworkEntity, PublicComment
 from app.models.artwork import AIProvider, UpdateArtworkRequest
 from pydantic import BaseModel
 import base64
@@ -30,6 +30,35 @@ from app.utils.conversation_storage import ConversationMessage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _normalize(s: str) -> str:
+    """Lowercase, strip leading 'the ', collapse whitespace for entity matching."""
+    s = s.lower().strip()
+    if s.startswith("the "):
+        s = s[4:]
+    return re.sub(r"\s+", " ", s)
+
+
+def upsert_artwork_entity(db, artist_name: str, artwork_name: str) -> "ArtworkEntity":
+    """Return existing or newly created ArtworkEntity for the given artist+title."""
+    can_artist = _normalize(artist_name)
+    can_title = _normalize(artwork_name)
+    entity = db.query(ArtworkEntity).filter_by(
+        canonical_artist=can_artist, canonical_title=can_title
+    ).first()
+    if entity:
+        entity.instance_count = (entity.instance_count or 0) + 1
+    else:
+        entity = ArtworkEntity(
+            canonical_artist=can_artist,
+            canonical_title=can_title,
+            display_artist=artist_name,
+            display_title=artwork_name,
+            instance_count=1,
+        )
+        db.add(entity)
+    return entity
 
 # Skill name → category map (mirrors ArtSkillsView.tsx)
 _SKILL_CAT: dict[str, str] = {
@@ -1812,7 +1841,13 @@ async def save_artwork(
             session_id=session_id
         )
         db.add(saved_artwork)
-        
+
+        # Link to shared artwork entity (only for recognized artworks)
+        if is_recognized and artist_name and artwork_name:
+            entity = upsert_artwork_entity(db, artist_name, artwork_name)
+            db.flush()  # ensure entity.id is assigned
+            saved_artwork.artwork_entity_id = entity.id
+
         # Ensure session exists (auto-create if not)
         if session_id:
             session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -1987,6 +2022,85 @@ async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Artwork not found")
 
     return artwork.to_dict()
+
+
+@router.get("/artworks/{artwork_id}/community")
+async def get_community(artwork_id: str, db: Session = Depends(get_db)):
+    """Return public comments for the artwork entity linked to this instance."""
+    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    if not artwork or not artwork.artwork_entity_id:
+        return {"entity": None, "comments": []}
+
+    entity = db.query(ArtworkEntity).filter(ArtworkEntity.id == artwork.artwork_entity_id).first()
+    if not entity:
+        return {"entity": None, "comments": []}
+
+    comments = (
+        db.query(PublicComment)
+        .filter(PublicComment.entity_id == entity.id)
+        .order_by(PublicComment.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return {
+        "entity": entity.to_dict(),
+        "comments": [c.to_dict() for c in comments],
+    }
+
+
+class PublishCommentRequest(BaseModel):
+    user_id: str
+    text: str
+
+
+@router.post("/artworks/{artwork_id}/community/comments")
+async def publish_comment(
+    artwork_id: str,
+    body: PublishCommentRequest,
+    db: Session = Depends(get_db),
+):
+    """Publish a public comment to the shared artwork entity."""
+    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+    # Lazily link entity if missing (e.g. artwork saved before this feature)
+    if not artwork.artwork_entity_id and artwork.is_recognized and artwork.artist_name and artwork.artwork_name:
+        entity = upsert_artwork_entity(db, artwork.artist_name, artwork.artwork_name)
+        db.flush()
+        artwork.artwork_entity_id = entity.id
+
+    if not artwork.artwork_entity_id:
+        raise HTTPException(status_code=400, detail="Artwork has no linked entity (unrecognized)")
+
+    comment = PublicComment(
+        entity_id=artwork.artwork_entity_id,
+        user_id=body.user_id,
+        text=body.text.strip(),
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return comment.to_dict()
+
+
+@router.delete("/artworks/{artwork_id}/community/comments/{comment_id}")
+async def delete_comment(
+    artwork_id: str,
+    comment_id: str,
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Delete own public comment."""
+    comment = db.query(PublicComment).filter(
+        PublicComment.id == comment_id,
+        PublicComment.user_id == user_id,
+    ).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found or not yours")
+    db.delete(comment)
+    db.commit()
+    return {"ok": True}
 
 
 @router.put("/artworks/{artwork_id}")
