@@ -23,14 +23,6 @@ export interface TagCoordinate {
   y: number;
 }
 
-export interface Annotation {
-  id: string;
-  x: number; // 0-100 percentage
-  y: number; // 0-100 percentage
-  comment: string;
-  author?: string;
-}
-
 export interface GalleryItem {
   id: string;
   url: string;
@@ -38,7 +30,6 @@ export interface GalleryItem {
   vibe: AestheticVibe;
   timestamp: number;
   conversation: Message[];
-  annotations: Annotation[];
   visitId?: string;
   // Artwork analysis fields from backend
   artistName?: string;
@@ -78,7 +69,6 @@ export interface CuratorConversation {
 export interface NeighborWork {
   id: string;
   url: string;
-  annotations: Annotation[];
   conversation: Message[];
 }
 

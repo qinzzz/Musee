@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import ExifReader from 'exifreader';
-import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, Annotation, CuratorConversation, Album, AestheticVibe } from './types';
+import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, CuratorConversation, Album, AestheticVibe } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import GoogleLogin from './components/GoogleLogin';
 import {
@@ -179,17 +179,14 @@ const MOCK_NEIGHBORS: NeighborItem[] = [
       {
         id: 'z1', url: 'https://picsum.photos/id/230/800/1200',
         conversation: [],
-        annotations: [{ id: 'az1', x: 50, y: 50, comment: "Pure void.", author: "Silent_Eye" }]
       },
       {
         id: 'z2', url: 'https://picsum.photos/id/231/800/1200',
         conversation: [],
-        annotations: []
       },
       {
         id: 'z3', url: 'https://picsum.photos/id/232/800/1200',
         conversation: [],
-        annotations: []
       }
     ]
   },
@@ -202,17 +199,14 @@ const MOCK_NEIGHBORS: NeighborItem[] = [
       {
         id: 'b1', url: 'https://picsum.photos/id/234/800/1200',
         conversation: [],
-        annotations: [{ id: 'ab1', x: 30, y: 60, comment: "The weight is the truth.", author: "Concrete_Heart" }]
       },
       {
         id: 'b2', url: 'https://picsum.photos/id/235/800/1200',
         conversation: [],
-        annotations: []
       },
       {
         id: 'b3', url: 'https://picsum.photos/id/236/800/1200',
         conversation: [],
-        annotations: []
       }
     ]
   },
@@ -234,7 +228,6 @@ const App: React.FC = () => {
     url: string,
     id: string,
     conversation: Message[],
-    annotations: Annotation[],
     artistName?: string,
     artworkName?: string,
     description?: string,
@@ -482,7 +475,6 @@ const App: React.FC = () => {
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 text: msg.content
               })),
-              annotations: [],
               vibe: {
                 backgroundColor: '#ffffff',
                 padding: 4,
@@ -902,7 +894,6 @@ const App: React.FC = () => {
           vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
           timestamp: photoTimestamp,
           conversation: [],
-          annotations: [],
           visitId: visitId,
           isAnalyzing: true,
           streamingText: '',
@@ -1017,7 +1008,7 @@ const App: React.FC = () => {
         const itemTimeLabel = new Date(itemTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
         return {
-          id: id, url: memFile.base64, keywords: [], conversation: [], annotations: [], visitId: batchVisitId,
+          id: id, url: memFile.base64, keywords: [], conversation: [], visitId: batchVisitId,
           vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
           timestamp: itemTime, isAnalyzing: true, streamingText: '', photoTime: itemTimeLabel,
           location: memFile.metadata.latitude ? JSON.stringify({ 

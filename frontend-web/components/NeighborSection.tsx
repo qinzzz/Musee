@@ -1,7 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { NeighborItem, NeighborWork } from '../types';
-import { generateSpeech } from '../apiService';
 
 interface Props {
   neighbors: NeighborItem[];
@@ -111,7 +110,6 @@ interface TowerProps {
 const AestheticTower: React.FC<TowerProps> = ({ neighbor, onInterpret }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [playingThoughtId, setPlayingThoughtId] = useState<string | null>(null);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -120,12 +118,6 @@ const AestheticTower: React.FC<TowerProps> = ({ neighbor, onInterpret }) => {
     if (newIndex !== activeIndex) {
       setActiveIndex(newIndex);
     }
-  };
-
-  const listenToThought = async (text: string, annotationId: string) => {
-    setPlayingThoughtId(annotationId);
-    await generateSpeech(text);
-    setPlayingThoughtId(null);
   };
 
   return (
@@ -168,22 +160,6 @@ const AestheticTower: React.FC<TowerProps> = ({ neighbor, onInterpret }) => {
                     alt={`Resonance work ${idx}`}
                   />
 
-                  {/* Hotspots - only visible when focused */}
-                  {isFocused && work.annotations.map(an => (
-                    <div 
-                      key={an.id}
-                      className="absolute group/hot -translate-x-1/2 -translate-y-1/2 z-10"
-                      style={{ left: `${an.x}%`, top: `${an.y}%` }}
-                    >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          listenToThought(an.comment, an.id);
-                        }}
-                        className={`w-6 h-6 rounded-full border border-amber-400 bg-amber-400/30 backdrop-blur shadow-[0_0_20px_rgba(251,191,36,0.6)] hover:scale-125 transition-all duration-500 ${playingThoughtId === an.id ? 'animate-ping' : 'animate-pulse'}`}
-                      />
-                    </div>
-                  ))}
 
                   {/* Focused Overlay */}
                   {isFocused && (

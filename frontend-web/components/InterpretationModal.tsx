@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
-import { Message, Album, Annotation, NeighborItem, Visit, GalleryItem } from '../types';
+import { Message, Album, NeighborItem, Visit, GalleryItem } from '../types';
 import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchUnlockPoints, fetchCommunity, publishComment, deleteCommunityComment, type PublicComment, type CommunityData } from '../apiService';
 
 interface Props {
@@ -10,7 +10,6 @@ interface Props {
     url: string;
     id: string;
     conversation: Message[];
-    annotations: Annotation[];
     artistName?: string;
     artworkName?: string;
     description?: string;
