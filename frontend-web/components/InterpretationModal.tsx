@@ -576,6 +576,65 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     };
   };
 
+  const overflowMenu = item.artworkId ? (
+    <div className="relative">
+      <button
+        onClick={() => setMoreMenuOpen(o => !o)}
+        className="w-9 h-9 flex items-center justify-center text-neutral-500 hover:text-neutral-900 active:text-neutral-900 transition-colors"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+      </button>
+      {moreMenuOpen && (
+        <>
+          <div className="fixed inset-0 z-[90]" onClick={() => setMoreMenuOpen(false)} />
+          <div className="absolute top-full right-0 mt-1 z-[91] bg-white border border-neutral-100 rounded-2xl shadow-2xl overflow-hidden min-w-[180px] animate-in fade-in zoom-in-95 duration-150">
+            {!item.isAnalyzing && (
+              <button
+                onClick={() => { setMoreMenuOpen(false); startEditing(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                Edit info
+              </button>
+            )}
+            {onReanalyze && !item.isAnalyzing && (
+              <button
+                onClick={async () => { setMoreMenuOpen(false); setIsReanalyzing(true); try { await onReanalyze(); } catch {} finally { setIsReanalyzing(false); } }}
+                disabled={isReanalyzing}
+                className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left disabled:opacity-40"
+              >
+                <svg width="15" height="15" className={isReanalyzing ? 'animate-spin' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                {isReanalyzing ? 'Refreshing…' : 'Refresh ID'}
+              </button>
+            )}
+            {onRetryHarder && !item.isAnalyzing && (
+              <button
+                onClick={async () => { setMoreMenuOpen(false); setIsRetrying(true); try { await onRetryHarder(); } catch {} finally { setIsRetrying(false); } }}
+                disabled={isRetrying}
+                className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left disabled:opacity-40"
+              >
+                <svg width="15" height="15" className={isRetrying ? 'animate-spin' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.2-9.2L23 10"/></svg>
+                {isRetrying ? 'Retrying…' : 'Retry deeper'}
+              </button>
+            )}
+            {onDelete && (
+              <>
+                <div className="h-px bg-neutral-100 mx-3" />
+                <button
+                  onClick={() => { setMoreMenuOpen(false); onDelete(); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-red-500 hover:bg-red-50 transition-colors text-left"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  ) : null;
+
   return (
     <>
     <div
@@ -636,64 +695,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
               </button>
             )}
             {/* Overflow menu — edit, refresh, retry, delete */}
-            {item.artworkId && (
-              <div className="relative">
-                <button
-                  onClick={() => setMoreMenuOpen(o => !o)}
-                  className="w-9 h-9 flex items-center justify-center text-neutral-500 active:text-neutral-900 transition-colors"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
-                </button>
-                {moreMenuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-[90]" onClick={() => setMoreMenuOpen(false)} />
-                    <div className="absolute top-full right-0 mt-1 z-[91] bg-white border border-neutral-100 rounded-2xl shadow-2xl overflow-hidden min-w-[180px] animate-in fade-in zoom-in-95 duration-150">
-                      {!item.isAnalyzing && (
-                        <button
-                          onClick={() => { setMoreMenuOpen(false); startEditing(); }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
-                          Edit info
-                        </button>
-                      )}
-                      {onReanalyze && !item.isAnalyzing && (
-                        <button
-                          onClick={async () => { setMoreMenuOpen(false); setIsReanalyzing(true); try { await onReanalyze(); } catch {} finally { setIsReanalyzing(false); } }}
-                          disabled={isReanalyzing}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left disabled:opacity-40"
-                        >
-                          <svg width="15" height="15" className={isReanalyzing ? 'animate-spin' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-                          {isReanalyzing ? 'Refreshing…' : 'Refresh ID'}
-                        </button>
-                      )}
-                      {onRetryHarder && !item.isAnalyzing && (
-                        <button
-                          onClick={async () => { setMoreMenuOpen(false); setIsRetrying(true); try { await onRetryHarder(); } catch {} finally { setIsRetrying(false); } }}
-                          disabled={isRetrying}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left disabled:opacity-40"
-                        >
-                          <svg width="15" height="15" className={isRetrying ? 'animate-spin' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.2-9.2L23 10"/></svg>
-                          {isRetrying ? 'Retrying…' : 'Retry deeper'}
-                        </button>
-                      )}
-                      {onDelete && (
-                        <>
-                          <div className="h-px bg-neutral-100 mx-3" />
-                          <button
-                            onClick={() => { setMoreMenuOpen(false); onDelete(); }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-red-500 hover:bg-red-50 transition-colors text-left"
-                          >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            Delete
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+            {overflowMenu}
           </div>
         </div>
 
@@ -786,18 +788,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                     <span className="text-[9px] tracking-[0.2em] uppercase font-bold">{messages.length}</span>
                   </button>
                 )}
-                {rightMode === 'metadata' && !item.isAnalyzing && item.artworkId && (
-                  (<button
-                      onClick={startEditing}
-                      title="Edit artwork info"
-                      className="w-8 h-9 flex items-center justify-center rounded-full text-neutral-500 hover:text-neutral-700 transition-colors"
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-                      </svg>
-                    </button>
-                  )
-                )}
 
                 {isEditing && (
                     <div className="flex items-center gap-2 px-2">
@@ -828,6 +818,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                     <div className="w-px h-3 bg-neutral-200" />
                   </>
                 )}
+                {overflowMenu}
                 <button onClick={onClose} className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
               </div>
             </div>
@@ -913,26 +904,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 ) : (displayArtist || displayTitle || displayDate || displayMedium) ? (
                   <div className="flex items-center gap-2 min-w-0">
-                    {/* Reanalyze button — desktop only; mobile uses "..." menu */}
-                    {onReanalyze && item.artworkId && !item.isAnalyzing && (
-                      <button
-                        onClick={async () => {
-                          if (isReanalyzing) return;
-                          setIsReanalyzing(true);
-                          try { await onReanalyze(); } catch { /* keep existing */ } finally { setIsReanalyzing(false); }
-                        }}
-                        disabled={isReanalyzing}
-                        title="Re-identify with AI"
-                        className="hidden sm:flex w-5 h-5 shrink-0 items-center justify-center rounded-full text-neutral-300 hover:text-neutral-500 transition-colors disabled:opacity-40"
-                      >
-                        <svg className={`w-3.5 h-3.5 ${isReanalyzing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 2v6h-6" />
-                          <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                          <path d="M3 22v-6h6" />
-                          <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-                        </svg>
-                      </button>
-                    )}
                     <div className="overflow-x-auto min-w-0 flex-1" style={{ scrollbarWidth: 'none' }}>
                       <div className="flex items-baseline gap-0 whitespace-nowrap">
                         {displayArtist && (
@@ -1042,24 +1013,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
                 {displayDescription && (
                   <div>
-                    {/* Desktop-only retry button header; mobile uses "..." menu */}
-                    {!item.isAnalyzing && onRetryHarder && (
-                      <div className="hidden sm:flex justify-end mb-2">
-                        <button
-                          onClick={async () => {
-                            if (isRetrying) return;
-                            setIsRetrying(true);
-                            try { await onRetryHarder(); } catch { /* keep current results */ } finally { setIsRetrying(false); }
-                          }}
-                          disabled={isRetrying}
-                          title="Retry analysis with higher reasoning effort"
-                          className="flex items-center gap-1.5 text-[9px] tracking-[0.2em] uppercase text-neutral-400 hover:text-neutral-700 border border-neutral-200 hover:border-neutral-400 px-2.5 py-1 rounded-full transition-colors disabled:opacity-50"
-                        >
-                          {isRetrying && <span className="inline-block w-2.5 h-2.5 border-t border-neutral-400 rounded-full animate-spin shrink-0" />}
-                          {isRetrying ? 'Retrying…' : 'Retry with higher reasoning'}
-                        </button>
-                      </div>
-                    )}
                     <div className="text-[13px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
                       <ReactMarkdown components={markdownComponents}>{displayDescription}</ReactMarkdown>
                       {item.isAnalyzing && (
