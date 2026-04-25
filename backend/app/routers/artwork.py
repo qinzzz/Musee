@@ -1549,6 +1549,33 @@ async def run_migrations(db: Session = Depends(get_db)):
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """))
+        _conn.execute(_text("""
+            CREATE TABLE IF NOT EXISTS artwork_entities (
+                id VARCHAR PRIMARY KEY,
+                canonical_artist VARCHAR NOT NULL,
+                canonical_title VARCHAR NOT NULL,
+                display_artist VARCHAR NOT NULL,
+                display_title VARCHAR NOT NULL,
+                instance_count INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE (canonical_artist, canonical_title)
+            )
+        """))
+        _conn.execute(_text("""
+            CREATE TABLE IF NOT EXISTS public_comments (
+                id VARCHAR PRIMARY KEY,
+                entity_id VARCHAR NOT NULL REFERENCES artwork_entities(id) ON DELETE CASCADE,
+                user_id VARCHAR NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        _conn.execute(_text("""
+            ALTER TABLE saved_artworks
+            ADD COLUMN IF NOT EXISTS artwork_entity_id VARCHAR
+            REFERENCES artwork_entities(id) ON DELETE SET NULL
+        """))
         _conn.commit()
     return {"status": "ok", "message": "Migrations applied"}
 
