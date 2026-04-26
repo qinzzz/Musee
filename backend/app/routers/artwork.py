@@ -1870,10 +1870,14 @@ async def save_artwork(
         db.add(saved_artwork)
 
         # Link to shared artwork entity (only for recognized artworks)
-        if is_recognized and artist_name and artwork_name:
-            entity = upsert_artwork_entity(db, artist_name, artwork_name)
-            db.flush()  # ensure entity.id is assigned
-            saved_artwork.artwork_entity_id = entity.id
+        if artist_name and artwork_name and artist_name.lower() not in ("unknown", ""):
+            try:
+                with db.begin_nested():  # savepoint — rolls back only entity upsert on failure
+                    entity = upsert_artwork_entity(db, artist_name, artwork_name)
+                    db.flush()
+                    saved_artwork.artwork_entity_id = entity.id
+            except Exception as e:
+                logger.warning("Entity upsert failed (non-fatal, artwork saved without entity): %s", e)
 
         # Ensure session exists (auto-create if not)
         if session_id:
