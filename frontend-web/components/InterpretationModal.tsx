@@ -324,8 +324,8 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   useEffect(() => {
     if (!item.isAnalyzing && item.artworkId) {
       fetchCommunity(item.artworkId)
-        .then(data => setCommunity(data.entity ? data : null))
-        .catch(() => {});
+        .then(data => setCommunity(data))
+        .catch(() => setCommunity({ entity: null, comments: [] }));
     }
   }, [item.artworkId, item.isAnalyzing]);
 
@@ -1069,7 +1069,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 )}
 
                 {/* Community comments — only shown when other users have also collected this artwork */}
-                {!item.isAnalyzing && community && (community.comments.length > 0 || userId) && (
+                {!item.isAnalyzing && item.artworkId && userId && community !== null && (
                   <div className="pt-4 border-t border-neutral-50">
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">
