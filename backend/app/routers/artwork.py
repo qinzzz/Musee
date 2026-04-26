@@ -410,6 +410,18 @@ async def analyze_artist(
                         else:
                             raise
                     local_db.refresh(art)
+
+                    # Link entity (non-fatal)
+                    if a_name and a_name != "Unknown Artist" and w_name:
+                        try:
+                            with local_db.begin_nested():
+                                entity = upsert_artwork_entity(local_db, a_name, w_name)
+                                local_db.flush()
+                                art.artwork_entity_id = entity.id
+                            local_db.commit()
+                        except Exception as _e:
+                            logger.warning("Entity upsert failed in stream save: %s", _e)
+
                     return str(art.id)
 
             artwork_id = await anyio.to_thread.run_sync(
@@ -741,6 +753,18 @@ async def analyze_artist_stream(
 
                     local_db.commit()
                     local_db.refresh(art)
+
+                    # Link entity (non-fatal)
+                    if a_name and a_name != "Unknown Artist" and w_name:
+                        try:
+                            with local_db.begin_nested():
+                                entity = upsert_artwork_entity(local_db, a_name, w_name)
+                                local_db.flush()
+                                art.artwork_entity_id = entity.id
+                            local_db.commit()
+                        except Exception as _e:
+                            logger.warning("Entity upsert failed in stream save: %s", _e)
+
                     return str(art.id)
 
             artwork_id = await anyio.to_thread.run_sync(
