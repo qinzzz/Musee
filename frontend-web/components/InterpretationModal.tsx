@@ -1083,25 +1083,34 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                     {/* Existing comments */}
                     {community.comments.length > 0 && (
                       <div className="space-y-3 mb-3">
-                        {community.comments.map(c => (
-                          <div key={c.id} className="flex gap-2.5 items-start">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[12px] text-neutral-700 leading-relaxed">{c.text}</p>
+                        {community.comments.map(c => {
+                          const avatarColors = ['#d4b896','#a8c4b8','#b8aed4','#c4b8a8','#a8b8c4','#d4a8b8','#b8d4a8','#c4a8d4'];
+                          let hash = 0;
+                          for (let i = 0; i < c.user_id.length; i++) hash = (hash * 31 + c.user_id.charCodeAt(i)) >>> 0;
+                          const avatarColor = avatarColors[hash % avatarColors.length];
+                          return (
+                            <div key={c.id} className="flex gap-2.5 items-start">
+                              <div className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ backgroundColor: avatarColor }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="white" stroke="none"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[12px] text-neutral-700 leading-relaxed">{c.text}</p>
+                              </div>
+                              {userId && c.user_id === userId && (
+                                <button
+                                  onClick={async () => {
+                                    await deleteCommunityComment(item.artworkId!, c.id, userId);
+                                    setCommunity(prev => prev ? { ...prev, comments: prev.comments.filter(x => x.id !== c.id) } : prev);
+                                  }}
+                                  className="text-neutral-300 hover:text-red-400 transition-colors shrink-0 mt-0.5"
+                                  title="Delete comment"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                              )}
                             </div>
-                            {userId && c.user_id === userId && (
-                              <button
-                                onClick={async () => {
-                                  await deleteCommunityComment(item.artworkId!, c.id, userId);
-                                  setCommunity(prev => prev ? { ...prev, comments: prev.comments.filter(x => x.id !== c.id) } : prev);
-                                }}
-                                className="text-neutral-300 hover:text-red-400 transition-colors shrink-0 mt-0.5"
-                                title="Delete comment"
-                              >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                              </button>
-                            )}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
 
@@ -1148,25 +1157,29 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 {/* Suggested explorations — clicking sends and switches to chat */}
                 {!item.isAnalyzing && suggestedTopics.length > 0 && (
                   <div className="pt-2 border-t border-neutral-50 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <p className="text-[8px] tracking-[0.3em] uppercase text-neutral-300 mb-3 font-bold">Suggested Explorations</p>
-                    <div className="flex flex-wrap gap-2">
-                      {suggestedTopics.map((topic, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleSend(topic)}
-                          className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-left"
-                        >
-                          {topic}
-                        </button>
-                      ))}
+                    <div className="flex items-center justify-between mb-3">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="text-neutral-300">
+                        <path d="M12 2l2.9 6.3 6.8.6-5 4.6 1.5 6.7L12 17l-6.2 3.2 1.5-6.7-5-4.6 6.8-.6z"/>
+                      </svg>
                       <button
                         onClick={() => fetchSuggestions(messages)}
                         disabled={isSuggesting}
-                        className="text-[11px] text-neutral-400 p-2 hover:text-neutral-900 transition-colors disabled:opacity-30"
+                        className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors disabled:opacity-30"
                         title="Suggest more topics"
                       >
                         {isSuggesting ? '...' : '↺'}
                       </button>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      {suggestedTopics.map((topic, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSend(topic)}
+                          className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-right"
+                        >
+                          {topic}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1217,26 +1230,30 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 )}
 
                 {!item.isAnalyzing && suggestedTopics.length > 0 && !isTyping && (
-                  <div className="pt-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <p className="text-[8px] tracking-[0.3em] uppercase text-neutral-300 mb-3 font-bold px-1">Suggested Explorations</p>
-                    <div className="flex flex-wrap gap-2">
-                      {suggestedTopics.map((topic, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleSend(topic)}
-                          className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-left"
-                        >
-                          {topic}
-                        </button>
-                      ))}
+                  <div className="pt-2 animate-in fade-in slide-in-from-bottom-2 duration-500 px-1">
+                    <div className="flex items-center justify-between mb-3">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="text-neutral-300">
+                        <path d="M12 2l2.9 6.3 6.8.6-5 4.6 1.5 6.7L12 17l-6.2 3.2 1.5-6.7-5-4.6 6.8-.6z"/>
+                      </svg>
                       <button
                         onClick={() => fetchSuggestions(messages)}
                         disabled={isSuggesting}
-                        className="text-[11px] text-neutral-400 p-2 hover:text-neutral-900 transition-colors disabled:opacity-30"
+                        className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors disabled:opacity-30"
                         title="Suggest more topics"
                       >
                         {isSuggesting ? '...' : '↺'}
                       </button>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      {suggestedTopics.map((topic, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSend(topic)}
+                          className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-right"
+                        >
+                          {topic}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
