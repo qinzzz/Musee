@@ -1072,11 +1072,12 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 {!item.isAnalyzing && item.artworkId && userId && community !== null && (
                   <div className="pt-4 border-t border-neutral-50">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">
-                        {community.entity && community.entity.instance_count > 1
-                          ? `${community.entity.instance_count} people collected this`
-                          : 'Community'}
-                      </p>
+                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Community</p>
+                      {community?.entity && community.entity.instance_count > 0 && (
+                        <span className="text-[9px] text-neutral-400">
+                          Seen by {community.entity.instance_count} {community.entity.instance_count === 1 ? 'person' : 'people'}
+                        </span>
+                      )}
                     </div>
 
                     {/* Existing comments */}
