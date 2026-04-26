@@ -1085,16 +1085,8 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                       <div className="space-y-3 mb-3">
                         {community.comments.map(c => (
                           <div key={c.id} className="flex gap-2.5 items-start">
-                            {c.author_avatar ? (
-                              <img src={c.author_avatar} className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5" alt={c.author_name} />
-                            ) : (
-                              <div className="w-6 h-6 rounded-full bg-neutral-100 shrink-0 mt-0.5 flex items-center justify-center text-[10px] text-neutral-400 font-medium">
-                                {c.author_name.charAt(0).toUpperCase()}
-                              </div>
-                            )}
                             <div className="flex-1 min-w-0">
-                              <span className="text-[10px] font-semibold text-neutral-600">{c.author_name}</span>
-                              <p className="text-[12px] text-neutral-700 leading-relaxed mt-0.5">{c.text}</p>
+                              <p className="text-[12px] text-neutral-700 leading-relaxed">{c.text}</p>
                             </div>
                             {userId && c.user_id === userId && (
                               <button
