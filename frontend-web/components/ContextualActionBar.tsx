@@ -192,7 +192,7 @@ const ContextualActionBar: React.FC<Props> = ({
         {/* Ask input — tappable placeholder */}
         <button
           onClick={() => onAskExpand?.()}
-          className="flex-1 flex items-center gap-2.5 bg-neutral-800 rounded-full h-10 px-4 text-left"
+          className="flex-1 flex items-center gap-2.5 bg-neutral-100 rounded-full h-10 px-4 text-left"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-500 shrink-0">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -202,7 +202,7 @@ const ContextualActionBar: React.FC<Props> = ({
 
         <button
           onClick={onLike}
-          className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-all ${isLiked ? 'text-red-400' : 'text-neutral-500 hover:text-white'}`}
+          className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-all ${isLiked ? 'text-red-400' : 'text-neutral-400 hover:text-neutral-700'}`}
           title={isLiked ? "Unlike" : "Like"}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -212,7 +212,7 @@ const ContextualActionBar: React.FC<Props> = ({
 
         <button
           onClick={onCollect}
-          className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
+          className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-neutral-400 hover:text-neutral-700 transition-colors"
           title="Collect"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -261,7 +261,7 @@ const ContextualActionBar: React.FC<Props> = ({
     return (
       <>
         {hiddenInputs}
-        <div className="fixed bottom-0 left-0 right-0 z-[100] bg-neutral-900/98 backdrop-blur-xl border-t border-white/10 animate-in slide-in-from-bottom-2 duration-300" style={{ paddingBottom: 'env(safe-area-inset-bottom, 8px)' }}>
+        <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white border-t border-neutral-200 animate-in slide-in-from-bottom-2 duration-300" style={{ paddingBottom: 'env(safe-area-inset-bottom, 8px)' }}>
           {renderInterpretation()}
         </div>
       </>
