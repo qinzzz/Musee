@@ -1069,7 +1069,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 )}
 
                 {/* Community comments — only shown when other users have also collected this artwork */}
-                {!item.isAnalyzing && item.artworkId && userId && community !== null && (
+                {!item.isAnalyzing && item.artworkId && community !== null && (community.comments.length > 0 || (community.entity && community.entity.instance_count > 0) || userId) && (
                   <div className="pt-4 border-t border-neutral-50">
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Community</p>
