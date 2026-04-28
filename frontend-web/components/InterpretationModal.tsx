@@ -32,8 +32,8 @@ interface Props {
   onNavigate?: (direction: 'prev' | 'next') => void;
   externalMessage?: string;
   onExternalMessageConsumed?: () => void;
-  rightMode: 'metadata' | 'chat';
-  onRightModeChange: (mode: 'metadata' | 'chat') => void;
+  rightMode: 'metadata' | 'chat' | 'community';
+  onRightModeChange: (mode: 'metadata' | 'chat' | 'community') => void;
   onSwitchMode?: () => void;
   interpretingMode?: 'professional' | 'interactive';
   onRetryHarder?: () => void;
@@ -824,7 +824,98 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
             </div>
 
             {/* Right panel scrollable content */}
-            {rightMode === 'metadata' ? (
+            {rightMode === 'community' ? (
+              <div className="sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-5 sm:p-7 pb-20 sm:pb-7 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between mb-5">
+                  <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Community</p>
+                  {community?.entity && community.entity.instance_count > 0 && (
+                    <span className="text-[9px] text-neutral-400">
+                      Seen by {community.entity.instance_count} {community.entity.instance_count === 1 ? 'person' : 'people'}
+                    </span>
+                  )}
+                </div>
+
+                {community === null && (
+                  <p className="text-[12px] text-neutral-400 italic">Loading…</p>
+                )}
+
+                {community !== null && community.comments.length === 0 && !userId && (
+                  <p className="text-[12px] text-neutral-400 italic">No community notes yet.</p>
+                )}
+
+                {/* Existing comments */}
+                {community !== null && community.comments.length > 0 && (
+                  <div className="space-y-3 mb-4">
+                    {community.comments.map(c => {
+                      const avatarColors = ['#d4b896','#a8c4b8','#b8aed4','#c4b8a8','#a8b8c4','#d4a8b8','#b8d4a8','#c4a8d4'];
+                      let hash = 0;
+                      for (let i = 0; i < c.user_id.length; i++) hash = (hash * 31 + c.user_id.charCodeAt(i)) >>> 0;
+                      const avatarColor = avatarColors[hash % avatarColors.length];
+                      return (
+                        <div key={c.id} className="flex gap-2.5 items-start">
+                          <div className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ backgroundColor: avatarColor }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="white" stroke="none"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] text-neutral-700 leading-relaxed">{c.text}</p>
+                          </div>
+                          {userId && c.user_id === userId && (
+                            <button
+                              onClick={async () => {
+                                await deleteCommunityComment(item.artworkId!, c.id, userId);
+                                setCommunity(prev => prev ? { ...prev, comments: prev.comments.filter(x => x.id !== c.id) } : prev);
+                              }}
+                              className="text-neutral-300 hover:text-red-400 transition-colors shrink-0 mt-0.5"
+                              title="Delete comment"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Publish comment box */}
+                {userId && (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      value={commentInput}
+                      onChange={e => setCommentInput(e.target.value)}
+                      onKeyDown={async e => {
+                        if (e.key === 'Enter' && commentInput.trim() && !isPublishing) {
+                          e.preventDefault();
+                          setIsPublishing(true);
+                          try {
+                            const c = await publishComment(item.artworkId!, userId, commentInput.trim());
+                            setCommunity(prev => prev ? { ...prev, comments: [c, ...prev.comments] } : prev);
+                            setCommentInput('');
+                          } catch {} finally { setIsPublishing(false); }
+                        }
+                      }}
+                      placeholder="Share your thought publicly…"
+                      className="flex-1 text-[11px] text-neutral-700 bg-neutral-50 border border-neutral-200 rounded-full px-3 py-1.5 outline-none focus:border-neutral-400 placeholder-neutral-300 transition-colors"
+                    />
+                    <button
+                      disabled={!commentInput.trim() || isPublishing}
+                      onClick={async () => {
+                        if (!commentInput.trim() || isPublishing) return;
+                        setIsPublishing(true);
+                        try {
+                          const c = await publishComment(item.artworkId!, userId, commentInput.trim());
+                          setCommunity(prev => prev ? { ...prev, comments: [c, ...prev.comments] } : prev);
+                          setCommentInput('');
+                        } catch {} finally { setIsPublishing(false); }
+                      }}
+                      className="w-7 h-7 flex items-center justify-center rounded-full bg-neutral-900 text-white disabled:opacity-30 transition-opacity shrink-0"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : rightMode === 'metadata' ? (
               <div className="sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-5 sm:p-7 space-y-5 sm:space-y-7 pb-20 sm:pb-7">
 
                 {/* Error state */}
@@ -1065,92 +1156,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                         );
                       })}
                     </div>
-                  </div>
-                )}
-
-                {/* Community comments — only shown when other users have also collected this artwork */}
-                {!item.isAnalyzing && item.artworkId && community !== null && (community.comments.length > 0 || (community.entity && community.entity.instance_count > 0) || userId) && (
-                  <div className="pt-4 border-t border-neutral-50">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Community</p>
-                      {community?.entity && community.entity.instance_count > 0 && (
-                        <span className="text-[9px] text-neutral-400">
-                          Seen by {community.entity.instance_count} {community.entity.instance_count === 1 ? 'person' : 'people'}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Existing comments */}
-                    {community.comments.length > 0 && (
-                      <div className="space-y-3 mb-3">
-                        {community.comments.map(c => {
-                          const avatarColors = ['#d4b896','#a8c4b8','#b8aed4','#c4b8a8','#a8b8c4','#d4a8b8','#b8d4a8','#c4a8d4'];
-                          let hash = 0;
-                          for (let i = 0; i < c.user_id.length; i++) hash = (hash * 31 + c.user_id.charCodeAt(i)) >>> 0;
-                          const avatarColor = avatarColors[hash % avatarColors.length];
-                          return (
-                            <div key={c.id} className="flex gap-2.5 items-start">
-                              <div className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ backgroundColor: avatarColor }}>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="white" stroke="none"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[12px] text-neutral-700 leading-relaxed">{c.text}</p>
-                              </div>
-                              {userId && c.user_id === userId && (
-                                <button
-                                  onClick={async () => {
-                                    await deleteCommunityComment(item.artworkId!, c.id, userId);
-                                    setCommunity(prev => prev ? { ...prev, comments: prev.comments.filter(x => x.id !== c.id) } : prev);
-                                  }}
-                                  className="text-neutral-300 hover:text-red-400 transition-colors shrink-0 mt-0.5"
-                                  title="Delete comment"
-                                >
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Publish comment box */}
-                    {userId && (
-                      <div className="flex gap-2 items-center">
-                        <input
-                          value={commentInput}
-                          onChange={e => setCommentInput(e.target.value)}
-                          onKeyDown={async e => {
-                            if (e.key === 'Enter' && commentInput.trim() && !isPublishing) {
-                              e.preventDefault();
-                              setIsPublishing(true);
-                              try {
-                                const c = await publishComment(item.artworkId!, userId, commentInput.trim());
-                                setCommunity(prev => prev ? { ...prev, comments: [c, ...prev.comments] } : prev);
-                                setCommentInput('');
-                              } catch {} finally { setIsPublishing(false); }
-                            }
-                          }}
-                          placeholder="Share your thought publicly…"
-                          className="flex-1 text-[11px] text-neutral-700 bg-neutral-50 border border-neutral-200 rounded-full px-3 py-1.5 outline-none focus:border-neutral-400 placeholder-neutral-300 transition-colors"
-                        />
-                        <button
-                          disabled={!commentInput.trim() || isPublishing}
-                          onClick={async () => {
-                            if (!commentInput.trim() || isPublishing) return;
-                            setIsPublishing(true);
-                            try {
-                              const c = await publishComment(item.artworkId!, userId, commentInput.trim());
-                              setCommunity(prev => prev ? { ...prev, comments: [c, ...prev.comments] } : prev);
-                              setCommentInput('');
-                            } catch {} finally { setIsPublishing(false); }
-                          }}
-                          className="w-7 h-7 flex items-center justify-center rounded-full bg-neutral-900 text-white disabled:opacity-30 transition-opacity shrink-0"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
 

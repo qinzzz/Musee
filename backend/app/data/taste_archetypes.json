@@ -1,0 +1,258 @@
+[
+  {
+    "id": 1,
+    "name": "洛可可漫游者",
+    "name_en": "Rococo Wanderer",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": -1, "serene_intense": -1, "classical_avantgarde": -1, "playful_serious": -1},
+    "representative": "Fragonard《秋千》",
+    "description": "你被生活中轻盈的美所吸引：粉色绸缎、花园里的玩笑、午后光线里的愉悦。你的审美不追求深刻的意义，而是享受那些让人会心一笑的瞬间。在你眼里，好的艺术应该让人感到愉快，而不是沉重。"
+  },
+  {
+    "id": 2,
+    "name": "静光凝视者",
+    "name_en": "Still-Light Gazer",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": -1, "serene_intense": -1, "classical_avantgarde": -1, "playful_serious": 1},
+    "representative": "Vermeer《戴珍珠耳环的少女》",
+    "description": "你在宁静的凝视中寻找真实。细腻的光线、专注的目光、日常物件里蕴藏的时间感——这些比任何戏剧性的姿态都更能打动你。你欣赏的不是宏大叙事，而是那些悄悄注视世界的目光。"
+  },
+  {
+    "id": 3,
+    "name": "温柔超现实者",
+    "name_en": "Tender Surrealist",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": -1, "serene_intense": -1, "classical_avantgarde": 1, "playful_serious": -1},
+    "representative": "Magritte《人子》",
+    "description": "现实在你的审美里从不是终点，而是起点。你喜欢那些表面可辨认、却悄悄颠覆逻辑的画面——苹果挡住了脸，火车从壁炉里驶出。这种温柔的错位让你着迷，因为它让日常重新变得陌生而有趣。"
+  },
+  {
+    "id": 4,
+    "name": "都市孤光者",
+    "name_en": "Urban Solitary",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": -1, "serene_intense": -1, "classical_avantgarde": 1, "playful_serious": 1},
+    "representative": "Edward Hopper《夜鹰》",
+    "description": "你被孤独的诗意所吸引：深夜餐馆里的陌生人、空旷街道上的单一光源、人群中的疏离感。你的收藏里有一种安静的忧郁，不是悲观，而是对现代生活中那些无言时刻的敏锐感知。"
+  },
+  {
+    "id": 5,
+    "name": "巴洛克狂欢者",
+    "name_en": "Baroque Reveler",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": -1, "serene_intense": 1, "classical_avantgarde": -1, "playful_serious": -1},
+    "representative": "Rubens《三美神》",
+    "description": "你的感官渴望盛宴：丰盈的肉身、流动的布料、神话里的欢腾场景。你不害怕过剩，甚至享受那种视觉上的饱和感。对你而言，节制是一种遗憾，而艺术应该充满生命力的喧嚣。"
+  },
+  {
+    "id": 6,
+    "name": "明暗戏剧家",
+    "name_en": "Chiaroscuro Dramatist",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": -1, "serene_intense": 1, "classical_avantgarde": -1, "playful_serious": 1},
+    "representative": "Caravaggio《以扫拉杀死荷罗孚尼》",
+    "description": "你在极端对比中寻找真相：强光与深暗、暴力与圣洁、生与死的边界。你不回避艺术中的震撼与不适，因为你相信正是这些极端时刻，才能揭示人性最深处的东西。"
+  },
+  {
+    "id": 7,
+    "name": "街头诗人",
+    "name_en": "Street Poet",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": -1, "serene_intense": 1, "classical_avantgarde": 1, "playful_serious": -1},
+    "representative": "Basquiat《无题》",
+    "description": "你的审美诞生于街头而非学院：涂鸦、符号、愤怒与欢笑混杂的图像语言。你被那些拒绝被驯服的艺术所吸引——粗砺、直接、充满能量，像是在白墙上喷出的一声呐喊。"
+  },
+  {
+    "id": 8,
+    "name": "肉身见证者",
+    "name_en": "Flesh Witness",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": -1, "serene_intense": 1, "classical_avantgarde": 1, "playful_serious": 1},
+    "representative": "Francis Bacon《三联画》",
+    "description": "你直视人类存在中最难以承受的部分：扭曲的形体、被压缩的自我、生命的脆弱与暴力。你的收藏不寻求安慰，而是见证——你相信艺术有责任不转移视线，即使那令人不安。"
+  },
+  {
+    "id": 9,
+    "name": "奇想博物学家",
+    "name_en": "Whimsical Naturalist",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": 1, "serene_intense": -1, "classical_avantgarde": -1, "playful_serious": -1},
+    "representative": "Arcimboldo《春》",
+    "description": "你在可见世界中发现隐藏的秩序和玩笑：蔬菜拼成的人脸、花朵排列的肖像、自然界里暗藏的机智。你的审美兼具科学的观察力与诗人的想象力，喜欢那些需要你仔细端详才能会心一笑的作品。"
+  },
+  {
+    "id": 10,
+    "name": "古典秩序者",
+    "name_en": "Classical Ordenador",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": 1, "serene_intense": -1, "classical_avantgarde": -1, "playful_serious": 1},
+    "representative": "Holbein《大使》",
+    "description": "你相信形式本身就是一种思想。精准的构图、象征的安排、每个细节都承载意义的画面——这些让你感到智识上的满足。你的审美是克制而深邃的，享受那种需要解读才能完整理解的艺术语言。"
+  },
+  {
+    "id": 11,
+    "name": "概念玩家",
+    "name_en": "Conceptual Trickster",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": 1, "serene_intense": -1, "classical_avantgarde": 1, "playful_serious": -1},
+    "representative": "Jeff Koons《气球狗》",
+    "description": "你喜欢那些在玩笑中埋藏严肃议题的艺术：光鲜的气球狗背后是消费主义的镜像，廉价物品被抬入博物馆变成批判。你的审美有一种狡黠，享受艺术颠覆自身价值体系的那一刻。"
+  },
+  {
+    "id": 12,
+    "name": "影像哲学家",
+    "name_en": "Image Philosopher",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": 1, "serene_intense": -1, "classical_avantgarde": 1, "playful_serious": 1},
+    "representative": "Cindy Sherman《无题电影剧照》",
+    "description": "你质疑图像本身：谁在看？谁被塑造？表演与真实之间的界限在哪里？你的收藏充满对视觉机制的反思，你不只是在欣赏图像，而是在追问图像为何存在，以及它如何塑造我们对世界的认知。"
+  },
+  {
+    "id": 13,
+    "name": "社会讽刺家",
+    "name_en": "Social Satirist",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": 1, "serene_intense": 1, "classical_avantgarde": -1, "playful_serious": -1},
+    "representative": "Hogarth《浪子历程》",
+    "description": "你用幽默解剖社会：夸张的人物、讽刺的情节、隐藏在荒诞场景里的道德评判。你欣赏那些敢于嘲笑权贵和时弊的艺术，相信笑声有时比愤怒更具穿透力。"
+  },
+  {
+    "id": 14,
+    "name": "政治见证者",
+    "name_en": "Political Witness",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": 1, "serene_intense": 1, "classical_avantgarde": -1, "playful_serious": 1},
+    "representative": "Goya《1808年5月3日》",
+    "description": "你要求艺术为历史作证。枪口、受难者的目光、暴力与恐惧的真实——你的收藏里有一种道德上的紧迫感。你相信艺术有义务记录人类的残酷与抵抗，让观者无法逃避地直面那些不该被遗忘的时刻。"
+  },
+  {
+    "id": 15,
+    "name": "游击美学家",
+    "name_en": "Guerrilla Aesthete",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": 1, "serene_intense": 1, "classical_avantgarde": 1, "playful_serious": -1},
+    "representative": "Banksy《执气球的女孩》",
+    "description": "你的审美诞生于公共空间的夹缝：涂鸦出现在权威机构的墙上，讽刺藏在温柔的图像里，批判以孩子的语言说出。你被那些绕过正式渠道直接抵达大众的艺术所吸引，因为它证明美和批判不需要白立方的授权。"
+  },
+  {
+    "id": 16,
+    "name": "批判现实者",
+    "name_en": "Critical Realist",
+    "dims": {"figurative_abstract": -1, "emotive_conceptual": 1, "serene_intense": 1, "classical_avantgarde": 1, "playful_serious": 1},
+    "representative": "Kara Walker《剪影叙事》",
+    "description": "你用艺术作为揭露的工具：历史暴力的影子、被压制叙事的重现、美丽形式包裹的残酷真相。你的收藏要求观者承担不适，因为你相信真正重要的艺术不该让人好过。"
+  },
+  {
+    "id": 17,
+    "name": "色彩享乐者",
+    "name_en": "Chromatic Hedonist",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": -1, "serene_intense": -1, "classical_avantgarde": -1, "playful_serious": -1},
+    "representative": "Matisse《舞蹈》",
+    "description": "颜色对你来说是一种直接的感官愉悦。明亮的红、跳跃的蓝、形式的律动——你不需要叙事，色彩本身就是充分的理由。你的审美是开放而直觉的，让身体先于大脑做出回应。"
+  },
+  {
+    "id": 18,
+    "name": "色场冥想者",
+    "name_en": "Color Field Meditator",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": -1, "serene_intense": -1, "classical_avantgarde": -1, "playful_serious": 1},
+    "representative": "Rothko《橙与红》",
+    "description": "你在色彩的深度中寻找静默的震撼。大面积的色块不是装饰，而是召唤——它们让你感到被某种无法言说的情绪包围。你愿意在一幅画前站很久，等待那个颜色开始与你对话的时刻。"
+  },
+  {
+    "id": 19,
+    "name": "梦境植物学家",
+    "name_en": "Dream Botanist",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": -1, "serene_intense": -1, "classical_avantgarde": 1, "playful_serious": -1},
+    "representative": "Miró《哈里昆狂欢》",
+    "description": "你的内心有一个充满奇异生物和自由形状的宇宙。你喜欢那些像梦一样运作的图像——不讲逻辑，只讲感觉；不是叙事，而是某种内在语言的涌现。你的审美是轻盈的、直觉的、充满生命力的即兴。"
+  },
+  {
+    "id": 20,
+    "name": "静谧先知",
+    "name_en": "Silent Prophet",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": -1, "serene_intense": -1, "classical_avantgarde": 1, "playful_serious": 1},
+    "representative": "Hilma af Klint《十大之作》",
+    "description": "你被那些超越可见世界的抽象形式所吸引：灵性的几何、宇宙的循环、用形状和颜色探索存在本质的尝试。你的审美有一种安静的神秘感，你相信艺术能够触及那些语言无法抵达的地方。"
+  },
+  {
+    "id": 21,
+    "name": "音乐绘画者",
+    "name_en": "Synesthetic Painter",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": -1, "serene_intense": 1, "classical_avantgarde": -1, "playful_serious": -1},
+    "representative": "Kandinsky《构成第八号》",
+    "description": "你感受艺术的方式接近听音乐：形状是节奏，颜色是音调，构图是旋律的起伏。你不需要看懂一幅画，你只需要感受它。你的审美是共感觉的——视觉与听觉、触觉在你的体验里相互渗透。"
+  },
+  {
+    "id": 22,
+    "name": "姿态哲学家",
+    "name_en": "Gestural Philosopher",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": -1, "serene_intense": 1, "classical_avantgarde": -1, "playful_serious": 1},
+    "representative": "de Kooning《女人一号》",
+    "description": "你在笔触本身中读到真实：颜料的厚度、手势的速度、力量与犹豫在画布上留下的痕迹。对你而言，抽象表现主义是一种心理的坦白，每一个动作都是艺术家内在状态的直接显现。"
+  },
+  {
+    "id": 23,
+    "name": "涂鸦诗人",
+    "name_en": "Graffiti Poet",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": -1, "serene_intense": 1, "classical_avantgarde": 1, "playful_serious": -1},
+    "representative": "Cy Twombly《黑板系列》",
+    "description": "你的审美在书写与绘画的边界游走：涂鸦般的线条、像诗句一样散落的痕迹、介于语言与图像之间的视觉低语。你被那些拒绝被解读、只要求被感受的作品所吸引。"
+  },
+  {
+    "id": 24,
+    "name": "历史悲歌者",
+    "name_en": "Elegist of History",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": -1, "serene_intense": 1, "classical_avantgarde": 1, "playful_serious": 1},
+    "representative": "Anselm Kiefer《德国精神英雄》",
+    "description": "你在材料本身中感受到历史的重量：铅、稻草、焦土——这些不只是媒介，而是记忆的载体。你的审美是悲剧性的，但不绝望；你相信艺术能够容纳那些无法被遗忘的苦难，并将其转化为某种庄严。"
+  },
+  {
+    "id": 25,
+    "name": "几何童话家",
+    "name_en": "Geometric Fabulist",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": 1, "serene_intense": -1, "classical_avantgarde": -1, "playful_serious": -1},
+    "representative": "Paul Klee《金鱼》",
+    "description": "你在几何形状里发现了童话的语言：小方块、弯曲的线条、像儿童梦境一样构建的图像世界。你的审美是温暖而精确的，带着一种刻意保留的天真——你知道这种天真其实需要极高的技巧才能维持。"
+  },
+  {
+    "id": 26,
+    "name": "纯粹主义者",
+    "name_en": "Purist",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": 1, "serene_intense": -1, "classical_avantgarde": -1, "playful_serious": 1},
+    "representative": "Mondrian《红黄蓝构成》",
+    "description": "你相信减法是一种智慧：去掉一切多余之物，留下那些不可再简化的基本元素。你的审美是严格的，享受那种在极限约束中产生的秩序感，因为你知道真正的自由往往来自于清晰的规则。"
+  },
+  {
+    "id": 27,
+    "name": "动态平衡者",
+    "name_en": "Kinetic Balancer",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": 1, "serene_intense": -1, "classical_avantgarde": 1, "playful_serious": -1},
+    "representative": "Alexander Calder《悬挂装置》",
+    "description": "你喜欢那些与时间和空间对话的艺术：悬挂在气流中的雕塑、随观者移动而改变的装置、平衡本身作为一种主题。你的审美是活跃的，你不满足于静止的图像，你想要艺术呼吸、移动、回应。"
+  },
+  {
+    "id": 28,
+    "name": "极简哲人",
+    "name_en": "Minimalist Philosopher",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": 1, "serene_intense": -1, "classical_avantgarde": 1, "playful_serious": 1},
+    "representative": "Donald Judd《无题·铝盒》",
+    "description": "你的审美接近沉默：工业铝盒的重复、空间与物体的精确关系、去除一切叙事后剩下的纯粹存在。你享受那种需要你调整感知方式才能进入的艺术，因为进入之后，你会发现极简的背面是无尽的复杂。"
+  },
+  {
+    "id": 29,
+    "name": "形式解构者",
+    "name_en": "Form Deconstructor",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": 1, "serene_intense": 1, "classical_avantgarde": -1, "playful_serious": -1},
+    "representative": "Picasso《亚维农少女》",
+    "description": "你对形式本身充满好奇：把面孔从多个视角同时呈现、打破透视法的单一视点、将可见世界拆开再重组。你的审美是分析性的，享受那种在破坏中创造新秩序的智识游戏。"
+  },
+  {
+    "id": 30,
+    "name": "构成主义者",
+    "name_en": "Constructivist",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": 1, "serene_intense": 1, "classical_avantgarde": -1, "playful_serious": 1},
+    "representative": "El Lissitzky《用红楔子打白军》",
+    "description": "你相信艺术是变革的工具：几何形式可以服务于政治，设计可以重塑社会意识。你的审美有一种强烈的目的性——形式永远服从于意图，美是革命的副产品，而非目的本身。"
+  },
+  {
+    "id": 31,
+    "name": "制度挑衅者",
+    "name_en": "Institutional Provocateur",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": 1, "serene_intense": 1, "classical_avantgarde": 1, "playful_serious": -1},
+    "representative": "Maurizio Cattelan《香蕉》",
+    "description": "你享受艺术系统被自身逻辑颠覆的时刻：一根用胶带贴在墙上的香蕉卖出天价，整个艺术市场成为笑话的对象。你的审美是游戏性的，但游戏的对象是权威本身——你用笑声质疑一切被认为理所当然的价值。"
+  },
+  {
+    "id": 32,
+    "name": "概念抵抗者",
+    "name_en": "Conceptual Resister",
+    "dims": {"figurative_abstract": 1, "emotive_conceptual": 1, "serene_intense": 1, "classical_avantgarde": 1, "playful_serious": 1},
+    "representative": "Ai Weiwei《葵花籽》",
+    "description": "你的审美与权力和记忆的关系密不可分：一亿颗手工瓷制葵花籽，每一颗都是一个无名劳工的痕迹。你被那些用规模和沉默来对抗遗忘的艺术所打动，因为你知道，当概念足够庞大，它就会变成无法忽视的现实。"
+  }
+]

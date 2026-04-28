@@ -412,7 +412,7 @@ const App: React.FC = () => {
   };
 
   const [artworkChatMessage, setArtworkChatMessage] = useState<string | null>(null);
-  const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'chat'>('metadata');
+  const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'chat' | 'community'>('metadata');
   const [interpretationAskExpanded, setInterpretationAskExpanded] = useState(false);
   const [interpretingMode, setInterpretingMode] = useState<'professional' | 'interactive'>(
     () => (localStorage.getItem('musee_analysis_mode') as 'professional' | 'interactive') ?? 'professional'
@@ -1840,6 +1840,8 @@ const App: React.FC = () => {
             isLiked={!!(interpretingItem && likedIds.has(interpretingItem.id))}
             onDelete={() => interpretingItem && setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
             onCollect={() => interpretingItem && alert('Collection feature coming soon')}
+            onCommunity={() => setInterpretationRightMode(prev => prev === 'community' ? 'metadata' : 'community')}
+            isCommunityActive={interpretationRightMode === 'community'}
             activeItem={interpretingItem as unknown as GalleryItem || undefined}
             placeholder={filteredVisitId ? `Ask about ${items.find(i => i.visitId === filteredVisitId)?.sessionTitle || 'this exhibition'}...` : undefined}
             isAskExpanded={interpretationAskExpanded}

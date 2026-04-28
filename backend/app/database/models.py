@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, SmallInteger, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.connection import Base
@@ -292,6 +292,16 @@ class ArtworkEntity(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
+    # Taste dimension scores — -1=left pole, 0=neutral, 1=right pole, NULL=not yet analyzed
+    dim_figurative_abstract  = Column(SmallInteger, nullable=True)
+    dim_emotive_conceptual   = Column(SmallInteger, nullable=True)
+    dim_serene_intense       = Column(SmallInteger, nullable=True)
+    dim_classical_avantgarde = Column(SmallInteger, nullable=True)
+    dim_playful_serious      = Column(SmallInteger, nullable=True)
+    dim_status      = Column(String(20), default='pending')
+    dim_analyzed_at = Column(DateTime, nullable=True)
+    dim_error       = Column(Text, nullable=True)
+
     __table_args__ = (
         UniqueConstraint('canonical_artist', 'canonical_title', name='uq_entity_artist_title'),
     )
@@ -305,6 +315,14 @@ class ArtworkEntity(Base):
             "display_artist": self.display_artist,
             "display_title": self.display_title,
             "instance_count": self.instance_count,
+            "dim_status": self.dim_status,
+            "dims": {
+                "figurative_abstract": self.dim_figurative_abstract,
+                "emotive_conceptual": self.dim_emotive_conceptual,
+                "serene_intense": self.dim_serene_intense,
+                "classical_avantgarde": self.dim_classical_avantgarde,
+                "playful_serious": self.dim_playful_serious,
+            } if self.dim_status == 'done' else None,
         }
 
 

@@ -412,6 +412,7 @@ async def analyze_artist(
                     local_db.refresh(art)
 
                     # Link entity (non-fatal)
+                    entity_id_for_analysis = None
                     if a_name and a_name != "Unknown Artist" and w_name:
                         try:
                             with local_db.begin_nested():
@@ -419,12 +420,14 @@ async def analyze_artist(
                                 local_db.flush()
                                 art.artwork_entity_id = entity.id
                             local_db.commit()
+                            if entity.dim_status in (None, "pending"):
+                                entity_id_for_analysis = entity.id
                         except Exception as _e:
                             logger.warning("Entity upsert failed in stream save: %s", _e)
 
-                    return str(art.id)
+                    return str(art.id), entity_id_for_analysis
 
-            artwork_id = await anyio.to_thread.run_sync(
+            result = await anyio.to_thread.run_sync(
                 _save_artwork_sync,
                 user_id,
                 session_id,
@@ -440,6 +443,9 @@ async def analyze_artist(
                 period_bucket_val,
                 vision_ref_urls,
             )
+            artwork_id, _entity_id_fast = result if isinstance(result, tuple) else (result, None)
+            if _entity_id_fast and background_tasks:
+                background_tasks.add_task(_run_dimension_analysis_bg, _entity_id_fast)
 
             # Update session narrative in background
             if session_id and background_tasks:
@@ -755,6 +761,7 @@ async def analyze_artist_stream(
                     local_db.refresh(art)
 
                     # Link entity (non-fatal)
+                    entity_id_for_analysis = None
                     if a_name and a_name != "Unknown Artist" and w_name:
                         try:
                             with local_db.begin_nested():
@@ -762,12 +769,14 @@ async def analyze_artist_stream(
                                 local_db.flush()
                                 art.artwork_entity_id = entity.id
                             local_db.commit()
+                            if entity.dim_status in (None, "pending"):
+                                entity_id_for_analysis = entity.id
                         except Exception as _e:
                             logger.warning("Entity upsert failed in stream save: %s", _e)
 
-                    return str(art.id)
+                    return str(art.id), entity_id_for_analysis
 
-            artwork_id = await anyio.to_thread.run_sync(
+            _stream_result = await anyio.to_thread.run_sync(
                 _save_streaming_artwork_sync,
                 user_id,
                 session_id,
@@ -785,6 +794,9 @@ async def analyze_artist_stream(
                 period_bucket_val,
                 vision_ref_urls,
             )
+            artwork_id, _entity_id_stream = _stream_result if isinstance(_stream_result, tuple) else (_stream_result, None)
+            if _entity_id_stream and background_tasks:
+                background_tasks.add_task(_run_dimension_analysis_bg, _entity_id_stream)
             result["artwork_id"] = artwork_id
             result["photo_uri"] = generated_photo_uri
             result["reference_urls"] = vision_ref_urls
@@ -1600,73 +1612,294 @@ async def run_migrations(db: Session = Depends(get_db)):
             ADD COLUMN IF NOT EXISTS artwork_entity_id VARCHAR
             REFERENCES artwork_entities(id) ON DELETE SET NULL
         """))
+        # Taste dimension columns on artwork_entities
+        for col, typ in [
+            ("dim_figurative_abstract",  "SMALLINT"),
+            ("dim_emotive_conceptual",   "SMALLINT"),
+            ("dim_serene_intense",       "SMALLINT"),
+            ("dim_classical_avantgarde", "SMALLINT"),
+            ("dim_playful_serious",      "SMALLINT"),
+            ("dim_status",               "VARCHAR(20) DEFAULT 'pending'"),
+            ("dim_analyzed_at",          "TIMESTAMP"),
+            ("dim_error",                "TEXT"),
+        ]:
+            _conn.execute(_text(f"ALTER TABLE artwork_entities ADD COLUMN IF NOT EXISTS {col} {typ}"))
         _conn.commit()
     return {"status": "ok", "message": "Migrations applied"}
 
 
+@router.post("/admin/backfill-entity-dimensions")
+async def backfill_entity_dimensions(force: bool = False, db: Session = Depends(get_db)):
+    """Analyze all ArtworkEntity rows that haven't been scored yet. Pass force=true to re-analyze all."""
+    if force:
+        pending = db.query(ArtworkEntity).all()
+        # Reset so _do_dimension_analysis doesn't skip 'done' entries
+        for e in pending:
+            e.dim_status = "pending"
+        db.commit()
+    else:
+        pending = (
+            db.query(ArtworkEntity)
+            .filter(ArtworkEntity.dim_status.in_(["pending", "failed", None]))
+            .all()
+        )
+    total = len(pending)
+    done = 0
+    failed = 0
+    for entity in pending:
+        try:
+            await _do_dimension_analysis(entity.id)
+            db.expire(entity)
+            db.refresh(entity)
+            if entity.dim_status == "done":
+                done += 1
+            else:
+                failed += 1
+        except Exception as e:
+            logger.warning("Backfill failed for entity %s: %s", entity.id, e)
+            failed += 1
+    return {"total": total, "done": done, "failed": failed}
+
+
+# ---------------------------------------------------------------------------
+# Taste dimension analysis
+# ---------------------------------------------------------------------------
+
+async def _do_dimension_analysis(entity_id: str) -> None:
+    """Async core: score one entity on 5 taste dimensions and persist."""
+    db = SessionLocal()
+    try:
+        entity = db.query(ArtworkEntity).filter(ArtworkEntity.id == entity_id).first()
+        if not entity or entity.dim_status == "done":
+            return
+        prompt = _DIM_ANALYSIS_PROMPT.format(
+            title=entity.display_title,
+            artist=entity.display_artist,
+            date_hint="unknown date",
+            medium_hint="unknown medium",
+            description_hint="No additional description available.",
+        )
+        entity.dim_status = "processing"
+        db.commit()
+        try:
+            client = OpenAIAPIClient()
+            raw = await client.client.chat.completions.create(
+                model="gpt-5.4-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                max_completion_tokens=100,
+            )
+            text = raw.choices[0].message.content.strip()
+            if text.startswith("```"):
+                text = re.sub(r"^```[a-z]*\n?", "", text)
+                text = re.sub(r"\n?```$", "", text)
+            scores = json.loads(text)
+            def clamp(v):
+                return v if v in (-1, 0, 1) else 0
+            entity.dim_figurative_abstract  = clamp(scores.get("dim_figurative_abstract", 0))
+            entity.dim_emotive_conceptual   = clamp(scores.get("dim_emotive_conceptual", 0))
+            entity.dim_serene_intense       = clamp(scores.get("dim_serene_intense", 0))
+            entity.dim_classical_avantgarde = clamp(scores.get("dim_classical_avantgarde", 0))
+            entity.dim_playful_serious      = clamp(scores.get("dim_playful_serious", 0))
+            entity.dim_status    = "done"
+            entity.dim_analyzed_at = datetime.utcnow()
+            entity.dim_error     = None
+            db.commit()
+            logger.info("Dimension analysis done for entity %s", entity_id)
+        except Exception as e:
+            entity.dim_status = "failed"
+            entity.dim_error  = str(e)
+            db.commit()
+            logger.warning("Dimension analysis failed for entity %s: %s", entity_id, e)
+    finally:
+        db.close()
+
+
+def _run_dimension_analysis_bg(entity_id: str) -> None:
+    """Sync wrapper for use as a FastAPI background task (runs in threadpool)."""
+    import asyncio as _asyncio
+    _asyncio.run(_do_dimension_analysis(entity_id))
+
+
+_DIM_ANALYSIS_PROMPT = """\
+You are an art analysis assistant. Given an artwork's metadata, score it on five taste dimensions.
+
+Artwork: "{title}" by {artist} ({date_hint})
+Medium: {medium_hint}
+Description: {description_hint}
+
+For each dimension output exactly -1, 0, or 1:
+  -1 = clearly left pole
+   0 = neutral / both sides / cannot determine
+   1 = clearly right pole
+
+Dimensions:
+- dim_figurative_abstract: Is the image recognisably depicting real things? (-1=figurative, 1=abstract)
+- dim_emotive_conceptual: Is the primary appeal emotion or intellect/idea? (-1=emotive, 1=conceptual)
+- dim_serene_intense: Is the visual mood calm or tense/dramatic? (-1=serene, 1=intense)
+- dim_classical_avantgarde: Does it follow tradition or break from it? (-1=classical, 1=avant-garde)
+- dim_playful_serious: Is the tone light/playful or heavy/serious? (-1=playful, 1=serious)
+
+Respond with ONLY valid JSON, no explanation:
+{{"dim_figurative_abstract": <int>, "dim_emotive_conceptual": <int>, "dim_serene_intense": <int>, "dim_classical_avantgarde": <int>, "dim_playful_serious": <int>}}
+"""
+
+_ARCHETYPES: list[dict] = []
+
+def _load_archetypes() -> list[dict]:
+    global _ARCHETYPES
+    if not _ARCHETYPES:
+        import os, json as _json
+        path = os.path.join(os.path.dirname(__file__), "..", "data", "taste_archetypes.json")
+        with open(os.path.normpath(path), encoding="utf-8") as f:
+            _ARCHETYPES = _json.load(f)
+    return _ARCHETYPES
+
+
+def _match_archetype(scores: dict) -> dict | None:
+    """Map a dict of {dim: float} AVG scores to the best-matching archetype."""
+    THRESHOLD = 0.3
+
+    def pole(v):
+        if v is None:
+            return 0
+        if v > THRESHOLD:
+            return 1
+        if v < -THRESHOLD:
+            return -1
+        return 0
+
+    user_poles = {
+        "figurative_abstract":  pole(scores.get("figurative_abstract")),
+        "emotive_conceptual":   pole(scores.get("emotive_conceptual")),
+        "serene_intense":       pole(scores.get("serene_intense")),
+        "classical_avantgarde": pole(scores.get("classical_avantgarde")),
+        "playful_serious":      pole(scores.get("playful_serious")),
+    }
+
+    archetypes = _load_archetypes()
+    best, best_score = None, -1
+    for arch in archetypes:
+        d = arch["dims"]
+        match = sum(
+            1 for k in user_poles
+            if user_poles[k] != 0 and d.get(k) == user_poles[k]
+        )
+        # penalise mismatches on decisive dimensions
+        mismatch = sum(
+            1 for k in user_poles
+            if user_poles[k] != 0 and d.get(k) != user_poles[k]
+        )
+        score = match - 0.5 * mismatch
+        if score > best_score:
+            best_score = score
+            best = arch
+    return best
+
+
+@router.post("/entities/{entity_id}/analyze-dimensions")
+async def analyze_entity_dimensions(entity_id: str, db: Session = Depends(get_db)):
+    """Score an ArtworkEntity on 5 taste dimensions via LLM. Idempotent."""
+    entity = db.query(ArtworkEntity).filter(ArtworkEntity.id == entity_id).first()
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found")
+    if entity.dim_status == "done":
+        entity_db = db.query(ArtworkEntity).filter(ArtworkEntity.id == entity_id).first()
+        return {"status": "already_done", "entity_id": entity_id, "scores": {
+            "dim_figurative_abstract":  entity_db.dim_figurative_abstract,
+            "dim_emotive_conceptual":   entity_db.dim_emotive_conceptual,
+            "dim_serene_intense":       entity_db.dim_serene_intense,
+            "dim_classical_avantgarde": entity_db.dim_classical_avantgarde,
+            "dim_playful_serious":      entity_db.dim_playful_serious,
+        }}
+    await _do_dimension_analysis(entity_id)
+    db.expire_all()
+    entity = db.query(ArtworkEntity).filter(ArtworkEntity.id == entity_id).first()
+    if entity and entity.dim_status == "done":
+        return {"status": "done", "entity_id": entity_id, "scores": {
+            "dim_figurative_abstract":  entity.dim_figurative_abstract,
+            "dim_emotive_conceptual":   entity.dim_emotive_conceptual,
+            "dim_serene_intense":       entity.dim_serene_intense,
+            "dim_classical_avantgarde": entity.dim_classical_avantgarde,
+            "dim_playful_serious":      entity.dim_playful_serious,
+        }}
+    raise HTTPException(status_code=500, detail="Dimension analysis failed")
+
+
 @router.get("/taste-profile")
 async def get_taste_profile(user_id: str, db: Session = Depends(get_db)):
-    """Return taste profile computed from skill_stats + saved artwork collection."""
+    """Return taste archetype profile derived from dimension scores of user's saved artworks."""
     from sqlalchemy import func as sqlfunc
 
-    user = db.query(User).filter(User.user_id == user_id).first()
-    skill_stats_raw: dict = dict(user.skill_stats or {}) if user else {}
-
-    # Enrich each skill entry with level
-    skill_stats: dict = {}
-    for name, entry in skill_stats_raw.items():
-        e = dict(entry)
-        e["level"] = _xp_to_level(e.get("xp", 0))
-        skill_stats[name] = e
-
-    # Top skills by XP
-    top_skills = sorted(
-        [{"name": k, "cat": _SKILL_CAT.get(k, "STRUCTURE"), **v} for k, v in skill_stats.items()],
-        key=lambda x: x["xp"], reverse=True
-    )[:5]
-
-    # Dominant category by total XP per category
-    cat_xp: dict[str, int] = {}
-    for name, entry in skill_stats.items():
-        cat = _SKILL_CAT.get(name, "STRUCTURE")
-        cat_xp[cat] = cat_xp.get(cat, 0) + entry.get("xp", 0)
-    dominant_cat = max(cat_xp, key=lambda c: cat_xp[c]) if cat_xp else None
-
-    identity_label, identity_desc = _IDENTITY_LABELS.get(dominant_cat, _IDENTITY_LABELS[None])
-
-    # Artwork collection stats
     total_artworks = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).count()
 
-    top_movements = [
-        {"movement": row[0], "count": row[1]}
-        for row in db.query(SavedArtwork.movement, sqlfunc.count().label("count"))
-            .filter(SavedArtwork.user_id == user_id, SavedArtwork.movement != None)
-            .group_by(SavedArtwork.movement)
-            .order_by(sqlfunc.count().desc())
-            .limit(5)
-    ]
+    # Join saved artworks → entities with completed dimension analysis
+    rows = (
+        db.query(
+            ArtworkEntity.dim_figurative_abstract,
+            ArtworkEntity.dim_emotive_conceptual,
+            ArtworkEntity.dim_serene_intense,
+            ArtworkEntity.dim_classical_avantgarde,
+            ArtworkEntity.dim_playful_serious,
+        )
+        .join(SavedArtwork, SavedArtwork.artwork_entity_id == ArtworkEntity.id)
+        .filter(
+            SavedArtwork.user_id == user_id,
+            ArtworkEntity.dim_status == "done",
+        )
+        .all()
+    )
 
-    top_periods = [
-        {"period": row[0], "count": row[1]}
-        for row in db.query(SavedArtwork.period_bucket, sqlfunc.count().label("count"))
-            .filter(SavedArtwork.user_id == user_id, SavedArtwork.period_bucket != None)
-            .group_by(SavedArtwork.period_bucket)
-            .order_by(sqlfunc.count().desc())
-    ]
+    analyzed_count = len(rows)
+    MIN_SAMPLE = 5
 
-    total_explore_events = db.query(SkillEvent).filter(SkillEvent.user_id == user_id).count()
+    if analyzed_count < MIN_SAMPLE:
+        return {
+            "user_id": user_id,
+            "total_artworks": total_artworks,
+            "analyzed_count": analyzed_count,
+            "min_sample": MIN_SAMPLE,
+            "status": "insufficient_data",
+            "archetype": None,
+            "dimension_scores": None,
+        }
+
+    # Compute per-dimension averages (exclude None)
+    def avg_dim(vals):
+        clean = [v for v in vals if v is not None]
+        return round(sum(clean) / len(clean), 3) if clean else None
+
+    dim_scores = {
+        "figurative_abstract":  avg_dim([r[0] for r in rows]),
+        "emotive_conceptual":   avg_dim([r[1] for r in rows]),
+        "serene_intense":       avg_dim([r[2] for r in rows]),
+        "classical_avantgarde": avg_dim([r[3] for r in rows]),
+        "playful_serious":      avg_dim([r[4] for r in rows]),
+    }
+
+    archetype = _match_archetype(dim_scores)
+
+    # Pending entities (not yet analyzed) belonging to this user
+    pending_count = (
+        db.query(ArtworkEntity)
+        .join(SavedArtwork, SavedArtwork.artwork_entity_id == ArtworkEntity.id)
+        .filter(
+            SavedArtwork.user_id == user_id,
+            ArtworkEntity.dim_status.in_(["pending", "processing", "failed"]),
+        )
+        .count()
+    )
 
     return {
         "user_id": user_id,
         "total_artworks": total_artworks,
-        "total_explore_events": total_explore_events,
-        "identity_label": identity_label,
-        "identity_description": identity_desc,
-        "dominant_category": dominant_cat,
-        "skill_stats": skill_stats,
-        "top_skills": top_skills,
-        "top_movements": top_movements,
-        "top_periods": top_periods,
+        "analyzed_count": analyzed_count,
+        "pending_count": pending_count,
+        "min_sample": MIN_SAMPLE,
+        "status": "ready" if analyzed_count >= MIN_SAMPLE else "insufficient_data",
+        "dimension_scores": dim_scores,
+        "archetype": archetype,
+        "low_sample_warning": analyzed_count < 10,
     }
 
 

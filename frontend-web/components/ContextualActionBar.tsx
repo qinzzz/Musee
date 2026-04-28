@@ -12,6 +12,8 @@ interface Props {
   onLike?: () => void;
   onCollect?: () => void;
   onDelete?: () => void;
+  onCommunity?: () => void;
+  isCommunityActive?: boolean;
   isAnalyzing?: boolean;
   isLiked?: boolean;
   activeItem?: GalleryItem;
@@ -29,6 +31,8 @@ const ContextualActionBar: React.FC<Props> = ({
   onLike,
   onCollect,
   onDelete,
+  onCommunity,
+  isCommunityActive,
   isAnalyzing,
   isLiked,
   activeItem,
@@ -207,6 +211,19 @@ const ContextualActionBar: React.FC<Props> = ({
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20.8 4.6a5.5 5.5 0 0 0-7.7 0l-1.1 1.1-1.1-1.1a5.5 5.5 0 0 0-7.7 7.7l1.1 1.1 7.7 7.7 7.7-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.7z"/>
+          </svg>
+        </button>
+
+        <button
+          onClick={onCommunity}
+          className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-all ${isCommunityActive ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-700'}`}
+          title="Community"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
         </button>
 
