@@ -1129,6 +1129,45 @@ const App: React.FC = () => {
     setDeleteConfirmation({ id, type: 'item' });
   };
 
+  const handleRetryAnalysis = async (item: GalleryItem) => {
+    const itemId = item.id;
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: true, streamingText: undefined } : i));
+    try {
+      const safeFile = base64ToFile(item.url, 'artwork.jpg');
+      await analyzeArtworkStream(
+        safeFile, USER_ID,
+        (chunk) => setItems(prev => prev.map(i => i.id === itemId ? { ...i, streamingText: (i.streamingText || '') + chunk } : i)),
+        (analysis) => {
+          const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
+          setItems(prev => prev.map(i => i.id === itemId ? {
+            ...i,
+            keywords, artistName: analysis.artist_name, artworkName: analysis.artwork_name,
+            description: parseAnalysis(analysis.description), date: analysis.date, medium: analysis.medium,
+            artworkId: analysis.artwork_id, isAnalyzing: false, streamingText: undefined,
+            location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
+            photoTime: analysis.photo_time, sessionTitle: analysis.session_title,
+            referenceUrls: analysis.reference_urls || [],
+          } : i));
+          setIsAnalyzing(false);
+        },
+        (error) => {
+          const msg = error?.message || 'Analysis failed.';
+          if (msg.includes('402') || msg.includes('quota_exceeded')) {
+            setItems(prev => prev.filter(i => i.id !== itemId));
+            setToast({ message: "You've reached your artwork limit. Upgrade to save more.", type: 'info' });
+          } else {
+            setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: false, streamingText: msg } : i));
+          }
+          setIsAnalyzing(false);
+        },
+        item.visitId, undefined, item.location, item.photoTime,
+      );
+    } catch {
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: false, streamingText: 'Retry failed.' } : i));
+      setIsAnalyzing(false);
+    }
+  };
+
   const handleRetryHarder = async () => {
     if (!interpretingItem || isAnalyzing) return;
     const retryItem = interpretingItem;
@@ -1667,6 +1706,7 @@ const App: React.FC = () => {
                             });
                           }}
                           onDelete={() => handleDeleteItem(entry.item.id)}
+                          onRetry={(!entry.item.isAnalyzing && entry.item.streamingText && !entry.item.artistName) ? () => handleRetryAnalysis(entry.item) : undefined}
                           onContinueVision={!filteredVisitId ? () => handleContinueVision(entry.item) : undefined}
                         />
                       ) : (

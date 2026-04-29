@@ -601,100 +601,83 @@ async def analyze_artist_stream(
     # TIMING: Image processed
     t_image_processed = time.time()
 
-    async def event_generator():
-        nonlocal t_request_received, t_image_processed, request_id
+    # Queue for passing SSE events from analysis task to SSE generator.
+    # Unbounded — put() never blocks, so the analysis task runs unimpeded
+    # even after the client disconnects and nobody is consuming events.
+    queue: asyncio.Queue = asyncio.Queue()
 
+    async def _analyze_task() -> None:
+        """Full LLM + R2 + DB pipeline. Runs as an independent asyncio.Task so it
+        completes even when the client disconnects mid-stream."""
         full_text = ""
         ai_service = AIServiceFactory.get_service(ai_provider)
+        t_ai_call = t_first_chunk = t_streaming_done = None
         first_chunk_received = False
-        t_ai_call = None
-        t_first_chunk = None
-        t_streaming_done = None
+        generated_photo_uri: Optional[str] = None
 
         try:
-            # TIMING: Call AI service
             t_ai_call = time.time()
 
-            # Run Vision API and session context fetch in parallel
             (vision_hint, vision_ref_urls), session_context = await asyncio.gather(
                 get_vision_hint(image_bytes),
                 get_session_context(session_id) if session_id else asyncio.sleep(0, result=None),
             )
 
-            # Stream the analysis text
             async for chunk in ai_service.identify_artist_stream(
-                image_bytes, identity=identity, language=language, session_context=session_context,
-                reasoning_effort=reasoning_effort, vision_hint=vision_hint,
+                image_bytes, identity=identity, language=language,
+                session_context=session_context, reasoning_effort=reasoning_effort,
+                vision_hint=vision_hint,
             ):
-                # TIMING: First chunk received
                 if not first_chunk_received:
                     t_first_chunk = time.time()
                     first_chunk_received = True
-                    time_to_first_chunk = (t_first_chunk - t_ai_call) * 1000
 
                 full_text += chunk
-                # Send chunk as SSE event
                 event_data = json.dumps({"type": "text", "content": chunk})
-                yield f"event: chunk\ndata: {event_data}\n\n"
+                await queue.put(f"event: chunk\ndata: {event_data}\n\n")
 
-            # TIMING: Streaming finished
             t_streaming_done = time.time()
-            streaming_duration = (t_streaming_done - t_first_chunk) * 1000 if t_first_chunk else 0
 
-            # Parse the full response to extract metadata
+            # ── Parse LLM output ────────────────────────────────────────────
             artist_name = "Unknown Artist"
             artwork_name = "Untitled"
-            extracted_tags = []
+            extracted_tags: list = []
             description = ""
-            date_val = None
-            medium_val = None
-            movement_val = None
-            period_bucket_val = None
+            date_val = medium_val = movement_val = period_bucket_val = None
 
             try:
                 json_str = full_text
-
-                # Extract JSON from markdown code blocks if present
                 json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', full_text)
                 if json_match:
                     json_str = json_match.group(1).strip()
-
                 parsed = json.loads(json_str)
-
-                # Handle the new structured object format
                 if isinstance(parsed, dict):
-                    artist_name = parsed.get('artist', artist_name)
+                    artist_name  = parsed.get('artist', artist_name)
                     artwork_name = parsed.get('title', artwork_name)
                     extracted_tags = parsed.get('tags', [])
-                    description = parsed.get('description', '')
-                    date_val = parsed.get('date')
-                    medium_val = parsed.get('medium')
-                    movement_val = parsed.get('movement')
+                    description    = parsed.get('description', '')
+                    date_val       = parsed.get('date')
+                    medium_val     = parsed.get('medium')
+                    movement_val   = parsed.get('movement')
                     period_bucket_val = parsed.get('period_bucket')
-
-                # Fallback for old array format
-                elif isinstance(parsed, list) and len(parsed) > 0:
+                elif isinstance(parsed, list) and parsed:
                     artist_info = next(
-                        (item for item in parsed if isinstance(item, dict) and 'artist_name' in item),
+                        (i for i in parsed if isinstance(i, dict) and 'artist_name' in i),
                         parsed[0] if isinstance(parsed[0], dict) else {}
                     )
-                    artist_name = artist_info.get('artist_name', artist_name)
-                    artwork_name = artist_info.get('artwork_name', artwork_name)
-
                     analysis_info = next(
-                        (item for item in parsed if isinstance(item, dict) and 'analysis' in item),
-                        {}
+                        (i for i in parsed if isinstance(i, dict) and 'analysis' in i), {}
                     )
+                    artist_name    = artist_info.get('artist_name', artist_name)
+                    artwork_name   = artist_info.get('artwork_name', artwork_name)
                     extracted_tags = analysis_info.get('tags', [])
-                    description = analysis_info.get('analysis', '')
-                    date_val = artist_info.get('date') or analysis_info.get('date')
-                    medium_val = artist_info.get('medium') or analysis_info.get('medium')
+                    description    = analysis_info.get('analysis', '')
+                    date_val       = artist_info.get('date') or analysis_info.get('date')
+                    medium_val     = artist_info.get('medium') or analysis_info.get('medium')
+                logger.info(f"[{request_id}] Parsed: {artist_name} — {artwork_name}")
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as _pe:
+                logger.warning(f"[{request_id}] Parse failed: {_pe}")
 
-                logger.info(f"[{request_id}] Parsed streaming artwork: {artist_name} - {artwork_name}, tags: {extracted_tags}")
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                logger.warning(f"[{request_id}] Failed to parse streaming analysis: {e}")
-
-            # Build result
             result = {
                 "type": "result",
                 "artist_name": artist_name,
@@ -708,79 +691,58 @@ async def analyze_artist_stream(
                 "analysis": description or full_text,
                 "model_used": ai_provider.value,
                 "location": location,
-                "photo_time": photo_time
+                "photo_time": photo_time,
             }
 
-            # Generate photo_uri based on client type
+            # ── Upload image to R2 ──────────────────────────────────────────
             if photo_uri:
                 generated_photo_uri = photo_uri
-            elif client_type == "web" or not photo_uri:
+            elif client_type == "web":
                 storage = get_storage_service()
                 generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
             else:
                 import uuid as uuid_mod
                 generated_photo_uri = f"artwork_{uuid_mod.uuid4().hex[:12]}"
 
-            # Parse location JSON
+            # ── Parse location ──────────────────────────────────────────────
             parsed_location = None
             if location and isinstance(location, str):
                 try:
-                    if location.strip().startswith('{'):
-                         parsed_location = json.loads(location)
-                    else:
-                         parsed_location = {"raw": location}
-                except:
+                    parsed_location = json.loads(location) if location.strip().startswith('{') else {"raw": location}
+                except Exception:
                     parsed_location = {"raw": location}
             elif location:
-                 parsed_location = location
+                parsed_location = location
 
-            # Create artwork record in a thread Safe way
+            # ── Save to DB ──────────────────────────────────────────────────
             def _save_streaming_artwork_sync(
-                u_id, s_id, p_uri, a_name, w_name, desc, full_txt, d_val, m_val, tags, loc, p_time, mv_val, pb_val, ref_urls
+                u_id, s_id, p_uri, a_name, w_name, desc, full_txt,
+                d_val, m_val, tags, loc, p_time, mv_val, pb_val, ref_urls
             ):
                 with SessionLocal() as local_db:
-                    # Ensure user exists
                     usr = local_db.query(User).filter(User.user_id == u_id).first()
                     if not usr:
-                        usr = User(user_id=u_id, device_id=u_id)
-                        local_db.add(usr)
+                        local_db.add(User(user_id=u_id, device_id=u_id))
                         local_db.flush()
 
-                    # Ensure session exists (Mandatory in Visit-Only Architecture)
                     s_id = s_id or f"sess_{uuid.uuid4().hex[:8]}"
-                    sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
-                    if not sess_record:
-                        # Determine initial title from location
+                    if not local_db.query(SessionModel).filter(SessionModel.id == s_id).first():
                         initial_title = "Personal Visit"
                         if loc:
                             try:
                                 loc_data = json.loads(loc) if isinstance(loc, str) else loc
                                 initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
-                            except: pass
-
-                        sess_record = SessionModel(
-                            id=s_id, 
-                            user_id=u_id or "anonymous",
-                            title=initial_title
-                        )
-                        local_db.add(sess_record)
+                            except Exception:
+                                pass
+                        local_db.add(SessionModel(id=s_id, user_id=u_id or "anonymous", title=initial_title))
                         local_db.flush()
 
-                    # Create artwork record
                     art = SavedArtwork(
-                        photo_uri=p_uri,
-                        artist_name=a_name,
-                        artwork_name=w_name,
-                        user_id=u_id,
-                        is_recognized=1 if a_name != "Unknown Artist" else 0,
-                        analysis=desc or full_txt,
-                        params={"date": d_val, "medium": m_val},
-                        session_id=s_id,
-                        location=loc,
-                        photo_time=p_time,
-                        movement=mv_val,
-                        period_bucket=pb_val,
-                        reference_urls=ref_urls or [],
+                        photo_uri=p_uri, artist_name=a_name, artwork_name=w_name,
+                        user_id=u_id, is_recognized=1 if a_name != "Unknown Artist" else 0,
+                        analysis=desc or full_txt, params={"date": d_val, "medium": m_val},
+                        session_id=s_id, location=loc, photo_time=p_time,
+                        movement=mv_val, period_bucket=pb_val, reference_urls=ref_urls or [],
                     )
                     local_db.add(art)
                     try:
@@ -794,15 +756,12 @@ async def analyze_artist_stream(
                         else:
                             raise
 
-                    # Link tags if parsed
                     if tags:
-                        local_db.flush()
                         batch_link_tags(local_db, art, tags)
 
                     local_db.commit()
                     local_db.refresh(art)
 
-                    # Link entity (non-fatal)
                     entity_id_for_analysis = None
                     if a_name and a_name != "Unknown Artist" and w_name:
                         try:
@@ -814,54 +773,49 @@ async def analyze_artist_stream(
                             if entity.dim_status in (None, "pending"):
                                 entity_id_for_analysis = entity.id
                         except Exception as _e:
-                            logger.warning("Entity upsert failed in stream save: %s", _e)
+                            logger.warning("Entity upsert failed: %s", _e)
 
                     return str(art.id), entity_id_for_analysis
 
-            _stream_result = await anyio.to_thread.run_sync(
-                _save_streaming_artwork_sync,
-                user_id,
-                session_id,
-                generated_photo_uri,
-                artist_name,
-                artwork_name,
-                description,
-                full_text,
-                date_val,
-                medium_val,
-                extracted_tags,
-                parsed_location,
-                photo_time,
-                movement_val,
-                period_bucket_val,
-                vision_ref_urls,
-            )
-            artwork_id, _entity_id_stream = _stream_result if isinstance(_stream_result, tuple) else (_stream_result, None)
-            if _entity_id_stream and background_tasks:
-                background_tasks.add_task(_run_dimension_analysis_bg, _entity_id_stream)
+            try:
+                _stream_result = await anyio.to_thread.run_sync(
+                    _save_streaming_artwork_sync,
+                    user_id, session_id, generated_photo_uri,
+                    artist_name, artwork_name, description, full_text,
+                    date_val, medium_val, extracted_tags, parsed_location,
+                    photo_time, movement_val, period_bucket_val, vision_ref_urls,
+                )
+            except Exception as _db_err:
+                # DB write failed after R2 upload — try to clean up the orphaned image
+                if generated_photo_uri and client_type == "web" and not photo_uri:
+                    try:
+                        await get_storage_service().delete(generated_photo_uri)
+                    except Exception:
+                        pass
+                raise _db_err
+
+            artwork_id, _entity_id = _stream_result if isinstance(_stream_result, tuple) else (_stream_result, None)
+
+            # Fire-and-forget background work as independent tasks (survive disconnect)
+            if _entity_id:
+                _bg = asyncio.create_task(_do_dimension_analysis(_entity_id))
+                _active_tasks.add(_bg)
+                _bg.add_done_callback(_active_tasks.discard)
+            if session_id:
+                _sn = asyncio.create_task(update_session_narrative_task(
+                    session_id=session_id,
+                    new_artwork_data={"artist": artist_name, "title": artwork_name, "description": description or full_text},
+                    identity=identity, language=language,
+                ))
+                _active_tasks.add(_sn)
+                _sn.add_done_callback(_active_tasks.discard)
+
             result["artwork_id"] = artwork_id
             result["photo_uri"] = generated_photo_uri
             result["reference_urls"] = vision_ref_urls
 
-            # Update session narrative in background
-            if session_id and background_tasks:
-                background_tasks.add_task(
-                    update_session_narrative_task,
-                    session_id=session_id,
-                    new_artwork_data={
-                        "artist": artist_name,
-                        "title": artwork_name,
-                        "description": description or full_text
-                    },
-                    identity=identity,
-                    language=language
-                )
-            
-            # TIMING: Request finished
-            t_request_done = time.time()
-            total_duration = (t_request_done - t_request_received) * 1000
-
-            # Build and send metrics event for frontend consumption
+            # ── Metrics ─────────────────────────────────────────────────────
+            t_done = time.time()
             metrics = {
                 "type": "metrics",
                 "request_id": request_id,
@@ -871,19 +825,36 @@ async def analyze_artist_stream(
                     "time_to_first_chunk_ms": round((t_first_chunk - t_request_received) * 1000) if t_first_chunk else None,
                     "ai_first_chunk_latency_ms": round((t_first_chunk - t_ai_call) * 1000) if t_first_chunk and t_ai_call else None,
                     "streaming_duration_ms": round((t_streaming_done - t_first_chunk) * 1000) if t_streaming_done and t_first_chunk else None,
-                    "total_duration_ms": round(total_duration)
+                    "total_duration_ms": round((t_done - t_request_received) * 1000),
                 },
-                "model": ai_provider.value
+                "model": ai_provider.value,
             }
             logger.info(f"[{request_id}] METRIC_SUMMARY: {json.dumps(metrics['timings'])}")
-            yield f"event: metrics\ndata: {json.dumps(metrics)}\n\n"
-
-            yield f"event: complete\ndata: {json.dumps(result)}\n\n"
+            await queue.put(f"event: metrics\ndata: {json.dumps(metrics)}\n\n")
+            await queue.put(f"event: complete\ndata: {json.dumps(result)}\n\n")
 
         except Exception as e:
-            logger.error(f"[{request_id}] Streaming error: {str(e)}", exc_info=True)
-            error_data = json.dumps({"type": "error", "message": str(e)})
-            yield f"event: error\ndata: {error_data}\n\n"
+            logger.error(f"[{request_id}] Streaming error: {e}", exc_info=True)
+            await queue.put(f"event: error\ndata: {json.dumps({'type': 'error', 'message': str(e)})}\n\n")
+        finally:
+            await queue.put(None)  # sentinel — tells event_generator to stop
+
+    # Start the analysis as an independent task. It will run to completion
+    # even if the SSE client disconnects mid-stream.
+    _task = asyncio.create_task(_analyze_task())
+    _active_tasks.add(_task)
+    _task.add_done_callback(_active_tasks.discard)
+
+    async def event_generator():
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                yield event
+        except (asyncio.CancelledError, Exception):
+            # Client disconnected — _analyze_task keeps running independently.
+            pass
 
     return StreamingResponse(
         event_generator(),
@@ -891,7 +862,7 @@ async def analyze_artist_stream(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
+            "X-Accel-Buffering": "no",
         }
     )
 

@@ -9,10 +9,11 @@ interface Props {
   onInterpret: () => void;
   onContinueVision?: () => void;
   onDelete?: () => void;
+  onRetry?: () => void;
   size?: 'normal' | 'large';
 }
 
-const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, size = 'normal' }) => {
+const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, onRetry, size = 'normal' }) => {
   const { url } = item;
 
   return (
@@ -48,8 +49,16 @@ const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, s
 
       {/* Error state */}
       {!item.isAnalyzing && item.streamingText && !item.artistName && (
-        <div className="absolute bottom-0 left-0 right-0 bg-neutral-900/90 text-white py-2 px-3 z-20">
+        <div className="absolute bottom-0 left-0 right-0 bg-neutral-900/90 text-white py-2 px-3 z-20 flex items-center justify-between gap-2">
           <p className="text-[9px] tracking-wider uppercase font-bold">Analysis failed</p>
+          {onRetry && (
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRetry(); }}
+              className="text-[9px] tracking-wider uppercase font-bold bg-white/20 hover:bg-white/30 px-2 py-1 rounded transition-colors shrink-0"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 
