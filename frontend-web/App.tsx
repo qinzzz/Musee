@@ -1089,10 +1089,10 @@ const App: React.FC = () => {
   }, [interpretingItem?.id]);
 
   useEffect(() => {
-    if (showAccountModal === 'account' && currentUser?.user_id) {
+    if (currentUser?.user_id) {
       getUserQuota(currentUser.user_id).then(setQuotaInfo).catch(() => {});
     }
-  }, [showAccountModal, currentUser?.user_id]);
+  }, [currentUser?.user_id]);
 
   const handleNavigateInterpretation = (direction: 'prev' | 'next') => {
     if (!interpretingItem || !interpretingItem.allVisitItems || interpretingItem.allVisitItems.length <= 1) return;
@@ -1303,21 +1303,22 @@ const App: React.FC = () => {
                             <p className="text-[13px] font-semibold text-neutral-900 truncate leading-tight">{currentUser.full_name}</p>
                             <p className="text-[11px] text-neutral-400 truncate leading-tight mt-0.5">{currentUser.email}</p>
                           </div>
-                          <span className="text-[10px] bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-md font-semibold shrink-0">Free</span>
+                          <span className="text-[10px] bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-md font-semibold shrink-0 capitalize">{quotaInfo?.tier ?? 'free'}</span>
                         </div>
-                        {(() => {
-                          const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-                          const todayCount = items.filter(i => i.timestamp >= todayStart.getTime()).length;
-                          const pct = Math.min(todayCount / 60, 1);
-                          return (
-                            <div className="mt-3 text-center">
-                              <div className="h-1 bg-neutral-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-neutral-900 rounded-full transition-all" style={{ width: `${pct * 100}%` }} />
-                              </div>
-                              <p className="text-[11px] text-neutral-400 mt-1.5">{todayCount}/60 analyses today</p>
+                        {quotaInfo && quotaInfo.limit !== null && (
+                          <div className="mt-3">
+                            <div className="h-1 bg-neutral-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${Math.min(100, (quotaInfo.used / quotaInfo.limit) * 100)}%`,
+                                  backgroundColor: quotaInfo.used >= quotaInfo.limit ? '#ef4444' : quotaInfo.used / quotaInfo.limit > 0.8 ? '#f59e0b' : '#262626',
+                                }}
+                              />
                             </div>
-                          );
-                        })()}
+                            <p className="text-[11px] text-neutral-400 mt-1.5">{quotaInfo.used} / {quotaInfo.limit} artworks</p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="h-px bg-neutral-100 mx-3" />
