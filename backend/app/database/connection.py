@@ -5,15 +5,16 @@ from app.config.settings import settings
 
 # Create database engine
 effective_url = settings.effective_database_url
-engine = create_engine(
-    effective_url,
-    connect_args={"check_same_thread": False} if "sqlite" in effective_url else {},
-    pool_pre_ping=True,
-    pool_recycle=300,
-    # Increased pool size for concurrent streaming requests
-    pool_size=20,
-    max_overflow=10
-)
+_is_sqlite = "sqlite" in effective_url
+_engine_kwargs: dict = {
+    "connect_args": {"check_same_thread": False} if _is_sqlite else {},
+    "pool_pre_ping": not _is_sqlite,
+    "pool_recycle": 300 if not _is_sqlite else -1,
+}
+if not _is_sqlite:
+    _engine_kwargs["pool_size"] = 20
+    _engine_kwargs["max_overflow"] = 10
+engine = create_engine(effective_url, **_engine_kwargs)
 
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

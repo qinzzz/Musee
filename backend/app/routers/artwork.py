@@ -528,6 +528,9 @@ async def analyze_artist(
 
         return response
 
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         logger.error(f"Error in analyze_artist: {str(e)}", exc_info=True)
         db.rollback()

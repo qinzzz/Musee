@@ -74,23 +74,25 @@ async def lifespan(app: FastAPI):
         from app.database.connection import engine, Base
         from sqlalchemy import text
         Base.metadata.create_all(bind=engine)
-        with engine.connect() as _conn:
-            _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS skill_stats JSONB"))
-            _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'free'"))
-            _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS reference_urls JSONB"))
-            _conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS skill_events (
-                    id SERIAL PRIMARY KEY,
-                    user_id VARCHAR NOT NULL,
-                    artwork_id VARCHAR,
-                    skill_name VARCHAR NOT NULL,
-                    event_type VARCHAR NOT NULL,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-            """))
-            _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_user_id ON saved_artworks(user_id)"))
-            _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_device_id ON saved_artworks(device_id)"))
-            _conn.commit()
+        _is_sqlite = "sqlite" in str(engine.url)
+        if not _is_sqlite:
+            with engine.connect() as _conn:
+                _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS skill_stats JSONB"))
+                _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'free'"))
+                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS reference_urls JSONB"))
+                _conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS skill_events (
+                        id SERIAL PRIMARY KEY,
+                        user_id VARCHAR NOT NULL,
+                        artwork_id VARCHAR,
+                        skill_name VARCHAR NOT NULL,
+                        event_type VARCHAR NOT NULL,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """))
+                _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_user_id ON saved_artworks(user_id)"))
+                _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_device_id ON saved_artworks(device_id)"))
+                _conn.commit()
         logger.info("Database initialized and migrations applied")
     yield
 
