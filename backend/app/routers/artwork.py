@@ -1841,6 +1841,10 @@ async def get_taste_profile(user_id: str, db: Session = Depends(get_db)):
             ArtworkEntity.dim_serene_intense,
             ArtworkEntity.dim_classical_avantgarde,
             ArtworkEntity.dim_playful_serious,
+            SavedArtwork.id,
+            SavedArtwork.photo_uri,
+            SavedArtwork.artist_name,
+            SavedArtwork.artwork_name,
         )
         .join(SavedArtwork, SavedArtwork.artwork_entity_id == ArtworkEntity.id)
         .filter(
@@ -1879,6 +1883,65 @@ async def get_taste_profile(user_id: str, db: Session = Depends(get_db)):
 
     archetype = _match_archetype(dim_scores)
 
+    # Per-dimension: pick up to 3 artworks that most strongly represent the dominant pole
+    _DIM_COL_IDX = {
+        "figurative_abstract": 0,
+        "emotive_conceptual": 1,
+        "serene_intense": 2,
+        "classical_avantgarde": 3,
+        "playful_serious": 4,
+    }
+    _DIM_POLES = [
+        ("figurative_abstract",  "具象", "抽象"),
+        ("emotive_conceptual",   "感性", "理性"),
+        ("serene_intense",       "宁静", "张力"),
+        ("classical_avantgarde", "经典", "先锋"),
+        ("playful_serious",      "玩味", "严肃"),
+    ]
+
+    THRESHOLD = 0.3
+    dimension_examples: dict = {}
+    for dim_key, left_label, right_label in _DIM_POLES:
+        avg = dim_scores.get(dim_key)
+        if avg is None:
+            continue
+        col_idx = _DIM_COL_IDX[dim_key]
+        # Dominant direction: positive = right pole, negative = left pole
+        dominant_sign = 1 if avg >= 0 else -1
+        if abs(avg) < THRESHOLD:
+            continue  # neutral — no clear pole to illustrate
+        # Sort by alignment with dominant pole (most extreme first), dedupe by artwork_name
+        seen_names: set = set()
+        candidates = []
+        for r in sorted(rows, key=lambda r: -(r[col_idx] or 0) * dominant_sign):
+            score = r[col_idx]
+            if score is None or score * dominant_sign <= 0:
+                continue
+            name_key = (r[8] or "").lower()  # artwork_name
+            if name_key in seen_names:
+                continue
+            seen_names.add(name_key)
+            candidates.append(r)
+            if len(candidates) == 3:
+                break
+
+        pole_label = right_label if dominant_sign > 0 else left_label
+        other_label = left_label if dominant_sign > 0 else right_label
+        examples = []
+        for r in candidates:
+            examples.append({
+                "artwork_id": r[5],
+                "photo_url": r[6],  # already a public URL in prod
+                "artist_name": r[7],
+                "artwork_name": r[8],
+                "dim_score": r[col_idx],
+            })
+        dimension_examples[dim_key] = {
+            "dominant_pole": pole_label,
+            "other_pole": other_label,
+            "examples": examples,
+        }
+
     # Pending entities (not yet analyzed) belonging to this user
     pending_count = (
         db.query(ArtworkEntity)
@@ -1898,6 +1961,7 @@ async def get_taste_profile(user_id: str, db: Session = Depends(get_db)):
         "min_sample": MIN_SAMPLE,
         "status": "ready" if analyzed_count >= MIN_SAMPLE else "insufficient_data",
         "dimension_scores": dim_scores,
+        "dimension_examples": dimension_examples,
         "archetype": archetype,
         "low_sample_warning": analyzed_count < 10,
     }
