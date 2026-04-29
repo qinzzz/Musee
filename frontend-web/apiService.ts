@@ -999,8 +999,8 @@ export async function updateArtwork(
  * @param artworkId - The ID of the artwork to delete
  * @returns Status message
  */
-export async function deleteArtwork(artworkId: string): Promise<any> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}`, {
+export async function deleteArtwork(artworkId: string, userId: string): Promise<any> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}?user_id=${encodeURIComponent(userId)}`, {
     method: 'DELETE',
   });
 
@@ -1225,8 +1225,8 @@ export async function fetchSmartCollections(userId: string): Promise<SmartCollec
  * @param sessionId - The ID of the session to delete
  * @returns Status message
  */
-export async function deleteSession(sessionId: string): Promise<any> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}`, {
+export async function deleteSession(sessionId: string, userId: string): Promise<any> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}?user_id=${encodeURIComponent(userId)}`, {
     method: 'DELETE',
   });
 

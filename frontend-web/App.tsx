@@ -1156,7 +1156,7 @@ const App: React.FC = () => {
     try {
       const itemToDelete = items.find(item => item.id === id);
       if (itemToDelete?.artworkId) {
-        await deleteArtwork(itemToDelete.artworkId);
+        await deleteArtwork(itemToDelete.artworkId, USER_ID);
       }
       setItems(prev => prev.filter(item => item.id !== id));
       if (interpretingItem?.id === id) setInterpretingItem(null);
@@ -1174,7 +1174,7 @@ const App: React.FC = () => {
 
   const confirmDeleteSession = async (sessionId: string) => {
     try {
-      await deleteSession(sessionId);
+      await deleteSession(sessionId, USER_ID);
       setItems(prev => prev.filter(item => item.visitId !== sessionId));
       if (interpretingItem && interpretingItem.visitId === sessionId) {
         setInterpretingItem(null);

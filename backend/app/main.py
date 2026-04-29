@@ -87,6 +87,8 @@ async def lifespan(app: FastAPI):
                     created_at TIMESTAMP DEFAULT NOW()
                 )
             """))
+            _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_user_id ON saved_artworks(user_id)"))
+            _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_device_id ON saved_artworks(device_id)"))
             _conn.commit()
         logger.info("Database initialized and migrations applied")
     yield
@@ -111,7 +113,7 @@ allowed_origins = [
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

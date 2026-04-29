@@ -2476,12 +2476,15 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/artworks/{artwork_id}")
-async def delete_artwork(artwork_id: str, db: Session = Depends(get_db)):
-    """Delete a saved artwork"""
+async def delete_artwork(artwork_id: str, user_id: str = Query(...), db: Session = Depends(get_db)):
+    """Delete a saved artwork — caller must supply their user_id for ownership verification."""
     artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
 
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
+
+    if artwork.user_id != user_id and artwork.device_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this artwork")
 
     session_id = artwork.session_id
     db.delete(artwork)
@@ -2549,12 +2552,15 @@ async def batch_delete_artworks(
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str, db: Session = Depends(get_db)):
-    """Delete a session and all its associated artworks"""
+async def delete_session(session_id: str, user_id: str = Query(...), db: Session = Depends(get_db)):
+    """Delete a session and all its associated artworks — caller must supply their user_id."""
     session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
 
     if not session_record:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    if session_record.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this session")
 
     # Delete all artworks in this session
     db.query(SavedArtwork).filter(SavedArtwork.session_id == session_id).delete()
