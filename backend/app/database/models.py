@@ -21,6 +21,7 @@ class User(Base):
     last_active = Column(DateTime, server_default=func.now(), onupdate=func.now())
     settings = Column(JSON, nullable=True)  # User preferences and settings
     skill_stats = Column(JSON, nullable=True)  # {"skill_name": {"observations": N, "deepdives": N, "xp": N}}
+    tier = Column(String(20), nullable=False, server_default='free')  # 'free' | 'member' | 'power'
 
     # Relationship to artworks
     artworks = relationship("SavedArtwork", back_populates="user", cascade="all, delete-orphan")
@@ -39,7 +40,8 @@ class User(Base):
             "device_id": self.device_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_active": self.last_active.isoformat() if self.last_active else None,
-            "settings": self.settings
+            "settings": self.settings,
+            "tier": self.tier or "free",
         }
 
 

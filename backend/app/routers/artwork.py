@@ -60,7 +60,41 @@ def upsert_artwork_entity(db, artist_name: str, artwork_name: str) -> "ArtworkEn
         db.add(entity)
     return entity
 
-# Skill name → category map (mirrors ArtSkillsView.tsx)
+# Tasks that survive client disconnect — prevents garbage collection until done
+_active_tasks: set = set()
+
+# ── User tier quota ──────────────────────────────────────────────────────────
+TIER_ARTWORK_LIMIT: dict[str, int | None] = {
+    "free":   20,
+    "member": 200,
+    "power":  None,   # unlimited
+}
+
+def get_quota(tier: str) -> int | None:
+    return TIER_ARTWORK_LIMIT.get(tier or "free", TIER_ARTWORK_LIMIT["free"])
+
+def check_artwork_quota(user_id: str, db) -> None:
+    """Raise 402 if user has reached their tier artwork limit."""
+    from app.database.models import User as UserModel
+    user = db.query(UserModel).filter(UserModel.user_id == user_id).first()
+    tier = (user.tier if user else None) or "free"
+    limit = get_quota(tier)
+    if limit is None:
+        return  # unlimited
+    count = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).count()
+    if count >= limit:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "quota_exceeded",
+                "tier": tier,
+                "limit": limit,
+                "used": count,
+                "message": f"You've reached the {tier} plan limit of {limit} artworks.",
+            }
+        )
+
+# ── Skill name → category map (mirrors ArtSkillsView.tsx) ────────────────────
 _SKILL_CAT: dict[str, str] = {
     "Color Tension": "PERCEPTION", "Compositional Pull": "PERCEPTION",
     "Materiality": "PERCEPTION", "Scale & Presence": "PERCEPTION", "Detail Hunter": "PERCEPTION",
@@ -244,9 +278,13 @@ async def analyze_artist(
     ai_provider = determine_ai_provider(model)
     logger.info(f"analyze_artist received session_id: {session_id}, user_id: {user_id}")
 
+    # Enforce artwork quota before any AI work
+    if user_id:
+        check_artwork_quota(user_id, db)
+
     try:
         image_bytes, image_metadata = await process_image(image)
-        
+
         # Determine location source (Priority: Client provided string > EXIF > Coordinate Resolution)
         if location:
             logger.info(f"Metadata Source [Location]: FRONTEND (Value: {location})")
@@ -529,6 +567,10 @@ async def analyze_artist_stream(
     request_id = f"stream_{int(t_request_received * 1000)}"
 
     ai_provider = determine_ai_provider(model)
+
+    # Quota check — before expensive image processing
+    if user_id:
+        check_artwork_quota(user_id, db)
 
     try:
         if image and image.filename:

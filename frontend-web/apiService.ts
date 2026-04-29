@@ -1276,3 +1276,15 @@ export async function deleteCommunityComment(artworkId: string, commentId: strin
   );
   if (!response.ok) throw new Error(`API error (${response.status})`);
 }
+
+export interface UserQuota {
+  tier: 'free' | 'member' | 'power';
+  used: number;
+  limit: number | null;
+}
+
+export async function getUserQuota(userId: string): Promise<UserQuota> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/users/${encodeURIComponent(userId)}/quota`);
+  if (!response.ok) throw new Error(`API error (${response.status})`);
+  return response.json();
+}

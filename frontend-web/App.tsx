@@ -8,6 +8,8 @@ import {
   analyzeArtwork,
   ArtworkAnalysisResult,
   StreamingMetrics,
+  UserQuota,
+  getUserQuota,
   getOrCreateUserId,
   fetchUserArtworks,
   resolveImageUrl,
@@ -350,6 +352,7 @@ const App: React.FC = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
+  const [quotaInfo, setQuotaInfo] = useState<UserQuota | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
@@ -967,8 +970,14 @@ const App: React.FC = () => {
           },
           (error) => {
             const msg = error?.message || 'Analysis failed.';
-            setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, streamingText: msg } : item));
-            setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, isAnalyzing: false, streamingText: msg } : prev);
+            if (msg.includes('402') || msg.includes('quota_exceeded')) {
+              setItems(prev => prev.filter(item => item.id !== newItemId));
+              setInterpretingItem(prev => (prev?.id === newItemId) ? null : prev);
+              setToast({ message: "You've reached your artwork limit. Upgrade to save more.", type: 'info' });
+            } else {
+              setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, streamingText: msg } : item));
+              setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, isAnalyzing: false, streamingText: msg } : prev);
+            }
             setIsAnalyzing(false);
           },
           visitId, undefined, undefined, photoTime, coords?.latitude, coords?.longitude
@@ -1055,7 +1064,13 @@ const App: React.FC = () => {
           };
           setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
         } catch (e) {
-          setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, description: 'Analysis failed.' } : item));
+          const errMsg = (e as Error)?.message || '';
+          if (errMsg.includes('402') || errMsg.includes('quota_exceeded')) {
+            setItems(prev => prev.filter(item => item.id !== newItemId));
+            setToast({ message: "You've reached your artwork limit. Upgrade to save more.", type: 'info' });
+          } else {
+            setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, description: 'Analysis failed.' } : item));
+          }
         } finally {
           finishedCount++;
           if (finishedCount === memoryFiles.length) setIsAnalyzing(false);
@@ -1072,6 +1087,12 @@ const App: React.FC = () => {
     setInterpretationAskExpanded(false);
     setArtworkChatMessage(null);
   }, [interpretingItem?.id]);
+
+  useEffect(() => {
+    if (showAccountModal === 'account' && currentUser?.user_id) {
+      getUserQuota(currentUser.user_id).then(setQuotaInfo).catch(() => {});
+    }
+  }, [showAccountModal, currentUser?.user_id]);
 
   const handleNavigateInterpretation = (direction: 'prev' | 'next') => {
     if (!interpretingItem || !interpretingItem.allVisitItems || interpretingItem.allVisitItems.length <= 1) return;
@@ -1393,6 +1414,32 @@ const App: React.FC = () => {
                     <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Email</label>
                     <div className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-500">{currentUser?.email || '—'}</div>
                   </div>
+                  {/* Quota bar */}
+                  <div className="border-t border-neutral-100 pt-4">
+                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Plan</label>
+                    <div className="mt-2 flex items-center justify-between">
+                      <span className="text-[13px] text-neutral-700 capitalize">{quotaInfo?.tier ?? 'free'}</span>
+                      <span className="text-[11px] text-neutral-400">
+                        {quotaInfo
+                          ? quotaInfo.limit === null
+                            ? `${quotaInfo.used} artworks (unlimited)`
+                            : `${quotaInfo.used} / ${quotaInfo.limit} artworks`
+                          : '…'}
+                      </span>
+                    </div>
+                    {quotaInfo && quotaInfo.limit !== null && (
+                      <div className="mt-1.5 w-full bg-neutral-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.min(100, (quotaInfo.used / quotaInfo.limit) * 100)}%`,
+                            backgroundColor: quotaInfo.used >= quotaInfo.limit ? '#ef4444' : quotaInfo.used / quotaInfo.limit > 0.8 ? '#f59e0b' : '#a3a3a3',
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <div className="border-t border-neutral-100 pt-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
