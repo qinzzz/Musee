@@ -279,7 +279,7 @@ async def analyze_artist(
     logger.info(f"analyze_artist received session_id: {session_id}, user_id: {user_id}")
 
     # Enforce artwork quota before any AI work
-    if user_id:
+    if user_id and settings.use_database:
         check_artwork_quota(user_id, db)
 
     try:
@@ -568,8 +568,8 @@ async def analyze_artist_stream(
 
     ai_provider = determine_ai_provider(model)
 
-    # Quota check — before expensive image processing
-    if user_id:
+    # Quota check — only when DB is enabled
+    if user_id and settings.use_database:
         check_artwork_quota(user_id, db)
 
     try:
