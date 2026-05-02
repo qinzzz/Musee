@@ -69,9 +69,7 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> Optional[User]:
-    """
-    FastAPI dependency to get the currently authenticated user
-    """
+    """FastAPI dependency — returns the authenticated User or None (anonymous)."""
     if not token:
         return None
 
@@ -83,5 +81,18 @@ async def get_current_user(
     except JWTError:
         return None
 
-    user = db.query(User).filter(User.user_id == user_id).first()
-    return user
+    return db.query(User).filter(User.user_id == user_id).first()
+
+
+def require_same_user(current_user: Optional[User], user_id: Optional[str]) -> None:
+    """Raise 403 when a JWT is present but its subject doesn't match user_id.
+
+    Skipped entirely when no JWT (anonymous mode) or no user_id in the request.
+    """
+    if current_user is None or not user_id:
+        return
+    if current_user.user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: token does not match user_id",
+        )

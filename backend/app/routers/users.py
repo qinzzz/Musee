@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.database.connection import get_db
 from app.database.models import User, SavedArtwork
+from app.utils.auth_utils import get_current_user, require_same_user
 
 router = APIRouter()
 
@@ -80,7 +81,8 @@ async def create_or_get_user(
 @router.get("/users/{user_id}")
 async def get_user(
     user_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """
     Get a user by user_id
@@ -89,6 +91,7 @@ async def get_user(
 
     Returns the user object
     """
+    require_same_user(current_user, user_id)
     try:
         user = db.query(User).filter(User.user_id == user_id).first()
 
@@ -130,7 +133,8 @@ async def get_user_by_device(
 async def update_user(
     user_id: str,
     request: UpdateUserRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """
     Update a user's profile
@@ -142,6 +146,7 @@ async def update_user(
 
     Returns the updated user object
     """
+    require_same_user(current_user, user_id)
     try:
         user = db.query(User).filter(User.user_id == user_id).first()
 
@@ -176,7 +181,8 @@ async def update_user(
 @router.delete("/users/{user_id}")
 async def delete_user(
     user_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """
     Delete a user and all associated artworks
@@ -185,6 +191,7 @@ async def delete_user(
 
     Returns success message
     """
+    require_same_user(current_user, user_id)
     try:
         user = db.query(User).filter(User.user_id == user_id).first()
 
@@ -207,8 +214,13 @@ async def delete_user(
 
 
 @router.get("/users/{user_id}/quota")
-async def get_user_quota(user_id: str, db: Session = Depends(get_db)):
+async def get_user_quota(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
     """Return tier, artwork usage, and limit for the given user."""
+    require_same_user(current_user, user_id)
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

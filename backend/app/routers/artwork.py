@@ -26,6 +26,7 @@ from app.utils.image_processing import process_image, reverse_geocode, compress_
 from app.services.storage import get_storage_service, StorageFactory
 from app.services.vision_service import get_vision_hint
 from app.config.settings import settings
+from app.utils.auth_utils import get_current_user, require_same_user
 from app.utils.conversation_storage import ConversationMessage
 
 router = APIRouter()
@@ -265,7 +266,8 @@ async def analyze_artist(
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
     db: Session = Depends(get_db),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """
     Analyze artwork image to identify artist
@@ -278,6 +280,7 @@ async def analyze_artist(
     ai_provider = determine_ai_provider(model)
     logger.info(f"analyze_artist received session_id: {session_id}, user_id: {user_id}")
 
+    require_same_user(current_user, user_id)
     # Enforce artwork quota before any AI work
     if user_id and settings.use_database:
         check_artwork_quota(user_id, db)
