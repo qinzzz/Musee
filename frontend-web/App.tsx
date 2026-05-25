@@ -33,6 +33,7 @@ import TopographyView from './components/TopographyView';
 import ArtSkillsView from './components/ArtSkillsView';
 import TasteProfileView from './components/TasteProfileView';
 import ArtistPage from './components/ArtistPage';
+import ArtistsIndexPage from './components/ArtistsIndexPage';
 import Toast, { ToastAction } from './components/Toast';
 import ContextualActionBar from './components/ContextualActionBar';
 
@@ -271,11 +272,49 @@ const App: React.FC = () => {
     artistEntityId?: string;
     artworkId?: string;
     artistName?: string;
-  } | null>(null);
+  } | null>(() => {
+    // Support deep-linking: /artists/ian_cheng opens the artist detail page on load
+    const path = window.location.pathname;
+    if (path.startsWith('/artists/')) {
+      const slug = path.slice('/artists/'.length);
+      if (slug) return { artistEntityId: slug }; // backend accepts slug as identifier
+    }
+    return null;
+  });
+  const [showArtistsIndex, setShowArtistsIndex] = useState<boolean>(
+    () => window.location.pathname === '/artists',
+  );
 
   const showToast = (message: string, type: 'info' | 'success' = 'info', action?: ToastAction) => {
     setToast({ message, type, action });
   };
+
+  // Sync URL → state when user hits browser Back/Forward
+  useEffect(() => {
+    const handlePop = () => {
+      const path = window.location.pathname;
+      if (path === '/artists') {
+        setShowArtistsIndex(true);
+        setArtistPageContext(null);
+      } else if (path.startsWith('/artists/')) {
+        const slug = path.slice('/artists/'.length);
+        setArtistPageContext(slug ? { artistEntityId: slug } : null);
+        setShowArtistsIndex(false);
+      } else {
+        setArtistPageContext(null);
+        setShowArtistsIndex(false);
+      }
+    };
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, []);
+
+  // Push /artists URL when the index page opens
+  useEffect(() => {
+    if (showArtistsIndex) {
+      window.history.pushState({}, '', '/artists');
+    }
+  }, [showArtistsIndex]);
 
   /** 
    * Algorithmic Session Determination (Phase 7)
@@ -1926,17 +1965,40 @@ const App: React.FC = () => {
 
       </div>
 
-      {/* Full-screen artist page — rendered above everything else */}
+      {/* Artists index page */}
+      {showArtistsIndex && (
+        <ArtistsIndexPage
+          userId={currentUser?.user_id || USER_ID}
+          onSelectArtist={(artist) => {
+            setShowArtistsIndex(false);
+            setArtistPageContext({ artistEntityId: artist.id, artistName: artist.display_name });
+          }}
+          onClose={() => {
+            setShowArtistsIndex(false);
+            window.history.pushState({}, '', '/');
+          }}
+        />
+      )}
+
+      {/* Full-screen artist detail page */}
       {artistPageContext && (
         <ArtistPage
           artistEntityId={artistPageContext.artistEntityId}
           artworkId={artistPageContext.artworkId}
           artistName={artistPageContext.artistName}
           userId={currentUser?.user_id || USER_ID}
-          onClose={() => setArtistPageContext(null)}
+          onClose={() => {
+            setArtistPageContext(null);
+            window.history.pushState({}, '', '/');
+          }}
           onOpenArtwork={(item) => {
             setArtistPageContext(null);
+            window.history.pushState({}, '', '/');
             setInterpretingItem(item as any);
+          }}
+          onNavigateToIndex={() => {
+            setArtistPageContext(null);
+            setShowArtistsIndex(true);
           }}
         />
       )}

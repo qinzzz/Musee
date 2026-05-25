@@ -2373,10 +2373,27 @@ def _movement_hook(name: str, count: int) -> str:
         return f"You keep returning to {name}. {count} works deep."
 
 
-@router.get("/artists/{artist_id}")
-async def get_artist(artist_id: str, db: Session = Depends(get_db)):
-    """Return the ArtistEntity profile for the given artist_id."""
-    entity = db.query(ArtistEntity).filter(ArtistEntity.id == artist_id).first()
+@router.get("/artists")
+async def list_user_artists(user_id: str = Query(...), db: Session = Depends(get_db)):
+    """List all ArtistEntity records that have at least one artwork from *user_id*."""
+    rows = (
+        db.query(ArtistEntity, func.count(SavedArtwork.id).label("artwork_count"))
+        .join(SavedArtwork, SavedArtwork.artist_entity_id == ArtistEntity.id)
+        .filter(SavedArtwork.user_id == user_id)
+        .group_by(ArtistEntity.id)
+        .order_by(ArtistEntity.display_name)
+        .all()
+    )
+    return [{**entity.to_dict(), "artwork_count": count} for entity, count in rows]
+
+
+@router.get("/artists/{identifier}")
+async def get_artist(identifier: str, db: Session = Depends(get_db)):
+    """Return an ArtistEntity by UUID or by URL slug (e.g. 'ian_cheng' → canonical 'ian cheng')."""
+    entity = db.query(ArtistEntity).filter(ArtistEntity.id == identifier).first()
+    if not entity:
+        canonical = identifier.replace("_", " ").lower()
+        entity = db.query(ArtistEntity).filter(ArtistEntity.canonical_name == canonical).first()
     if not entity:
         raise HTTPException(status_code=404, detail="Artist not found")
     return entity.to_dict()

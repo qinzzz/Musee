@@ -9,6 +9,11 @@ interface Props {
   userId: string;
   onClose: () => void;
   onOpenArtwork: (item: GalleryItem) => void;
+  onNavigateToIndex?: () => void; // navigate to /artists index
+}
+
+function toSlug(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, '_');
 }
 
 function rawToGalleryItem(raw: any): GalleryItem {
@@ -31,7 +36,7 @@ function rawToGalleryItem(raw: any): GalleryItem {
   };
 }
 
-export default function ArtistPage({ artistEntityId, artworkId, artistName, userId, onClose, onOpenArtwork }: Props) {
+export default function ArtistPage({ artistEntityId, artworkId, artistName, userId, onClose, onOpenArtwork, onNavigateToIndex }: Props) {
   const [artist, setArtist] = useState<ArtistEntity | null>(null);
   const [artworks, setArtworks] = useState<GalleryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,6 +80,14 @@ export default function ArtistPage({ artistEntityId, artworkId, artistName, user
     return () => { cancelled = true; };
   }, [artistEntityId, artworkId, userId]);
 
+  // Push a clean URL when we know the artist name
+  useEffect(() => {
+    const name = artist?.display_name || artistName;
+    if (name) {
+      window.history.pushState({}, '', `/artists/${toSlug(name)}`);
+    }
+  }, [artist?.display_name, artistName]);
+
   const lifespan = (() => {
     if (!artist) return null;
     const { birth_year, death_year } = artist;
@@ -91,17 +104,34 @@ export default function ArtistPage({ artistEntityId, artworkId, artistName, user
       style={{ fontFamily: 'system-ui, sans-serif' }}
     >
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-safe pt-4 pb-3 border-b border-white/10 shrink-0">
+      <div className="flex items-center gap-2 px-4 pt-safe pt-4 pb-3 border-b border-white/10 shrink-0">
         <button
           onClick={onClose}
-          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0"
           aria-label="Back"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <span className="text-white/50 text-sm tracking-wide">Artist</span>
+
+        {/* Breadcrumb: optionally show "All Artists /" when index is reachable */}
+        <div className="flex items-center gap-1.5 text-sm min-w-0">
+          {onNavigateToIndex && (
+            <>
+              <button
+                onClick={onNavigateToIndex}
+                className="text-white/40 hover:text-white/70 transition-colors whitespace-nowrap"
+              >
+                Artists
+              </button>
+              <span className="text-white/20">/</span>
+            </>
+          )}
+          <span className="text-white/70 truncate">
+            {artist?.display_name || artistName || '…'}
+          </span>
+        </div>
       </div>
 
       {/* Scrollable body */}
