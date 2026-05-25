@@ -951,6 +951,22 @@ export async function fetchInsights(
 }
 
 /**
+ * Fetch (and persist) insights for a saved artwork by its DB id.
+ * Returns cached value immediately if already computed.
+ */
+export async function fetchAndPersistInsights(
+  artworkId: string,
+  language?: string,
+): Promise<Array<{ title: string; text: string }>> {
+  const url = new URL(`${API_BASE_URL}/artworks/${artworkId}/insights`);
+  if (language) url.searchParams.set('language', language);
+  const response = await fetchWithTimeout(url.toString(), { method: 'POST', timeout: 30000 });
+  if (!response.ok) return [];
+  const data = await response.json();
+  return data.insights ?? [];
+}
+
+/**
  * Re-run AI identification on a saved artwork using its stored image.
  */
 export async function reanalyzeArtwork(artworkId: string): Promise<any> {

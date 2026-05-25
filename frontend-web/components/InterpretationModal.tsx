@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, NeighborItem, Visit, GalleryItem } from '../types';
-import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchCommunity, publishComment, deleteCommunityComment, type PublicComment, type CommunityData } from '../apiService';
+import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type PublicComment, type CommunityData } from '../apiService';
 
 interface Props {
   item: {
@@ -307,10 +307,17 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     originalTagsRef.current = tags;
   }, [item.id]);
 
-  // Use persisted unlock points from DB
+  // Use persisted insights from DB; backfill on first open if missing
   useEffect(() => {
-    setInsights(item.insights || []);
-  }, [item.id, item.insights]);
+    if ((item.insights ?? []).length > 0) {
+      setInsights(item.insights!);
+      return;
+    }
+    if (!item.artworkId || !item.artistName || item.artistName.toLowerCase() === 'unknown') return;
+    fetchAndPersistInsights(item.artworkId)
+      .then(pts => setInsights(pts))
+      .catch(() => {});
+  }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch community comments when artwork is identified and saved
   useEffect(() => {

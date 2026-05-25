@@ -2552,6 +2552,41 @@ async def delete_artwork(artwork_id: str, user_id: str = Query(...), db: Session
     return {"message": "Artwork deleted successfully"}
 
 
+@router.post("/artworks/{artwork_id}/insights")
+async def get_or_create_artwork_insights(
+    artwork_id: str,
+    language: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Return cached insights for an artwork, computing and persisting them if missing."""
+    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+    if artwork.insights:
+        return {"insights": artwork.insights}
+
+    artist = artwork.artist_name or ""
+    if not artist or artist.lower() in ("unknown", "unknown artist", ""):
+        return {"insights": []}
+
+    ai_provider = determine_ai_provider(None)
+    ai_service = AIServiceFactory.get_service(ai_provider)
+    try:
+        points = await ai_service.get_insights(
+            artist_name=artist,
+            artwork_name=artwork.artwork_name or "Untitled",
+            language=language,
+        )
+    except Exception as e:
+        logger.exception("Insights computation failed for %s", artwork_id)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    artwork.insights = points
+    db.commit()
+    return {"insights": points}
+
+
 @router.post("/artworks/batch-delete")
 async def batch_delete_artworks(
     artwork_ids: List[str],
