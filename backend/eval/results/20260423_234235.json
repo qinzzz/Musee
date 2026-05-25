@@ -1,0 +1,2938 @@
+{
+  "timestamp": "20260423_234235",
+  "configs": [
+    "gpt-5.4",
+    "gemini-3-flash"
+  ],
+  "n_items": 39,
+  "summary": {
+    "gpt-5.4": {
+      "n": 39,
+      "artist_exact": 0.692,
+      "artist_fuzzy": 0.692,
+      "artist_contains": 0.692,
+      "title_fuzzy": 0.359,
+      "title_contains": 0.41,
+      "movement_exact": 0.538,
+      "movement_fuzzy": 0.538
+    },
+    "gemini-3-flash": {
+      "n": 0
+    }
+  },
+  "results": [
+    {
+      "item_id": "c001",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Antonio Canova",
+        "title": "Theseus Defeats the Centaur",
+        "movement": "Neoclassicism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Antonio Canova",
+        "title": "Theseus and the Minotaur",
+        "date": "c. 1781\u20131783",
+        "medium": "Marble sculpture",
+        "movement": "Historical",
+        "period_bucket": "Modern",
+        "description": "This is most likely **Antonio Canova\u2019s** **Theseus and the Minotaur**, a landmark of **Neoclassical** sculpture, shown here in a grand museum setting. Canova turns a violent myth into something strangely calm: Theseus has already won, and the drama lives in the poised body, ideal anatomy, and cool marble surface rather than in chaotic action. The work looks back to ancient Greek art, which made it a powerful statement against the emotional excess of the Baroque. Even in a crowded gallery, the sculpture holds a hushed, heroic stillness.",
+        "tags": [
+          "marble",
+          "Neoclassicism",
+          "mythology",
+          "Theseus",
+          "Canova"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": true,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c002",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "Cabinet of curiosities",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Johann Joachim Kaendler and the Meissen Manufactory",
+        "title": "Mounted Meissen porcelain centerpiece with flower bouquet and garniture",
+        "date": "c. 1745\u20131760",
+        "medium": "Hard-paste porcelain with gilt bronze mounts",
+        "movement": "Rococo",
+        "period_bucket": "Modern",
+        "description": "This lavish table ornament is most likely a **Meissen** porcelain centerpiece later enriched with swirling **Rococo** gilt-bronze mounts, in the spirit of designs associated with **Johann Joachim Kaendler**. The crowded bouquet of porcelain flowers, miniature vessels, and playful figural details turn a dining object into a theater of luxury, showing how 18th-century courts prized technical virtuosity and exotic refinement. Meissen was Europe\u2019s first successful hard-paste porcelain factory, and works like this advertised both wealth and scientific triumph. The glittering gold and delicate blossoms create a tension between permanence and fragility that still feels enchanting.",
+        "tags": [
+          "Meissen",
+          "porcelain",
+          "Rococo",
+          "gilt bronze",
+          "decorative arts"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c003",
+      "config_id": "gpt-5.4",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Caravaggio",
+        "title": "David with the Head of Goliath",
+        "movement": "Baroque",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Caravaggio",
+        "title": "David with the Head of Goliath",
+        "date": "c. 1600",
+        "medium": "Oil on canvas",
+        "movement": "Baroque",
+        "period_bucket": "Modern",
+        "description": "This is most likely **Caravaggio\u2019s** early **David with the Head of Goliath**, recognizable by its stark darkness, sharp spotlighting, and the young hero caught in a tense, human moment rather than a triumphant pose. The painting turns a biblical story into raw theater: **David** grips the giant\u2019s hair while the sword still hovers, making violence feel immediate and unsettling. Caravaggio\u2019s realism\u2014especially in the flesh, drapery, and shadow\u2014was radical for its time and helped reshape European painting. Instead of ideal beauty, he gives us drama, vulnerability, and a moral scene that feels almost painfully close.",
+        "tags": [
+          "Caravaggio",
+          "David and Goliath",
+          "Baroque",
+          "tenebrism",
+          "biblical"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c004",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Pablo Picasso",
+        "title": "The Fourteenth of July",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Pablo Picasso",
+        "title": "The Races at Auteuil",
+        "date": "c. 1900\u20131901",
+        "medium": "Oil on canvas",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "This crowded, fast-moving scene is most likely an early **Pablo Picasso**, painted when he was absorbing Parisian modern life and testing a looser, more emotional brushwork. The swirling horses, flags, and spectators are built from quick strokes and compressed forms, giving the image the nervous energy of a public spectacle rather than a polished society view. You can feel Picasso pushing beyond description toward mood, turning a day at the races into a dense, almost chaotic experience of movement and noise. It\u2019s a glimpse of the young artist before **Cubism**, already fascinated by urban crowds and the drama of modern life.",
+        "tags": [
+          "Picasso",
+          "horse race",
+          "crowd scene",
+          "early modernism",
+          "Paris"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c005",
+      "config_id": "gpt-5.4",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Pieter Bruegel the Elder",
+        "title": "The Tower of Babel",
+        "movement": "Northern Renaissance",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Pieter Bruegel the Elder",
+        "title": "The Tower of Babel",
+        "date": "c. 1563",
+        "medium": "Oil on panel",
+        "movement": "Historical",
+        "period_bucket": "Historical",
+        "description": "**Pieter Bruegel the Elder** turns the biblical story of human pride into a vast construction site, where the monumental tower feels both impressive and doomed. Its spiral form echoes the Roman Colosseum, linking the tale to earthly empire and overreach, while the tiny workers below emphasize the fragile scale of human ambition. Bruegel fills the scene with believable labor, shipping, and masonry, making the miracle of building look almost ordinary. That realism makes the warning sharper: civilization can be brilliant, busy, and still headed toward collapse.",
+        "tags": [
+          "Bruegel",
+          "Tower of Babel",
+          "biblical",
+          "Northern Renaissance",
+          "architecture"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c007",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "James Ensor",
+        "title": "Christ's Entry Into Brussels in 1889",
+        "movement": "Expressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "James Ensor",
+        "title": "Christ's Entry into Brussels in 1889",
+        "date": "1888",
+        "medium": "Oil on canvas",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "**James Ensor** turns a biblical procession into a noisy modern parade, filling the canvas with masks, banners, soldiers, and gawking faces. At the top, the slogan **\"Vive la Sociale\"** and the barely noticeable Christ suggest a sharp satire of mass politics, spectacle, and spiritual indifference in late 19th-century Belgium. The rough, acidic color and crowded composition make the scene feel both carnivalesque and unsettling, as if celebration has tipped into chaos. It is one of Ensor\u2019s boldest attacks on hypocrisy and conformity, and a key bridge toward **Expressionism**.",
+        "tags": [
+          "crowd scene",
+          "satire",
+          "religious imagery",
+          "Belgium",
+          "masks"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c006",
+      "config_id": "gpt-5.4",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Paul C\u00e9zanne",
+        "title": "Mont Sainte-Victoire",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Paul C\u00e9zanne",
+        "title": "Mont Sainte-Victoire",
+        "date": "c. 1885\u20131904",
+        "medium": "Oil on canvas",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Modern",
+        "description": "**Paul C\u00e9zanne** returned to **Mont Sainte-Victoire** again and again, using the mountain as a laboratory for seeing. Here the landscape is built from short, blocky strokes and shifting patches of blue, green, and ochre, so the scene feels both observed and constructed. That method became hugely influential for modern art because it turns nature into structure without losing its atmosphere. The result is calm yet restless, as if the mountain and the air around it are slowly taking shape before your eyes.",
+        "tags": [
+          "landscape",
+          "mountain",
+          "Provence",
+          "brushwork",
+          "modernism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m001",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Albert Gleizes",
+        "title": "Painting for Contemplation, Dominant Rose and Green",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Sonia Delaunay",
+        "title": "Rhythme couleur / abstract composition",
+        "date": "c. 1930s\u20131950s",
+        "medium": "Oil on canvas",
+        "movement": "Orphism",
+        "period_bucket": "Modern",
+        "description": "This tall, swirling abstraction is most likely by **Sonia Delaunay**, whose work often turns color into a kind of visual music. The interlocking arcs, layered planes, and lively pastel-and-jewel palette suggest her interest in movement, rhythm, and modern life rather than a fixed subject. Even without depicting a scene directly, the painting feels animated, almost like a figure or machine dissolving into pulses of light and motion. It captures the modernist belief that **color** alone could structure space, emotion, and energy.",
+        "tags": [
+          "abstract",
+          "color rhythm",
+          "modernism",
+          "Sonia Delaunay",
+          "geometric"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m002",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Marxism Will Give Health to the Sick",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Frida Kahlo",
+        "title": "Marxism Will Give Health to the Sick",
+        "date": "1954",
+        "medium": "Oil on masonite",
+        "movement": "Surrealism",
+        "period_bucket": "Modern",
+        "description": "This is most likely **Frida Kahlo\u2019s** late painting **Marxism Will Give Health to the Sick**, where she turns self-portraiture into political allegory. Kahlo stands at the center in a green skirt, while oversized hands, **Karl Marx**, a globe, and symbolic birds crowd the space around her, merging bodily pain with hopes for social liberation. The surface is rough and intensely worked, giving the scene a handmade urgency rather than polished realism. What makes it striking is how **Kahlo** fuses private suffering, revolutionary belief, and dreamlike imagery into one compact, confrontational image.",
+        "tags": [
+          "Frida Kahlo",
+          "self-portrait",
+          "politics",
+          "surreal imagery",
+          "Marxism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m003",
+      "config_id": "gpt-5.4",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "The Two Fridas",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Frida Kahlo",
+        "title": "The Two Fridas",
+        "date": "1939",
+        "medium": "Oil on canvas",
+        "movement": "Surrealism",
+        "period_bucket": "Modern",
+        "description": "**Frida Kahlo\u2019s** **The Two Fridas** is one of her most recognizable self-portraits, showing a doubled identity split between European and Mexican selves. The exposed hearts, joined by a single artery, turn private pain into vivid symbolism, likely reflecting her divorce from Diego Rivera and her ongoing search for wholeness. Kahlo\u2019s precise, almost folk-art realism makes the scene feel both calm and unsettling. The stormy sky behind the figures deepens the mood of emotional vulnerability and resilience.",
+        "tags": [
+          "self-portrait",
+          "dual identity",
+          "Mexican art",
+          "surreal symbolism",
+          "female artist"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m004",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Viva la Vida, Watermelons",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Frida Kahlo",
+        "title": "Viva la Vida",
+        "date": "1954",
+        "medium": "Oil on Masonite",
+        "movement": "Surrealism",
+        "period_bucket": "Modern",
+        "description": "**Frida Kahlo\u2019s** final painting turns a simple still life into something fierce and defiant. The thickly painted watermelons glow with saturated reds and greens, while the inscription **\u201cViva la Vida\u201d** transforms the fruit into a declaration of life made just days before her death. Kahlo draws on the Mexican tradition of using fruit in popular art and market imagery, but here it feels deeply personal\u2014sensual, mortal, and celebratory at once. The work carries both sweetness and fragility, as if joy itself were being defended against loss.",
+        "tags": [
+          "Frida Kahlo",
+          "still life",
+          "watermelon",
+          "Mexico",
+          "final painting"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m005",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Mark Rothko",
+        "title": "No. 10",
+        "movement": "Color Field",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Mark Rothko",
+        "title": "Untitled (Rothko color field painting)",
+        "date": "c. 1954\u20131960",
+        "medium": "Oil on canvas",
+        "movement": "Color Field",
+        "period_bucket": "Modern",
+        "description": "**Mark Rothko** built paintings like this from hovering bands of color that seem simple at first, then become deeply atmospheric as you stand with them. The soft-edged blocks of white, red-orange, yellow, and misty blue create a slow emotional pull rather than a scene or story, which is central to **Color Field** painting. Rothko wanted color to feel almost spiritual, using thin layered oil paint so the surface glows and breathes. The work\u2019s power comes from that tension between structure and blur, where each band feels both monumental and fragile.",
+        "tags": [
+          "Rothko",
+          "Color Field",
+          "abstract painting",
+          "spiritual",
+          "color"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m006",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Robert Delaunay",
+        "title": "Red Eiffel Tower",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Robert Delaunay",
+        "title": "The Red Tower (La Tour Rouge)",
+        "date": "c. 1911\u20131912",
+        "medium": "Oil on canvas",
+        "movement": "Cubism",
+        "period_bucket": "Modern",
+        "description": "**Robert Delaunay** turns the **Eiffel Tower** into a fractured, spinning structure of red girders, smoke, and city fragments, capturing the thrill of modern Paris. The broken planes and shifting viewpoints connect it to **Cubism**, but the glowing color and sense of motion feel distinctly his own. Rather than showing the tower as stable architecture, he makes it pulse like a living symbol of technology and urban change. It carries the excitement of the early 20th century, when steel, speed, and the modern city seemed to remake how people saw the world.",
+        "tags": [
+          "Eiffel Tower",
+          "Paris",
+          "Cubism",
+          "modernity",
+          "architecture"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m007",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wassily Kandinsky",
+        "title": "Improvisation 28 (second version)",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Wassily Kandinsky",
+        "title": "Improvisation 31 (Sea Battle)",
+        "date": "1913",
+        "medium": "Oil on canvas",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "This looks like **Wassily Kandinsky\u2019s** **Improvisation 31 (Sea Battle)**, where recognizable forms dissolve into a storm of line, color, and motion. The sharp black diagonals and floating patches of red, blue, and yellow create a feeling of collision, as if landscape, water, and figures are being pulled into pure sensation. Kandinsky believed painting could work like music, expressing inner emotion rather than simply describing the visible world. That makes this canvas feel both chaotic and lyrical, poised at the moment when modern art was breaking away from representation.",
+        "tags": [
+          "abstract",
+          "Kandinsky",
+          "Expressionism",
+          "oil painting",
+          "early modernism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m008",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "David Hockney",
+        "title": "Garden",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "David Hockney",
+        "title": "California garden/pool house landscape (likely from The Arrival of Spring / iPad landscape mode, but closer to a Los Angeles house-and-pool painting)",
+        "date": "circa 2010s",
+        "medium": "Acrylic or gouache-like painting on paper/canvas, possibly from a digital drawing translated to print",
+        "movement": "Contemporary",
+        "period_bucket": "Now",
+        "description": "The bright, flattened color, crisp outlines, and joyous domestic setting strongly suggest **David Hockney**, especially his long fascination with **California houses, pools, and gardens**. The scene turns architecture and tropical planting into a decorative rhythm of turquoise, violet, cobalt, and acid green, making everyday space feel almost theatrical. Its simplified forms echo **Pop Art** clarity, but the mood is more intimate than ironic: a private paradise of light, leisure, and careful looking. What stands out is how the painting balances observation with invention, letting color carry the emotional heat of the place.",
+        "tags": [
+          "pool",
+          "garden",
+          "California",
+          "bright color",
+          "landscape"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m009",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Egon Schiele",
+        "title": "Wally in a Red Blouse",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Egon Schiele",
+        "title": "Reclining Woman in Orange Stockings",
+        "date": "c. 1914",
+        "medium": "Gouache, watercolor, and black crayon on paper",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "This looks very close to **Egon Schiele**, whose wiry contour lines and psychologically charged figures are instantly recognizable. The woman\u2019s tilted pose, exposed stockings, and sharp, restless outline turn a reclining figure into something uneasy and intimate rather than simply decorative. Schiele, working in early 20th-century Vienna, often pushed portraiture and erotic drawing toward raw emotional exposure, and here the orange-red garment heightens that sense of heat and vulnerability. The blank paper around her makes the body feel isolated, as if the whole image were a flash of desire and self-consciousness at once.",
+        "tags": [
+          "Egon Schiele",
+          "Expressionism",
+          "figurative",
+          "Vienna",
+          "eroticism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m010",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Joseph Nic\u00e9phore Ni\u00e9pce",
+        "title": "View from the Window at Le Gras",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Joseph Nic\u00e9phore Ni\u00e9pce",
+        "title": "View from the Window at Le Gras",
+        "date": "1826\u20131827",
+        "medium": "Heliographic photograph on pewter plate",
+        "movement": "Unknown",
+        "period_bucket": "Historical",
+        "description": "**Ni\u00e9pce\u2019s** plate is often recognized as the earliest surviving camera photograph, made through a long exposure that turns architecture into a ghostly presence. The dim rooftops and courtyard seem to emerge slowly from the metal surface, which is part of the work\u2019s power: you do not simply see the image, you discover it. Its blurred, silvery appearance records both a place and a technological breakthrough, capturing the moment when light itself first became a durable image.",
+        "tags": [
+          "early photography",
+          "heliography",
+          "architecture",
+          "innovation",
+          "19th century"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m011",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wayne Thiebaud",
+        "title": "Cakes",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Wayne Thiebaud",
+        "title": "Cakes",
+        "date": "Approximate date: 1960s",
+        "medium": "Oil on canvas",
+        "movement": "Pop Art",
+        "period_bucket": "Modern",
+        "description": "**Wayne Thiebaud** turned ordinary American desserts into something almost monumental, and this cake-filled composition is one of his most recognizable subjects. The neat rows, creamy pastel colors, and thick, frosting-like paint give the work a playful surface, but the sharp shadows and careful spacing also make it feel strangely formal and isolated. Painted in the early **Pop Art** moment, it shares that movement\u2019s fascination with everyday consumer culture, yet Thiebaud\u2019s touch is warmer and more handmade than commercial imagery. The result is both cheerful and slightly wistful, like a bakery window remembered through nostalgia.",
+        "tags": [
+          "cakes",
+          "pop art",
+          "still life",
+          "American art",
+          "desserts"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co001",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Anselm Kiefer",
+        "title": "Die Welle (The Wave)",
+        "movement": "Neo-Expressionism",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Alberto Burri",
+        "title": "Grande Sacco",
+        "date": "c. 1955",
+        "medium": "Burlap, fabric, pigment, and mixed media on canvas",
+        "movement": "Art Informel",
+        "period_bucket": "Modern",
+        "description": "This rough, scarred surface strongly suggests **Alberto Burri**, who turned torn **sacks**, cloth, and damaged materials into paintings that feel almost like wounded bodies. The patched fabric and earthy browns and grays carry the memory of poverty, repair, and postwar ruin in Italy after World War II. Rather than depicting suffering directly, Burri lets the materials speak through abrasion, stitching, and decay. The result is both austere and deeply human, hovering between **painting**, **relief**, and a relic pulled from history.",
+        "tags": [
+          "mixed media",
+          "textile",
+          "postwar",
+          "materiality",
+          "abstraction"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co002",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Faire son temps (Making One's Time)",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Shilpa Gupta",
+        "title": "Untitled hanging-thread light installation",
+        "date": "Approximate date: 2010s",
+        "medium": "Installation with suspended threads, projected image, and programmed LED light",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This immersive work is most plausibly by **Shilpa Gupta**, who often uses light, language, and spatial barriers to turn viewers into participants. The curtain of hanging threads makes the projected face appear unstable, as if identity itself is flickering between presence and disappearance. The red LED element adds a tense, technological pulse, suggesting surveillance, warning, or coded communication. What makes the piece striking is how a simple walk-through structure becomes emotionally charged, asking you to move through images of power, memory, and fragile human visibility.",
+        "tags": [
+          "installation",
+          "light art",
+          "identity",
+          "threads",
+          "projection"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co003",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Chiharu Shiota",
+        "title": "Uncertain hanging portrait installation",
+        "date": "Approximate date: 2010s",
+        "medium": "Suspended translucent fabric or paper banners with printed photographic portraits, lights, and installation elements",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This immersive installation is most likely by **Chiharu Shiota**, whose work often turns memory into a physical environment. Here, ghostly portrait images hang like fragile remnants of lives and relationships, while the scattered lights make the space feel suspended between archive and dream. The translucent material lets faces overlap and fade, suggesting how identity is never fixed but built from memory, absence, and encounter. It is notable less as a single image than as an atmosphere you move through, where private histories become collective and haunting.",
+        "tags": [
+          "installation",
+          "portraits",
+          "memory",
+          "translucent fabric",
+          "contemporary art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co004",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Christian Boltanski",
+        "title": "No Man's Land",
+        "date": "2010",
+        "medium": "Installation with used clothing, industrial crane, and sound",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "**Christian Boltanski's** **No Man's Land** turns a mountain of discarded clothes into a haunting memorial, while a mechanical crane grabs garments at random like an indifferent hand of fate. The scale is overwhelming: viewers feel both the weight of mass consumption and the ghostly absence of the bodies that once wore these \u0432\u0435\u0449\u0435\u0439. Boltanski often worked with memory, loss, and the traces people leave behind, and here ordinary fabric becomes a stand-in for anonymous human lives. The work is hard to forget because it feels at once like a warehouse, a grave site, and a monument to modern vulnerability.",
+        "tags": [
+          "installation",
+          "used clothing",
+          "memory",
+          "loss",
+          "monumental"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co005",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Dorothy Napangardi",
+        "title": "Yuparli",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Yunupingu / Aboriginal Australian artist (likely from Arnhem Land school)",
+        "title": "Bawaka Country or related Yol\u014bu bark-inspired abstract painting",
+        "date": "Approximate date: 2000s\u20132010s",
+        "medium": "Acrylic on canvas",
+        "movement": "Postcolonial Art",
+        "period_bucket": "Now",
+        "description": "This painting appears to draw on **Aboriginal Australian** visual languages, with dense fields of dots and branching forms that suggest plants, waterways, or ancestral mapping rather than a single fixed scene. The dramatic black-and-white band cutting across the center creates a strong ceremonial or topographic axis, while the clustered colors radiate like living country seen from above. Its power lies in how it blends abstraction with place-based knowledge: what looks decorative at first is often deeply tied to **Country**, kinship, and memory. The work invites you to feel landscape as something alive, storied, and spiritually charged.",
+        "tags": [
+          "Aboriginal art",
+          "dots",
+          "mapping",
+          "Country",
+          "contemporary painting"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co006",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Liao Fei",
+        "title": "A Straight Line Extended",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Jimmie Durham",
+        "title": "Various Items and Complaints",
+        "date": "Approx. 1980s\u20131990s",
+        "medium": "Stone installation with metal shelf and pedestal",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This work feels deceptively simple: a sequence of **stones** arranged by size along a narrow support, turning raw weight into a careful visual sentence. It closely recalls **Jimmie Durham**, who often used humble materials to question systems of value, display, and cultural authority. The dramatic shadows make the rocks seem almost animated, as if the museum setting itself is part of the piece. What looks minimal at first becomes quietly political, asking how objects from the earth are transformed once institutions frame them as **art**.",
+        "tags": [
+          "stone",
+          "installation",
+          "minimal",
+          "conceptual",
+          "shadow"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co007",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Mike Kelley",
+        "title": "Riddle of the Sphinx",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Sheila Hicks",
+        "title": "Untitled textile landscape installation",
+        "date": "Approx. 2010s",
+        "medium": "Woven and layered textile installation on the floor with framed wall work",
+        "movement": "Fiber Art",
+        "period_bucket": "Now",
+        "description": "**Sheila Hicks** is the strongest match here: the undulating floor-based textile, built from dense bands of radiant color, turns weaving into a kind of landscape. The piece feels both ancient and contemporary, drawing on global textile traditions while behaving like sculpture and installation. Its rippling surface invites you to read cloth as terrain\u2014hills, waves, even topographic memory\u2014while the small framed image above acts almost like a distant horizon or echo. What makes it memorable is how soft material carries monumental presence, making color feel physical and immersive.",
+        "tags": [
+          "textile",
+          "installation",
+          "landscape",
+          "color",
+          "woven"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co008",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Piet Mondrian",
+        "title": "Summer, Dune in Zeeland",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Richard Diebenkorn",
+        "title": "Ocean Park (exact number unknown)",
+        "date": "circa 1970s",
+        "medium": "Oil on canvas",
+        "movement": "Color Field",
+        "period_bucket": "Contemporary",
+        "description": "This looks very much like an **Ocean Park** painting by **Richard Diebenkorn**, where landscape is reduced to spacious planes of color and scraped, reworked edges. The deep blue upper band and broad pale turquoise field suggest sea, sky, and land without fully describing them, while the hot orange lines act like flashes of California light. What makes Diebenkorn distinctive is this balance between geometry and atmosphere: the painting feels abstract, yet still anchored in place and memory. It carries the calm of a horizon seen from afar, but also the restless energy of a surface constantly revised.",
+        "tags": [
+          "abstract landscape",
+          "California",
+          "blue and orange",
+          "Ocean Park",
+          "large-scale painting"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co009",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ron Mueck",
+        "title": "In Bed",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ron Mueck",
+        "title": "In Bed",
+        "date": "2005",
+        "medium": "Hyperrealistic sculpture in mixed media, including silicone, fiberglass, resin, and fabric",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "**Ron Mueck** is known for uncanny, oversized figures, and this work closely matches **In Bed**, where a woman lies under white sheets, absorbed in private thought. The hyperreal skin, restrained color, and monumental scale turn an ordinary moment into something psychologically intense. Rather than telling a clear story, the sculpture invites us to read anxiety, insomnia, or grief in her expression. It belongs to a strain of **contemporary installation art** that uses realism not for comfort, but to make human vulnerability feel startlingly present.",
+        "tags": [
+          "hyperrealism",
+          "sculpture",
+          "figure",
+          "intimacy",
+          "psychological"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co010",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "James Turrell",
+        "title": "Danae",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "James Turrell",
+        "title": "Wedgework installation (likely from the \"Wedgework\" or related light-space series)",
+        "date": "Approx. 1990s\u20132010s",
+        "medium": "Architectural light installation using projected light in a gallery space",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "**James Turrell** is the strongest match here: a seemingly simple blue rectangle of light transforms the whole room into the artwork. Rather than depicting anything, Turrell uses light itself as a material, making you question whether you are looking at a flat image, an opening, or a volume in space. The intense blue glow softens the room\u2019s edges and turns perception into the real subject. This kind of work grows out of **Light and Space** concerns, where atmosphere, duration, and the viewer\u2019s body complete the piece.",
+        "tags": [
+          "light",
+          "perception",
+          "installation",
+          "blue",
+          "minimalism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co011",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ai Weiwei",
+        "title": "Grapes",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ai Weiwei",
+        "title": "Grapes",
+        "date": "Approximate date: 2010",
+        "medium": "Qing dynasty wooden stools reconfigured into a sculptural installation",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "**Ai Weiwei\u2019s** **Grapes** transforms antique wooden stools into a dense, almost explosive cluster, turning useful furniture into something communal, unruly, and sculptural. The work is built from traditional Chinese household objects, but their impossible interlocking arrangement breaks function apart and asks what happens when heritage is preserved, altered, or sacrificed. There\u2019s a tension here between craftsmanship and disruption: each stool carries the touch of daily life, yet together they become a monument to collective memory. It feels playful at first glance, then quietly unsettling, like history being both honored and dismantled at once.",
+        "tags": [
+          "Ai Weiwei",
+          "wooden stools",
+          "Chinese art",
+          "assemblage",
+          "tradition and transformation"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co012",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "C\u00e9leste Boursier-Mougenot",
+        "title": "Clinamen",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Carsten H\u00f6ller",
+        "title": "Two Roaming Beds (best guess from a participatory circular installation)",
+        "date": "c. 2000s",
+        "medium": "Interactive installation in a museum atrium with motorized circular platform and participatory seating/viewing",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This looks most like a work by **Carsten H\u00f6ller**, an artist known for turning museums into spaces of experiment, play, and altered perception. The large blue circular field and the way visitors gather around it suggest a participatory installation where motion, waiting, and collective attention become the artwork itself. H\u00f6ller often borrows the language of science and amusement rides, but the effect is more psychological than spectacular: viewers become aware of their own balance, curiosity, and social behavior. The piece feels calm yet uncanny, as if a pool, a sky, and a machine had briefly merged.",
+        "tags": [
+          "interactive",
+          "installation",
+          "participatory",
+          "perception",
+          "circular"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co013",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Chiharu Shiota",
+        "title": "Diary",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Chiharu Shiota",
+        "title": "Uncertain Journey",
+        "date": "c. 2016\u20132019",
+        "medium": "Thread installation with found objects",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "**Chiharu Shiota** is known for transforming entire rooms into emotional webs of memory, and this dense red-thread environment is strongly characteristic of her work. The suspended fragments and branching forms make the space feel part forest, part nervous system, turning thread into a map of connection, loss, and human presence. The color red often carries meanings of blood, fate, and life in her installations, while the immersive scale invites you to move physically through a feeling rather than simply look at an object. It is a striking example of **Installation Art** that makes absence feel almost tangible.",
+        "tags": [
+          "red thread",
+          "immersive installation",
+          "memory",
+          "found objects",
+          "contemporary art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co014",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Katharina Grosse",
+        "title": "Is It You?",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Katharina Grosse",
+        "title": "Untitled spray-painted fabric installation",
+        "date": "2010s",
+        "medium": "Spray paint on hanging and draped fabric installation",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This looks most like **Katharina Grosse**, who is known for turning whole spaces into immersive fields of sprayed color. Here, the billowing fabric works almost like a three-dimensional painting: folds catch the pigment so that **magenta, cobalt, orange, and acid green** seem to move across the room like weather. What makes it striking is the collapse of painting and sculpture into one experience\u2014you do not just look at color, you walk inside it. The effect is both theatrical and bodily, as if the museum has been temporarily transformed into a dreamlike landscape.",
+        "tags": [
+          "immersive",
+          "spray paint",
+          "fabric",
+          "color",
+          "installation"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co015",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Leandro Erlich",
+        "title": "Swimming Pool",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Leandro Erlich",
+        "title": "Swimming Pool",
+        "date": "1999\u20132001",
+        "medium": "Installation with concrete pool, glass, water, and architectural space",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "**Leandro Erlich\u2019s** **Swimming Pool** turns an ordinary pool into a clever perceptual trap: visitors appear submerged underwater while actually standing in a dry room beneath a thin layer of water above glass. The work is notable for how simply it produces wonder, using architecture and reflection rather than digital effects. It connects to contemporary installation art\u2019s interest in participation, making the viewer part of the image. There\u2019s also a quiet emotional twist here\u2014something familiar becomes uncanny, playful, and slightly impossible all at once.",
+        "tags": [
+          "illusion",
+          "interactive",
+          "pool",
+          "perception",
+          "installation"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co016",
+      "config_id": "gpt-5.4",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Marcel Duchamp",
+        "title": "Fountain",
+        "movement": "Dada",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Marcel Duchamp",
+        "title": "Fountain",
+        "date": "1917 (likely later replica)",
+        "medium": "Glazed porcelain urinal, readymade sculpture",
+        "movement": "Dada",
+        "period_bucket": "Modern",
+        "description": "**Marcel Duchamp\u2019s** **Fountain** is one of the most influential artworks of the 20th century: an ordinary urinal turned on its back, signed \u201cR. Mutt,\u201d and presented as art. By choosing a mass-produced object instead of making something by hand, Duchamp challenged ideas of skill, taste, and who gets to decide what counts as art. The work emerged from the anti-establishment spirit of **Dada**, born during World War I, and it still feels provocative because its shock comes from thought rather than beauty. What looks simple is actually a radical shift: art becomes an act of selection, context, and naming.",
+        "tags": [
+          "readymade",
+          "Dada",
+          "conceptual",
+          "ceramic",
+          "avant-garde"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co017",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Olafur Eliasson",
+        "title": "Mediated Motion",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Olafur Eliasson",
+        "title": "The Mediated Motion",
+        "date": "2001",
+        "medium": "Site-specific installation with water, duckweed, wooden walkways, and architectural intervention",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "**Olafur Eliasson** is the strongest match here: the work turns the gallery into an engineered landscape, asking visitors to move through nature as something carefully staged and perceptually unstable. The green surface of duckweed and the pale wooden paths create a striking contrast between organic spread and minimalist control. Like much of Eliasson\u2019s work, it is less about a single object than about embodied experience\u2014how space, light, and movement make us newly aware of our own seeing. The installation feels calm at first, but also faintly uncanny, as if a pond has quietly overtaken the museum.",
+        "tags": [
+          "Olafur Eliasson",
+          "installation",
+          "site-specific",
+          "water",
+          "environment"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co019",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Rinko Kawauchi",
+        "title": "Ametsuchi",
+        "movement": "New Media Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Richard Misrach",
+        "title": "Berm (Controlled Burn), from the Desert Cantos",
+        "date": "c. 1980s\u20131990s",
+        "medium": "Chromogenic color photograph",
+        "movement": "Photography",
+        "period_bucket": "Contemporary",
+        "description": "This large-scale color photograph is most likely by **Richard Misrach**, whose quietly monumental landscapes often show human intervention etched into the American West. The image turns a controlled burn into a stark geometric event: one half of the hill is charred black, the other remains pale gold, divided by a razor line of flame. That balance of beauty and damage is central to Misrach\u2019s work, which often asks how we aestheticize environmental disruption. The result feels eerie and meditative at once\u2014like watching nature, policy, and catastrophe briefly hold still in the same frame.",
+        "tags": [
+          "landscape",
+          "fire",
+          "environment",
+          "photography",
+          "American West"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co018",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Ruth Asawa",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ruth Asawa",
+        "title": "Untitled (Hanging Wire Sculptures)",
+        "date": "c. 1950s\u20131960s",
+        "medium": "Looped and tied galvanized wire hanging sculpture",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary",
+        "description": "**Ruth Asawa** is the strongest match here: these suspended, biomorphic forms made from looped wire are her signature language, developed from basket-weaving techniques she encountered in Mexico and transformed into airy sculpture. The work feels both handwoven and architectural, with nested volumes that seem to draw with shadow as much as with metal. Its delicacy hides remarkable rigor\u2014each form expands and contracts like a breathing organism. Seen in a museum space, the sculpture turns emptiness itself into part of the artwork.",
+        "tags": [
+          "wire sculpture",
+          "hanging forms",
+          "shadows",
+          "biomorphic",
+          "Ruth Asawa"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "al001",
+      "config_id": "gpt-5.4",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Kaspar von Zumbusch",
+        "title": "Maria Theresa Monument",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Kaspar von Zumbusch",
+        "title": "Maria Theresa Monument (with the Natural History Museum in the background)",
+        "date": "1888",
+        "medium": "Bronze monument with stone architectural setting",
+        "movement": "Historical",
+        "period_bucket": "Contemporary",
+        "description": "This image centers on **Kaspar von Zumbusch's** monumental statue of **Empress Maria Theresa** in Vienna, framed by the grand dome of the **Naturhistorisches Museum**. The sculpture belongs to the late 19th-century culture of imperial commemoration: the seated ruler appears calm and commanding, while advisers, generals, and allegorical figures gather below to project order, learning, and state power. Behind it, the museum\u2019s richly decorated historicist fa\u00e7ade reinforces that message, linking monarchy with science and civilization. At dusk, the warm lighting softens the stone and bronze, making the whole ensemble feel both ceremonial and unexpectedly intimate.",
+        "tags": [
+          "Vienna",
+          "public monument",
+          "Maria Theresa",
+          "historicist architecture",
+          "bronze sculpture"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "e002",
+      "config_id": "gpt-5.4",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "",
+        "movement": "Street Art",
+        "period_bucket": "Now"
+      },
+      "predicted": {
+        "artist": "M\u00e9ndez",
+        "title": "La Gran Cabeza",
+        "date": "2025",
+        "medium": "Street poster print, likely linocut or woodcut-style print on pasted paper",
+        "movement": "Street Art",
+        "period_bucket": "Now",
+        "description": "This pasted print, signed **M\u00e9ndez**, borrows the sharp black hatching and skeletal imagery of Mexican **printmaking** and **calavera** traditions, especially the social bite associated with Jos\u00e9 Guadalupe Posada. The giant skull, propped up by tiny laboring figures, turns death into a public monument and a political metaphor: something collective, constructed, and impossible to ignore. Its hand-pulled look and rough paper edges make it feel urgent, like a street announcement rather than a precious object. The phrase **\"Muerte en Cartelera 2025\"** suggests death is not just eternal here, but spectacularized and put on display.",
+        "tags": [
+          "skull",
+          "Mexican printmaking",
+          "calavera",
+          "political satire",
+          "street poster"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c001",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Antonio Canova",
+        "title": "Theseus Defeats the Centaur",
+        "movement": "Neoclassicism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "c002",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "Cabinet of curiosities",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "c003",
+      "config_id": "gemini-3-flash",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Caravaggio",
+        "title": "David with the Head of Goliath",
+        "movement": "Baroque",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "c004",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Pablo Picasso",
+        "title": "The Fourteenth of July",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "c005",
+      "config_id": "gemini-3-flash",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Pieter Bruegel the Elder",
+        "title": "The Tower of Babel",
+        "movement": "Northern Renaissance",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "c007",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "James Ensor",
+        "title": "Christ's Entry Into Brussels in 1889",
+        "movement": "Expressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "c006",
+      "config_id": "gemini-3-flash",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Paul C\u00e9zanne",
+        "title": "Mont Sainte-Victoire",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m001",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Albert Gleizes",
+        "title": "Painting for Contemplation, Dominant Rose and Green",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m002",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Marxism Will Give Health to the Sick",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m003",
+      "config_id": "gemini-3-flash",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "The Two Fridas",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m004",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Viva la Vida, Watermelons",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m005",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Mark Rothko",
+        "title": "No. 10",
+        "movement": "Color Field",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m006",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Robert Delaunay",
+        "title": "Red Eiffel Tower",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m007",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wassily Kandinsky",
+        "title": "Improvisation 28 (second version)",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m008",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "David Hockney",
+        "title": "Garden",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m009",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Egon Schiele",
+        "title": "Wally in a Red Blouse",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m010",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Joseph Nic\u00e9phore Ni\u00e9pce",
+        "title": "View from the Window at Le Gras",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "m011",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wayne Thiebaud",
+        "title": "Cakes",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co001",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Anselm Kiefer",
+        "title": "Die Welle (The Wave)",
+        "movement": "Neo-Expressionism",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co002",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Faire son temps (Making One's Time)",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co003",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co004",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co005",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Dorothy Napangardi",
+        "title": "Yuparli",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co006",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Liao Fei",
+        "title": "A Straight Line Extended",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co007",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Mike Kelley",
+        "title": "Riddle of the Sphinx",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co008",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Piet Mondrian",
+        "title": "Summer, Dune in Zeeland",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co009",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ron Mueck",
+        "title": "In Bed",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co010",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "James Turrell",
+        "title": "Danae",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co011",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ai Weiwei",
+        "title": "Grapes",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co012",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "C\u00e9leste Boursier-Mougenot",
+        "title": "Clinamen",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co013",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Chiharu Shiota",
+        "title": "Diary",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co014",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Katharina Grosse",
+        "title": "Is It You?",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co015",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Leandro Erlich",
+        "title": "Swimming Pool",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co016",
+      "config_id": "gemini-3-flash",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Marcel Duchamp",
+        "title": "Fountain",
+        "movement": "Dada",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co017",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Olafur Eliasson",
+        "title": "Mediated Motion",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co019",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Rinko Kawauchi",
+        "title": "Ametsuchi",
+        "movement": "New Media Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "co018",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Ruth Asawa",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "al001",
+      "config_id": "gemini-3-flash",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Kaspar von Zumbusch",
+        "title": "Maria Theresa Monument",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    },
+    {
+      "item_id": "e002",
+      "config_id": "gemini-3-flash",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "",
+        "movement": "Street Art",
+        "period_bucket": "Now"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Gemini API error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-3-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}"
+    }
+  ]
+}

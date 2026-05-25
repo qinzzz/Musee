@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "session_state": "idle",
+  "session_id": "S-001",
+  "created_at": "2026-04-23T00:00:00+00:00",
+  "updated_at": "2026-04-23T00:00:00+00:00",
+  "runtime_mode": "interactive",
+  "tmux_session": null,
+  "transition": null,
+  "transition_target": null,
+  "transition_started_at": null,
+  "shutdown_requested_at": null,
+  "shutdown_completed_at": null,
+  "last_error": null,
+  "waiting_reason": null,
+  "idle_task": null
+}

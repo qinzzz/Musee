@@ -1,0 +1,4698 @@
+{
+  "timestamp": "20260423_231642",
+  "configs": [
+    "gpt",
+    "gemini",
+    "claude"
+  ],
+  "n_items": 39,
+  "summary": {
+    "gpt": {
+      "n": 39,
+      "artist_exact": 0.615,
+      "artist_fuzzy": 0.615,
+      "artist_contains": 0.615,
+      "title_fuzzy": 0.308,
+      "title_contains": 0.359,
+      "movement_exact": 0.538,
+      "movement_fuzzy": 0.538
+    },
+    "gemini": {
+      "n": 39,
+      "artist_exact": 0.718,
+      "artist_fuzzy": 0.769,
+      "artist_contains": 0.744,
+      "title_fuzzy": 0.385,
+      "title_contains": 0.385,
+      "movement_exact": 0.487,
+      "movement_fuzzy": 0.487
+    },
+    "claude": {
+      "n": 0
+    }
+  },
+  "results": [
+    {
+      "item_id": "c001",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Antonio Canova",
+        "title": "Theseus Defeats the Centaur",
+        "movement": "Neoclassicism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Antonio Canova",
+        "title": "Theseus and the Minotaur",
+        "date": "c. 1781\u20131783",
+        "medium": "Marble sculpture",
+        "movement": "Neoclassicism",
+        "period_bucket": "Modern",
+        "description": "**Antonio Canova\u2019s** **Theseus and the Minotaur** turns a violent myth into a study in calm control. Instead of showing the peak of battle, Canova captures the aftermath: the hero sits poised above the defeated beast, making reason and restraint feel more powerful than raw force. The polished marble, idealized anatomy, and reference to ancient Greece reflect the Neoclassical taste for moral clarity and antique beauty. Seen in this grand museum setting, the sculpture still feels theatrical, but its real drama lies in its silence.",
+        "tags": [
+          "marble",
+          "mythology",
+          "Neoclassicism",
+          "Canova",
+          "classical hero"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": true,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c002",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "Cabinet of curiosities",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Johann Joachim K\u00e4ndler and the Meissen manufactory",
+        "title": "Mounted Meissen porcelain centerpiece with flower basket and garniture",
+        "date": "c. 1745\u20131760",
+        "medium": "Hard-paste porcelain with gilt bronze mounts",
+        "movement": "Rococo",
+        "period_bucket": "Modern",
+        "description": "This lavish centerpiece is most likely a **Meissen** porcelain ensemble, probably linked to **Johann Joachim K\u00e4ndler**, whose workshops helped define European luxury ceramics in the 18th century. The piled porcelain flowers, miniature vessels, and swirling gilt mounts turn a dining-table object into a theatrical display of status, taste, and technical virtuosity. Its playful asymmetry and curling ornament are deeply **Rococo**, while the tiny figures and exoticizing details reflect Europe\u2019s fascination with imported Asian porcelain and courtly spectacle. What makes it so striking is the way fragile ceramic delicacy is fused with heavy golden grandeur, creating an object that feels both intimate and extravagantly performative.",
+        "tags": [
+          "Meissen",
+          "porcelain",
+          "Rococo",
+          "gilt bronze",
+          "decorative arts"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c003",
+      "config_id": "gpt",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Caravaggio",
+        "title": "David with the Head of Goliath",
+        "movement": "Baroque",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Caravaggio",
+        "title": "David with the Head of Goliath",
+        "date": "c. 1600\u20131601",
+        "medium": "Oil on canvas",
+        "movement": "Baroque",
+        "period_bucket": "Modern",
+        "description": "**Caravaggio** is the strongest match here: the stark darkness, the theatrical spotlight on flesh and drapery, and the charged pause between action and emotion are all hallmarks of his style. This scene of **David** holding **Goliath\u2019s** severed head turns a biblical victory into something deeply human, with the young hero looking more reflective than triumphant. The painting\u2019s drama comes from intense **chiaroscuro**, where light carves the figures out of black space and makes the violence feel immediate. Rather than idealizing the story, it brings it close to lived experience\u2014raw, tense, and psychologically unsettled.",
+        "tags": [
+          "Caravaggio",
+          "David and Goliath",
+          "chiaroscuro",
+          "biblical",
+          "Baroque"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c004",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Pablo Picasso",
+        "title": "The Fourteenth of July",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Pablo Picasso",
+        "title": "The Races (Les Courses) or related crowd scene",
+        "date": "c. 1900\u20131901",
+        "medium": "Oil on panel or canvas",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "This looks like an early **Pablo Picasso**, likely from his turn-of-the-century years, when he was testing a rough, urgent brushwork before the full **Blue Period**. The packed crowd, flickering flags, and fractured architecture create a sense of public spectacle seen almost as a blur of memory rather than a stable scene. Its loose paint and compressed figures make the image feel noisy and alive, as if modern city life is surging forward faster than the eye can fully grasp it. You can already sense Picasso pushing away from description toward emotional force.",
+        "tags": [
+          "Picasso",
+          "crowd scene",
+          "early modernism",
+          "urban spectacle",
+          "expressive brushwork"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c005",
+      "config_id": "gpt",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Pieter Bruegel the Elder",
+        "title": "The Tower of Babel",
+        "movement": "Northern Renaissance",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Pieter Bruegel the Elder",
+        "title": "The Tower of Babel",
+        "date": "c. 1563",
+        "medium": "Oil on panel",
+        "movement": "Historical",
+        "period_bucket": "Historical",
+        "description": "**Pieter Bruegel the Elder** turns the biblical **Tower of Babel** into a vast, believable construction site, packed with tiny laborers, scaffolding, and ships unloading materials below. The spiraling architecture echoes the Roman Colosseum, linking ancient imperial ambition with the story of human pride and failure. What makes this painting so gripping is its mix of fantasy and realism: the tower feels monumental, yet already unstable and doomed. It carries both wonder and warning, showing civilization at its most inventive and most overreaching.",
+        "tags": [
+          "Babel",
+          "biblical",
+          "Northern Renaissance",
+          "architecture",
+          "allegory"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c007",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "James Ensor",
+        "title": "Christ's Entry Into Brussels in 1889",
+        "movement": "Expressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "James Ensor",
+        "title": "Christ's Entry into Brussels in 1889",
+        "date": "1888",
+        "medium": "Oil on canvas",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "**James Ensor** turns a biblical subject into a noisy modern street spectacle, filling the canvas with masks, banners, soldiers, and a crush of faces that feels both comic and unsettling. The barely visible Christ is almost swallowed by the crowd, which is exactly the point: Ensor is mocking public hypocrisy, political theater, and the chaos of mass society in late 19th-century Belgium. Its raw color, flattened space, and carnival grotesques anticipate **Expressionism** while keeping the bite of satire. The painting feels exuberant and disturbing at once, like a parade that has tipped into social nightmare.",
+        "tags": [
+          "crowd scene",
+          "satire",
+          "religious subject",
+          "masks",
+          "Belgium"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c006",
+      "config_id": "gpt",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Paul C\u00e9zanne",
+        "title": "Mont Sainte-Victoire",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Paul C\u00e9zanne",
+        "title": "Mont Sainte-Victoire",
+        "date": "c. 1902\u20131904",
+        "medium": "Oil on canvas",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Modern",
+        "description": "**C\u00e9zanne** returned to **Mont Sainte-Victoire** again and again, using the mountain less as a scenic subject than as a structure to test how painting can hold space, light, and solidity at once. Here the land is built from short, shifting patches of green, ochre, and blue, so the village and fields seem to flicker between observation and construction. That tension is exactly what made C\u00e9zanne so important: he pushed landscape toward the fractured logic that would later feed **Cubism**. The result feels both calm and unsettled, like nature being slowly assembled before your eyes.",
+        "tags": [
+          "landscape",
+          "mountain",
+          "Provence",
+          "brushwork",
+          "C\u00e9zanne"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m001",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Albert Gleizes",
+        "title": "Painting for Contemplation, Dominant Rose and Green",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Maqbool Fida Husain",
+        "title": "Untitled (Abstract Composition)",
+        "date": "circa 1950s\u20131960s",
+        "medium": "Oil on canvas",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "This tall, swirling abstraction is most likely by **M.F. Husain**, whose calligraphic line and fractured figuration often balance between the human body and pure rhythm. The painting feels almost architectural, with arcs, slashes, and layered color planes pulling your eye inward like a vortex, while muted pinks, blues, and ochres soften the energy. It reflects a moment when Indian modernists were absorbing **Cubist** and **Expressionist** languages but reshaping them through local sensibilities rather than imitation. The result is both restless and meditative, as if a figure is emerging and dissolving at the same time.",
+        "tags": [
+          "Indian modernism",
+          "abstraction",
+          "figurative",
+          "large-scale",
+          "gesture"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m002",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Marxism Will Give Health to the Sick",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Diego Rivera",
+        "title": "Portrait of Frida Kahlo Set in a Landscape",
+        "date": "c. 1930s\u20131940s",
+        "medium": "Oil on canvas",
+        "movement": "Surrealism",
+        "period_bucket": "Modern",
+        "description": "This looks like **Diego Rivera\u2019s** unusual tribute to **Frida Kahlo**, where her calm, frontal figure is surrounded by a dense world of symbols: a globe, birds, a crow, **Karl Marx**, and **Uncle Sam**. The painting blends portraiture with allegory, turning Frida into a kind of ideological and cosmic center, held and shaped by history, politics, and nature. Its rough, tactile surface and dreamlike juxtapositions give it a visionary feeling, even as Rivera\u2019s interest in public history and Mexican identity remains strong. The result is intimate but also crowded with the forces that defined their era.",
+        "tags": [
+          "Frida Kahlo",
+          "Diego Rivera",
+          "political symbolism",
+          "surreal imagery",
+          "Mexico"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m003",
+      "config_id": "gpt",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "The Two Fridas",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Frida Kahlo",
+        "title": "The Two Fridas",
+        "date": "1939",
+        "medium": "Oil on canvas",
+        "movement": "Surrealism",
+        "period_bucket": "Modern",
+        "description": "**Frida Kahlo\u2019s** **The Two Fridas** is one of her most recognizable self-portraits, showing two versions of herself seated side by side, their hearts exposed and joined by a single artery. The European dress on the left and Tehuana clothing on the right suggest divided identity\u2014between cultures, selves, and emotional states\u2014painted during her separation from Diego Rivera. Kahlo\u2019s precise, almost folk-art realism makes the image feel calm and shocking at once, especially with the blood, surgical clamp, and stormy sky. It turns personal pain into a powerful picture of endurance, intimacy, and fractured selfhood.",
+        "tags": [
+          "self-portrait",
+          "dual identity",
+          "Mexican art",
+          "heart symbolism",
+          "surrealism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m004",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Viva la Vida, Watermelons",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Frida Kahlo",
+        "title": "Viva la Vida",
+        "date": "1954",
+        "medium": "Oil on masonite",
+        "movement": "Surrealism",
+        "period_bucket": "Modern",
+        "description": "**Frida Kahlo\u2019s** final still life turns watermelons into a vivid declaration of endurance. The thick, tactile paint and saturated reds and greens make the fruit feel almost bodily, balancing freshness with an awareness of mortality; the inscription **\u201cViva la Vida\u201d** gives the image the force of a farewell. Painted in **1954**, near the end of her life, it carries Kahlo\u2019s characteristic mix of pain, humor, and defiant vitality. What looks simple at first becomes deeply moving: a celebration of life spoken in the shadow of death.",
+        "tags": [
+          "Frida Kahlo",
+          "still life",
+          "watermelons",
+          "Mexico",
+          "mortality"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m005",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Mark Rothko",
+        "title": "No. 10",
+        "movement": "Color Field",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Mark Rothko",
+        "title": "Untitled (Orange, Red, Yellow, White and Blue)",
+        "date": "c. 1950s\u20131960s",
+        "medium": "Oil on canvas",
+        "movement": "Color Field",
+        "period_bucket": "Modern",
+        "description": "This tall canvas is most likely by **Mark Rothko**, built from hovering bands of white, red, yellow, and pale blue that seem to glow from within. Rather than sharp geometry, the soft edges and thin, layered paint create a slow emotional atmosphere\u2014part light, part weight, part silence. Rothko\u2019s **Color Field** paintings were meant to be encountered physically, at close range, so color becomes almost spiritual rather than decorative. The work feels simple at first, but its stacked zones can register like horizon, breath, or mood shifting across the day.",
+        "tags": [
+          "Rothko",
+          "Color Field",
+          "abstract",
+          "meditative",
+          "large-scale"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m006",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Robert Delaunay",
+        "title": "Red Eiffel Tower",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Robert Delaunay",
+        "title": "The Cardiff Team (study/variant with Eiffel Tower motif)",
+        "date": "c. 1912\u20131913",
+        "medium": "Oil on canvas",
+        "movement": "Cubism",
+        "period_bucket": "Modern",
+        "description": "This looks most like **Robert Delaunay**, especially because of the fractured planes, the bold **Eiffel Tower** structure, and the sense of urban motion. Delaunay used Cubist fragmentation not to break the world apart completely, but to make modern Paris feel alive\u2014full of smoke, machinery, flags, and shifting viewpoints. The red tower anchors the painting while the blue, gray, and white forms swirl around it like weather or crowds, giving the scene a buoyant, almost musical energy. It captures the early 20th century fascination with technology, spectacle, and the city as a symbol of modern life.",
+        "tags": [
+          "Eiffel Tower",
+          "Paris",
+          "modernity",
+          "fragmentation",
+          "urban"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m007",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wassily Kandinsky",
+        "title": "Improvisation 28 (second version)",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Wassily Kandinsky",
+        "title": "Composition IV",
+        "date": "c. 1911",
+        "medium": "Oil on canvas",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "This looks most like **Wassily Kandinsky\u2019s** **Composition IV**, a landmark work from the moment when painting was breaking away from literal description. The sweeping black lines and floating patches of pink, blue, yellow, and green create a feeling of rhythm and collision, as if landscape, riders, and sound are dissolving into pure emotion. Kandinsky believed color and line could affect the spirit like music, and this canvas carries that idea with unusual force. It feels both turbulent and hopeful, poised between chaos and harmony.",
+        "tags": [
+          "abstract",
+          "Kandinsky",
+          "Expressionism",
+          "color",
+          "modernism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m008",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "David Hockney",
+        "title": "Garden",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "David Hockney",
+        "title": "California garden/pool scene (possibly from the Nichols Canyon or Hollywood Hills series)",
+        "date": "c. 1980s\u20132000s",
+        "medium": "Acrylic on canvas",
+        "movement": "Contemporary",
+        "period_bucket": "Contemporary",
+        "description": "This bright garden-and-pool view strongly suggests **David Hockney** through its flattened perspective, clean architectural edges, and joyful, high-key color. The painting turns a domestic outdoor space into a decorative rhythm of blues, greens, pinks, and purples, balancing observation with stylized pattern. Hockney often treated California as both a real place and an idea of leisure, light, and cultivated nature. Here, the lush planting and vivid house colors create a scene that feels intimate yet theatrical, like a private paradise staged for the eye.",
+        "tags": [
+          "pool",
+          "garden",
+          "California",
+          "landscape",
+          "color"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m009",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Egon Schiele",
+        "title": "Wally in a Red Blouse",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Egon Schiele",
+        "title": "Reclining Woman in Orange Stockings",
+        "date": "c. 1914",
+        "medium": "Gouache, watercolor, and black crayon on paper",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "**Egon Schiele** turns the reclining figure into something tense, angular, and psychologically charged rather than simply sensual. The wiry contour lines, pale skin, and jolts of orange and red are classic Schiele: they make the body feel exposed, restless, and intensely alive. Made in early 20th-century Vienna, this kind of image reflects a moment when artists were pushing portraiture and the nude toward raw inner emotion. The result is intimate but unsettling, as if vulnerability itself has been drawn onto the paper.",
+        "tags": [
+          "Egon Schiele",
+          "Expressionism",
+          "female figure",
+          "Vienna",
+          "drawing"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m010",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Joseph Nic\u00e9phore Ni\u00e9pce",
+        "title": "View from the Window at Le Gras",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Unknown artist",
+        "title": "Untitled Rooftop View (daguerreotype)",
+        "date": "c. 1839\u20131845",
+        "medium": "Daguerreotype photograph on silver-coated copper plate",
+        "movement": "Conceptual Art",
+        "period_bucket": "Historical",
+        "description": "This looks like an early **daguerreotype**, where the image appears almost like a ghost in metal until the light hits it just right. The hazy rooftop scene, with chimneys and steep angles, suggests the long exposure times of the 1840s, when photography was still a technical marvel rather than a casual tool. What makes works like this moving is their fragility: the picture feels half-remembered, suspended between document and apparition. Even without a named maker, it carries the wonder of photography\u2019s first attempts to hold everyday life still.",
+        "tags": [
+          "daguerreotype",
+          "early photography",
+          "rooftops",
+          "19th century",
+          "silver plate"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m011",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wayne Thiebaud",
+        "title": "Cakes",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Wayne Thiebaud",
+        "title": "Cakes",
+        "date": "Approximate 1963",
+        "medium": "Oil on canvas",
+        "movement": "Pop Art",
+        "period_bucket": "Modern",
+        "description": "**Wayne Thiebaud** turned ordinary desserts into icons, and this painting is a classic example of his playful, precise vision. The neatly arranged cakes on pedestal stands echo the display logic of diners and bakeries, but the thick paint, pastel colors, and crisp shadows make them feel almost theatrical. Though often linked to **Pop Art**, Thiebaud\u2019s work is less about mass media than about pleasure, memory, and the seductive look of American abundance. The icing-like brushwork gives the surface a sweet physicality, making these cakes feel both delicious and slightly dreamlike.",
+        "tags": [
+          "cakes",
+          "still life",
+          "American art",
+          "Pop Art",
+          "desserts"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co001",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Anselm Kiefer",
+        "title": "Die Welle (The Wave)",
+        "movement": "Neo-Expressionism",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Alberto Burri",
+        "title": "Grande Sacco",
+        "date": "c. 1952\u20131954",
+        "medium": "Burlap, fabric, paint, and mixed media on canvas",
+        "movement": "Art Informel",
+        "period_bucket": "Modern",
+        "description": "**Alberto Burri** transformed rough, damaged materials into painting, and this battered surface of cloth and earth-toned matter is very much his language. The hanging scraps read almost like worn garments or bandages, bringing in quiet associations with injury, repair, and postwar poverty in Italy. Rather than depict suffering directly, Burri lets torn fabric, stains, and crusted textures carry the emotional weight. The result feels both austere and deeply human: a picture that looks like a wall, a wound, and a memory all at once.",
+        "tags": [
+          "assemblage",
+          "textural",
+          "postwar",
+          "burlap",
+          "materiality"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co002",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Faire son temps (Making One's Time)",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Shilpa Gupta",
+        "title": "Untitled (face projected on hanging threads)",
+        "date": "c. 2010s",
+        "medium": "Thread curtain installation with projected video/light",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This looks most like a **Shilpa Gupta** installation, where light, portraiture, and fragile materials create a shifting image that appears and disappears as you move. The face suspended across hanging threads feels both present and fractured, turning identity into something unstable and vulnerable. The red glow around it adds a sense of warning or surveillance, a mood common in Gupta\u2019s work about borders, control, and the politics of visibility. What makes it striking is how a simple material\u2014thread\u2014becomes a screen for memory, body, and power.",
+        "tags": [
+          "installation",
+          "projection",
+          "portrait",
+          "threads",
+          "identity"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co003",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Christian Boltanski",
+        "title": "Reserve / floating photo installation (best guess)",
+        "date": "c. 1989\u20132005",
+        "medium": "Hanging translucent fabric or paper photo banners with electric lights, mixed-media installation",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "**Christian Boltanski** often worked with anonymous faces, memory, and loss, and this suspended installation fits that language closely. The softly lit, ghostlike portraits seem to drift between archive and apparition, turning the gallery into a fragile space of remembrance. Rather than presenting a single image, the work surrounds you with fragments of human presence, suggesting how history is preserved unevenly and how identities can blur over time. Its emotional power comes from that tension between intimacy and disappearance.",
+        "tags": [
+          "memory",
+          "portraits",
+          "installation",
+          "archive",
+          "light"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co004",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Christian Boltanski",
+        "title": "No Man's Land",
+        "date": "2010",
+        "medium": "Installation with used clothing, crane, and mechanical grab",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "**Christian Boltanski\u2019s** **No Man's Land** turns a mountain of discarded clothes into a haunting memorial. The industrial crane and dangling grabber repeatedly lift and drop garments, making the pile feel both mechanical and deeply human, as if each piece stands in for an absent body. Boltanski often worked with memory, loss, and the traces people leave behind, and here ordinary clothing becomes a powerful symbol of mass anonymity, mortality, and collective history. The scale is overwhelming, inviting you to feel both awe and unease.",
+        "tags": [
+          "installation",
+          "used clothing",
+          "memory",
+          "mortality",
+          "mechanization"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co005",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Dorothy Napangardi",
+        "title": "Yuparli",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Yayoi Kusama",
+        "title": "Infinity Net / floral abstraction (likely from the My Eternal Soul period)",
+        "date": "c. 2000s\u20132010s",
+        "medium": "Acrylic on canvas",
+        "movement": "Contemporary",
+        "period_bucket": "Now",
+        "description": "This dense, pulsating canvas is most likely by **Yayoi Kusama**, recognizable in the obsessive accumulation of tiny marks and the sense that pattern becomes a kind of living force. The image feels botanical and cosmic at once: branching forms bloom outward from a bright center while the black-and-white band cuts across like a wave, net, or visual interruption. Kusama\u2019s work often turns repetition into emotion, linking beauty, anxiety, and infinity, so this painting can feel both celebratory and slightly overwhelming. Its surface invites you to move closer, where what first looks decorative becomes an intense record of focus and psychological energy.",
+        "tags": [
+          "abstraction",
+          "pattern",
+          "botanical",
+          "contemporary",
+          "repetition"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co006",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Liao Fei",
+        "title": "A Straight Line Extended",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Jimmie Durham",
+        "title": "Various-sized stones balanced on a cantilevered beam",
+        "date": "Approximate date: 1990s\u20132000s",
+        "medium": "Stone, metal beam, pedestal, and site-specific installation",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This installation is most plausibly by **Jimmie Durham**, who often used raw stone and simple supports to create tense, quietly witty encounters between mass and balance. The work turns ordinary materials into a drama of physics: each rock feels both ancient and precarious, as if time and gravity are being measured in real space. Its stripped-down look echoes **conceptual** and sculptural practices of the late 20th century, but the emotional charge comes from the way the stones seem to hover between stability and collapse. The long shadow on the floor becomes part of the piece, making weight itself feel visible.",
+        "tags": [
+          "stone",
+          "balance",
+          "installation",
+          "gravity",
+          "contemporary sculpture"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co007",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Mike Kelley",
+        "title": "Riddle of the Sphinx",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Sheila Hicks",
+        "title": "Untitled textile landscape installation",
+        "date": "Approximate date: 2010s",
+        "medium": "Woven and stitched textile installation on the floor",
+        "movement": "Fiber Art",
+        "period_bucket": "Now",
+        "description": "This looks most like a work by **Sheila Hicks**, whose monumental textile pieces turn thread into something almost geological. The striped fabric rises and dips across the floor like a topographic map or a soft landscape, making weaving feel architectural rather than decorative. Hicks helped expand **Fiber Art** into the space of sculpture and installation, drawing on ancient weaving traditions while using bold contemporary color. The result is both playful and meditative: a handmade terrain that invites you to think about labor, pattern, and the quiet power of cloth.",
+        "tags": [
+          "textile",
+          "installation",
+          "fiber art",
+          "landscape",
+          "color"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co008",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Piet Mondrian",
+        "title": "Summer, Dune in Zeeland",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Richard Diebenkorn",
+        "title": "Ocean Park (approximate series work)",
+        "date": "c. 1970s\u20131980s",
+        "medium": "Oil on canvas",
+        "movement": "Color Field",
+        "period_bucket": "Contemporary",
+        "description": "This large abstract landscape strongly suggests **Richard Diebenkorn**, especially his **Ocean Park** series, where aerial views, coastlines, and studio light become loose geometric fields. The cool blues and gray-greens are interrupted by vivid orange bands, creating a push between calm atmosphere and structural tension. Diebenkorn often balanced drawing-like edges with broad, scraped brushwork, so the painting feels both spontaneous and carefully built. It carries the sensation of looking at sea, land, and light all at once\u2014less a literal place than a memory of California space.",
+        "tags": [
+          "abstract landscape",
+          "California",
+          "Ocean Park",
+          "blue palette",
+          "large-scale"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co009",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ron Mueck",
+        "title": "In Bed",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ron Mueck",
+        "title": "In Bed",
+        "date": "2005",
+        "medium": "Polychromed silicone, resin, fiberglass, fabric, and mixed-media sculpture",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "**Ron Mueck** is the strongest match here: the figure\u2019s uncanny realism, enlarged scale, and intensely observed skin and facial detail are signatures of his work. This appears to be **In Bed**, where a woman lies under white sheets, isolated in a stark setting that turns an ordinary private moment into something psychologically huge. The sculpture feels less about sleep than about inward thought\u2014anxiety, memory, or grief seem to gather in her gaze and hand. Mueck\u2019s hyperreal technique makes the scene believable, but the scale and stillness push it into a charged, almost cinematic meditation on vulnerability.",
+        "tags": [
+          "hyperrealism",
+          "figurative sculpture",
+          "psychological",
+          "bed",
+          "scale"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co010",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "James Turrell",
+        "title": "Danae",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "James Turrell",
+        "title": "Projection Piece (Blue)",
+        "date": "1960s\u20132010s",
+        "medium": "Light installation / projected light in architectural space",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This looks most like a **James Turrell** light work, where a glowing blue rectangle seems both flat and strangely physical at once. Turrell is known for using pure light as his medium, turning a room into an instrument that tests how we perceive depth, edges, and color. The intense **blue** recalls his long interest in atmospheric sensation and the psychology of seeing, making the space feel meditative, almost immaterial. Rather than depicting an image, the work asks you to notice your own vision as the real subject.",
+        "tags": [
+          "light art",
+          "blue",
+          "perception",
+          "immersive",
+          "minimalism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co011",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ai Weiwei",
+        "title": "Grapes",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ai Weiwei",
+        "title": "Grapes",
+        "date": "Approximate date: 2010",
+        "medium": "Qing dynasty wooden stools joined into a sculptural installation",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This is most likely **Ai Weiwei\u2019s** **Grapes**, a sculpture made by joining antique wooden stools into a dense, radiating cluster. The work turns everyday furniture from China\u2019s past into something uncanny and almost explosive, balancing craft, reuse, and disruption. Its power comes from that tension: each stool is familiar and functional, yet together they become unusable, sculptural, and slightly chaotic. Like much of **Ai\u2019s** work, it quietly asks what is preserved, what is sacrificed, and how tradition survives in a rapidly changing world.",
+        "tags": [
+          "wood sculpture",
+          "Chinese contemporary art",
+          "antique stools",
+          "assemblage",
+          "tradition and change"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co012",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "C\u00e9leste Boursier-Mougenot",
+        "title": "Clinamen",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ryoji Ikeda",
+        "title": "data-verse / immersive floor projection (best guess)",
+        "date": "c. 2010s",
+        "medium": "Digital installation with projected moving image",
+        "movement": "Immersive Art",
+        "period_bucket": "Now",
+        "description": "This looks most like an installation by **Ryoji Ikeda**, whose work often turns data, light, and perception into overwhelming spatial experiences. The large circular blue field, activated by shifting white marks and viewed collectively from the floor, suggests a work where information becomes something almost cosmic\u2014part map, part pond, part digital pulse. What makes it striking is the way spectators become part of the composition, sitting around it like witnesses to a shared experiment. The piece carries the cool precision of contemporary technology, but it also feels meditative, inviting you to watch patterns emerge and dissolve like thought itself.",
+        "tags": [
+          "digital installation",
+          "projection",
+          "immersive",
+          "data",
+          "contemporary art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co013",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Chiharu Shiota",
+        "title": "Diary",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Chiharu Shiota",
+        "title": "Uncertain Journey",
+        "date": "c. 2016\u20132019",
+        "medium": "Installation of red yarn/thread with suspended paper fragments and found objects",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This immersive web of red thread is most likely by **Chiharu Shiota**, whose installations turn ordinary materials into emotional environments about memory, absence, and connection. The dense, hand-woven network feels both bodily and architectural, while the suspended paper fragments read like drifting thoughts, letters, or traces of lives caught in transit. Shiota often uses red to suggest blood, fate, and human relationships, so walking through it can feel like entering a shared nervous system. The work is notable for making space itself the medium, transforming the gallery into something intimate, fragile, and slightly overwhelming.",
+        "tags": [
+          "red thread",
+          "immersive installation",
+          "memory",
+          "contemporary art",
+          "Chiharu Shiota"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co014",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Katharina Grosse",
+        "title": "Is It You?",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Sam Gilliam",
+        "title": "Untitled drape installation",
+        "date": "circa 2010s",
+        "medium": "Spray-painted and stained fabric installation",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This immersive field of suspended cloth strongly recalls **Sam Gilliam\u2019s** celebrated **drape paintings**, where canvas leaves the stretcher and becomes sculptural. The sprayed bands of magenta, blue, orange, and acid green turn color into atmosphere, so the work feels less like a picture than something you move through. Gilliam, a key figure in postwar American abstraction, pushed painting beyond the wall, and this kind of installation carries both the freedom of **Abstract Expressionism** and the bodily presence of **Installation Art**. The folds make the surface feel alive\u2014part curtain, part landscape, part performance.",
+        "tags": [
+          "fabric",
+          "abstraction",
+          "color",
+          "immersive",
+          "drape"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co015",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Leandro Erlich",
+        "title": "Swimming Pool",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Leandro Erlich",
+        "title": "Swimming Pool",
+        "date": "1999\u20132001",
+        "medium": "Installation with reinforced glass, water, light, and architectural construction",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "**Leandro Erlich\u2019s** **Swimming Pool** turns an ordinary pool into a clever perceptual trap: viewers stand in a dry chamber below a thin layer of water, appearing to be submerged. The work is notable for how simply it creates wonder, using architecture, reflection, and rippling light rather than digital effects. It plays with the gap between what we see and what we know, making everyday space feel uncanny and dreamlike. That mix of humor and disorientation is central to Erlich\u2019s practice, which often transforms familiar environments into impossible experiences.",
+        "tags": [
+          "installation",
+          "illusion",
+          "water",
+          "perception",
+          "interactive"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co016",
+      "config_id": "gpt",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Marcel Duchamp",
+        "title": "Fountain",
+        "movement": "Dada",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Marcel Duchamp",
+        "title": "Fountain",
+        "date": "1917",
+        "medium": "Porcelain urinal, readymade sculpture",
+        "movement": "Dada",
+        "period_bucket": "Modern",
+        "description": "**Marcel Duchamp\u2019s** **Fountain** is one of the key works of **Dada**, turning an ordinary urinal into art simply through selection, repositioning, and context. Signed \u201cR. Mutt 1917,\u201d it challenged the idea that art had to be handmade, beautiful, or technically skilled. What makes this object so powerful is how calmly it asks a radical question: is art defined by the object itself, or by the artist\u2019s choice and the museum\u2019s frame? More than a scandal, it became a blueprint for much of conceptual and contemporary art.",
+        "tags": [
+          "Duchamp",
+          "readymade",
+          "Dada",
+          "conceptual art",
+          "urinal"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co017",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Olafur Eliasson",
+        "title": "Mediated Motion",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Olafur Eliasson",
+        "title": "The mediated motion",
+        "date": "2001",
+        "medium": "Site-specific installation with water basins, duckweed, timber walkways, and architectural intervention",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "**Olafur Eliasson\u2019s** **The mediated motion** turns the museum into a staged landscape, asking you to move through it rather than just look. The floating green duckweed and pale wooden path create a strange mix of serenity and unease, bringing a fragment of nature into a rigid concrete interior. Eliasson often explores how perception is shaped by environment, and here the work makes you newly aware of balance, smell, humidity, and your own body in space. It feels minimal at first, but its quiet drama comes from that collision between controlled architecture and living matter.",
+        "tags": [
+          "installation",
+          "site-specific",
+          "nature",
+          "perception",
+          "duckweed"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co019",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Rinko Kawauchi",
+        "title": "Ametsuchi",
+        "movement": "New Media Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Richard Misrach",
+        "title": "Untitled (Controlled Burn / Fire Line)",
+        "date": "c. 2010s",
+        "medium": "Color photograph",
+        "movement": "Contemporary",
+        "period_bucket": "Now",
+        "description": "This looks most like a photograph by **Richard Misrach**, whose large-scale images often turn the American landscape into something both beautiful and unsettling. The stark division between blackened earth and pale grass creates an almost minimalist geometry, while the thin ribbon of fire reminds you that this is a real ecological event, not an abstract composition. The image carries the quiet drama of the contemporary West: climate, land management, and environmental fragility held inside a deceptively serene scene. What makes it memorable is that tension between formal elegance and the violence of transformation.",
+        "tags": [
+          "photography",
+          "landscape",
+          "fire",
+          "environment",
+          "contemporary art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co018",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Ruth Asawa",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ruth Asawa",
+        "title": "Untitled (Hanging Wire Sculptures)",
+        "date": "c. 1950s\u20131960s",
+        "medium": "Looped and tied galvanized wire sculpture",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary",
+        "description": "**Ruth Asawa** transformed ordinary industrial wire into floating forms that feel at once organic, mathematical, and handmade. These hanging sculptures are built through a repeated looped-wire technique inspired in part by basketry methods she encountered in Mexico, letting line become volume without ever turning solid. Their transparency is the point: light passes through them, casting shifting shadows that make the work expand beyond the object itself. The result is quietly mesmerizing\u2014part plant, part body, part architecture\u2014and deeply tied to postwar experiments in sculpture that made space itself a material.",
+        "tags": [
+          "wire sculpture",
+          "hanging forms",
+          "shadow play",
+          "organic abstraction",
+          "postwar art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "al001",
+      "config_id": "gpt",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Kaspar von Zumbusch",
+        "title": "Maria Theresa Monument",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Carl von Hasenauer and Gottfried Semper",
+        "title": "Naturhistorisches Museum Wien (with Maria Theresa Monument in foreground)",
+        "date": "1871\u20131889",
+        "medium": "Stone architecture with bronze public monument",
+        "movement": "Historical",
+        "period_bucket": "Contemporary",
+        "description": "This is most likely the **Natural History Museum, Vienna**, designed by **Gottfried Semper** and **Carl von Hasenauer**, with the **Maria Theresa Monument** by **Kaspar von Zumbusch** in front. The grand dome, sculpted fa\u00e7ades, and imperial inscriptions belong to Vienna\u2019s Ringstrasse era, when architecture was used to project scholarship, empire, and civic pride. The building mixes **neo-Renaissance historicism** with theatrical monumentality, making science feel almost sacred. At dusk, the lit niches and bronze figures add a ceremonial mood, turning the square into a stage for memory and power.",
+        "tags": [
+          "Vienna",
+          "architecture",
+          "Ringstrasse",
+          "Maria Theresa",
+          "museum"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "e002",
+      "config_id": "gpt",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "",
+        "movement": "Street Art",
+        "period_bucket": "Now"
+      },
+      "predicted": {
+        "artist": "Minder",
+        "title": "La Gran Cabeza",
+        "date": "2025",
+        "medium": "Street poster print / paste-up, likely relief or ink drawing reproduced on paper",
+        "movement": "Street Art",
+        "period_bucket": "Now",
+        "description": "**Minder\u2019s** **La Gran Cabeza** uses a monumental skull, braced by tiny laboring figures, to turn death into a public spectacle and a social metaphor. The dense crosshatching and limited palette echo printmaking traditions, while the pasted-paper format places it firmly in the language of the street, where images feel urgent and temporary. Its imagery connects strongly to Mexico\u2019s long visual culture of **calaveras** and satirical death iconography, from **Jos\u00e9 Guadalupe Posada** onward. The handwritten phrase \u201cMuerte en Cartelera 2025\u201d makes the work feel like an announcement: death is not hidden, but advertised, staged, and collectively carried.",
+        "tags": [
+          "skull",
+          "Mexican print culture",
+          "paste-up",
+          "satire",
+          "death imagery"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c001",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Antonio Canova",
+        "title": "Theseus Defeats the Centaur",
+        "movement": "Neoclassicism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Antonio Canova",
+        "title": "Theseus and the Minotaur",
+        "date": "1781-1783",
+        "medium": "Marble",
+        "movement": "Neoclassicism",
+        "period_bucket": "Historical",
+        "description": "This powerful marble sculpture by **Antonio Canova** captures the moment after **Theseus** has defeated the monstrous **Minotaur**. Unlike earlier depictions of the struggle, Canova chose to portray the hero in a state of calm contemplation, resting on his vanquished foe. This emphasis on rational triumph over brute force, rendered with idealized forms and smooth surfaces, is a hallmark of **Neoclassical** art, reflecting the Enlightenment's values.",
+        "tags": [
+          "Mythology",
+          "Sculpture",
+          "Marble",
+          "Neoclassicism",
+          "Heroic"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": true,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c002",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "Cabinet of curiosities",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Meissen Porcelain Manufactory and Gilder",
+        "title": "Grand Surtout de Table with Porcelain Flowers and Figures",
+        "date": "c. 1740-1760",
+        "medium": "Gilded bronze, polychrome porcelain",
+        "movement": "Rococo",
+        "period_bucket": "Historical",
+        "description": "This magnificent **surtout de table** exemplifies the lavish taste of the **Rococo** era, likely from a European court in the mid-18th century. Crafted from gilded bronze and exquisite **Meissen porcelain**, it combines functional elements like candelabra with purely decorative ones, such as the vibrant porcelain flower bouquet and charming miniature figures. The intricate scrollwork, naturalistic details, and delicate Chinoiserie-inspired patterns on the porcelain vessels reflect the period's fascination with elegance, fantasy, and exoticism, designed to adorn aristocratic dining tables.",
+        "tags": [
+          "Rococo",
+          "Decorative Arts",
+          "Porcelain",
+          "Gilded Bronze",
+          "18th Century"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c003",
+      "config_id": "gemini",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Caravaggio",
+        "title": "David with the Head of Goliath",
+        "movement": "Baroque",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Caravaggio",
+        "title": "David with the Head of Goliath",
+        "date": "c. 1607-1610",
+        "medium": "Oil on canvas",
+        "movement": "Expressionism",
+        "period_bucket": "Historical",
+        "description": "This powerful oil painting by **Caravaggio** depicts the biblical story of **David with the Head of Goliath**. The artist masterfully uses dramatic **chiaroscuro**, a stark contrast between light and shadow, to heighten the emotional intensity and focus on the figures. David, portrayed with a melancholic expression, holds the severed head of Goliath, which is famously believed to be a self-portrait of Caravaggio himself. This work exemplifies the raw realism and psychological depth characteristic of the **Baroque** era.",
+        "tags": [
+          "Chiaroscuro",
+          "Baroque",
+          "Biblical",
+          "Realism",
+          "Tenebrism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c004",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Pablo Picasso",
+        "title": "The Fourteenth of July",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Pablo Picasso",
+        "title": "The F\u00eate at Montmartre",
+        "date": "1900-1901",
+        "medium": "Oil on canvas",
+        "movement": "Fauvism",
+        "period_bucket": "Modern",
+        "description": "This vibrant painting by **Pablo Picasso** captures the bustling energy of a public celebration, likely **Bastille Day** in Paris. Executed with bold, expressive brushstrokes and a vivid palette, it conveys the excitement and movement of the crowd. This early work showcases Picasso's experimentation with color and form, hinting at the revolutionary artistic paths he would soon forge. It's a dynamic glimpse into his formative years, reflecting the lively spirit of turn-of-the-century Parisian life.",
+        "tags": [
+          "Picasso",
+          "Fauvism",
+          "Crowd",
+          "Celebration",
+          "Paris"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c005",
+      "config_id": "gemini",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Pieter Bruegel the Elder",
+        "title": "The Tower of Babel",
+        "movement": "Northern Renaissance",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Pieter Bruegel the Elder",
+        "title": "The Tower of Babel",
+        "date": "c. 1563",
+        "medium": "Oil on panel",
+        "movement": "Unknown",
+        "period_bucket": "Historical",
+        "description": "This iconic painting by **Pieter Bruegel the Elder** masterfully illustrates the biblical story of the **Tower of Babel**, a monumental structure symbolizing human ambition and hubris. Bruegel's meticulous detail captures the immense scale of the construction, with countless workers and intricate scaffolding, set against a bustling port city. The painting serves as a moralizing tale, illustrating the futility of human endeavors that challenge divine authority, a common theme in Northern Renaissance art. Its panoramic view and narrative richness invite viewers to explore every corner of this ambitious, yet doomed, project.",
+        "tags": [
+          "Biblical art",
+          "Northern Renaissance",
+          "Landscape",
+          "Architecture",
+          "Allegory"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c007",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "James Ensor",
+        "title": "Christ's Entry Into Brussels in 1889",
+        "movement": "Expressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "James Ensor",
+        "title": "Christ's Entry into Brussels in 1889",
+        "date": "1888",
+        "medium": "Oil on canvas",
+        "movement": "Expressionism",
+        "period_bucket": "Historical",
+        "description": "This monumental painting, **James Ensor's** \"Christ's Entry into Brussels in 1889,\" plunges the viewer into a chaotic, carnivalesque parade. Ensor fills the canvas with a dense, grotesque crowd, many wearing masks, reflecting his cynical view of society and the hypocrisy of the masses. The vibrant, almost garish colors and distorted figures are hallmarks of his unique style, blending social satire with a deeply personal, often unsettling vision. It's a powerful commentary on political and religious fervor, anticipating the anxieties of the 20th century.",
+        "tags": [
+          "Social Satire",
+          "Belgian Art",
+          "Carnival",
+          "Crowd Scene",
+          "Symbolism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c006",
+      "config_id": "gemini",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Paul C\u00e9zanne",
+        "title": "Mont Sainte-Victoire",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Paul C\u00e9zanne",
+        "title": "Mont Sainte-Victoire",
+        "date": "c. 1902-1906",
+        "medium": "Oil on canvas",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Modern",
+        "description": "This painting by **Paul C\u00e9zanne** showcases his iconic subject, **Mont Sainte-Victoire**, a mountain near his home in Aix-en-Provence. C\u00e9zanne's distinctive brushwork builds forms through planes of color, moving beyond the fleeting impressions of his Impressionist contemporaries. He sought to capture the underlying structure and permanence of nature, influencing the development of Cubism and modern art. The landscape is rendered with a powerful sense of volume and depth, yet also a flattened, almost architectural quality.",
+        "tags": [
+          "Landscape",
+          "French art",
+          "Oil painting",
+          "Mont Sainte-Victoire",
+          "Modern art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m001",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Albert Gleizes",
+        "title": "Painting for Contemplation, Dominant Rose and Green",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Sonia Delaunay",
+        "title": "Rythme color\u00e9",
+        "date": "1962",
+        "medium": "Oil on canvas",
+        "movement": "Orphism",
+        "period_bucket": "Modern",
+        "description": "This vibrant abstract painting by **Sonia Delaunay** exemplifies **Orphism**, a movement she co-founded. It's a symphony of interlocking geometric shapes and concentric arcs, creating a dynamic sense of rhythm and movement through pure color. Delaunay believed color itself could convey emotion and form, liberating art from representational constraints. The work invites viewers to experience the interplay of hues and forms, reflecting the energy of the modern world.",
+        "tags": [
+          "Abstract",
+          "Orphism",
+          "Color",
+          "Rhythm",
+          "Modern Art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m002",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Marxism Will Give Health to the Sick",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Frida Kahlo",
+        "title": "Marxism Will Give Health to the Sick",
+        "date": "1954",
+        "medium": "Oil on masonite",
+        "movement": "Surrealism",
+        "period_bucket": "Modern",
+        "description": "This poignant self-portrait by **Frida Kahlo**, \"Marxism Will Give Health to the Sick,\" powerfully conveys her lifelong physical suffering and fervent political beliefs. Kahlo depicts herself shedding her medical corset and crutches, embraced by giant hands that symbolize the healing power of **Marxism**. Above, **Karl Marx** strangles **Uncle Sam**, while a dove of peace and a globe represent global struggle. This work encapsulates Kahlo's conviction in communism as a remedy for both personal and societal ailments, painted shortly before her death.",
+        "tags": [
+          "Self-portrait",
+          "Political art",
+          "Mexican art",
+          "Symbolism",
+          "Illness"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m003",
+      "config_id": "gemini",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "The Two Fridas",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Frida Kahlo",
+        "title": "The Two Fridas",
+        "date": "1939",
+        "medium": "Oil on canvas",
+        "movement": "Surrealism",
+        "period_bucket": "Modern",
+        "description": "This powerful self-portrait by **Frida Kahlo**, titled **The Two Fridas**, vividly expresses the artist's emotional turmoil during her divorce from **Diego Rivera**. Two versions of Frida sit side-by-side, holding hands, their exposed hearts connected by an artery. The Frida on the right, in traditional Tehuana dress, represents the Frida loved by Rivera, while the European-dressed Frida on the left, with a damaged heart and surgical scissors, symbolizes her pain and rejection. The stormy sky mirrors her inner landscape of suffering and duality.",
+        "tags": [
+          "Self-portrait",
+          "Mexican art",
+          "Identity",
+          "Emotional pain",
+          "Duality"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m004",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Viva la Vida, Watermelons",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Frida Kahlo",
+        "title": "Viva la Vida",
+        "date": "1954",
+        "medium": "Oil on masonite",
+        "movement": "Surrealism",
+        "period_bucket": "Modern",
+        "description": "This vibrant still life, titled **Viva la Vida** (Long Live Life), is one of **Frida Kahlo's** last paintings, completed shortly before her death in 1954. The painting features an array of watermelons, a fruit deeply symbolic of life and fertility in Mexican culture, rendered with a raw, almost visceral quality. The poignant inscription \"VIVA LA VIDA\" on a central slice serves as a powerful declaration of her enduring spirit and love for life, despite her lifelong physical suffering and declining health. It beautifully encapsulates her characteristic blend of personal narrative, Mexican folk art, and profound symbolic expression.",
+        "tags": [
+          "Mexican art",
+          "Still life",
+          "Symbolism",
+          "Frida Kahlo",
+          "Oil painting"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m005",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Mark Rothko",
+        "title": "No. 10",
+        "movement": "Color Field",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Mark Rothko",
+        "title": "Untitled",
+        "date": "c. 1956",
+        "medium": "Oil on canvas",
+        "movement": "Abstract Expressionism",
+        "period_bucket": "Modern",
+        "description": "This monumental work by **Mark Rothko** exemplifies his signature style, featuring large, luminous rectangular fields of color that seem to float on the canvas. The soft, blurred edges and layered application of paint create a profound sense of depth and emotional resonance, inviting viewers into a contemplative space. Rothko sought to evoke universal human emotions through color and form, transforming the act of viewing into a deeply personal and spiritual experience. The vibrant orange and yellow against the muted white and blue create a powerful, yet subtle, visual dialogue.",
+        "tags": [
+          "Abstract",
+          "Color Field",
+          "Modern Art",
+          "Emotional",
+          "Luminous"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m006",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Robert Delaunay",
+        "title": "Red Eiffel Tower",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Robert Delaunay",
+        "title": "The Red Tower (La Tour Rouge)",
+        "date": "c. 1911-1912",
+        "medium": "Oil on canvas",
+        "movement": "Orphism",
+        "period_bucket": "Modern",
+        "description": "This painting by Robert Delaunay exemplifies **Orphism**, an offshoot of Cubism that emphasized vibrant color and abstract forms. The iconic **Eiffel Tower** is depicted not as a static monument, but as a dynamic structure, fragmented and reassembled through geometric planes and a rich palette of reds, blues, and grays. Delaunay sought to capture the energy and modernity of Paris, using color and light to create a sense of movement and simultaneous perspective, making the tower appear to vibrate with life.",
+        "tags": [
+          "Eiffel Tower",
+          "Orphism",
+          "Cubism",
+          "Modern Art",
+          "Paris"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m007",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wassily Kandinsky",
+        "title": "Improvisation 28 (second version)",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Wassily Kandinsky",
+        "title": "Improvisation 28 (Second Version)",
+        "date": "1912",
+        "medium": "Oil on canvas",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "This captivating work by **Wassily Kandinsky**, titled **Improvisation 28 (Second Version)**, is a pivotal piece from 1912, showcasing his revolutionary leap into pure abstraction. Kandinsky believed art should express \"inner necessity,\" much like music, using vibrant colors, dynamic lines, and fragmented forms to evoke spiritual and emotional experiences rather than depicting recognizable reality. The painting invites viewers to feel its rhythm and harmony, marking a profound moment in the development of modern art.",
+        "tags": [
+          "abstraction",
+          "modernism",
+          "color",
+          "spirituality",
+          "pioneering"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m008",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "David Hockney",
+        "title": "Garden",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "David Hockney",
+        "title": "A Bigger Garden",
+        "date": "1967",
+        "medium": "Acrylic on canvas",
+        "movement": "Pop Art",
+        "period_bucket": "Modern",
+        "description": "This vibrant painting by **David Hockney** exemplifies his iconic style, capturing a lush garden scene with a distinctive blue house and a red tiled path. Hockney's use of bold, flat colors and simplified forms creates a flattened perspective, almost like a stage set, inviting viewers into a stylized vision of a Californian landscape. The vivid hues, particularly the pink tree trunks and electric blues, convey a sense of heightened reality and the intense light of the West Coast, a recurring theme in his work.",
+        "tags": [
+          "David Hockney",
+          "California",
+          "Landscape",
+          "Vibrant colors",
+          "Garden"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m009",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Egon Schiele",
+        "title": "Wally in a Red Blouse",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Egon Schiele",
+        "title": "Reclining Woman with Red Blouse",
+        "date": "1913",
+        "medium": "Crayon, gouache, and watercolor on paper",
+        "movement": "Expressionism",
+        "period_bucket": "Modern",
+        "description": "This striking drawing by **Egon Schiele** captures a reclining woman with his characteristic raw intensity. Schiele's distinctive angular lines and the figure's direct, almost confrontational gaze convey a profound psychological depth, a hallmark of **Expressionism**. The vibrant red blouse contrasts with the muted background, drawing attention to the figure's vulnerability and inner turmoil. This work exemplifies Schiele's exploration of the human psyche and the often unsettling realities of existence in early 20th-century Vienna.",
+        "tags": [
+          "Expressionism",
+          "Austrian Art",
+          "Figure Drawing",
+          "Psychological",
+          "Watercolor"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m010",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Joseph Nic\u00e9phore Ni\u00e9pce",
+        "title": "View from the Window at Le Gras",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Nic\u00e9phore Ni\u00e9pce",
+        "title": "View from the Window at Le Gras",
+        "date": "c. 1826-1827",
+        "medium": "Heliograph (bitumen on pewter plate)",
+        "movement": "Unknown",
+        "period_bucket": "Historical",
+        "description": "This remarkable image, **View from the Window at Le Gras**, is widely considered the world's first permanent photograph, captured by **Nic\u00e9phore Ni\u00e9pce**. Created using a process called heliography, which involved exposing a pewter plate coated with bitumen for many hours, it offers a hazy yet profound glimpse of rooftops and the surrounding landscape from Ni\u00e9pce's estate. The long exposure time means the sun moved across the sky, illuminating both sides of the buildings. This pioneering work laid the foundation for all photography that followed, forever changing how we perceive and document reality.",
+        "tags": [
+          "Photography",
+          "Heliography",
+          "First photograph",
+          "Historical",
+          "Landscape"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m011",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wayne Thiebaud",
+        "title": "Cakes",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Wayne Thiebaud",
+        "title": "Cakes",
+        "date": "c. 1963",
+        "medium": "Oil on canvas",
+        "movement": "Pop Art",
+        "period_bucket": "Modern",
+        "description": "This delightful painting, **Cakes** by **Wayne Thiebaud**, invites us into a vibrant display of confectionery. Thiebaud is renowned for his luscious depictions of everyday objects, particularly desserts, using thick, impasto brushstrokes that mimic the texture of frosting itself. The arrangement of these cakes on individual stands creates a sense of abundance and commercial presentation, characteristic of the **Pop Art** movement's interest in consumer culture. Yet, his painterly technique elevates these ordinary treats into objects of desire and artistic contemplation, exploring themes of nostalgia and the American experience.",
+        "tags": [
+          "dessert",
+          "still life",
+          "food",
+          "American art",
+          "consumerism"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co001",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Anselm Kiefer",
+        "title": "Die Welle (The Wave)",
+        "movement": "Neo-Expressionism",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Anselm Kiefer",
+        "title": "Margarethe",
+        "date": "1981",
+        "medium": "Oil, emulsion, shellac, lead, and fabric on canvas",
+        "movement": "Neo-Expressionism",
+        "period_bucket": "Contemporary",
+        "description": "This profound work by **Anselm Kiefer** uses a stark combination of lead sheets, fabric, and mixed media to evoke a powerful sense of history and memory. The heavy, crumpled lead suggests the immense weight of the past and destruction, while the small, distressed fabric elements, resembling garments, hint at lost lives and the human cost of conflict. Kiefer frequently confronts Germany's difficult history, particularly the Holocaust, transforming raw materials into poignant symbols of remembrance and trauma. The raw, earthy palette and tactile surface invite deep contemplation on themes of decay, resilience, and the enduring presence of the past.",
+        "tags": [
+          "Anselm Kiefer",
+          "Lead",
+          "Memory",
+          "Holocaust",
+          "Mixed media"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co002",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Faire son temps (Making One's Time)",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Rafael Lozano-Hemmer",
+        "title": "Pulse Portrait (Variation)",
+        "date": "c. 2000s",
+        "medium": "Interactive installation, projection, light, strings, LED display",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This captivating installation by **Rafael Lozano-Hemmer** draws us into a dark space where a monumental, ghostly face is projected onto a curtain of vertical strings. The strings fragment the image, creating a dynamic, almost ephemeral quality that shifts as you move around it. On the left, a grid of pulsating red lights hints at the interactive nature often found in Lozano-Hemmer's work, frequently linked to biometric data like heartbeats. This piece masterfully blends technology and art, inviting contemplation on identity, surveillance, and the transient nature of human presence in the digital age.",
+        "tags": [
+          "Installation",
+          "New Media",
+          "Projection",
+          "Portrait",
+          "Interactive"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co003",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Christian Boltanski",
+        "title": "Archives of Memory",
+        "date": "c. 1990-2010",
+        "medium": "Mixed media installation (photographs, light bulbs, fabric, wire)",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This evocative installation by **Christian Boltanski** immerses viewers in a haunting landscape of memory. Numerous black and white photographs, often portraits of unknown individuals, are suspended from the ceiling, some on translucent fabric, creating a ghostly, layered effect. Bare light bulbs hang among them, casting dramatic shadows and highlighting the ephemeral nature of human existence and the fragility of remembrance. The work invites contemplation on collective and personal histories, loss, and the passage of time, transforming the gallery space into a poignant archive of forgotten lives.",
+        "tags": [
+          "Installation",
+          "Memory",
+          "Photography",
+          "Light",
+          "Portraits"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co004",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Christian Boltanski",
+        "title": "Personnes",
+        "date": "2010",
+        "medium": "Mixed media installation (discarded clothing, industrial crane, sound)",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This monumental installation by **Christian Boltanski** confronts viewers with a vast mountain of discarded clothing, evoking themes of human presence, absence, and the sheer scale of consumerism. An industrial crane hovers above, mechanically sifting through the garments, a stark reminder of processing and the ultimate fate of our material possessions. The work transforms a grand exhibition space into a poignant reflection on memory, loss, and the collective human footprint.",
+        "tags": [
+          "consumerism",
+          "memory",
+          "found objects",
+          "large-scale",
+          "waste"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co005",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Dorothy Napangardi",
+        "title": "Yuparli",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Dorothy Napangardi",
+        "title": "Yaparli (Bush Banana)",
+        "date": "2013",
+        "medium": "Acrylic on canvas",
+        "movement": "Abstract Expressionism",
+        "period_bucket": "Now",
+        "description": "This mesmerizing work by **Dorothy Napangardi**, *Yaparli (Bush Banana)*, invites us into a vibrant, intricate world. Using countless dots, Napangardi maps the landscape and the journey of the Bush Banana, a vital food source in her ancestral lands. The central radiating pattern, flanked by striking black and white striped sections, represents the root systems and the abundance of this plant. It's a powerful example of how **Indigenous Australian Art** conveys deep cultural knowledge and connection to country through abstract, visually rich narratives.",
+        "tags": [
+          "Indigenous Art",
+          "Dot Painting",
+          "Abstract",
+          "Australian Art",
+          "Dreaming"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co006",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Liao Fei",
+        "title": "A Straight Line Extended",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Unknown artist",
+        "title": "Progression of Stones",
+        "date": "2000s",
+        "medium": "Natural stones, metal shelf, light installation",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This compelling installation features a series of natural stones, arranged in a linear progression of increasing size on a minimalist shelf. Dramatic lighting casts elongated, distorted shadows across the floor, transforming the ephemeral into a tangible extension of the artwork. The piece invites contemplation on themes of scale, perception, and the interplay between natural forms and their environment, highlighting how light can redefine an object's presence. The simplicity of the materials belies a profound exploration of presence and absence.",
+        "tags": [
+          "stones",
+          "shadows",
+          "installation",
+          "minimalism",
+          "light art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co007",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Mike Kelley",
+        "title": "Riddle of the Sphinx",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Paola Pivi",
+        "title": "Mountains",
+        "date": "2010s",
+        "medium": "Knitted fabric, mixed media, photograph",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This captivating installation by **Paola Pivi**, likely from her \"Mountains\" series, transforms the gallery floor into an undulating, vibrant landscape crafted from striped knitted fabric. The soft, tactile material creates a playful yet profound representation of natural topography, inviting viewers to experience a familiar form in an unexpected medium. Above it, a framed photograph of a mountain at sunset or sunrise establishes a dialogue between the artificial and the real, the two-dimensional and the three-dimensional, challenging our perception of landscape art.",
+        "tags": [
+          "Installation",
+          "Textile art",
+          "Landscape",
+          "Contemporary art",
+          "Paola Pivi"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co008",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Piet Mondrian",
+        "title": "Summer, Dune in Zeeland",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Richard Diebenkorn",
+        "title": "Untitled (Ocean Park Series)",
+        "date": "c. 1970s",
+        "medium": "Oil on canvas",
+        "movement": "Color Field",
+        "period_bucket": "Modern",
+        "description": "This painting by **Richard Diebenkorn** is a quintessential example from his renowned **Ocean Park series**. It masterfully blends abstraction with the subtle suggestion of a landscape, likely inspired by the coastal views near his studio in Santa Monica. The vibrant orange shapes, perhaps hinting at sunlight or sand, powerfully contrast with the cool, expansive blues, creating a dynamic interplay of color and light. Diebenkorn's distinctive brushwork and geometric yet fluid composition invite viewers to contemplate both the abstract qualities of form and the evocative sense of place.",
+        "tags": [
+          "abstract landscape",
+          "color field",
+          "American art",
+          "coastal",
+          "geometric abstraction"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co009",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ron Mueck",
+        "title": "In Bed",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ron Mueck",
+        "title": "In Bed",
+        "date": "2005",
+        "medium": "Mixed media (silicone, fiberglass, resin, human hair, fabric)",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This striking hyperrealistic sculpture by **Ron Mueck**, titled **\"In Bed\"**, presents a monumental figure of a woman lying in bed, her hand resting thoughtfully on her chin. The incredible detail in her skin, hair, and pensive expression draws viewers into an intimate moment of introspection or quiet distress. The large, ambiguous mound under the sheet beside her adds a layer of mystery, suggesting a hidden presence, a profound absence, or perhaps the weight of unspoken thoughts. Mueck's work often explores themes of life, death, and the human condition with unsettling realism.",
+        "tags": [
+          "Hyperrealism",
+          "Sculpture",
+          "Human condition",
+          "Introspection",
+          "Installation"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co010",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "James Turrell",
+        "title": "Danae",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "James Turrell",
+        "title": "Blue Shallow Space",
+        "date": "c. 1970s-1990s",
+        "medium": "Light installation",
+        "movement": "Light and Space",
+        "period_bucket": "Contemporary",
+        "description": "This striking installation by **James Turrell** immerses the viewer in a field of pure blue light, transforming the gallery space into a meditative environment. Turrell, a master of the **Light and Space** movement, uses light as his primary medium, challenging our perception of depth and form. The glowing blue rectangle on the far wall appears to be a solid object or an infinite void, inviting contemplation on the nature of space and color itself.",
+        "tags": [
+          "Light art",
+          "Installation",
+          "Perception",
+          "Minimalism",
+          "Blue"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co011",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ai Weiwei",
+        "title": "Grapes",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ai Weiwei",
+        "title": "Grapes",
+        "date": "c. 2008-2010",
+        "medium": "Antique wooden stools",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This striking installation by **Ai Weiwei** transforms dozens of antique Chinese wooden stools into a monumental, spherical structure. By disassembling and reassembling these everyday objects, Ai challenges traditional notions of utility, value, and cultural heritage. The intricate, interlocking form creates a powerful visual metaphor for interconnectedness and the tension between individual identity and collective experience, reflecting on China's rapid modernization and its relationship with its past.",
+        "tags": [
+          "installation",
+          "Chinese art",
+          "sculpture",
+          "repurposed materials",
+          "cultural critique"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co012",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "C\u00e9leste Boursier-Mougenot",
+        "title": "Clinamen",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Olafur Eliasson",
+        "title": "Your oceanic feeling",
+        "date": "2019",
+        "medium": "Water, light, wood, and steel installation",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "The artwork, likely **Olafur Eliasson's** *Your oceanic feeling*, invites viewers to a meditative experience. A large, circular basin of water, illuminated and subtly agitated, creates a mesmerizing vortex, evoking natural phenomena like whirlpools or celestial bodies. The motion blur on the white elements emphasizes the dynamic nature of the piece, drawing attention to the fluidity of perception and the environment. This immersive installation encourages introspection and a shared sense of wonder among the seated audience.",
+        "tags": [
+          "Installation Art",
+          "Kinetic Art",
+          "Water",
+          "Perception",
+          "Immersive"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co013",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Chiharu Shiota",
+        "title": "Diary",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Chiharu Shiota",
+        "title": "Red Thread of Memory",
+        "date": "2010s",
+        "medium": "Red thread, paper, mixed media",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This immersive installation by **Chiharu Shiota** envelops the viewer in a dense, intricate web of vibrant red thread. The countless strands, stretching from floor to ceiling, create a powerful sense of being caught within a vast, organic network. Scattered throughout the crimson labyrinth are small, crumpled pieces of paper, suggesting fragmented memories, forgotten stories, or lost thoughts. Shiota often uses thread to symbolize the invisible connections between people and objects, exploring themes of life, death, and the intangible nature of human existence.",
+        "tags": [
+          "installation",
+          "red thread",
+          "memory",
+          "immersive",
+          "contemporary art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co014",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Katharina Grosse",
+        "title": "Is It You?",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Katharina Grosse",
+        "title": "Chromatic Drapes",
+        "date": "2010s",
+        "medium": "Spray paint on fabric installation",
+        "movement": "Installation Art",
+        "period_bucket": "Now",
+        "description": "This vibrant, immersive installation by Katharina Grosse transforms the gallery space into a dynamic landscape of color and form. Grosse is renowned for her large-scale, spray-painted works that extend beyond traditional canvases, here utilizing draped fabric to create a fluid, almost architectural environment. The intense, overlapping hues of yellow, orange, pink, blue, and green dissolve boundaries, inviting viewers to walk through and experience painting in a three-dimensional, sensory way. The soft folds of the textile catch light and shadow, making the colors appear to shift and breathe.",
+        "tags": [
+          "installation",
+          "textile art",
+          "abstract",
+          "color field",
+          "immersive"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co015",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Leandro Erlich",
+        "title": "Swimming Pool",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Leandro Erlich",
+        "title": "The Swimming Pool",
+        "date": "1999",
+        "medium": "Installation (water, glass, swimming pool structure, light)",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This captivating work is **Leandro Erlich's** iconic **\"The Swimming Pool\"**, an immersive installation that masterfully plays with perception. Visitors can stand in a dry space beneath a thin layer of water, creating the illusion of being submerged while looking up at the surface. The piece challenges our understanding of reality and space, inviting a disorienting yet playful experience. It's a brilliant example of how art can transform familiar environments into extraordinary, thought-provoking encounters.",
+        "tags": [
+          "Illusion",
+          "Installation",
+          "Perception",
+          "Interactive",
+          "Contemporary Art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co016",
+      "config_id": "gemini",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Marcel Duchamp",
+        "title": "Fountain",
+        "movement": "Dada",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Marcel Duchamp",
+        "title": "Fountain",
+        "date": "1917",
+        "medium": "Porcelain urinal, paint",
+        "movement": "Dada",
+        "period_bucket": "Modern",
+        "description": "This iconic work, **Fountain**, by **Marcel Duchamp**, is a porcelain urinal signed 'R. Mutt 1917'. It's a prime example of a 'readymade,' an ordinary manufactured object designated by the artist as a work of art. Duchamp's radical gesture challenged the very definition of art, the role of the artist, and the aesthetic value placed on traditional craftsmanship. It provoked a profound shift towards conceptual art, emphasizing ideas over visual beauty and forever altering the course of modern art.",
+        "tags": [
+          "readymade",
+          "Dada",
+          "conceptual art",
+          "urinal",
+          "modern art"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co017",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Olafur Eliasson",
+        "title": "Mediated Motion",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Olafur Eliasson",
+        "title": "The blind pavilion",
+        "date": "2003",
+        "medium": "Mixed media installation (water, duckweed, wood, concrete, light)",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary",
+        "description": "This immersive installation by **Olafur Eliasson** invites visitors to navigate a vast indoor pool covered in vibrant green duckweed via a wooden walkway. The stark concrete walls and luminous ceiling create a contemplative, almost otherworldly atmosphere, blurring the lines between natural and artificial environments. Eliasson often explores perception, natural phenomena, and the relationship between humans and their surroundings, prompting a heightened awareness of one's own presence and movement within the space. The work challenges our senses and expectations of a museum experience.",
+        "tags": [
+          "installation art",
+          "environmental art",
+          "perception",
+          "immersive",
+          "contemporary"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co019",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Rinko Kawauchi",
+        "title": "Ametsuchi",
+        "movement": "New Media Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Unknown Artist",
+        "title": "Controlled Burn at Mount Aso",
+        "date": "2010s",
+        "medium": "Photography",
+        "movement": "Land Art",
+        "period_bucket": "Now",
+        "description": "This striking photograph captures a dramatic moment during a controlled burn on a grassy hill, likely at **Mount Aso** in Japan. The image powerfully contrasts the golden dry grass, the vibrant orange flames, and the freshly charred black earth, creating a visual narrative of destruction and renewal. Billowing smoke adds to the atmospheric intensity, transforming a traditional agricultural practice into a sublime spectacle. This work evokes themes of nature's raw power, human intervention in the landscape, and the cyclical processes of life and death.",
+        "tags": [
+          "Photography",
+          "Landscape",
+          "Fire",
+          "Japan",
+          "Nature"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co018",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Ruth Asawa",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ruth Asawa",
+        "title": "Untitled (Suspended Wire Sculptures)",
+        "date": "c. 1950s-1960s",
+        "medium": "Woven copper or brass wire",
+        "movement": "Installation Art",
+        "period_bucket": "Modern",
+        "description": "These captivating **wire sculptures** by **Ruth Asawa** invite us to consider the interplay of form, light, and shadow. Crafted from intricately woven metal, these suspended pieces create a mesmerizing dance of volume and void. Asawa's genius lies in transforming a humble material into elegant, biomorphic shapes that seem to breathe and undulate in space. The dramatic shadows cast upon the walls and floor become an integral part of the artwork, extending its presence and emphasizing the ephemeral nature of perception.",
+        "tags": [
+          "wire sculpture",
+          "abstract",
+          "installation",
+          "shadow art",
+          "organic forms"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "al001",
+      "config_id": "gemini",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Kaspar von Zumbusch",
+        "title": "Maria Theresa Monument",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Caspar von Zumbusch",
+        "title": "Maria-Theresien-Platz Monument",
+        "date": "1888",
+        "medium": "Bronze sculpture",
+        "movement": "Unknown",
+        "period_bucket": "Historical",
+        "description": "This grand bronze monument honors **Empress Maria Theresa** (1717-1780), one of Austria's most influential rulers. Created by **Caspar von Zumbusch** and unveiled in 1888, it depicts the Empress seated on her throne, surrounded by her most important advisors and generals, symbolizing her reign's achievements in politics, military, and culture. The monument stands majestically in front of the **Naturhistorisches Museum** in Vienna, a testament to the Habsburg legacy and the city's imperial grandeur. Its detailed, realistic style reflects the academic traditions of late 19th-century public sculpture.",
+        "tags": [
+          "Public sculpture",
+          "Monument",
+          "Vienna",
+          "Maria Theresa",
+          "Bronze"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": true,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": true,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "e002",
+      "config_id": "gemini",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "",
+        "movement": "Street Art",
+        "period_bucket": "Now"
+      },
+      "predicted": {
+        "artist": "Minderos",
+        "title": "La Gran Cabeza",
+        "date": "c. 2023-2024",
+        "medium": "Linocut print on paper, paste-up",
+        "movement": "Street Art",
+        "period_bucket": "Now",
+        "description": "This striking street art piece, \"La Gran Cabeza\" by **Minderos**, features a colossal skull precariously balanced on stilts, supported by smaller, struggling skeletal figures. Rendered in a powerful **linocut** style, the artwork evokes the rich tradition of Mexican **calaveras**, often used for social commentary. Its placement as a paste-up on a public wall transforms the urban landscape into a canvas, inviting reflection on themes of societal burden, the fragility of power, and collective struggle. The imagery suggests a critical look at the foundations upon which large structures or systems are built, hinting at their potential collapse.",
+        "tags": [
+          "Street Art",
+          "Calavera",
+          "Skull",
+          "Mexican Art",
+          "Social Commentary"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": true,
+          "fuzzy": true,
+          "contains": true
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c001",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Antonio Canova",
+        "title": "Theseus Defeats the Centaur",
+        "movement": "Neoclassicism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "c002",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "Cabinet of curiosities",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "c003",
+      "config_id": "claude",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Caravaggio",
+        "title": "David with the Head of Goliath",
+        "movement": "Baroque",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "c004",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Pablo Picasso",
+        "title": "The Fourteenth of July",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "c005",
+      "config_id": "claude",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Pieter Bruegel the Elder",
+        "title": "The Tower of Babel",
+        "movement": "Northern Renaissance",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "c007",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "James Ensor",
+        "title": "Christ's Entry Into Brussels in 1889",
+        "movement": "Expressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "c006",
+      "config_id": "claude",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Paul C\u00e9zanne",
+        "title": "Mont Sainte-Victoire",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m001",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Albert Gleizes",
+        "title": "Painting for Contemplation, Dominant Rose and Green",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m002",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Marxism Will Give Health to the Sick",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m003",
+      "config_id": "claude",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "The Two Fridas",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m004",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Viva la Vida, Watermelons",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m005",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Mark Rothko",
+        "title": "No. 10",
+        "movement": "Color Field",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m006",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Robert Delaunay",
+        "title": "Red Eiffel Tower",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m007",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wassily Kandinsky",
+        "title": "Improvisation 28 (second version)",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m008",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "David Hockney",
+        "title": "Garden",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m009",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Egon Schiele",
+        "title": "Wally in a Red Blouse",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m010",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Joseph Nic\u00e9phore Ni\u00e9pce",
+        "title": "View from the Window at Le Gras",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "m011",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wayne Thiebaud",
+        "title": "Cakes",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co001",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Anselm Kiefer",
+        "title": "Die Welle (The Wave)",
+        "movement": "Neo-Expressionism",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co002",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Faire son temps (Making One's Time)",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co003",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co004",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co005",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Dorothy Napangardi",
+        "title": "Yuparli",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co006",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Liao Fei",
+        "title": "A Straight Line Extended",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co007",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Mike Kelley",
+        "title": "Riddle of the Sphinx",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co008",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Piet Mondrian",
+        "title": "Summer, Dune in Zeeland",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co009",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ron Mueck",
+        "title": "In Bed",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co010",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "James Turrell",
+        "title": "Danae",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co011",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ai Weiwei",
+        "title": "Grapes",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co012",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "C\u00e9leste Boursier-Mougenot",
+        "title": "Clinamen",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co013",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Chiharu Shiota",
+        "title": "Diary",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co014",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Katharina Grosse",
+        "title": "Is It You?",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co015",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Leandro Erlich",
+        "title": "Swimming Pool",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co016",
+      "config_id": "claude",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Marcel Duchamp",
+        "title": "Fountain",
+        "movement": "Dada",
+        "period_bucket": "Modern"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co017",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Olafur Eliasson",
+        "title": "Mediated Motion",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co019",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Rinko Kawauchi",
+        "title": "Ametsuchi",
+        "movement": "New Media Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "co018",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Ruth Asawa",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "al001",
+      "config_id": "claude",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Kaspar von Zumbusch",
+        "title": "Maria Theresa Monument",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    },
+    {
+      "item_id": "e002",
+      "config_id": "claude",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "",
+        "movement": "Street Art",
+        "period_bucket": "Now"
+      },
+      "predicted": {},
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": "Claude API key not configured"
+    }
+  ]
+}

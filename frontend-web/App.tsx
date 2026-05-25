@@ -474,6 +474,7 @@ const App: React.FC = () => {
               movement: item.movement,
               periodBucket: item.period_bucket,
               referenceUrls: item.reference_urls || [],
+              insights: item.insights || [],
               conversation: (item.conversation_history || []).map((msg: any) => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 text: msg.content

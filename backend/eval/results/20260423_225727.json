@@ -1,0 +1,1959 @@
+{
+  "timestamp": "20260423_225727",
+  "configs": [
+    "vision-only"
+  ],
+  "n_items": 39,
+  "summary": {
+    "vision-only": {
+      "n": 39,
+      "artist_exact": 0.0,
+      "artist_fuzzy": 0.0,
+      "artist_contains": 0.41,
+      "title_fuzzy": 0.0,
+      "title_contains": 0.308,
+      "movement_exact": 0.0,
+      "movement_fuzzy": 0.0
+    }
+  },
+  "results": [
+    {
+      "item_id": "c001",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Antonio Canova",
+        "title": "Theseus Defeats the Centaur",
+        "movement": "Neoclassicism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Classical sculpture",
+        "title": "classical sculpture",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Classical sculpture",
+          "Sculpture",
+          "Classicism"
+        ],
+        "_raw_best_guess": [
+          "classical sculpture"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c002",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "Cabinet of curiosities",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Flower",
+        "title": "artificial flower",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Flower",
+          "Artificial plants"
+        ],
+        "_raw_best_guess": [
+          "artificial flower"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c003",
+      "config_id": "vision-only",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Caravaggio",
+        "title": "David with the Head of Goliath",
+        "movement": "Baroque",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Westside Gunn",
+        "title": "pray for paris vinyl",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Westside Gunn",
+          "David with the Head of Goliath",
+          "David and Goliath",
+          "David with the Head of Goliath",
+          "Pray for Paris",
+          "Kunsthistorisches Museum Wien",
+          "Art",
+          "Painting"
+        ],
+        "_raw_best_guess": [
+          "pray for paris vinyl"
+        ],
+        "_raw_page_titles": [
+          "WestsideGunn \u2013 Pray For Paris | Releases - Discogs",
+          "WestsideGunn \u2013 Pray For Paris \u2013 Vinyl (LP, Album ... - Discogs",
+          "WestsideGunn \u2013 Pray For Paris \u2013 Vinyl (Tri-color, French ... - Discogs",
+          "WestsideGunn \u2013 Pray For Paris | Releases - Discogs",
+          "Finally got pray for Paris on vinyl! : r/westsidegunn - Reddit"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c004",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Pablo Picasso",
+        "title": "The Fourteenth of July",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Picture Frame",
+        "title": "picture frame",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Picture Frame",
+          "Art",
+          "Solomon R. Guggenheim Museum",
+          "Painting",
+          "Mat",
+          "Image",
+          "Photograph",
+          "Poster"
+        ],
+        "_raw_best_guess": [
+          "picture frame"
+        ],
+        "_raw_page_titles": [
+          "Colour E-Ink Picture Frame - The Reflection Frame - YouTube",
+          "Probably the fanciest picture frame you'll ever see. - YouTube",
+          "The World's Largest E-Ink Picture Frame: InkPoster Tela 28.5 Review",
+          "I Tried Finding the PERFECT Digital Picture Frame - YouTube",
+          "Map / Picture Frames / Photo Albums, Frames & Accessories"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c005",
+      "config_id": "vision-only",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Pieter Bruegel the Elder",
+        "title": "The Tower of Babel",
+        "movement": "Northern Renaissance",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Kunsthistorisches Museum Wien",
+        "title": "bruegel tower of babel",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Kunsthistorisches Museum Wien",
+          "Painting",
+          "Art",
+          "The Tower of Babel",
+          "Der Turmbau zu Babel",
+          "The Tower of Babel",
+          "Artwork",
+          "Renaissance"
+        ],
+        "_raw_best_guess": [
+          "bruegel tower of babel"
+        ],
+        "_raw_page_titles": [
+          "File:Pieter Bruegel the Elder - The Tower of Babel (Vienna) - edited.jpg",
+          "File:Pieter Bruegel the Elder - The Tower of Babel (Vienna)",
+          "File:Pieter Bruegel the Elder - The Tower of Babel (Vienna) - Wikipedia",
+          "MWW Artwork of the Day (9/8/25) Pieter Bruegel the Elder (Flemish ...",
+          "Puzzle Pieter Bruegel: The Tower of Babel, 3 000 pieces"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c007",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "James Ensor",
+        "title": "Christ's Entry Into Brussels in 1889",
+        "movement": "Expressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Christ's Entry Into Brussels in 1889",
+        "title": "james ensor christ's entry into brussels",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Christ's Entry Into Brussels in 1889",
+          "The Getty",
+          "Art",
+          "Painting",
+          "Expressionism",
+          "Artwork",
+          "The Getty Villa",
+          "Painter"
+        ],
+        "_raw_best_guess": [
+          "james ensor christ's entry into brussels"
+        ],
+        "_raw_page_titles": [
+          "Christ's Entry Into Brussels in 1889 - Wikipedia",
+          "Ensor - Christ's Entry into Brussels in 1889 - Postcard",
+          "(PL ) A multitude of faces \u2013 a crowd of masks. This James Ensor ...",
+          "Ensor's \u201cChrist's Entry into Brussels in 1889\u201d | Redtree Times",
+          "James Ensor - Wikipedia"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "c006",
+      "config_id": "vision-only",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Paul C\u00e9zanne",
+        "title": "Mont Sainte-Victoire",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Painting",
+        "title": "paul c\u00e9zanne paintings",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Painting",
+          "Los Angeles County Museum of Art",
+          "Art",
+          "Princeton University Art Museum",
+          "Modern art",
+          "Post-Impressionism",
+          "Artwork",
+          "Impressionism"
+        ],
+        "_raw_best_guess": [
+          "paul c\u00e9zanne paintings"
+        ],
+        "_raw_page_titles": [
+          "Paul Cezanne: The father of modern art | National Gallery - YouTube",
+          "Why Paul C\u00e9zanne Was the True Father of Modern Painting",
+          "Still Life with Apples by Paul C\u00e9zanne - Curator Highlights - YouTube",
+          "The painting that became the pinnacle of Cezanne's career",
+          "C\u00e9zanne's Radical Approach to the Still Life - YouTube"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m001",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Albert Gleizes",
+        "title": "Painting for Contemplation, Dominant Rose and Green",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "The Museum of Modern Art",
+        "title": "modern art",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "The Museum of Modern Art",
+          "Giant Soft Fan",
+          "Art",
+          "Modern art",
+          "Painting",
+          "Contemporary art",
+          "Art movement",
+          "modern and contemporary art"
+        ],
+        "_raw_best_guess": [
+          "modern art"
+        ],
+        "_raw_page_titles": [
+          "Modern art in 5 masterpieces | Centre Pompidou - YouTube",
+          "Introduction to Modern Art & Ideas - YouTube",
+          "SmART Talk: Modern Art vs Contemporary Art - YouTube",
+          "Video: Modern Art | Definition, History & Styles - Study.com",
+          "Introduction to Modern Art | Art Trippin' Lecture Series (S1 - YouTube"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m002",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Marxism Will Give Health to the Sick",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Frida Kahlo Museum",
+        "title": "Frida Kahlo Museum",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Frida Kahlo Museum",
+          "Marxism Will Give Health to the Sick",
+          "Art",
+          "Painting",
+          "Modern art",
+          "Catalina Island Museum",
+          "Artwork",
+          "Art Museum"
+        ],
+        "_raw_best_guess": [
+          "Frida Kahlo Museum"
+        ],
+        "_raw_page_titles": [
+          "The Frida Kahlo Museum - Claire Polders",
+          "I knew that Frida had been disabled, but to experience her life the ...",
+          "Frida Kahlo on Instagram: \"\"Henry Ford Hospital.\" (1932). #FridaArt ...",
+          "Frida Kahlo in China #FridaKahlo #Shanghai #China #M\u00e9xico",
+          "Frida Kahlo Museum (Map, Images and Tips) - Seeker"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m003",
+      "config_id": "vision-only",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "The Two Fridas",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "The Two Fridas",
+        "title": "two fridas",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "The Two Fridas",
+          "Frida Kahlo",
+          "Frida Kahlo Museum",
+          "Art",
+          "Painting",
+          "Frida. Viva la Vida",
+          "Self-portrait",
+          "Artist"
+        ],
+        "_raw_best_guess": [
+          "two fridas"
+        ],
+        "_raw_page_titles": [
+          "Frida Kahlo, The Two Fridas (Las dos Fridas) - Smarthistory",
+          "Frida Kahlo's 'The Two Fridas': Great Art Explained - YouTube",
+          "10-Minute Challenge: The Two Fridas - The New York Times",
+          "The Two Fridas - Remo Anzovino - YouTube",
+          "Frida Khalo- The Two Fridas - Canvas OR Print Wall Art - Amazon.com"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m004",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Frida Kahlo",
+        "title": "Viva la Vida, Watermelons",
+        "movement": "Surrealism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Viva la Vida, Watermelons",
+        "title": "twinkling watermelon viva la vida",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Viva la Vida, Watermelons",
+          "Frida Kahlo Museum",
+          "Watermelon",
+          "Painting",
+          "Art",
+          "Artwork",
+          "Still life",
+          "Melon"
+        ],
+        "_raw_best_guess": [
+          "twinkling watermelon viva la vida"
+        ],
+        "_raw_page_titles": [
+          "Viva La Vida Watermelon - Etsy",
+          "Buy Viva La Vida Watermelon Online In India - Etsy",
+          "Viva La Vida (Long Live Life) \u2014 these are the words Frida Kahlo left ...",
+          "Viva La Vida Watermelon - Etsy Canada",
+          "Viva La Vida Watermelon - Etsy UK"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m005",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Mark Rothko",
+        "title": "No. 10",
+        "movement": "Color Field",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Art",
+        "title": "modern art",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Art",
+          "Painting"
+        ],
+        "_raw_best_guess": [
+          "modern art"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m006",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Robert Delaunay",
+        "title": "Red Eiffel Tower",
+        "movement": "Cubism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Art",
+        "title": "Robert Delaunay",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Art",
+          "Painting",
+          "Solomon R. Guggenheim Museum",
+          "Modern art",
+          "Orphism",
+          "Cubism",
+          "Visual Arts",
+          "Artwork"
+        ],
+        "_raw_best_guess": [
+          "Robert Delaunay"
+        ],
+        "_raw_page_titles": [
+          "Robert Delaunay was a French artist of the School of Paris ...",
+          "The Windows - Robert Delaunay - Galerie Mont-Blanc",
+          "The Eiffel Tower I - Robert Delaunay - Galerie Mont-Blanc",
+          "The Eiffel Tower II - Robert Delaunay - Galerie Mont-Blanc",
+          "The Art of Robert Delaunay: 24 Full Color Paintings - Amazon.com"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m007",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wassily Kandinsky",
+        "title": "Improvisation 28 (second version)",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Improvisation 28 (second version)",
+        "title": "improvisaci\u00f3n 28 1912 wassily kandinsky",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Improvisation 28 (second version)",
+          "Solomon R. Guggenheim Museum",
+          "Art",
+          "Painting",
+          "Modern art",
+          "Rose with Gray",
+          "Abstract art",
+          "Oil painting"
+        ],
+        "_raw_best_guess": [
+          "improvisaci\u00f3n 28 1912 wassily kandinsky"
+        ],
+        "_raw_page_titles": [
+          "Kandinsky, Improvisation 28 (second version), 1912 - YouTube",
+          "Improvisation 28 (Second Version), 1912 by Wassily Kandinsky ...",
+          "Improvisation 28 (Second Version), 1912 by Wassily Kandinsky ...",
+          "Color, chaos, rhythm, emotion\u2014Kandinsky's Improvisation 28 ...",
+          "First Version 1912 Canvas Art Print by Wassily Kandinsky - Size: 18 ..."
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m008",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "David Hockney",
+        "title": "Garden",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Painting",
+        "title": "david hockneys art",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Painting",
+          "Art",
+          "The Centre Pompidou",
+          "Artist",
+          "Landscape painting",
+          "Artwork",
+          "Painter",
+          "Richard Gray Gallery"
+        ],
+        "_raw_best_guess": [
+          "david hockneys art"
+        ],
+        "_raw_page_titles": [
+          "3 Powerful Ideas You Should Steal from David Hockney - YouTube",
+          "DAVID HOCKNEY - Pictures at an Exhibition - Richard Gray Gallery",
+          "David Hockney's Art Techniques: Technology, Media & Photography",
+          "The bewitching allure of Hockney's swimming pools - BBC",
+          "Happy Birthday, David Hockney! Here Are 14 Iconic Works to ..."
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m009",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Egon Schiele",
+        "title": "Wally in a Red Blouse",
+        "movement": "Expressionism",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Portrait of the Painter Anton Peschka",
+        "title": "egon schiele paintings",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Portrait of the Painter Anton Peschka",
+          "Art",
+          "Portrait of Wally",
+          "Painting",
+          "The embrace",
+          "Modern art",
+          "Expressionism",
+          "Artwork"
+        ],
+        "_raw_best_guess": [
+          "egon schiele paintings"
+        ],
+        "_raw_page_titles": [
+          "Egon Schiele: Great Art Explained - YouTube",
+          "Egon Schiele's Short, Scandalous Life \u2014 And Why His Art Still Matters",
+          "Egon Schiele: A collection of 365 works (HD) *UPDATE - YouTube",
+          "Paint like Egon Schiele in 7 easy steps! - YouTube",
+          "Know the Artist: Egon Schiele : r/ArtHistory - Reddit"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m010",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Joseph Nic\u00e9phore Ni\u00e9pce",
+        "title": "View from the Window at Le Gras",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "View from the Window at Le Gras",
+        "title": "world's first photograph",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "View from the Window at Le Gras",
+          "Photograph",
+          "Photography",
+          "Image",
+          "Heliography",
+          "War photography",
+          "successful",
+          "Camera"
+        ],
+        "_raw_best_guess": [
+          "world's first photograph"
+        ],
+        "_raw_page_titles": [
+          "View from the Window at Le Gras - Wikipedia",
+          "History of photography - Wikipedia",
+          "The world's first photograph was taken in 1826 using an 8, hour ...",
+          "History of the camera - Wikipedia",
+          "Restoring the first photograph ever taken w/ Nano Banana - Reddit"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "m011",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Wayne Thiebaud",
+        "title": "Cakes",
+        "movement": "Pop Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "The Courtauld Gallery",
+        "title": "wayne thiebaud caramel cake",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "The Courtauld Gallery",
+          "Cakes",
+          "Wayne Thiebaud. American Still Life",
+          "Wayne Thiebaud: Art Comes from Art",
+          "Art",
+          "Painting",
+          "Visual Arts",
+          "Artwork"
+        ],
+        "_raw_best_guess": [
+          "wayne thiebaud caramel cake"
+        ],
+        "_raw_page_titles": [
+          "Screenprint, Cake Slices, Wayne Thiebaud - The Courtauld Shop",
+          "American Still Life at @courtauld in Somerset House. As ... - Instagram",
+          "The Courtauld extends opening hours for Wayne Thiebaud ...",
+          "PRESENTATION: Wayne Thiebaud-American Still Life",
+          "Wayne Thiebaud: American Still Life - The Brooklyn Rail"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co001",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Anselm Kiefer",
+        "title": "Die Welle (The Wave)",
+        "movement": "Neo-Expressionism",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Art",
+        "title": "modern art",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Art",
+          "Painting"
+        ],
+        "_raw_best_guess": [
+          "modern art"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co002",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Faire son temps (Making One's Time)",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Lighting",
+        "title": "light",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Lighting"
+        ],
+        "_raw_best_guess": [
+          "light"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co003",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Lighting",
+        "title": "light",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Lighting"
+        ],
+        "_raw_best_guess": [
+          "light"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co004",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Christian Boltanski",
+        "title": "Storage Memory",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "ArchitectureM RIBA Chartered Practice",
+        "title": "architecture",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "ArchitectureM RIBA Chartered Practice",
+          "Architecture"
+        ],
+        "_raw_best_guess": [
+          "architecture"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co005",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Dorothy Napangardi",
+        "title": "Yuparli",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Painting",
+        "title": "motif",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Painting",
+          "Modern art",
+          "Art"
+        ],
+        "_raw_best_guess": [
+          "motif"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co006",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Liao Fei",
+        "title": "A Straight Line Extended",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Jean Sport Aviation Center",
+        "title": "floor",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Jean Sport Aviation Center",
+          "Floor"
+        ],
+        "_raw_best_guess": [
+          "floor"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co007",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Mike Kelley",
+        "title": "Riddle of the Sphinx",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Room in a Room",
+        "title": "room",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Room in a Room",
+          "Room",
+          "Furniture",
+          "create",
+          "Bed",
+          "Hotel",
+          "Door",
+          "Living room"
+        ],
+        "_raw_best_guess": [
+          "room"
+        ],
+        "_raw_page_titles": [
+          "ROOM - Official 60\" Trailer - Starring Brie Larson In Her ... - YouTube",
+          "Room In A Room - YouTube",
+          "Calum Scott - Hotel Room (Audio) - YouTube",
+          "Creating Your First Room - YouTube",
+          "Furniture you like at prices you'll love! Shop our wide ... - Facebook"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co008",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Piet Mondrian",
+        "title": "Summer, Dune in Zeeland",
+        "movement": "Post-Impressionism",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Art",
+        "title": "modern art",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Art",
+          "Painting",
+          "Modern art"
+        ],
+        "_raw_best_guess": [
+          "modern art"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co009",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ron Mueck",
+        "title": "In Bed",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Mattress",
+        "title": "mattress",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Mattress",
+          "Sheet",
+          "Bed"
+        ],
+        "_raw_best_guess": [
+          "mattress"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co010",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "James Turrell",
+        "title": "Danae",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Ceiling Fixture",
+        "title": "fluorescent lamp",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Ceiling Fixture",
+          "Fluorescent lamp",
+          "Ceiling",
+          "Lamp",
+          "Fluorescence"
+        ],
+        "_raw_best_guess": [
+          "fluorescent lamp"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co011",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Ai Weiwei",
+        "title": "Grapes",
+        "movement": "Conceptual Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Soleil Levant",
+        "title": "ai weiwei art",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Soleil Levant",
+          "Sunflower Seeds",
+          "Art",
+          "Artwork",
+          "Contemporary art",
+          "Sculpture",
+          "Artist",
+          "Visual Arts"
+        ],
+        "_raw_best_guess": [
+          "ai weiwei art"
+        ],
+        "_raw_page_titles": [
+          "Ai Weiwei in \"Change\" - \"Art in the Twenty-First Century\" | Art21",
+          "Ai Weiwei: Life is in Danger Every Day - Louisiana Channel",
+          "The Case for Ai Weiwei | The Art Assignment | PBS Digital Studios",
+          "Art on 60 Minutes: Ai Weiwei - YouTube",
+          "In The Studio With Ai Weiwei - YouTube"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co012",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "C\u00e9leste Boursier-Mougenot",
+        "title": "Clinamen",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Audience",
+        "title": "audience",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Audience"
+        ],
+        "_raw_best_guess": [
+          "audience"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co013",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Chiharu Shiota",
+        "title": "Diary",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Painting",
+        "title": "painting",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Painting",
+          "Acrylic Paint",
+          "Art",
+          "painting technique",
+          "Watercolor painting",
+          "Oil painting",
+          "Image",
+          "Gesso"
+        ],
+        "_raw_best_guess": [
+          "painting"
+        ],
+        "_raw_page_titles": [
+          "Painting Technique for Beginners | Acrylic Painting - YouTube",
+          "Comb Painting Technique / Acrylic Painting / Walking in the Rain",
+          "Paint Anything In 3 Easy Steps - YouTube",
+          "Art Lesson #10 - Intro to Painting - Class 1 - YouTube",
+          "Somewhere In Between, a stunning new exhibit by local artist Yurika ..."
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co014",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Katharina Grosse",
+        "title": "Is It You?",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Anime",
+        "title": "manga",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Anime",
+          "Illustration",
+          "Manga",
+          "Art"
+        ],
+        "_raw_best_guess": [
+          "manga"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co015",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Leandro Erlich",
+        "title": "Swimming Pool",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Leandro Erlich: Swimming Pool",
+        "title": "leandro erlich swimming pool",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Leandro Erlich: Swimming Pool",
+          "Leandro Erlich",
+          "Kanazawa 21st Century Museum of Contemporary Art",
+          "MoMA PS1",
+          "Leandro Erlich Liminal",
+          "Museo de Arte Latinoamericano de Buenos Aires",
+          "P\u00e9rez Art Museum Miami",
+          "Art"
+        ],
+        "_raw_best_guess": [
+          "leandro erlich swimming pool"
+        ],
+        "_raw_page_titles": [
+          "LEANDRO ERLICH : Swimming Pool Masterpiece - YouTube",
+          "Leandro Erlich: Swimming Pool at P.S.1 - YouTube",
+          "The Swimmingpool by Leandro Ehrlich, 21st Century Museum of ...",
+          "VTV Classics (r3): Leandro Erlich: Swimming Pool / P.S.1, New York",
+          "Introducing 'Swimming Pool' \u2014 an immersive installation by artist ..."
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co016",
+      "config_id": "vision-only",
+      "difficulty": "easy",
+      "ground_truth": {
+        "artist": "Marcel Duchamp",
+        "title": "Fountain",
+        "movement": "Dada",
+        "period_bucket": "Modern"
+      },
+      "predicted": {
+        "artist": "Window",
+        "title": "window",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Window"
+        ],
+        "_raw_best_guess": [
+          "window"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co017",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Olafur Eliasson",
+        "title": "Mediated Motion",
+        "movement": "Installation Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "Kunsthaus Bregenz",
+        "title": "gunther vogt landscape architecture",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Kunsthaus Bregenz",
+          "Vogt Landscape Architects AG",
+          "Architecture",
+          "Landscape Architect",
+          "Architect",
+          "Landscape architecture",
+          "Berlin",
+          "Design"
+        ],
+        "_raw_best_guess": [
+          "gunther vogt landscape architecture"
+        ],
+        "_raw_page_titles": [
+          "G\u00fcnther Vogt, \u201cThe Imprint of the Landscape\u201d - YouTube",
+          "Landezine Talks with G\u00fcnther Vogt: Ecology is Invisible - YouTube",
+          "Lecture by G\u00fcnther Vogt - YouTube",
+          "Studio Visits: G\u00fcnther Vogt \u2013 Landscape and public space | SOE.TV",
+          "\"City as Territory as Landscape\" Gunther Vogt - YouTube"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co019",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Rinko Kawauchi",
+        "title": "Ametsuchi",
+        "movement": "New Media Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "\u7167\u5ea6 \u3042\u3081\u3064\u3061 \u5f71\u3092\u898b\u308b",
+        "title": "hill",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "\u7167\u5ea6 \u3042\u3081\u3064\u3061 \u5f71\u3092\u898b\u308b",
+          "Tokyo Photographic Art Museum",
+          "Photograph",
+          "Dictionary",
+          "Photographer",
+          "Pronunciation",
+          "5SG",
+          "Art"
+        ],
+        "_raw_best_guess": [
+          "hill"
+        ],
+        "_raw_page_titles": [
+          "Hill - YouTube",
+          "Am I saying HILL or HEEL? #shorts #pronunciation - YouTube",
+          "How To Pronounce \"Hill\" vs \"He'll\" - YouTube",
+          "The Hill | Now Streaming | Angel - YouTube",
+          "The incredible true story of THE HILL is now playing in theaters and ..."
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": true
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "co018",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "Ruth Asawa",
+        "movement": "Fiber Art",
+        "period_bucket": "Contemporary"
+      },
+      "predicted": {
+        "artist": "",
+        "title": "motif",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [],
+        "_raw_best_guess": [
+          "motif"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "al001",
+      "config_id": "vision-only",
+      "difficulty": "medium",
+      "ground_truth": {
+        "artist": "Kaspar von Zumbusch",
+        "title": "Maria Theresa Monument",
+        "movement": "",
+        "period_bucket": "Historical"
+      },
+      "predicted": {
+        "artist": "Fa\u00e7ade",
+        "title": "facade",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Fa\u00e7ade",
+          "Window",
+          "Fa\u00e7ade engineering",
+          "Building",
+          "Wall",
+          "Cladding",
+          "Architecture",
+          "Design"
+        ],
+        "_raw_best_guess": [
+          "facade"
+        ],
+        "_raw_page_titles": [
+          "Video: Building Facade | Definition, Characteristics & Types",
+          "OBSERVATIONS ON FACADE DESIGN - YouTube",
+          "How To Design Facades Like A Pro [Follow These Architecture ...",
+          "How to Fix a Facade: 4 Design Principles That Make All ... - YouTube",
+          "How an Architect designs a Fa\u00e7ade in under '10 - YouTube"
+        ]
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    },
+    {
+      "item_id": "e002",
+      "config_id": "vision-only",
+      "difficulty": "hard",
+      "ground_truth": {
+        "artist": "",
+        "title": "",
+        "movement": "Street Art",
+        "period_bucket": "Now"
+      },
+      "predicted": {
+        "artist": "Art",
+        "title": "street art",
+        "movement": "",
+        "period_bucket": "",
+        "_raw_entities": [
+          "Art",
+          "Street art",
+          "Street"
+        ],
+        "_raw_best_guess": [
+          "street art"
+        ],
+        "_raw_page_titles": []
+      },
+      "scores": {
+        "artist": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "title": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        },
+        "movement": {
+          "exact": false,
+          "fuzzy": false,
+          "contains": false
+        }
+      },
+      "error": null
+    }
+  ]
+}

@@ -934,12 +934,12 @@ export async function getTasteProfile(userId: string): Promise<any> {
   return response.json();
 }
 
-export async function fetchUnlockPoints(
+export async function fetchInsights(
   artistName: string,
   artworkName: string,
   language?: string,
 ): Promise<Array<{ title: string; text: string }>> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-unlock-points`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-insights`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ artist_name: artistName, artwork_name: artworkName, language: language || null }),

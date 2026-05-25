@@ -1,0 +1,49 @@
+{
+  "changed_files": [
+    {
+      "file": ".github/workflows/ci.yml",
+      "status": "added"
+    },
+    {
+      "file": "backend/app/database/connection.py",
+      "status": "modified"
+    },
+    {
+      "file": "backend/app/main.py",
+      "status": "modified"
+    },
+    {
+      "file": "backend/app/routers/artwork.py",
+      "status": "modified"
+    },
+    {
+      "file": "backend/requirements-dev.txt",
+      "status": "added"
+    },
+    {
+      "file": "backend/tests/__init__.py",
+      "status": "added"
+    },
+    {
+      "file": "backend/tests/conftest.py",
+      "status": "added"
+    },
+    {
+      "file": "backend/tests/test_analyze_endpoint.py",
+      "status": "added"
+    },
+    {
+      "file": "backend/tests/test_health.py",
+      "status": "added"
+    },
+    {
+      "file": "backend/tests/test_quota.py",
+      "status": "added"
+    },
+    {
+      "file": "backend/tests/test_users.py",
+      "status": "added"
+    }
+  ],
+  "captured_at": "2026-04-29T16:52:06.747Z"
+}

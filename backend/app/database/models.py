@@ -70,6 +70,7 @@ class SavedArtwork(Base):
     period_bucket = Column(String, nullable=True)  # Historical / Modern / Contemporary / Now
     reference_urls = Column(JSON, nullable=True)  # Top reference URLs from Vision web detection
     artwork_entity_id = Column(String, ForeignKey('artwork_entities.id', ondelete='SET NULL'), nullable=True, index=True)
+    insights = Column(JSON, nullable=True)  # Cached "Behind the Frame" insights [{title, text}, ...]
 
     # Relationships
     user = relationship("User", back_populates="artworks")
@@ -109,6 +110,7 @@ class SavedArtwork(Base):
             "movement": self.movement,
             "period_bucket": self.period_bucket,
             "reference_urls": self.reference_urls or [],
+            "insights": self.insights or [],
         }
 
         # Include conversation_history for backward compatibility with frontend

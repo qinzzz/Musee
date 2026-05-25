@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>艺术解读技能树</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #1a1a1a; padding: 2rem; margin: 0; }
+  h1 { font-size: 18px; font-weight: 500; margin-bottom: 1.5rem; color: #1a1a1a; }
+  .tree { padding: 0; }
+  .attr-row { display: grid; grid-template-columns: 110px 1fr; gap: 12px; margin-bottom: 16px; align-items: start; }
+  .attr-label { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; }
+  .attr-name { font-size: 13px; font-weight: 500; color: #1a1a1a; }
+  .attr-en { font-size: 11px; color: #999; letter-spacing: 0.04em; }
+  .skills { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .skills-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .skill { border-radius: 8px; padding: 10px 8px; border: 0.5px solid; text-align: center; cursor: pointer; transition: transform 0.1s; }
+  .skill:hover { transform: translateY(-2px); }
+  .skill-name { font-size: 12px; font-weight: 500; display: block; margin-bottom: 4px; }
+  .skill-dots { font-size: 10px; letter-spacing: 2px; }
+  .divider { border: none; border-top: 0.5px solid #e5e5e5; margin: 4px 0 16px; }
+
+  .c-purple-skill { background: #EEEDFE; border-color: #AFA9EC; }
+  .c-purple-skill .skill-name { color: #3C3489; }
+  .c-purple-skill .skill-dots { color: #7F77DD; }
+  .c-teal-skill { background: #E1F5EE; border-color: #5DCAA5; }
+  .c-teal-skill .skill-name { color: #085041; }
+  .c-teal-skill .skill-dots { color: #1D9E75; }
+  .c-coral-skill { background: #FAECE7; border-color: #F0997B; }
+  .c-coral-skill .skill-name { color: #712B13; }
+  .c-coral-skill .skill-dots { color: #D85A30; }
+  .c-blue-skill { background: #E6F1FB; border-color: #85B7EB; }
+  .c-blue-skill .skill-name { color: #0C447C; }
+  .c-blue-skill .skill-dots { color: #378ADD; }
+  .c-amber-skill { background: #FAEEDA; border-color: #EF9F27; }
+  .c-amber-skill .skill-name { color: #633806; }
+  .c-amber-skill .skill-dots { color: #BA7517; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #f0f0f0; }
+    h1 { color: #f0f0f0; }
+    .attr-name { color: #f0f0f0; }
+    .attr-en { color: #666; }
+    .divider { border-color: #333; }
+    .c-purple-skill { background: #26215C; border-color: #534AB7; }
+    .c-purple-skill .skill-name { color: #CECBF6; }
+    .c-purple-skill .skill-dots { color: #AFA9EC; }
+    .c-teal-skill { background: #04342C; border-color: #0F6E56; }
+    .c-teal-skill .skill-name { color: #9FE1CB; }
+    .c-teal-skill .skill-dots { color: #5DCAA5; }
+    .c-coral-skill { background: #4A1B0C; border-color: #993C1D; }
+    .c-coral-skill .skill-name { color: #F5C4B3; }
+    .c-coral-skill .skill-dots { color: #F0997B; }
+    .c-blue-skill { background: #042C53; border-color: #185FA5; }
+    .c-blue-skill .skill-name { color: #B5D4F4; }
+    .c-blue-skill .skill-dots { color: #85B7EB; }
+    .c-amber-skill { background: #412402; border-color: #854F0B; }
+    .c-amber-skill .skill-name { color: #FAC775; }
+    .c-amber-skill .skill-dots { color: #EF9F27; }
+    .card { background: #2a2a2a; border-color: #444; }
+    .card-title { color: #f0f0f0; }
+    .card-tag { color: #888; }
+    .card-desc { color: #ccc; }
+    .card-example { color: #888; border-color: #444; }
+    .card-close { color: #888; }
+    .card-close:hover { color: #f0f0f0; }
+  }
+
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 100; align-items: center; justify-content: center; }
+  .overlay.active { display: flex; }
+  .card { background: #fff; border-radius: 12px; border: 0.5px solid #ddd; padding: 1.5rem; max-width: 340px; width: 90%; position: relative; }
+  .card-tag { font-size: 11px; letter-spacing: 0.05em; color: #999; margin-bottom: 6px; }
+  .card-title { font-size: 18px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
+  .card-dots { font-size: 13px; letter-spacing: 3px; margin-bottom: 14px; }
+  .card-desc { font-size: 14px; color: #555; line-height: 1.7; margin-bottom: 14px; }
+  .card-example { font-size: 13px; color: #888; border-left: 2px solid #ddd; padding-left: 10px; line-height: 1.6; }
+  .card-close { position: absolute; top: 12px; right: 14px; font-size: 18px; color: #aaa; cursor: pointer; background: none; border: none; line-height: 1; padding: 0; }
+  .card-close:hover { color: #1a1a1a; }
+</style>
+</head>
+<body>
+<h1>艺术解读技能树</h1>
+<div class="tree">
+
+  <div class="attr-row">
+    <div class="attr-label"><span class="attr-name">感知</span><span class="attr-en">PERCEPTION</span></div>
+    <div class="skills">
+      <div class="skill c-purple-skill" onclick="show('色彩张力','PERCEPTION','◆◆◇◇◇','你感受到颜色之间的拉扯了吗？冷暖、明暗、补色——色彩不只是装饰，它直接作用于你的神经系统。','看石膏像旁一抹红，或Rothko大色块边缘的微妙渗透——问自己：这里的颜色让我想靠近还是想逃？')"><span class="skill-name">色彩张力</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-purple-skill" onclick="show('构图引力','PERCEPTION','◆◆◇◇◇','你的视线被拉去哪里？为什么？艺术家用线条、重量、空白控制你的眼睛，就像导演控制镜头。','闭上眼，再睁开——第一眼落在哪？那就是艺术家想让你看到的地方。然后问：他为什么这样安排？')"><span class="skill-name">构图引力</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-purple-skill" onclick="show('材料直觉','PERCEPTION','◆◆◇◇◇','这件作品的材料让你感受到了什么？重量、温度、脆弱、腐朽——材料的物理性质直接作用于你的感官，先于任何思考。','站在那堆废旧衣物前，你感受到的密度和气味是真实的。那个感受本身就是信息。')"><span class="skill-name">材料直觉</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-purple-skill" onclick="show('尺度感','PERCEPTION','◆◇◇◇◇','作品的大小如何影响你的身体？巨幅画让你变小，微型雕塑让你俯视——尺度重新定义了你和作品的权力关系。','站在一幅比你高三倍的画前，和拿着放大镜看一幅火柴盒大小的画，是完全不同的经验。')"><span class="skill-name">尺度感</span><span class="skill-dots">◆◇◇◇◇</span></div>
+      <div class="skill c-purple-skill" onclick="show('细节猎人','PERCEPTION','◆◇◇◇◇','大多数人看完就走了。你多看五分钟，会发现什么？当代艺术经常在角落、背面、底部藏着关键信息。','那件石头装置，如果不仔细看，你永远不会发现小石头是悬空的。慢下来，绕着走一圈。')"><span class="skill-name">细节猎人</span><span class="skill-dots">◆◇◇◇◇</span></div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="attr-row">
+    <div class="attr-label"><span class="attr-name">历史</span><span class="attr-en">HISTORY</span></div>
+    <div class="skills">
+      <div class="skill c-teal-skill" onclick="show('流派定位','HISTORY','◆◆◇◇◇','这件作品从哪里来？它属于哪个对话？艺术不是凭空出现的，每件作品都在回应或拒绝之前发生的事情。','极简主义、概念艺术、后殖民艺术——知道标签不是目的，目的是理解这件作品在和谁说话。')"><span class="skill-name">流派定位</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-teal-skill" onclick="show('历史回响','HISTORY','◆◆◇◇◇','这件作品在和谁对话？借用、致敬、引用、模仿、二次创作——艺术家从过去拿了什么，又怎么把它变成自己的？','安迪·沃霍尔画坎贝尔汤罐头，是在致敬还是在挪用商业文化？往回看，才能理解它在做什么。')"><span class="skill-name">历史回响</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-teal-skill" onclick="show('时代印记','HISTORY','◆◆◇◇◇','这件作品诞生于什么时刻？2008年的作品和2020年的作品，即使形式相似，语境完全不同。','刘闯的作品做于2018年——那一年中国比特币挖矿监管刚刚收紧。这个时间点不是偶然的。')"><span class="skill-name">时代印记</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-teal-skill" onclick="show('收藏与市场','HISTORY','◆◇◇◇◇','谁买了这件作品？花了多少钱？市场价格和机构收藏重塑了作品的意义——有时候和艺术家的意图完全相反。','一件批判资本主义的作品被亿万富翁买走挂在客厅里，这本身也成了作品意义的一部分。')"><span class="skill-name">收藏与市场</span><span class="skill-dots">◆◇◇◇◇</span></div>
+      <div class="skill c-teal-skill" onclick="show('身后影响','HISTORY','◆◇◇◇◇','这件作品改变了什么？之后的艺术家有没有因为它而做出不同的选择？影响力是一种延迟显现的意义。','有些作品展出时被忽视，几十年后才被重新发现为转折点。当下的冷淡不代表没有价值。')"><span class="skill-name">身后影响</span><span class="skill-dots">◆◇◇◇◇</span></div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="attr-row">
+    <div class="attr-label"><span class="attr-name">意图</span><span class="attr-en">INTENT</span></div>
+    <div class="skills">
+      <div class="skill c-coral-skill" onclick="show('生命痕迹','INTENT','◆◆◇◇◇','艺术家的个人经历在作品里留下了什么？不是所有作品都是自传性的，但生命经历几乎总会以某种方式渗透进来。','Louise Bourgeois做了一辈子的巨型蜘蛛，那是她对母亲的隐喻。知道这个，你看蜘蛛的方式就变了。')"><span class="skill-name">生命痕迹</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-coral-skill" onclick="show('主张','INTENT','◆◆◇◇◇','这件作品在对世界说什么？艺术家的立场往往不直接说出来，而是藏在选题、材料和展示方式里。','把比特币和少数民族放在同一个标题里，是一种主张——即使艺术家从未明确表态。')"><span class="skill-name">主张</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-coral-skill" onclick="show('执念','INTENT','◆◆◇◇◇','是什么驱动艺术家反复做这件事？执念不是缺陷，是线索——它指向艺术家无法放下的某个核心问题。','看一个艺术家的全部作品，比看一件作品更能理解他在追什么。重复出现的东西值得追问。')"><span class="skill-name">执念</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-coral-skill" onclick="show('野心','INTENT','◆◇◇◇◇','艺术家在挑战艺术本身的什么？形式、媒介、观看方式，还是【艺术】这个概念本身？这是作品的元层级。','杜尚把小便池放进美术馆，不是在说小便池，而是在问：谁有权决定什么是艺术？')"><span class="skill-name">野心</span><span class="skill-dots">◆◇◇◇◇</span></div>
+      <div class="skill c-coral-skill" onclick="show('为什么偏偏','INTENT','◆◇◇◇◇','为什么是这个材料、这个地点、这个颜色、这个尺寸？每一个具体选择背后都有一个理由——即使艺术家说是直觉，直觉也来自某个地方。','废旧衣物山为什么不用新衣服？真实的废弃物带着真实的消费历史，新衣服没有这个重量。')"><span class="skill-name">为什么偏偏</span><span class="skill-dots">◆◇◇◇◇</span></div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="attr-row">
+    <div class="attr-label"><span class="attr-name">结构</span><span class="attr-en">STRUCTURE</span></div>
+    <div class="skills-6">
+      <div class="skill c-blue-skill" onclick="show('隐藏机制','STRUCTURE','◆◆◇◇◇','作品有没有一个不说出来就看不见的内在逻辑？当你发现它，整件作品的意义就会重组。','那件石头装置——不告诉你小石头是悬空的，你永远不会知道那个平衡关系。隐藏是为了让发现变得有力量。')"><span class="skill-name">隐藏机制</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-blue-skill" onclick="show('矛盾点','STRUCTURE','◆◆◇◇◇','作品内部有没有打架的地方？形式和内容的冲突、材料和主题的张力——矛盾不是缺陷，通常是核心。','一件关于脆弱的作品用钢铁做成，一件关于永恒的作品用冰做成——矛盾本身就是意义。')"><span class="skill-name">矛盾点</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-blue-skill" onclick="show('缺席与沉默','STRUCTURE','◆◆◇◇◇','什么没有被画出来、没有被说出来？空白、省略、沉默有时比存在的部分更响亮。','一幅只画了半张脸的肖像——另一半在哪？谁被排除在这个画面之外？不在场的人往往最重要。')"><span class="skill-name">缺席与沉默</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-blue-skill" onclick="show('观看位置','STRUCTURE','◆◇◇◇◇','你被规定从哪里看、怎么看了吗？有些作品只有一个正确的观看角度，有些要求你移动，有些拒绝让你舒适地站着。','围绳、台座、灯光方向——这些都在悄悄告诉你：你应该在哪里，你应该是什么姿态。')"><span class="skill-name">观看位置</span><span class="skill-dots">◆◇◇◇◇</span></div>
+      <div class="skill c-blue-skill" onclick="show('时间性','STRUCTURE','◆◇◇◇◇','这件作品要求你花多少时间？它会随时间变化吗？会腐烂、褪色、消失吗？时间本身有时候是材料。','冰雕展览里融化的作品，行为艺术里只发生一次的时刻——消失是作品意义的一部分。')"><span class="skill-name">时间性</span><span class="skill-dots">◆◇◇◇◇</span></div>
+      <div class="skill c-blue-skill" onclick="show('场域','STRUCTURE','◆◇◇◇◇','这件作品放在哪里本身就是意义的一部分。离开这个空间它还成立吗？场地的历史、建筑、光线都参与了作品的构成。','同一件装置放在白盒子美术馆和废弃工厂里，是两件不同的作品——空间不是背景，是内容。')"><span class="skill-name">场域</span><span class="skill-dots">◆◇◇◇◇</span></div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="attr-row">
+    <div class="attr-label"><span class="attr-name">共鸣</span><span class="attr-en">RESONANCE</span></div>
+    <div class="skills">
+      <div class="skill c-amber-skill" onclick="show('个人记忆','RESONANCE','◆◆◇◇◇','这件作品唤起了你生命里的什么？艺术的共鸣不是普遍的——你带进来的经历决定了你能看见什么。','同一幅画，失去过人的人和没有失去过的人看到的是不同的东西。你的生命是解读的工具。')"><span class="skill-name">个人记忆</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-amber-skill" onclick="show('身体反应','RESONANCE','◆◆◇◇◇','你想靠近还是想退后？呼吸有没有变化？身体的反应比大脑更诚实，它在告诉你一些语言还没到达的信息。','有人在某些装置前会感到恶心，有人会心跳加速。这不是主观，这是数据——关于你和这件作品之间发生了什么。')"><span class="skill-name">身体反应</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-amber-skill" onclick="show('道德直觉','RESONANCE','◆◆◇◇◇','这件作品让你觉得对或不对？当代艺术经常挑战道德边界——你的不适感本身值得被检视。','一件用动物尸体做的装置让你反感——是因为它在伤害，还是因为它让你直视你平时选择不看的事情？')"><span class="skill-name">道德直觉</span><span class="skill-dots">◆◆◇◇◇</span></div>
+      <div class="skill c-amber-skill" onclick="show('跨界联想','RESONANCE','◆◇◇◇◇','这件作品让你想到艺术以外的什么？一首歌、一段对话、一个新闻事件——意义在跨界的瞬间爆发。','刘闯的作品让人想到殖民史、到数据采集、到旅游业对文化的消费——都是合法的联想。')"><span class="skill-name">跨界联想</span><span class="skill-dots">◆◇◇◇◇</span></div>
+      <div class="skill c-amber-skill" onclick="show('无法解释','RESONANCE','◆◇◇◇◇','有些东西你说不清楚，但它就是在你身上留下了什么。这个说不清楚本身就是解读——不需要被解决。','不是所有的感受都需要变成语言。坐在困惑里待一会儿，这也是一种和作品相处的方式。')"><span class="skill-name">无法解释</span><span class="skill-dots">◆◇◇◇◇</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="overlay" id="overlay" onclick="handleOverlayClick(event)">
+  <div class="card" id="card">
+    <button class="card-close" onclick="closeCard()">×</button>
+    <div class="card-tag" id="card-tag"></div>
+    <div class="card-title" id="card-title"></div>
+    <div class="card-dots" id="card-dots"></div>
+    <div class="card-desc" id="card-desc"></div>
+    <div class="card-example" id="card-example"></div>
+  </div>
+</div>
+
+<script>
+const colorMap = {
+  PERCEPTION: '#7F77DD',
+  HISTORY: '#1D9E75',
+  INTENT: '#D85A30',
+  STRUCTURE: '#378ADD',
+  RESONANCE: '#BA7517'
+};
+
+function show(name, category, dots, desc, example) {
+  document.getElementById('card-tag').textContent = category;
+  document.getElementById('card-title').textContent = name;
+  const dotsEl = document.getElementById('card-dots');
+  dotsEl.textContent = dots;
+  dotsEl.style.color = colorMap[category] || '#999';
+  document.getElementById('card-desc').textContent = desc;
+  document.getElementById('card-example').textContent = '例：' + example;
+  document.getElementById('overlay').classList.add('active');
+}
+
+function closeCard() {
+  document.getElementById('overlay').classList.remove('active');
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('overlay')) closeCard();
+}
+</script>
+</body>
+</html>

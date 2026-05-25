@@ -46,6 +46,7 @@ export interface GalleryItem {
   movement?: string;
   periodBucket?: string;
   referenceUrls?: ReferenceItem[];
+  insights?: Array<{ title: string; text: string }>;
 }
 
 export interface Visit {

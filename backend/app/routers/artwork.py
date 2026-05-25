@@ -487,6 +487,8 @@ async def analyze_artist(
             artwork_id, _entity_id_fast = result if isinstance(result, tuple) else (result, None)
             if _entity_id_fast and background_tasks:
                 background_tasks.add_task(_run_dimension_analysis_bg, _entity_id_fast)
+            if artwork_id and artist_name and artist_name != "Unknown Artist" and background_tasks:
+                background_tasks.add_task(_run_insights_bg, artwork_id, artist_name, artwork_name, language)
 
             # Update session narrative in background
             if session_id and background_tasks:
@@ -807,6 +809,10 @@ async def analyze_artist_stream(
                 _bg = asyncio.create_task(_do_dimension_analysis(_entity_id))
                 _active_tasks.add(_bg)
                 _bg.add_done_callback(_active_tasks.discard)
+            if artist_name and artist_name != "Unknown Artist":
+                _up = asyncio.create_task(_do_insights(artwork_id, artist_name, artwork_name, language))
+                _active_tasks.add(_up)
+                _up.add_done_callback(_active_tasks.discard)
             if session_id:
                 _sn = asyncio.create_task(update_session_narrative_task(
                     session_id=session_id,
@@ -1740,6 +1746,32 @@ def _run_dimension_analysis_bg(entity_id: str) -> None:
     _asyncio.run(_do_dimension_analysis(entity_id))
 
 
+async def _do_insights(artwork_id: str, artist_name: str, artwork_name: str, language: Optional[str]) -> None:
+    """Compute and persist Behind-the-Frame insights for one artwork."""
+    if not artist_name or artist_name.lower() in ("unknown", "unknown artist", ""):
+        return
+    try:
+        ai_service = AIServiceFactory.get_service(determine_ai_provider(None))
+        points = await ai_service.get_insights(
+            artist_name=artist_name,
+            artwork_name=artwork_name or "Untitled",
+            language=language,
+        )
+        with SessionLocal() as db:
+            art = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+            if art:
+                art.insights = points
+                db.commit()
+    except Exception as _e:
+        logger.warning("Insights bg task failed for %s: %s", artwork_id, _e)
+
+
+def _run_insights_bg(artwork_id: str, artist_name: str, artwork_name: str, language: Optional[str]) -> None:
+    """Sync wrapper for use as a FastAPI background task (runs in threadpool)."""
+    import asyncio as _asyncio
+    _asyncio.run(_do_insights(artwork_id, artist_name, artwork_name, language))
+
+
 _DIM_ANALYSIS_PROMPT = """\
 You are an art analysis assistant. Given an artwork's metadata, score it on five taste dimensions.
 
@@ -2074,14 +2106,14 @@ async def define_aesthetic_term(
         logger.exception("Define aesthetic term failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-class UnlockPointsRequest(BaseModel):
+class InsightsRequest(BaseModel):
     artist_name: str
     artwork_name: str
     language: Optional[str] = None
 
-@router.post("/artwork-unlock-points")
-async def artwork_unlock_points(
-    request: UnlockPointsRequest = Body(...),
+@router.post("/artwork-insights")
+async def artwork_insights(
+    request: InsightsRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
 ):
     """Return 0–3 unlock points anchored on the artist's known biography/intent."""
@@ -2090,7 +2122,7 @@ async def artwork_unlock_points(
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
     try:
-        points = await ai_service.get_unlock_points(
+        points = await ai_service.get_insights(
             artist_name=request.artist_name,
             artwork_name=request.artwork_name or "Untitled",
             language=request.language,

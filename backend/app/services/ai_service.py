@@ -16,7 +16,7 @@ from app.utils.prompt_loader import (
     get_explore_observation_prompt,
     get_explore_deepdive_prompt,
     get_define_aesthetic_term_prompt,
-    get_unlock_points_prompt,
+    get_insights_prompt,
 )
 from app.services.ai_client_interface import AIClientInterface
 import anyio
@@ -659,14 +659,14 @@ Return ONLY the updated narrative text.{language_instruction}"""
             )
         return self.parse_json_response(response)
 
-    async def get_unlock_points(
+    async def get_insights(
         self,
         artist_name: str,
         artwork_name: str,
         language: Optional[str] = None,
     ) -> List[Dict[str, str]]:
-        """Return 0–3 unlock points for the given artwork. Returns [] if AI has no reliable knowledge."""
-        prompt = get_unlock_points_prompt(artist_name=artist_name, artwork_name=artwork_name, language=language)
+        """Return 0–3 Behind-the-Frame insights for the given artwork. Returns [] if AI has no reliable knowledge."""
+        prompt = get_insights_prompt(artist_name=artist_name, artwork_name=artwork_name, language=language)
         with anyio.fail_after(settings.ai_timeout):
             response = await self.ai_client.call_text_only(
                 prompt=prompt,

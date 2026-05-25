@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# Docker management CLI for hermit containers.
+# Usage: hermit-docker <command> [args...]
+# Commands: up, down, attach, bash, login, logs, restart
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONFIG="$SCRIPT_DIR/../config.json"
+CMD="${1:?Usage: hermit-docker <up|down|attach|bash|login|logs|restart> [args...]}"
+shift
+
+if [ ! -f "$CONFIG" ]; then
+  echo "[hermit] No config found at $CONFIG" >&2
+  echo "[hermit] Run /claude-code-hermit:hatch inside Claude Code first." >&2
+  exit 1
+fi
+
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+COMPOSE="$PROJECT_DIR/docker-compose.hermit.yml"
+RUNTIME_FILE="$PROJECT_DIR/.claude-code-hermit/state/runtime.json"
+
+if [ ! -f "$COMPOSE" ]; then
+  echo "[hermit] No docker-compose.hermit.yml found in $PROJECT_DIR" >&2
+  echo "[hermit] Run /claude-code-hermit:docker-setup inside Claude Code first." >&2
+  exit 1
+fi
+
+# Resolve tmux session name from config
+TMUX_SESSION=$(python3 -c "
+import json, sys, os
+config = json.load(open(sys.argv[1]))
+name = config.get('tmux_session_name', 'hermit-{project_name}')
+project = os.path.basename(sys.argv[2])
+print(name.replace('{project_name}', project))
+" "$CONFIG" "$PROJECT_DIR" 2>/dev/null || echo "hermit")
+
+# Get compose service name
+SERVICE=$(cd "$PROJECT_DIR" && docker compose -f "$COMPOSE" config --services 2>/dev/null | head -1 || echo "hermit")
+
+DC=(docker compose -f "$COMPOSE")
+
+_oauth_hint() {
+  echo ""
+  echo "Note: if the session does not start, the OAuth token may have expired."
+  echo "      Run: .claude-code-hermit/bin/hermit-docker login"
+}
+
+_require_running() {
+  local running
+  running="$(cd "$PROJECT_DIR" && "${DC[@]}" ps --status running --format '{{.Service}}' 2>/dev/null | grep -x "$SERVICE")"
+  if [ -z "$running" ]; then
+    echo "[hermit] Container is not running. Start it first:" >&2
+    echo "  .claude-code-hermit/bin/hermit-docker up" >&2
+    exit 1
+  fi
+}
+
+case "$CMD" in
+  up)
+    echo "[hermit] Starting Docker container..."
+    cd "$PROJECT_DIR" && "${DC[@]}" up -d "$@"
+    echo ""
+    echo "Container is up. To attach to the hermit's tmux session:"
+    echo ""
+    echo "  .claude-code-hermit/bin/hermit-docker attach"
+    echo ""
+    echo "Detach with: Ctrl+B then D"
+    echo "Status: .claude-code-hermit/bin/hermit-status"
+    _oauth_hint
+    ;;
+
+  down)
+    FORCE=false
+    [ "${1:-}" = "--force" ] && FORCE=true
+
+    if [ "$FORCE" = false ]; then
+      echo "[hermit] Requesting graceful session close..."
+      # Split text and Enter into two send-keys calls with a pause — Claude Code's
+      # TUI treats text+Enter in one burst as bracketed paste and Enter becomes a
+      # literal newline instead of submit. Same fix as scripts/hermit-start.py.
+      cd "$PROJECT_DIR" && "${DC[@]}" exec -T "$SERVICE" \
+        tmux send-keys -t "$TMUX_SESSION:0.0" "/claude-code-hermit:session-close --shutdown" 2>/dev/null || true
+      sleep 0.5
+      cd "$PROJECT_DIR" && "${DC[@]}" exec -T "$SERVICE" \
+        tmux send-keys -t "$TMUX_SESSION:0.0" Enter 2>/dev/null || true
+
+      echo "[hermit] Waiting for session to close (up to 60s)..."
+      CLOSED=false
+      for i in $(seq 1 60); do
+        CUR_STATE=$(jq -r '.session_state // "unknown"' "$RUNTIME_FILE" 2>/dev/null || echo "unknown")
+        SHUTDOWN_DONE=$(jq -r '.shutdown_completed_at // empty' "$RUNTIME_FILE" 2>/dev/null)
+        if [ "$CUR_STATE" = "idle" ] || [ -n "$SHUTDOWN_DONE" ]; then
+          echo "[hermit] Session closed after ${i}s."
+          CLOSED=true
+          break
+        fi
+        sleep 1
+      done
+      if [ "$CLOSED" = false ]; then
+        echo "[hermit] Timed out waiting for graceful close; forcing stop." >&2
+      fi
+    fi
+
+    echo "[hermit] Stopping Docker container..."
+    cd "$PROJECT_DIR" && "${DC[@]}" down
+    echo "[hermit] Container stopped."
+    ;;
+
+  attach)
+    _require_running
+    echo "[hermit] Attaching to tmux session: $TMUX_SESSION"
+    echo "[hermit] Detach with: Ctrl+B then D"
+    cd "$PROJECT_DIR" && "${DC[@]}" exec "$SERVICE" tmux attach -t "$TMUX_SESSION"
+    ;;
+
+  bash)
+    _require_running
+    cd "$PROJECT_DIR" && "${DC[@]}" exec -it "$SERVICE" /bin/bash "$@"
+    ;;
+
+  login)
+    _require_running
+    AUTH_STATUS=$(cd "$PROJECT_DIR" && "${DC[@]}" exec -T "$SERVICE" claude auth status --json 2>/dev/null || echo '{}')
+    PARSED=$(echo "$AUTH_STATUS" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('loggedIn','false')); print(d.get('email','unknown'))" 2>/dev/null || printf 'false\nunknown')
+    LOGGED_IN="${PARSED%%$'\n'*}"
+    EMAIL="${PARSED#*$'\n'}"
+    if [ "$LOGGED_IN" = "True" ] || [ "$LOGGED_IN" = "true" ]; then
+      echo "[hermit] Already authenticated as ${EMAIL}."
+      echo "[hermit] To switch accounts: hermit-docker bash → claude auth logout, then re-run hermit-docker login."
+    else
+      echo "[hermit] Opening Claude Code REPL for login..."
+      echo "[hermit] → Type /login and press Enter"
+      echo "[hermit] → Open the URL in your browser and complete OAuth"
+      echo "[hermit] → Paste the code back into this terminal when prompted"
+      echo "[hermit] → Type /exit when done — the hermit will start automatically"
+      echo ""
+      cd "$PROJECT_DIR" && "${DC[@]}" exec -it "$SERVICE" claude
+      if ! cd "$PROJECT_DIR" && "${DC[@]}" exec -T "$SERVICE" \
+          sh -c 'test -f "${CLAUDE_CONFIG_DIR:-/home/claude/.claude}/.credentials.json"' 2>/dev/null; then
+        echo "" >&2
+        echo "[hermit] Login may not have completed — .credentials.json not found." >&2
+        echo "[hermit] Re-run hermit-docker login to try again." >&2
+        exit 1
+      fi
+      echo "[hermit] Credentials saved. The hermit will start shortly."
+    fi
+    ;;
+
+  logs)
+    cd "$PROJECT_DIR" && "${DC[@]}" logs "$@"
+    ;;
+
+  restart)
+    _require_running
+    echo "[hermit] Restarting container..."
+    cd "$PROJECT_DIR" && "${DC[@]}" restart "$@"
+    echo "[hermit] Container restarted."
+    _oauth_hint
+    ;;
+
+  *)
+    echo "Usage: hermit-docker <up|down|attach|bash|login|logs|restart> [args...]" >&2
+    exit 1
+    ;;
+esac

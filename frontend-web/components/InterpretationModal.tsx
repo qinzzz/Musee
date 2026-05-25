@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, NeighborItem, Visit, GalleryItem } from '../types';
-import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchUnlockPoints, fetchCommunity, publishComment, deleteCommunityComment, type PublicComment, type CommunityData } from '../apiService';
+import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchCommunity, publishComment, deleteCommunityComment, type PublicComment, type CommunityData } from '../apiService';
 
 interface Props {
   item: {
@@ -23,6 +23,7 @@ interface Props {
     photoTime?: string;
     visitId?: string;
     referenceUrls?: import('../types').ReferenceItem[];
+    insights?: Array<{ title: string; text: string }>;
   };
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
@@ -96,7 +97,7 @@ const HoverTag: React.FC<{
 };
 
 
-const UnlockPoint: React.FC<{
+const Insight: React.FC<{
   pt: { title: string; text: string };
   idx: number;
   c: { dot: string; bg: string; border: string; text: string };
@@ -139,8 +140,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
-  const [unlockPoints, setUnlockPoints] = useState<Array<{ title: string; text: string }>>([]);
-  const [isLoadingUnlock, setIsLoadingUnlock] = useState(false);
+  const [insights, setInsights] = useState<Array<{ title: string; text: string }>>([]);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [community, setCommunity] = useState<CommunityData | null>(null);
@@ -289,7 +289,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   useEffect(() => {
     setMessages(item.conversation || []);
     setSuggestedTopics([]);
-    setUnlockPoints([]);
+    setInsights([]);
     onRightModeChange('metadata'); // Reset to metadata view for the new piece
     // mobileImageHeight no longer used for mobile
     setIsEditing(false);
@@ -307,16 +307,10 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     originalTagsRef.current = tags;
   }, [item.id]);
 
-  // Fetch unlock points when artist is identified
+  // Use persisted unlock points from DB
   useEffect(() => {
-    if (!item.isAnalyzing && item.artistName && item.artistName.toLowerCase() !== 'unknown') {
-      setIsLoadingUnlock(true);
-      fetchUnlockPoints(item.artistName, item.artworkName || '', undefined)
-        .then(pts => setUnlockPoints(pts))
-        .catch(() => setUnlockPoints([]))
-        .finally(() => setIsLoadingUnlock(false));
-    }
-  }, [item.artistName, item.isAnalyzing]);
+    setInsights(item.insights || []);
+  }, [item.id, item.insights]);
 
   // Fetch community comments when artwork is identified and saved
   useEffect(() => {
@@ -1050,17 +1044,11 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 )}
 
-                {(isLoadingUnlock || unlockPoints.length > 0) && (
+                {insights.length > 0 && (
                   <div className="border-t border-neutral-50 pt-5">
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-3">Behind the Frame</p>
-                    {isLoadingUnlock ? (
-                      <div className="flex items-center gap-2 text-neutral-300">
-                        <div className="w-3 h-3 border-t border-neutral-300 rounded-full animate-spin shrink-0" />
-                        <span className="text-[11px] tracking-wide">Looking up context…</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {unlockPoints.map((pt, idx) => {
+                    <div className="space-y-1.5">
+                      {insights.map((pt, idx) => {
                           const colors = [
                             { dot: '#7F77DD', bg: '#EEEDFE', border: '#C5C1F0', text: '#3C3489' },
                             { dot: '#1D9E75', bg: '#E1F5EE', border: '#5DCAA5', text: '#085041' },
@@ -1068,11 +1056,10 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                           ];
                           const c = colors[idx % colors.length];
                           return (
-                            <UnlockPoint key={idx} pt={pt} idx={idx} c={c} />
+                            <Insight key={idx} pt={pt} idx={idx} c={c} />
                           );
                         })}
-                      </div>
-                    )}
+                    </div>
                   </div>
                 )}
 

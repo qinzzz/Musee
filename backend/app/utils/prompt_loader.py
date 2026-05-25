@@ -412,12 +412,12 @@ def get_explore_deepdive_prompt(
 
 
 @lru_cache(maxsize=1)
-def _load_unlock_points_template() -> str:
-    return _load_prompt_file(INSTRUCTIONS_DIR / "unlock_points.txt")
+def _load_insights_template() -> str:
+    return _load_prompt_file(INSTRUCTIONS_DIR / "insights.txt")
 
 
-def get_unlock_points_prompt(artist_name: str, artwork_name: str, language: str = None) -> str:
-    template = _load_unlock_points_template()
+def get_insights_prompt(artist_name: str, artwork_name: str, language: str = None) -> str:
+    template = _load_insights_template()
     lang_instr = _build_language_instruction(language)
     return (template
         .replace("{artist_name}", artist_name)
