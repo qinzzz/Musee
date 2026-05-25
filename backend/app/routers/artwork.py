@@ -12,7 +12,7 @@ from datetime import datetime
 import anyio
 
 from app.database.connection import get_db, SessionLocal
-from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SkillEvent, ArtworkEntity, PublicComment
+from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SkillEvent, ArtworkEntity, ArtistEntity, PublicComment
 from app.models.artwork import AIProvider, UpdateArtworkRequest
 from pydantic import BaseModel
 import base64
@@ -60,6 +60,22 @@ def upsert_artwork_entity(db, artist_name: str, artwork_name: str) -> "ArtworkEn
         )
         db.add(entity)
     return entity
+
+def upsert_artist_entity(db, artist_name: str) -> "ArtistEntity":
+    """Return existing or newly created ArtistEntity for the given artist name."""
+    can_name = _normalize(artist_name)
+    entity = db.query(ArtistEntity).filter_by(canonical_name=can_name).first()
+    if entity:
+        entity.instance_count = (entity.instance_count or 0) + 1
+    else:
+        entity = ArtistEntity(
+            canonical_name=can_name,
+            display_name=artist_name,
+            instance_count=1,
+        )
+        db.add(entity)
+    return entity
+
 
 # Tasks that survive client disconnect — prevents garbage collection until done
 _active_tasks: set = set()
@@ -452,21 +468,28 @@ async def analyze_artist(
                             raise
                     local_db.refresh(art)
 
-                    # Link entity (non-fatal)
+                    # Link artwork entity and artist entity (non-fatal)
                     entity_id_for_analysis = None
+                    artist_entity_id_for_bio = None
+                    linked_artist_entity_id = None
                     if a_name and a_name != "Unknown Artist" and w_name:
                         try:
                             with local_db.begin_nested():
                                 entity = upsert_artwork_entity(local_db, a_name, w_name)
+                                artist_ent = upsert_artist_entity(local_db, a_name)
                                 local_db.flush()
                                 art.artwork_entity_id = entity.id
+                                art.artist_entity_id = artist_ent.id
                             local_db.commit()
+                            linked_artist_entity_id = artist_ent.id
                             if entity.dim_status in (None, "pending"):
                                 entity_id_for_analysis = entity.id
+                            if artist_ent.bio_status in (None, "pending"):
+                                artist_entity_id_for_bio = artist_ent.id
                         except Exception as _e:
                             logger.warning("Entity upsert failed in stream save: %s", _e)
 
-                    return str(art.id), entity_id_for_analysis
+                    return str(art.id), entity_id_for_analysis, artist_entity_id_for_bio, linked_artist_entity_id
 
             result = await anyio.to_thread.run_sync(
                 _save_artwork_sync,
@@ -484,9 +507,18 @@ async def analyze_artist(
                 period_bucket_val,
                 vision_ref_urls,
             )
-            artwork_id, _entity_id_fast = result if isinstance(result, tuple) else (result, None)
+            if isinstance(result, tuple) and len(result) == 4:
+                artwork_id, _entity_id_fast, _artist_entity_id_fast, _linked_artist_entity_id = result
+            elif isinstance(result, tuple) and len(result) == 3:
+                artwork_id, _entity_id_fast, _artist_entity_id_fast = result; _linked_artist_entity_id = _artist_entity_id_fast
+            elif isinstance(result, tuple):
+                artwork_id, _entity_id_fast = result; _artist_entity_id_fast = _linked_artist_entity_id = None
+            else:
+                artwork_id = result; _entity_id_fast = _artist_entity_id_fast = _linked_artist_entity_id = None
             if _entity_id_fast and background_tasks:
                 background_tasks.add_task(_run_dimension_analysis_bg, _entity_id_fast)
+            if _artist_entity_id_fast and background_tasks:
+                background_tasks.add_task(_run_artist_bio_bg, _artist_entity_id_fast)
             if artwork_id and artist_name and artist_name != "Unknown Artist" and background_tasks:
                 background_tasks.add_task(_run_insights_bg, artwork_id, artist_name, artwork_name, language)
 
@@ -514,6 +546,7 @@ async def analyze_artist(
             response["photo_time"] = photo_time
             response["tags"] = extracted_tags
             response["analysis"] = extracted_analysis
+            response["artist_entity_id"] = _linked_artist_entity_id
         else:
             # If not saving to DB, still try to parse for cleaner response
             extracted_analysis = None
@@ -771,19 +804,26 @@ async def analyze_artist_stream(
                     local_db.refresh(art)
 
                     entity_id_for_analysis = None
+                    artist_entity_id_for_bio = None
+                    linked_artist_entity_id = None
                     if a_name and a_name != "Unknown Artist" and w_name:
                         try:
                             with local_db.begin_nested():
                                 entity = upsert_artwork_entity(local_db, a_name, w_name)
+                                artist_ent = upsert_artist_entity(local_db, a_name)
                                 local_db.flush()
                                 art.artwork_entity_id = entity.id
+                                art.artist_entity_id = artist_ent.id
                             local_db.commit()
+                            linked_artist_entity_id = artist_ent.id
                             if entity.dim_status in (None, "pending"):
                                 entity_id_for_analysis = entity.id
+                            if artist_ent.bio_status in (None, "pending"):
+                                artist_entity_id_for_bio = artist_ent.id
                         except Exception as _e:
                             logger.warning("Entity upsert failed: %s", _e)
 
-                    return str(art.id), entity_id_for_analysis
+                    return str(art.id), entity_id_for_analysis, artist_entity_id_for_bio, linked_artist_entity_id
 
             try:
                 _stream_result = await anyio.to_thread.run_sync(
@@ -802,13 +842,24 @@ async def analyze_artist_stream(
                         pass
                 raise _db_err
 
-            artwork_id, _entity_id = _stream_result if isinstance(_stream_result, tuple) else (_stream_result, None)
+            if isinstance(_stream_result, tuple) and len(_stream_result) == 4:
+                artwork_id, _entity_id, _artist_entity_id, _linked_artist_entity_id = _stream_result
+            elif isinstance(_stream_result, tuple) and len(_stream_result) == 3:
+                artwork_id, _entity_id, _artist_entity_id = _stream_result; _linked_artist_entity_id = _artist_entity_id
+            elif isinstance(_stream_result, tuple):
+                artwork_id, _entity_id = _stream_result; _artist_entity_id = _linked_artist_entity_id = None
+            else:
+                artwork_id = _stream_result; _entity_id = _artist_entity_id = _linked_artist_entity_id = None
 
             # Fire-and-forget background work as independent tasks (survive disconnect)
             if _entity_id:
                 _bg = asyncio.create_task(_do_dimension_analysis(_entity_id))
                 _active_tasks.add(_bg)
                 _bg.add_done_callback(_active_tasks.discard)
+            if _artist_entity_id:
+                _ab = asyncio.create_task(_do_artist_bio(_artist_entity_id))
+                _active_tasks.add(_ab)
+                _ab.add_done_callback(_active_tasks.discard)
             if artist_name and artist_name != "Unknown Artist":
                 _up = asyncio.create_task(_do_insights(artwork_id, artist_name, artwork_name, language))
                 _active_tasks.add(_up)
@@ -825,6 +876,7 @@ async def analyze_artist_stream(
             result["artwork_id"] = artwork_id
             result["photo_uri"] = generated_photo_uri
             result["reference_urls"] = vision_ref_urls
+            result["artist_entity_id"] = _linked_artist_entity_id
 
             # ── Metrics ─────────────────────────────────────────────────────
             t_done = time.time()
@@ -1772,6 +1824,44 @@ def _run_insights_bg(artwork_id: str, artist_name: str, artwork_name: str, langu
     _asyncio.run(_do_insights(artwork_id, artist_name, artwork_name, language))
 
 
+async def _do_artist_bio(artist_entity_id: str) -> None:
+    """Compute and persist bio for one ArtistEntity if not already done."""
+    with SessionLocal() as db:
+        entity = db.query(ArtistEntity).filter(ArtistEntity.id == artist_entity_id).first()
+        if not entity or entity.bio_status == "done":
+            return
+        artist_name = entity.display_name
+        entity.bio_status = "processing"
+        db.commit()
+    try:
+        ai_service = AIServiceFactory.get_service(determine_ai_provider(None))
+        bio_data = await ai_service.get_artist_bio(artist_name=artist_name)
+        with SessionLocal() as db:
+            entity = db.query(ArtistEntity).filter(ArtistEntity.id == artist_entity_id).first()
+            if entity:
+                entity.bio = bio_data.get("bio")
+                entity.nationality = bio_data.get("nationality")
+                entity.birth_year = bio_data.get("birth_year")
+                entity.death_year = bio_data.get("death_year")
+                entity.movements = bio_data.get("movements") or []
+                entity.bio_status = "done"
+                db.commit()
+        logger.info("Artist bio done for %s", artist_entity_id)
+    except Exception as _e:
+        logger.warning("Artist bio failed for %s: %s", artist_entity_id, _e)
+        with SessionLocal() as db:
+            entity = db.query(ArtistEntity).filter(ArtistEntity.id == artist_entity_id).first()
+            if entity:
+                entity.bio_status = "failed"
+                db.commit()
+
+
+def _run_artist_bio_bg(artist_entity_id: str) -> None:
+    """Sync wrapper for use as a FastAPI background task (runs in threadpool)."""
+    import asyncio as _asyncio
+    _asyncio.run(_do_artist_bio(artist_entity_id))
+
+
 _DIM_ANALYSIS_PROMPT = """\
 You are an art analysis assistant. Given an artwork's metadata, score it on five taste dimensions.
 
@@ -2276,6 +2366,50 @@ def _movement_hook(name: str, count: int) -> str:
         return f"{count} {name} works — a pattern is forming."
     else:
         return f"You keep returning to {name}. {count} works deep."
+
+
+@router.get("/artists/{artist_id}")
+async def get_artist(artist_id: str, db: Session = Depends(get_db)):
+    """Return the ArtistEntity profile for the given artist_id."""
+    entity = db.query(ArtistEntity).filter(ArtistEntity.id == artist_id).first()
+    if not entity:
+        raise HTTPException(status_code=404, detail="Artist not found")
+    return entity.to_dict()
+
+
+@router.post("/artworks/{artwork_id}/artist")
+async def backfill_artwork_artist(
+    artwork_id: str,
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
+):
+    """Lazily link or compute the ArtistEntity for an existing artwork."""
+    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+    artist_name = artwork.artist_name or ""
+    if not artist_name or artist_name.lower() in ("unknown", "unknown artist", ""):
+        return {"artist_entity_id": None}
+
+    # If already linked, return cached
+    if artwork.artist_entity_id:
+        entity = db.query(ArtistEntity).filter(ArtistEntity.id == artwork.artist_entity_id).first()
+        if entity:
+            return entity.to_dict()
+
+    # Create/link entity
+    artist_ent = upsert_artist_entity(db, artist_name)
+    db.flush()
+    artwork.artist_entity_id = artist_ent.id
+    db.commit()
+    db.refresh(artist_ent)
+
+    # Fire bio computation if needed
+    if artist_ent.bio_status in (None, "pending") and background_tasks:
+        background_tasks.add_task(_run_artist_bio_bg, artist_ent.id)
+
+    return artist_ent.to_dict()
 
 
 @router.get("/artworks/{artwork_id}")

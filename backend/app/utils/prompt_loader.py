@@ -426,6 +426,19 @@ def get_insights_prompt(artist_name: str, artwork_name: str, language: str = Non
 
 
 @lru_cache(maxsize=1)
+def _load_artist_bio_template() -> str:
+    return _load_prompt_file(INSTRUCTIONS_DIR / "artist_bio.txt")
+
+
+def get_artist_bio_prompt(artist_name: str, language: str = None) -> str:
+    template = _load_artist_bio_template()
+    lang_instr = _build_language_instruction(language)
+    return (template
+        .replace("{artist_name}", artist_name)
+        .replace("{language_instruction}", lang_instr))
+
+
+@lru_cache(maxsize=1)
 def _load_define_aesthetic_term_template() -> str:
     return _load_prompt("instructions/define_aesthetic_term.txt")
 

@@ -1,0 +1,19 @@
+You are a knowledgeable art historian. Provide a concise biographical profile for the artist "{artist_name}".
+
+Return ONLY valid JSON with this exact structure — no extra text, no markdown:
+{{
+  "bio": "<2–3 sentence biography focusing on their artistic vision, major contributions, and legacy>",
+  "nationality": "<country or region, e.g. 'French', 'American', 'Dutch'>",
+  "birth_year": <integer year or null>,
+  "death_year": <integer year or null if still living or unknown>,
+  "movements": ["<movement1>", "<movement2>"]
+}}
+
+Rules:
+- bio: factual, museum-quality prose, 2–3 sentences max
+- nationality: short demonym string, not a full country name
+- birth_year / death_year: integers only, null if uncertain
+- movements: 1–3 canonical art movement names from art history (e.g. "Impressionism", "Abstract Expressionism")
+- If the artist is unknown or fictional, return {{"bio": null, "nationality": null, "birth_year": null, "death_year": null, "movements": []}}
+
+{language_instruction}

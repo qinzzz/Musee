@@ -321,6 +321,7 @@ export interface ArtworkAnalysisResult {
   photo_time?: string;
   session_title?: string;
   reference_urls?: ReferenceItem[];
+  artist_entity_id?: string;
 }
 
 export interface TopicSuggestionResponse {
@@ -432,6 +433,7 @@ export async function analyzeArtwork(
     photo_time: data.photo_time,
     session_title: data.session_title,
     reference_urls: data.reference_urls || [],
+    artist_entity_id: data.artist_entity_id,
   };
 }
 
@@ -595,6 +597,7 @@ export async function analyzeArtworkStream(
               photo_time: data.photo_time,
               session_title: data.session_title,
               reference_urls: data.reference_urls || [],
+              artist_entity_id: data.artist_entity_id,
             };
 
             onComplete(result);
@@ -964,6 +967,28 @@ export async function fetchAndPersistInsights(
   if (!response.ok) return [];
   const data = await response.json();
   return data.insights ?? [];
+}
+
+/**
+ * Fetch artist profile by artist entity ID.
+ */
+export async function fetchArtistProfile(artistEntityId: string): Promise<import('./types').ArtistEntity | null> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artists/${artistEntityId}`, { timeout: 15000 });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+/**
+ * Lazily link or backfill an ArtistEntity for an existing artwork.
+ * Returns the artist profile if available.
+ */
+export async function backfillArtworkArtist(artworkId: string): Promise<import('./types').ArtistEntity | null> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}/artist`, {
+    method: 'POST',
+    timeout: 20000,
+  });
+  if (!response.ok) return null;
+  return response.json();
 }
 
 /**

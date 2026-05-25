@@ -17,6 +17,7 @@ from app.utils.prompt_loader import (
     get_explore_deepdive_prompt,
     get_define_aesthetic_term_prompt,
     get_insights_prompt,
+    get_artist_bio_prompt,
 )
 from app.services.ai_client_interface import AIClientInterface
 import anyio
@@ -675,6 +676,28 @@ Return ONLY the updated narrative text.{language_instruction}"""
             )
         parsed = self.parse_json_response(response)
         return parsed.get("points", [])
+
+    async def get_artist_bio(
+        self,
+        artist_name: str,
+        language: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return biographical data for the given artist. Returns empty dict on failure."""
+        prompt = get_artist_bio_prompt(artist_name=artist_name, language=language)
+        with anyio.fail_after(settings.ai_timeout):
+            response = await self.ai_client.call_text_only(
+                prompt=prompt,
+                max_tokens=400,
+                temperature=0.2,
+            )
+        parsed = self.parse_json_response(response)
+        return {
+            "bio": parsed.get("bio"),
+            "nationality": parsed.get("nationality"),
+            "birth_year": parsed.get("birth_year"),
+            "death_year": parsed.get("death_year"),
+            "movements": parsed.get("movements") or [],
+        }
 
     async def define_aesthetic_term(self, tag: str) -> Dict[str, Any]:
         """Return a definition and external resonances for an aesthetic term."""

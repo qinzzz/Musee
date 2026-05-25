@@ -475,6 +475,7 @@ const App: React.FC = () => {
               periodBucket: item.period_bucket,
               referenceUrls: item.reference_urls || [],
               insights: item.insights || [],
+              artistEntityId: item.artist_entity_id || undefined,
               conversation: (item.conversation_history || []).map((msg: any) => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 text: msg.content
@@ -964,6 +965,7 @@ const App: React.FC = () => {
               location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
               photoTime: analysis.photo_time,
               referenceUrls: analysis.reference_urls || [],
+              artistEntityId: analysis.artist_entity_id || undefined,
             };
             setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
             setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...updates } : prev);
@@ -1062,6 +1064,7 @@ const App: React.FC = () => {
             location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
             photoTime: analysis.photo_time,
             referenceUrls: analysis.reference_urls || [],
+            artistEntityId: analysis.artist_entity_id || undefined,
           };
           setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
         } catch (e) {
@@ -1148,6 +1151,7 @@ const App: React.FC = () => {
             location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
             photoTime: analysis.photo_time, sessionTitle: analysis.session_title,
             referenceUrls: analysis.reference_urls || [],
+            artistEntityId: analysis.artist_entity_id || undefined,
           } : i));
           setIsAnalyzing(false);
         },

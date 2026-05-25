@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, NeighborItem, Visit, GalleryItem } from '../types';
 import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type PublicComment, type CommunityData } from '../apiService';
+import ArtistProfileSheet from './ArtistProfileSheet';
 
 interface Props {
   item: {
@@ -24,6 +25,7 @@ interface Props {
     visitId?: string;
     referenceUrls?: import('../types').ReferenceItem[];
     insights?: Array<{ title: string; text: string }>;
+    artistEntityId?: string;
   };
   onClose: () => void;
   onUpdateConversation: (id: string, newMessages: Message[]) => void;
@@ -158,6 +160,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
   // Inline editing state
   const [isEditing, setIsEditing] = useState(false);
+  const [showArtistProfile, setShowArtistProfile] = useState(false);
   const [editValues, setEditValues] = useState({
     artist: item.artistName || '',
     title: item.artworkName || '',
@@ -973,7 +976,11 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                     <div className="overflow-x-auto min-w-0 flex-1" style={{ scrollbarWidth: 'none' }}>
                       <div className="flex items-baseline gap-0 whitespace-nowrap">
                         {displayArtist && (
-                          <span className="text-[16px] sm:text-[19px] font-medium text-neutral-900 tracking-tight">
+                          <span
+                            className="text-[16px] sm:text-[19px] font-medium text-neutral-900 tracking-tight"
+                            style={(item.artistEntityId || item.artworkId) ? { cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 } : undefined}
+                            onClick={(item.artistEntityId || item.artworkId) ? (e) => { e.stopPropagation(); setShowArtistProfile(true); } : undefined}
+                          >
                             {editValues.artist || displayArtist}
                           </span>
                         )}
@@ -1286,6 +1293,16 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
         </button>
       </div>,
       document.body
+    )}
+
+    {/* Artist profile sheet */}
+    {showArtistProfile && (
+      <ArtistProfileSheet
+        artistEntityId={item.artistEntityId}
+        artworkId={!item.artistEntityId ? item.artworkId : undefined}
+        artistName={item.artistName}
+        onClose={() => setShowArtistProfile(false)}
+      />
     )}
 
     </>

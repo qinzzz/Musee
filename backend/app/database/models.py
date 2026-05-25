@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, SmallInteger, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, SmallInteger, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.connection import Base
@@ -70,11 +70,13 @@ class SavedArtwork(Base):
     period_bucket = Column(String, nullable=True)  # Historical / Modern / Contemporary / Now
     reference_urls = Column(JSON, nullable=True)  # Top reference URLs from Vision web detection
     artwork_entity_id = Column(String, ForeignKey('artwork_entities.id', ondelete='SET NULL'), nullable=True, index=True)
+    artist_entity_id = Column(String, ForeignKey('artist_entities.id', ondelete='SET NULL'), nullable=True, index=True)
     insights = Column(JSON, nullable=True)  # Cached "Behind the Frame" insights [{title, text}, ...]
 
     # Relationships
     user = relationship("User", back_populates="artworks")
     artwork_entity = relationship("ArtworkEntity", back_populates="instances")
+    artist_entity = relationship("ArtistEntity", back_populates="artworks")
     conversations = relationship("Conversation", back_populates="artwork", cascade="all, delete-orphan", order_by="Conversation.sequence_number")
     collections = relationship("Collection", secondary="collection_artworks", back_populates="artworks")
     artwork_tags = relationship("Tag", secondary="artwork_tags", back_populates="artworks")
@@ -111,6 +113,7 @@ class SavedArtwork(Base):
             "period_bucket": self.period_bucket,
             "reference_urls": self.reference_urls or [],
             "insights": self.insights or [],
+            "artist_entity_id": self.artist_entity_id,
         }
 
         # Include conversation_history for backward compatibility with frontend
@@ -353,6 +356,40 @@ class PublicComment(Base):
             "author_avatar": self.author.profile_picture_url if self.author else None,
             "text": self.text,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ArtistEntity(Base):
+    """Canonical artist entity — shared across all users' instances of artworks by this artist."""
+
+    __tablename__ = "artist_entities"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    canonical_name = Column(String, nullable=False, unique=True)  # normalized lowercase
+    display_name = Column(String, nullable=False)                  # original casing from first recognition
+    bio = Column(Text, nullable=True)                              # AI-generated biography paragraph
+    nationality = Column(String, nullable=True)
+    birth_year = Column(Integer, nullable=True)
+    death_year = Column(Integer, nullable=True)
+    movements = Column(JSON, nullable=True)                        # list of movement name strings
+    instance_count = Column(Integer, default=1)
+    bio_status = Column(String(20), default='pending')             # 'pending' | 'done' | 'failed'
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    artworks = relationship("SavedArtwork", back_populates="artist_entity")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "display_name": self.display_name,
+            "bio": self.bio,
+            "nationality": self.nationality,
+            "birth_year": self.birth_year,
+            "death_year": self.death_year,
+            "movements": self.movements or [],
+            "instance_count": self.instance_count,
+            "bio_status": self.bio_status,
         }
 
 
