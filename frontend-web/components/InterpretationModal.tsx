@@ -4,8 +4,6 @@ import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, NeighborItem, Visit, GalleryItem } from '../types';
 import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type PublicComment, type CommunityData } from '../apiService';
-import ArtistProfileSheet from './ArtistProfileSheet';
-
 interface Props {
   item: {
     url: string;
@@ -42,6 +40,7 @@ interface Props {
   onReanalyze?: () => Promise<void>;
   onDelete?: () => void;
   userId?: string;
+  onNavigateToArtist?: (artistEntityId: string | undefined, artworkId: string | undefined, artistName: string | undefined) => void;
 }
 
 // Tag component with explanation tooltip on hover
@@ -138,7 +137,7 @@ const Insight: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onReanalyze, onDelete, userId }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onReanalyze, onDelete, userId, onNavigateToArtist }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
@@ -160,7 +159,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
   // Inline editing state
   const [isEditing, setIsEditing] = useState(false);
-  const [showArtistProfile, setShowArtistProfile] = useState(false);
   const [editValues, setEditValues] = useState({
     artist: item.artistName || '',
     title: item.artworkName || '',
@@ -979,7 +977,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                           <span
                             className="text-[16px] sm:text-[19px] font-medium text-neutral-900 tracking-tight"
                             style={(item.artistEntityId || item.artworkId) ? { cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 } : undefined}
-                            onClick={(item.artistEntityId || item.artworkId) ? (e) => { e.stopPropagation(); setShowArtistProfile(true); } : undefined}
+                            onClick={(item.artistEntityId || item.artworkId) ? (e) => { e.stopPropagation(); onNavigateToArtist?.(item.artistEntityId, item.artworkId, item.artistName); } : undefined}
                           >
                             {editValues.artist || displayArtist}
                           </span>
@@ -1295,17 +1293,8 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
       document.body
     )}
 
-    {/* Artist profile sheet */}
-    {showArtistProfile && (
-      <ArtistProfileSheet
-        artistEntityId={item.artistEntityId}
-        artworkId={!item.artistEntityId ? item.artworkId : undefined}
-        artistName={item.artistName}
-        onClose={() => setShowArtistProfile(false)}
-      />
-    )}
 
-    </>
+</>
   );
 };
 

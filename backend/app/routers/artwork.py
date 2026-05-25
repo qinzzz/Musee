@@ -2382,6 +2382,22 @@ async def get_artist(artist_id: str, db: Session = Depends(get_db)):
     return entity.to_dict()
 
 
+@router.get("/artists/{artist_id}/artworks")
+async def get_artist_artworks(
+    artist_id: str,
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Return all artworks belonging to *user_id* that are linked to this artist entity."""
+    artworks = (
+        db.query(SavedArtwork)
+        .filter(SavedArtwork.artist_entity_id == artist_id, SavedArtwork.user_id == user_id)
+        .order_by(SavedArtwork.created_at.desc())
+        .all()
+    )
+    return [a.to_dict(include_conversations=False) for a in artworks]
+
+
 @router.post("/artworks/{artwork_id}/artist")
 async def backfill_artwork_artist(
     artwork_id: str,

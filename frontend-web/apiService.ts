@@ -978,6 +978,15 @@ export async function fetchArtistProfile(artistEntityId: string): Promise<import
   return response.json();
 }
 
+export async function fetchArtistArtworks(artistEntityId: string, userId: string): Promise<any[]> {
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/artists/${artistEntityId}/artworks?user_id=${encodeURIComponent(userId)}`,
+    { timeout: 15000 },
+  );
+  if (!response.ok) return [];
+  return response.json();
+}
+
 /**
  * Lazily link or backfill an ArtistEntity for an existing artwork.
  * Returns the artist profile if available.

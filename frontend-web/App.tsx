@@ -32,6 +32,7 @@ import OrganizeView from './components/OrganizeView';
 import TopographyView from './components/TopographyView';
 import ArtSkillsView from './components/ArtSkillsView';
 import TasteProfileView from './components/TasteProfileView';
+import ArtistPage from './components/ArtistPage';
 import Toast, { ToastAction } from './components/Toast';
 import ContextualActionBar from './components/ContextualActionBar';
 
@@ -266,6 +267,11 @@ const App: React.FC = () => {
   const locationCache = useRef<Map<string, { city: string, country: string, museum: string }>>(new Map());
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
   const [toast, setToast] = useState<{ message: string, type: 'info' | 'success', action?: ToastAction } | null>(null);
+  const [artistPageContext, setArtistPageContext] = useState<{
+    artistEntityId?: string;
+    artworkId?: string;
+    artistName?: string;
+  } | null>(null);
 
   const showToast = (message: string, type: 'info' | 'success' = 'info', action?: ToastAction) => {
     setToast({ message, type, action });
@@ -1818,6 +1824,9 @@ const App: React.FC = () => {
             }}
             onReanalyze={handleReanalyze}
             userId={currentUser?.user_id || USER_ID}
+            onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
+              setArtistPageContext({ artistEntityId, artworkId, artistName });
+            }}
           />
         )}
 
@@ -1916,6 +1925,22 @@ const App: React.FC = () => {
         )}
 
       </div>
+
+      {/* Full-screen artist page — rendered above everything else */}
+      {artistPageContext && (
+        <ArtistPage
+          artistEntityId={artistPageContext.artistEntityId}
+          artworkId={artistPageContext.artworkId}
+          artistName={artistPageContext.artistName}
+          userId={currentUser?.user_id || USER_ID}
+          onClose={() => setArtistPageContext(null)}
+          onOpenArtwork={(item) => {
+            setArtistPageContext(null);
+            setInterpretingItem(item as any);
+          }}
+        />
+      )}
+
     </GoogleOAuthProvider>
   );
 };
