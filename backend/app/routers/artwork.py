@@ -1825,7 +1825,9 @@ def _run_insights_bg(artwork_id: str, artist_name: str, artwork_name: str, langu
 
 
 async def _do_artist_bio(artist_entity_id: str) -> None:
-    """Compute and persist bio for one ArtistEntity if not already done."""
+    """Fetch and persist bio for one ArtistEntity from Wikidata/Wikipedia."""
+    from app.services.wikidata_service import get_artist_info_from_wiki
+
     with SessionLocal() as db:
         entity = db.query(ArtistEntity).filter(ArtistEntity.id == artist_entity_id).first()
         if not entity or entity.bio_status == "done":
@@ -1835,8 +1837,10 @@ async def _do_artist_bio(artist_entity_id: str) -> None:
         entity.bio = None
         db.commit()
     try:
-        ai_service = AIServiceFactory.get_service(determine_ai_provider(None))
-        bio_data = await ai_service.get_artist_bio(artist_name=artist_name)
+        bio_data = await get_artist_info_from_wiki(artist_name)
+        # If Wikidata has no record, store nulls — still mark done so we don't retry indefinitely
+        if bio_data is None:
+            bio_data = {"bio": None, "nationality": None, "birth_year": None, "death_year": None, "movements": []}
         with SessionLocal() as db:
             entity = db.query(ArtistEntity).filter(ArtistEntity.id == artist_entity_id).first()
             if entity:
@@ -1847,9 +1851,9 @@ async def _do_artist_bio(artist_entity_id: str) -> None:
                 entity.movements = bio_data.get("movements") or []
                 entity.bio_status = "done"
                 db.commit()
-        logger.info("Artist bio done for %s", artist_entity_id)
+        logger.info("Artist bio done for %s (%s)", artist_entity_id, artist_name)
     except Exception as _e:
-        logger.warning("Artist bio failed for %s: %s", artist_entity_id, _e)
+        logger.warning("Artist bio failed for %s: %s", artist_entity_id, _e, exc_info=True)
         with SessionLocal() as db:
             entity = db.query(ArtistEntity).filter(ArtistEntity.id == artist_entity_id).first()
             if entity:
