@@ -27,13 +27,12 @@ import InterpretationModal from './components/InterpretationModal';
 import CuratorRoom from './components/CuratorRoom';
 import ExhibitionHallView from './components/ExhibitionHallView';
 import EmptyWall from './components/EmptyWall';
-import UnderstandView from './components/UnderstandView';
 import OrganizeView from './components/OrganizeView';
 import TopographyView from './components/TopographyView';
-import ArtSkillsView from './components/ArtSkillsView';
 import TasteProfileView from './components/TasteProfileView';
 import ArtistPage from './components/ArtistPage';
 import ArtMovementPage from './components/ArtMovementPage';
+import LearningHubPage from './components/LearningHubPage';
 import Toast, { ToastAction } from './components/Toast';
 import ContextualActionBar from './components/ContextualActionBar';
 
@@ -224,12 +223,19 @@ const App: React.FC = () => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
-  const [activeTab, setActiveTab] = useState<'explore' | 'learn' | 'collect' | 'profile'>(() => {
+  const [activeTab, setActiveTab] = useState<'explore' | 'collect' | 'profile'>(() => {
     const p = window.location.pathname;
-    if (p === '/learn' || p.startsWith('/learn/')) return 'learn';
     if (p === '/profile') return 'profile';
     if (p === '/saved' || p === '/boards' || p === '/art-movements' || p === '/artists' || p.startsWith('/art-movements/')) return 'collect';
     return 'explore';
+  });
+  const [showLearningHub, setShowLearningHub] = useState<boolean>(() =>
+    window.location.pathname.startsWith('/learning')
+  );
+  const [learningInitialGuide] = useState<string | null>(() => {
+    const p = window.location.pathname;
+    if (p.startsWith('/learning/')) return p.slice('/learning/'.length) || null;
+    return null;
   });
   const [collectTab, setCollectTab] = useState<'saved' | 'boards' | 'movements' | 'artists'>(() => {
     const p = window.location.pathname;
@@ -301,7 +307,6 @@ const App: React.FC = () => {
 
   // ── Centralised URL ↔ state helpers ──────────────────────────────────────
   function stateToPath(tab: string, collectSub: string): string {
-    if (tab === 'learn') return '/learn';
     if (tab === 'profile') return '/profile';
     if (tab === 'collect') {
       if (collectSub === 'boards') return '/boards';
@@ -332,9 +337,12 @@ const App: React.FC = () => {
       }
       setArtistPageContext(null);
       setMovementPageContext(null);
-      if (path === '/learn') {
-        setActiveTab('learn');
-      } else if (path === '/profile') {
+      if (path.startsWith('/learning')) {
+        setShowLearningHub(true);
+        return;
+      }
+      setShowLearningHub(false);
+      if (path === '/profile') {
         setActiveTab('profile');
       } else if (path === '/saved' || path === '/boards' || path === '/art-movements' || path === '/artists') {
         setActiveTab('collect');
@@ -352,12 +360,12 @@ const App: React.FC = () => {
 
   // Sync state → URL whenever a tab changes (skip when overlay pages own the URL)
   useEffect(() => {
-    if (artistPageContext || movementPageContext) return;
+    if (artistPageContext || movementPageContext || showLearningHub) return;
     const path = stateToPath(activeTab, collectTab);
     if (window.location.pathname !== path) {
       window.history.pushState({}, '', path);
     }
-  }, [activeTab, collectTab, artistPageContext, movementPageContext]);
+  }, [activeTab, collectTab, artistPageContext, movementPageContext, showLearningHub]);
 
   /** 
    * Algorithmic Session Determination (Phase 7)
@@ -1600,26 +1608,41 @@ const App: React.FC = () => {
           style={{ height: 44 }}
         />
 
-        {/* Top Tab Bar — Explore / Learn / Collect */}
+        {/* Top Tab Bar — Explore / Collect / Profile */}
         {!filteredVisitId && (
-          <div
-            className="fixed top-2 left-1/2 -translate-x-1/2 z-[70] flex items-center bg-white border border-neutral-200 rounded-full shadow-sm px-1 py-1"
-            style={{ pointerEvents: 'auto' }}
-          >
-            {(['explore', 'learn', 'collect', 'profile'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-3 sm:px-4 py-1 rounded-full text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-bold transition-all whitespace-nowrap ${
-                  activeTab === tab
-                    ? 'bg-neutral-900 text-white'
-                    : 'text-neutral-400 hover:text-neutral-700'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+          <>
+            <div
+              className="fixed top-2 left-1/2 -translate-x-1/2 z-[70] flex items-center bg-white border border-neutral-200 rounded-full shadow-sm px-1 py-1"
+              style={{ pointerEvents: 'auto' }}
+            >
+              {(['explore', 'collect', 'profile'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-3 sm:px-4 py-1 rounded-full text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-bold transition-all whitespace-nowrap ${
+                    activeTab === tab
+                      ? 'bg-neutral-900 text-white'
+                      : 'text-neutral-400 hover:text-neutral-700'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {/* Learning Hub button — top right */}
+            <button
+              onClick={() => setShowLearningHub(true)}
+              className="fixed top-2 right-4 z-[70] flex items-center gap-1.5 bg-white border border-neutral-200 rounded-full shadow-sm px-3 py-1.5 text-neutral-500 hover:text-neutral-900 hover:border-neutral-400 transition-all"
+              title="Learning Hub"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+              </svg>
+              <span className="text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-bold hidden sm:inline">Learn</span>
+            </button>
+          </>
         )}
 
 
@@ -1627,9 +1650,7 @@ const App: React.FC = () => {
 
 
         <div className={`relative z-10 flex-1 min-h-0 overflow-hidden transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-14 sm:pt-10 pb-20 sm:pb-4'} ${(interpretingItem || curatorRoomContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
-          {activeTab === 'learn' ? (
-            <ArtSkillsView />
-          ) : activeTab === 'profile' ? (
+          {activeTab === 'profile' ? (
             <TasteProfileView userId={currentUser?.user_id || USER_ID} />
           ) : activeTab === 'collect' ? (
             <OrganizeView
@@ -1942,6 +1963,17 @@ const App: React.FC = () => {
         )}
 
       </div>
+
+      {/* Learning hub */}
+      {showLearningHub && (
+        <LearningHubPage
+          initialGuide={learningInitialGuide}
+          onClose={() => {
+            setShowLearningHub(false);
+            window.history.pushState({}, '', stateToPath(activeTab, collectTab));
+          }}
+        />
+      )}
 
       {/* Art movement detail page */}
       {movementPageContext && (
