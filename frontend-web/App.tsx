@@ -1168,32 +1168,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleRetryHarder = async () => {
-    if (!interpretingItem || isAnalyzing) return;
-    const retryItem = interpretingItem;
-
-    // Run in background — keep current results visible; only update on success
-    // Pass the image URL directly; backend loads/compresses it server-side
-    await analyzeArtworkStream(
-      null, USER_ID,
-      () => {}, // ignore streaming chunks
-      (analysis) => {
-        const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
-        const updates = {
-          keywords, artistName: analysis.artist_name, artworkName: analysis.artwork_name,
-          description: parseAnalysis(analysis.description), date: analysis.date, medium: analysis.medium,
-          artworkId: analysis.artwork_id || retryItem.artworkId,
-          referenceUrls: analysis.reference_urls || [],
-        };
-        setItems(prev => prev.map(item => item.id === retryItem.id ? { ...item, ...updates } : item));
-        setInterpretingItem(prev => (prev && prev.id === retryItem.id) ? { ...prev, ...updates } : prev);
-      },
-      (error) => { console.error('Retry harder failed:', error); },
-      retryItem.visitId, undefined, undefined, retryItem.photoTime,
-      undefined, undefined, 'high', retryItem.url
-    );
-  };
-
   const handleReanalyze = async () => {
     if (!interpretingItem?.artworkId) return;
     const targetItem = interpretingItem;
@@ -1837,7 +1811,6 @@ const App: React.FC = () => {
               setInterpretingMode(next);
               localStorage.setItem('musee_analysis_mode', next);
             }}
-            onRetryHarder={handleRetryHarder}
             onReanalyze={handleReanalyze}
             userId={currentUser?.user_id || USER_ID}
           />

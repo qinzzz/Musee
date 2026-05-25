@@ -36,7 +36,6 @@ interface Props {
   onRightModeChange: (mode: 'metadata' | 'chat' | 'community') => void;
   onSwitchMode?: () => void;
   interpretingMode?: 'professional' | 'interactive';
-  onRetryHarder?: () => void;
   onReanalyze?: () => Promise<void>;
   onDelete?: () => void;
   userId?: string;
@@ -136,10 +135,9 @@ const UnlockPoint: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onRetryHarder, onReanalyze, onDelete, userId }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onReanalyze, onDelete, userId }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
-  const [isRetrying, setIsRetrying] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [unlockPoints, setUnlockPoints] = useState<Array<{ title: string; text: string }>>([]);
   const [isLoadingUnlock, setIsLoadingUnlock] = useState(false);
@@ -604,17 +602,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left disabled:opacity-40"
               >
                 <svg width="15" height="15" className={isReanalyzing ? 'animate-spin' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-                {isReanalyzing ? 'Refreshing…' : 'Refresh ID'}
-              </button>
-            )}
-            {onRetryHarder && !item.isAnalyzing && (
-              <button
-                onClick={async () => { setMoreMenuOpen(false); setIsRetrying(true); try { await onRetryHarder(); } catch {} finally { setIsRetrying(false); } }}
-                disabled={isRetrying}
-                className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left disabled:opacity-40"
-              >
-                <svg width="15" height="15" className={isRetrying ? 'animate-spin' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.2-9.2L23 10"/></svg>
-                {isRetrying ? 'Retrying…' : 'Retry deeper'}
+                {isReanalyzing ? 'Retrying…' : 'Retry'}
               </button>
             )}
             {onDelete && (
@@ -923,20 +911,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   <div className="rounded-xl border border-red-200 bg-red-50/80 p-4">
                     <p className="text-[9px] tracking-[0.3em] uppercase text-red-600 font-bold mb-2">Analysis failed</p>
                     <p className="text-[13px] text-red-800 leading-relaxed">{item.streamingText}</p>
-                    {onRetryHarder && (
-                      <button
-                        onClick={async () => {
-                          if (isRetrying) return;
-                          setIsRetrying(true);
-                          try { await onRetryHarder(); } catch { /* keep current results */ } finally { setIsRetrying(false); }
-                        }}
-                        disabled={isRetrying}
-                        className="mt-3 flex items-center gap-1.5 text-[9px] tracking-[0.2em] uppercase text-red-700 border border-red-300 px-3 py-1.5 rounded-full hover:bg-red-100 transition-colors disabled:opacity-50"
-                      >
-                        {isRetrying && <span className="inline-block w-2.5 h-2.5 border-t border-red-500 rounded-full animate-spin shrink-0" />}
-                        {isRetrying ? 'Retrying…' : 'Retry with higher reasoning'}
-                      </button>
-                    )}
                   </div>
                 )}
 
