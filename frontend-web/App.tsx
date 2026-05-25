@@ -224,8 +224,19 @@ const App: React.FC = () => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
-  const [activeTab, setActiveTab] = useState<'explore' | 'learn' | 'collect' | 'profile'>('explore');
-  const [learnSubTab, setLearnSubTab] = useState<'curator' | 'taste-map' | 'skills'>('curator');
+  const [activeTab, setActiveTab] = useState<'explore' | 'learn' | 'collect' | 'profile'>(() => {
+    const p = window.location.pathname;
+    if (p === '/learn' || p.startsWith('/learn/')) return 'learn';
+    if (p === '/profile') return 'profile';
+    if (p === '/saved' || p === '/boards' || p === '/collections') return 'collect';
+    return 'explore';
+  });
+  const [collectTab, setCollectTab] = useState<'saved' | 'boards' | 'smart'>(() => {
+    const p = window.location.pathname;
+    if (p === '/boards') return 'boards';
+    if (p === '/collections') return 'smart';
+    return 'saved';
+  });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showEntrance, setShowEntrance] = useState(false);
   const [interpretingItem, setInterpretingItem] = useState<{
@@ -289,6 +300,18 @@ const App: React.FC = () => {
     setToast({ message, type, action });
   };
 
+  // ── Centralised URL ↔ state helpers ──────────────────────────────────────
+  function stateToPath(tab: string, collectSub: string): string {
+    if (tab === 'learn') return '/learn';
+    if (tab === 'profile') return '/profile';
+    if (tab === 'collect') {
+      if (collectSub === 'boards') return '/boards';
+      if (collectSub === 'smart') return '/collections';
+      return '/saved';
+    }
+    return '/';
+  }
+
   // Sync URL → state when user hits browser Back/Forward
   useEffect(() => {
     const handlePop = () => {
@@ -296,25 +319,39 @@ const App: React.FC = () => {
       if (path === '/artists') {
         setShowArtistsIndex(true);
         setArtistPageContext(null);
-      } else if (path.startsWith('/artists/')) {
+        return;
+      }
+      if (path.startsWith('/artists/')) {
         const slug = path.slice('/artists/'.length);
         setArtistPageContext(slug ? { artistEntityId: slug } : null);
         setShowArtistsIndex(false);
+        return;
+      }
+      setArtistPageContext(null);
+      setShowArtistsIndex(false);
+      if (path === '/learn') {
+        setActiveTab('learn');
+      } else if (path === '/profile') {
+        setActiveTab('profile');
+      } else if (path === '/saved' || path === '/boards' || path === '/collections') {
+        setActiveTab('collect');
+        setCollectTab(path === '/boards' ? 'boards' : path === '/collections' ? 'smart' : 'saved');
       } else {
-        setArtistPageContext(null);
-        setShowArtistsIndex(false);
+        setActiveTab('explore');
       }
     };
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  // Push /artists URL when the index page opens
+  // Sync state → URL whenever a tab changes (skip when artist pages have the URL)
   useEffect(() => {
-    if (showArtistsIndex) {
-      window.history.pushState({}, '', '/artists');
+    if (artistPageContext || showArtistsIndex) return;
+    const path = stateToPath(activeTab, collectTab);
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, '', path);
     }
-  }, [showArtistsIndex]);
+  }, [activeTab, collectTab, artistPageContext, showArtistsIndex]);
 
   /** 
    * Algorithmic Session Determination (Phase 7)
@@ -1585,56 +1622,7 @@ const App: React.FC = () => {
 
         <div className={`relative z-10 flex-1 min-h-0 overflow-hidden transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-14 sm:pt-10 pb-20 sm:pb-4'} ${(interpretingItem || curatorRoomContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
           {activeTab === 'learn' ? (
-            <div className="flex flex-col w-full h-full overflow-hidden">
-              {/* Learn sub-tab bar */}
-              <div className="shrink-0 flex items-end gap-7 px-5 sm:px-8 border-b border-neutral-100 relative z-[70] bg-[#faf9f7]">
-                {(['curator', 'taste-map', 'skills'] as const).map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setLearnSubTab(tab)}
-                    className={`pt-3 pb-3 text-[11px] sm:text-[12px] tracking-[0.14em] uppercase font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
-                      learnSubTab === tab
-                        ? 'border-neutral-900 text-neutral-900'
-                        : 'border-transparent text-neutral-400 hover:text-neutral-700'
-                    }`}
-                  >{tab === 'curator' ? 'Curator' : tab === 'taste-map' ? 'Taste Map' : 'Art Skills'}</button>
-                ))}
-              </div>
-              {/* Learn sub-tab content */}
-              <div className="flex-1 min-h-0 overflow-hidden relative">
-                {learnSubTab === 'curator' && (
-                  <UnderstandView
-                    items={items}
-                    sidebarOpen={sidebarOpen}
-                    onCloseSidebar={() => setSidebarOpen(false)}
-                    onToggleSidebar={() => setSidebarOpen(p => !p)}
-                    conversations={curatorConversations}
-                    onSaveConversation={(convId, newMsgs, itemIds) => {
-                      setCuratorConversations(prev => {
-                        const existing = prev.find(c => c.id === convId);
-                        const allMessages = existing ? [...existing.messages, ...newMsgs] : newMsgs;
-                        const title = allMessages.find(m => m.role === 'user')?.text?.slice(0, 60) ?? 'Conversation';
-                        const updated: CuratorConversation[] = existing
-                          ? prev.map(c => c.id === convId ? { ...c, messages: allMessages, title, updatedAt: Date.now() } : c)
-                          : [{ id: convId, title, messages: allMessages, itemIds, createdAt: Date.now(), updatedAt: Date.now() }, ...prev];
-                        localStorage.setItem('musee_curator_conversations', JSON.stringify(updated));
-                        return updated;
-                      });
-                    }}
-                    onDeleteConversation={(id) => {
-                      setCuratorConversations(prev => {
-                        const updated = prev.filter(c => c.id !== id);
-                        localStorage.setItem('musee_curator_conversations', JSON.stringify(updated));
-                        return updated;
-                      });
-                    }}
-                  />
-                )}
-                {learnSubTab === 'skills' && (
-                  <ArtSkillsView />
-                )}
-              </div>
-            </div>
+            <ArtSkillsView />
           ) : activeTab === 'profile' ? (
             <TasteProfileView userId={currentUser?.user_id || USER_ID} />
           ) : activeTab === 'collect' ? (
@@ -1646,6 +1634,9 @@ const App: React.FC = () => {
               likedIds={likedIds}
               albums={albums}
               userId={USER_ID}
+              collectTab={collectTab}
+              onCollectTabChange={setCollectTab}
+              onNavigateToArtists={() => setShowArtistsIndex(true)}
               onInterpret={(item) => {
                 const activeId = filteredVisitId;
                 const sessionItems = activeId ? items.filter(i => i.visitId === activeId) : [item];
@@ -1810,30 +1801,6 @@ const App: React.FC = () => {
           ))}
         </div>
 
-        {activeTab === 'learn' && learnSubTab === 'taste-map' && (
-          <>
-            <TopographyView
-              items={items}
-              cachedTagMap={tagPositions}
-              neighborItems={MOCK_NEIGHBORS}
-              onClose={() => setLearnSubTab('curator')}
-            />
-            {/* Sub-tab bar rendered at top level so it sits above TopographyView's z-[60] */}
-            <div className="fixed top-11 left-0 right-0 z-[70] flex items-end gap-7 px-5 sm:px-8 border-b border-neutral-100 bg-[#faf9f7]">
-              {(['curator', 'taste-map', 'skills'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setLearnSubTab(tab)}
-                  className={`pt-3 pb-3 text-[11px] sm:text-[12px] tracking-[0.14em] uppercase font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
-                    learnSubTab === tab
-                      ? 'border-neutral-900 text-neutral-900'
-                      : 'border-transparent text-neutral-400 hover:text-neutral-700'
-                  }`}
-                >{tab === 'curator' ? 'Curator' : tab === 'taste-map' ? 'Taste Map' : 'Art Skills'}</button>
-              ))}
-            </div>
-          </>
-        )}
 
         {interpretingItem && (
           <InterpretationModal

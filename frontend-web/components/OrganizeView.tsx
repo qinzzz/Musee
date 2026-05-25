@@ -4,7 +4,7 @@ import { GalleryItem, Visit, Album } from '../types';
 import GridView from './GridView';
 import SmartCollectionsView from './SmartCollectionsView';
 
-type MainTab = 'saved' | 'boards' | 'smart';
+export type CollectTab = 'saved' | 'boards' | 'smart';
 type SavedLayout = 'grid' | 'grouped';
 type ActiveFilter = 'all' | 'liked' | string;
 
@@ -16,15 +16,19 @@ interface Props {
   likedIds?: Set<string>;
   albums?: Album[];
   userId?: string | null;
+  collectTab: CollectTab;
+  onCollectTabChange: (tab: CollectTab) => void;
+  onNavigateToArtists: () => void;
   onInterpret: (item: GalleryItem) => void;
   onDelete: (id: string) => void;
 }
 
 const OrganizeView: React.FC<Props> = ({
   items, visit, filteredVisitId, isAnalyzing,
-  likedIds, albums, userId, onInterpret, onDelete,
+  likedIds, albums, userId,
+  collectTab, onCollectTabChange, onNavigateToArtists,
+  onInterpret, onDelete,
 }) => {
-  const [mainTab, setMainTab] = useState<MainTab>('saved');
   const [savedLayout, setSavedLayout] = useState<SavedLayout>('grid');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [selectedBoard, setSelectedBoard] = useState<'liked' | string | null>(null);
@@ -73,10 +77,11 @@ const OrganizeView: React.FC<Props> = ({
   const getCoverImages = (itemIds: string[]) =>
     itemIds.slice(0, 4).map(id => items.find(i => i.id === id)?.url).filter(Boolean) as string[];
 
-  const TABS: { id: MainTab; label: string }[] = [
+  const TABS: { id: CollectTab | 'artists'; label: string }[] = [
     { id: 'saved', label: 'Saved' },
     { id: 'boards', label: 'Boards' },
     { id: 'smart', label: 'Collections' },
+    { id: 'artists', label: 'Artists' },
   ];
 
   return (
@@ -87,9 +92,16 @@ const OrganizeView: React.FC<Props> = ({
         {TABS.map(tab => (
           <button
             key={tab.id}
-            onClick={() => { setMainTab(tab.id); setSelectedBoard(null); }}
+            onClick={() => {
+              if (tab.id === 'artists') {
+                onNavigateToArtists();
+              } else {
+                onCollectTabChange(tab.id);
+                setSelectedBoard(null);
+              }
+            }}
             className={`pt-3 pb-3 text-[11px] sm:text-[12px] tracking-[0.14em] uppercase font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
-              mainTab === tab.id
+              tab.id !== 'artists' && collectTab === tab.id
                 ? 'border-neutral-900 text-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-700'
             }`}
@@ -101,7 +113,7 @@ const OrganizeView: React.FC<Props> = ({
       <div className="flex-1 min-h-0 overflow-hidden relative">
 
         {/* ── SAVED ── */}
-        {mainTab === 'saved' && (
+        {collectTab === 'saved' && (
           <div className="flex flex-col h-full">
             {/* Saved controls row: filter chips + layout toggle */}
             <div className="shrink-0 flex items-center justify-between gap-3 px-5 sm:px-8 pt-3 pb-2">
@@ -218,7 +230,7 @@ const OrganizeView: React.FC<Props> = ({
         )}
 
         {/* ── BOARDS ── */}
-        {mainTab === 'boards' && (
+        {collectTab === 'boards' && (
           <div className="h-full overflow-y-auto">
             {selectedBoard === null ? (
               /* Board grid */
@@ -319,7 +331,7 @@ const OrganizeView: React.FC<Props> = ({
 
 
         {/* ── SMART COLLECTIONS ── */}
-        {mainTab === 'smart' && (
+        {collectTab === 'smart' && (
           <SmartCollectionsView
             items={items}
             userId={userId ?? null}
