@@ -33,7 +33,7 @@ import TopographyView from './components/TopographyView';
 import ArtSkillsView from './components/ArtSkillsView';
 import TasteProfileView from './components/TasteProfileView';
 import ArtistPage from './components/ArtistPage';
-import ArtistsIndexPage from './components/ArtistsIndexPage';
+import ArtMovementPage from './components/ArtMovementPage';
 import Toast, { ToastAction } from './components/Toast';
 import ContextualActionBar from './components/ContextualActionBar';
 
@@ -228,13 +228,14 @@ const App: React.FC = () => {
     const p = window.location.pathname;
     if (p === '/learn' || p.startsWith('/learn/')) return 'learn';
     if (p === '/profile') return 'profile';
-    if (p === '/saved' || p === '/boards' || p === '/collections') return 'collect';
+    if (p === '/saved' || p === '/boards' || p === '/art-movements' || p === '/artists' || p.startsWith('/art-movements/')) return 'collect';
     return 'explore';
   });
-  const [collectTab, setCollectTab] = useState<'saved' | 'boards' | 'smart'>(() => {
+  const [collectTab, setCollectTab] = useState<'saved' | 'boards' | 'movements' | 'artists'>(() => {
     const p = window.location.pathname;
     if (p === '/boards') return 'boards';
-    if (p === '/collections') return 'smart';
+    if (p === '/art-movements') return 'movements';
+    if (p === '/artists') return 'artists';
     return 'saved';
   });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -292,9 +293,7 @@ const App: React.FC = () => {
     }
     return null;
   });
-  const [showArtistsIndex, setShowArtistsIndex] = useState<boolean>(
-    () => window.location.pathname === '/artists',
-  );
+  const [movementPageContext, setMovementPageContext] = useState<import('./apiService').SmartCollection | null>(null);
 
   const showToast = (message: string, type: 'info' | 'success' = 'info', action?: ToastAction) => {
     setToast({ message, type, action });
@@ -306,7 +305,8 @@ const App: React.FC = () => {
     if (tab === 'profile') return '/profile';
     if (tab === 'collect') {
       if (collectSub === 'boards') return '/boards';
-      if (collectSub === 'smart') return '/collections';
+      if (collectSub === 'movements') return '/art-movements';
+      if (collectSub === 'artists') return '/artists';
       return '/saved';
     }
     return '/';
@@ -316,26 +316,32 @@ const App: React.FC = () => {
   useEffect(() => {
     const handlePop = () => {
       const path = window.location.pathname;
-      if (path === '/artists') {
-        setShowArtistsIndex(true);
-        setArtistPageContext(null);
-        return;
-      }
       if (path.startsWith('/artists/')) {
         const slug = path.slice('/artists/'.length);
         setArtistPageContext(slug ? { artistEntityId: slug } : null);
-        setShowArtistsIndex(false);
+        setMovementPageContext(null);
+        return;
+      }
+      if (path.startsWith('/art-movements/')) {
+        // Deep-link to a movement page — just land on the movements list
+        setMovementPageContext(null);
+        setArtistPageContext(null);
+        setActiveTab('collect');
+        setCollectTab('movements');
         return;
       }
       setArtistPageContext(null);
-      setShowArtistsIndex(false);
+      setMovementPageContext(null);
       if (path === '/learn') {
         setActiveTab('learn');
       } else if (path === '/profile') {
         setActiveTab('profile');
-      } else if (path === '/saved' || path === '/boards' || path === '/collections') {
+      } else if (path === '/saved' || path === '/boards' || path === '/art-movements' || path === '/artists') {
         setActiveTab('collect');
-        setCollectTab(path === '/boards' ? 'boards' : path === '/collections' ? 'smart' : 'saved');
+        if (path === '/boards') setCollectTab('boards');
+        else if (path === '/art-movements') setCollectTab('movements');
+        else if (path === '/artists') setCollectTab('artists');
+        else setCollectTab('saved');
       } else {
         setActiveTab('explore');
       }
@@ -344,14 +350,14 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  // Sync state → URL whenever a tab changes (skip when artist pages have the URL)
+  // Sync state → URL whenever a tab changes (skip when overlay pages own the URL)
   useEffect(() => {
-    if (artistPageContext || showArtistsIndex) return;
+    if (artistPageContext || movementPageContext) return;
     const path = stateToPath(activeTab, collectTab);
     if (window.location.pathname !== path) {
       window.history.pushState({}, '', path);
     }
-  }, [activeTab, collectTab, artistPageContext, showArtistsIndex]);
+  }, [activeTab, collectTab, artistPageContext, movementPageContext]);
 
   /** 
    * Algorithmic Session Determination (Phase 7)
@@ -1636,7 +1642,12 @@ const App: React.FC = () => {
               userId={USER_ID}
               collectTab={collectTab}
               onCollectTabChange={setCollectTab}
-              onNavigateToArtists={() => setShowArtistsIndex(true)}
+              onOpenArtist={(artistEntityId, artistName) => {
+                setArtistPageContext({ artistEntityId, artistName });
+              }}
+              onOpenMovement={(collection) => {
+                setMovementPageContext(collection);
+              }}
               onInterpret={(item) => {
                 const activeId = filteredVisitId;
                 const sessionItems = activeId ? items.filter(i => i.visitId === activeId) : [item];
@@ -1932,17 +1943,20 @@ const App: React.FC = () => {
 
       </div>
 
-      {/* Artists index page */}
-      {showArtistsIndex && (
-        <ArtistsIndexPage
-          userId={currentUser?.user_id || USER_ID}
-          onSelectArtist={(artist) => {
-            setShowArtistsIndex(false);
-            setArtistPageContext({ artistEntityId: artist.id, artistName: artist.display_name });
-          }}
+      {/* Art movement detail page */}
+      {movementPageContext && (
+        <ArtMovementPage
+          collection={movementPageContext}
+          items={items}
           onClose={() => {
-            setShowArtistsIndex(false);
-            window.history.pushState({}, '', '/');
+            setMovementPageContext(null);
+            window.history.pushState({}, '', '/art-movements');
+          }}
+          onOpenArtwork={(item) => {
+            setMovementPageContext(null);
+            window.history.pushState({}, '', '/art-movements');
+            const sessionItems = item.visitId ? items.filter(i => i.visitId === item.visitId) : [item];
+            setInterpretingItem({ ...item, allVisitItems: sessionItems });
           }}
         />
       )}
@@ -1956,16 +1970,17 @@ const App: React.FC = () => {
           userId={currentUser?.user_id || USER_ID}
           onClose={() => {
             setArtistPageContext(null);
-            window.history.pushState({}, '', '/');
+            window.history.pushState({}, '', '/artists');
           }}
           onOpenArtwork={(item) => {
             setArtistPageContext(null);
-            window.history.pushState({}, '', '/');
+            window.history.pushState({}, '', '/artists');
             setInterpretingItem(item as any);
           }}
           onNavigateToIndex={() => {
             setArtistPageContext(null);
-            setShowArtistsIndex(true);
+            setActiveTab('collect');
+            setCollectTab('artists');
           }}
         />
       )}

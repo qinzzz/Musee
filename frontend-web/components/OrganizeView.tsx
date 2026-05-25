@@ -1,12 +1,17 @@
 
-import React, { useState, useMemo } from 'react';
-import { GalleryItem, Visit, Album } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { GalleryItem, Visit, Album, ArtistEntity } from '../types';
+import { fetchUserArtists, SmartCollection } from '../apiService';
 import GridView from './GridView';
 import SmartCollectionsView from './SmartCollectionsView';
 
-export type CollectTab = 'saved' | 'boards' | 'smart';
+export type CollectTab = 'saved' | 'boards' | 'movements' | 'artists';
 type SavedLayout = 'grid' | 'grouped';
 type ActiveFilter = 'all' | 'liked' | string;
+
+interface ArtistRow extends ArtistEntity {
+  artwork_count: number;
+}
 
 interface Props {
   items: GalleryItem[];
@@ -18,7 +23,8 @@ interface Props {
   userId?: string | null;
   collectTab: CollectTab;
   onCollectTabChange: (tab: CollectTab) => void;
-  onNavigateToArtists: () => void;
+  onOpenArtist: (artistEntityId: string, artistName: string) => void;
+  onOpenMovement: (collection: SmartCollection) => void;
   onInterpret: (item: GalleryItem) => void;
   onDelete: (id: string) => void;
 }
@@ -26,12 +32,27 @@ interface Props {
 const OrganizeView: React.FC<Props> = ({
   items, visit, filteredVisitId, isAnalyzing,
   likedIds, albums, userId,
-  collectTab, onCollectTabChange, onNavigateToArtists,
+  collectTab, onCollectTabChange,
+  onOpenArtist, onOpenMovement,
   onInterpret, onDelete,
 }) => {
   const [savedLayout, setSavedLayout] = useState<SavedLayout>('grid');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [selectedBoard, setSelectedBoard] = useState<'liked' | string | null>(null);
+  const [artists, setArtists] = useState<ArtistRow[]>([]);
+  const [artistsLoading, setArtistsLoading] = useState(false);
+
+  // Fetch artists when the tab is first activated
+  useEffect(() => {
+    if (collectTab !== 'artists' || !userId || artists.length > 0) return;
+    let cancelled = false;
+    setArtistsLoading(true);
+    fetchUserArtists(userId)
+      .then(data => { if (!cancelled) setArtists(data); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setArtistsLoading(false); });
+    return () => { cancelled = true; };
+  }, [collectTab, userId]);
 
   const likedItems = useMemo(() => items.filter(i => likedIds?.has(i.id)), [items, likedIds]);
   const activeAlbums = useMemo(() =>
@@ -47,7 +68,6 @@ const OrganizeView: React.FC<Props> = ({
     return album ? items.filter(i => album.itemIds.includes(i.id)) : items;
   }, [items, activeFilter, likedItems, albums]);
 
-  // Grouped by month/year for the grouped sub-layout
   const groupedItems = useMemo(() => {
     const groups = new Map<string, GalleryItem[]>();
     [...filteredItems].sort((a, b) => b.timestamp - a.timestamp).forEach(item => {
@@ -59,7 +79,6 @@ const OrganizeView: React.FC<Props> = ({
     return Array.from(groups.entries()).map(([label, groupItems]) => ({ label, items: groupItems }));
   }, [filteredItems]);
 
-  // Board detail items
   const boardDetailItems = useMemo(() => {
     if (!selectedBoard) return [];
     if (selectedBoard === 'liked') return likedItems;
@@ -73,35 +92,34 @@ const OrganizeView: React.FC<Props> = ({
     return (albums || []).find(a => a.id === selectedBoard)?.name ?? '';
   }, [selectedBoard, albums]);
 
-  // Cover images for a board
   const getCoverImages = (itemIds: string[]) =>
     itemIds.slice(0, 4).map(id => items.find(i => i.id === id)?.url).filter(Boolean) as string[];
 
-  const TABS: { id: CollectTab | 'artists'; label: string }[] = [
-    { id: 'saved', label: 'Saved' },
-    { id: 'boards', label: 'Boards' },
-    { id: 'smart', label: 'Collections' },
-    { id: 'artists', label: 'Artists' },
+  // Derive 4 cover images for an artist from loaded items
+  const getArtistCovers = (artistId: string) =>
+    items.filter(i => i.artistEntityId === artistId).slice(0, 4).map(i => i.url);
+
+  const TABS: { id: CollectTab; label: string }[] = [
+    { id: 'saved',     label: 'Saved' },
+    { id: 'boards',    label: 'Boards' },
+    { id: 'movements', label: 'Art Movements' },
+    { id: 'artists',   label: 'Artists' },
   ];
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden">
 
       {/* ── Top tab bar ── */}
-      <div className="shrink-0 flex items-end gap-7 px-5 sm:px-8 border-b border-neutral-100">
+      <div className="shrink-0 flex items-end gap-7 px-5 sm:px-8 border-b border-neutral-100 overflow-x-auto no-scrollbar">
         {TABS.map(tab => (
           <button
             key={tab.id}
             onClick={() => {
-              if (tab.id === 'artists') {
-                onNavigateToArtists();
-              } else {
-                onCollectTabChange(tab.id);
-                setSelectedBoard(null);
-              }
+              onCollectTabChange(tab.id);
+              setSelectedBoard(null);
             }}
-            className={`pt-3 pb-3 text-[11px] sm:text-[12px] tracking-[0.14em] uppercase font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
-              tab.id !== 'artists' && collectTab === tab.id
+            className={`shrink-0 pt-3 pb-3 text-[11px] sm:text-[12px] tracking-[0.14em] uppercase font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
+              collectTab === tab.id
                 ? 'border-neutral-900 text-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-700'
             }`}
@@ -115,9 +133,7 @@ const OrganizeView: React.FC<Props> = ({
         {/* ── SAVED ── */}
         {collectTab === 'saved' && (
           <div className="flex flex-col h-full">
-            {/* Saved controls row: filter chips + layout toggle */}
             <div className="shrink-0 flex items-center justify-between gap-3 px-5 sm:px-8 pt-3 pb-2">
-              {/* Filter chips */}
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
                 {showFilterBar && (
                   <>
@@ -152,7 +168,6 @@ const OrganizeView: React.FC<Props> = ({
                   </>
                 )}
               </div>
-              {/* Layout toggle */}
               <div className="shrink-0 flex items-center gap-0.5 bg-neutral-100 rounded-full p-0.5">
                 <button
                   onClick={() => setSavedLayout('grid')}
@@ -177,7 +192,6 @@ const OrganizeView: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Saved content */}
             <div className="flex-1 min-h-0 relative">
               {savedLayout === 'grid' ? (
                 <GridView
@@ -189,7 +203,6 @@ const OrganizeView: React.FC<Props> = ({
                   onDelete={onDelete}
                 />
               ) : (
-                /* Grouped view */
                 <div className="h-full overflow-y-auto">
                   {groupedItems.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
@@ -233,7 +246,6 @@ const OrganizeView: React.FC<Props> = ({
         {collectTab === 'boards' && (
           <div className="h-full overflow-y-auto">
             {selectedBoard === null ? (
-              /* Board grid */
               <div className="px-5 sm:px-8 pt-5 pb-32">
                 {likedItems.length === 0 && activeAlbums.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-48 gap-2">
@@ -242,12 +254,8 @@ const OrganizeView: React.FC<Props> = ({
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
-                    {/* Liked pseudo-board */}
                     {likedItems.length > 0 && (
-                      <button
-                        onClick={() => setSelectedBoard('liked')}
-                        className="text-left group"
-                      >
+                      <button onClick={() => setSelectedBoard('liked')} className="text-left group">
                         <div className="grid grid-cols-2 gap-0.5 bg-neutral-100 overflow-hidden rounded-xl aspect-square mb-2.5">
                           {likedItems.slice(0, 4).map((item, i) => (
                             <img key={i} src={item.url} alt="" className="w-full h-full object-cover aspect-square" />
@@ -260,16 +268,11 @@ const OrganizeView: React.FC<Props> = ({
                         <p className="text-[11px] text-neutral-400 mt-0.5">{likedItems.length} {likedItems.length === 1 ? 'piece' : 'pieces'}</p>
                       </button>
                     )}
-                    {/* Named albums */}
                     {activeAlbums.map(album => {
                       const covers = getCoverImages(album.itemIds);
                       const count = album.itemIds.filter(id => items.find(i => i.id === id)).length;
                       return (
-                        <button
-                          key={album.id}
-                          onClick={() => setSelectedBoard(album.id)}
-                          className="text-left group"
-                        >
+                        <button key={album.id} onClick={() => setSelectedBoard(album.id)} className="text-left group">
                           <div className="grid grid-cols-2 gap-0.5 bg-neutral-100 overflow-hidden rounded-xl aspect-square mb-2.5">
                             {covers.slice(0, 4).map((url, i) => (
                               <img key={i} src={url} alt="" className="w-full h-full object-cover aspect-square" />
@@ -287,9 +290,7 @@ const OrganizeView: React.FC<Props> = ({
                 )}
               </div>
             ) : (
-              /* Board detail */
               <div className="flex flex-col h-full">
-                {/* Back + title */}
                 <div className="shrink-0 flex items-center gap-3 px-5 sm:px-8 pt-4 pb-3 border-b border-neutral-100">
                   <button
                     onClick={() => setSelectedBoard(null)}
@@ -304,7 +305,6 @@ const OrganizeView: React.FC<Props> = ({
                   <span className="text-[12px] font-semibold text-neutral-900">{boardDetailName}</span>
                   <span className="text-[10px] text-neutral-400 ml-auto">{boardDetailItems.length} {boardDetailItems.length === 1 ? 'piece' : 'pieces'}</span>
                 </div>
-                {/* Album grid */}
                 <div className="flex-1 min-h-0 overflow-y-auto">
                   {boardDetailItems.length === 0 ? (
                     <div className="flex items-center justify-center h-32">
@@ -329,14 +329,74 @@ const OrganizeView: React.FC<Props> = ({
           </div>
         )}
 
-
-        {/* ── SMART COLLECTIONS ── */}
-        {collectTab === 'smart' && (
+        {/* ── ART MOVEMENTS ── */}
+        {collectTab === 'movements' && (
           <SmartCollectionsView
-            items={items}
             userId={userId ?? null}
-            onInterpret={onInterpret}
+            onSelect={onOpenMovement}
           />
+        )}
+
+        {/* ── ARTISTS ── */}
+        {collectTab === 'artists' && (
+          <div className="h-full overflow-y-auto">
+            <div className="px-5 sm:px-8 pt-5 pb-32">
+              {artistsLoading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="text-left">
+                      <div className="rounded-xl aspect-square bg-neutral-100 animate-pulse mb-2.5" />
+                      <div className="h-3 bg-neutral-100 rounded animate-pulse w-3/4 mb-1" />
+                      <div className="h-2.5 bg-neutral-100 rounded animate-pulse w-1/2" />
+                    </div>
+                  ))}
+                </div>
+              ) : artists.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 gap-2">
+                  <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No artists yet</p>
+                  <p className="text-[11px] text-neutral-400">Explore artworks to discover artists</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
+                  {artists.map(artist => {
+                    const covers = getArtistCovers(artist.id);
+                    const lifespan = artist.birth_year && artist.death_year
+                      ? `${artist.birth_year}–${artist.death_year}`
+                      : artist.birth_year ? `b. ${artist.birth_year}` : null;
+                    const subtitle = [artist.nationality, lifespan].filter(Boolean).join(' · ');
+                    return (
+                      <button
+                        key={artist.id}
+                        onClick={() => onOpenArtist(artist.id, artist.display_name)}
+                        className="text-left group"
+                      >
+                        {/* 2×2 cover grid */}
+                        <div className="grid grid-cols-2 gap-0.5 bg-neutral-100 overflow-hidden rounded-xl aspect-square mb-2.5">
+                          {covers.slice(0, 4).map((url, i) => (
+                            <img key={i} src={url} alt="" className="w-full h-full object-cover aspect-square" />
+                          ))}
+                          {covers.length === 0 && (
+                            <div className="col-span-2 row-span-2 flex items-center justify-center bg-neutral-100">
+                              <span className="text-3xl font-bold text-neutral-300">
+                                {artist.display_name[0]?.toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          {covers.length > 0 && Array(Math.max(0, 4 - covers.length)).fill(null).map((_, i) => (
+                            <div key={`e${i}`} className="bg-neutral-100 aspect-square" />
+                          ))}
+                        </div>
+                        <p className="text-[12px] font-semibold text-neutral-900 leading-tight mb-0.5 truncate">{artist.display_name}</p>
+                        <p className="text-[11px] text-neutral-400 truncate">
+                          {subtitle || `${artist.artwork_count} ${artist.artwork_count === 1 ? 'work' : 'works'}`}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
       </div>

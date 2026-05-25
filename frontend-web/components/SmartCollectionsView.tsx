@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { GalleryItem } from '../types';
 import { fetchSmartCollections, SmartCollection, resolveImageUrl } from '../apiService';
 
 const RARITY_STYLE: Record<string, { label: string; classes: string }> = {
@@ -10,16 +9,14 @@ const RARITY_STYLE: Record<string, { label: string; classes: string }> = {
 };
 
 interface Props {
-  items: GalleryItem[];
   userId: string | null;
-  onInterpret: (item: GalleryItem) => void;
+  onSelect: (collection: SmartCollection) => void;
 }
 
-const SmartCollectionsView: React.FC<Props> = ({ items, userId, onInterpret }) => {
+const SmartCollectionsView: React.FC<Props> = ({ userId, onSelect }) => {
   const [collections, setCollections] = useState<SmartCollection[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<SmartCollection | null>(null);
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -36,53 +33,6 @@ const SmartCollectionsView: React.FC<Props> = ({ items, userId, onInterpret }) =
   }, [userId]);
 
   useEffect(() => { load(); }, [load]);
-
-  const selectedItems = selected
-    ? items.filter(i => selected.artwork_ids.includes(i.artworkId ?? i.id))
-    : [];
-
-  if (selected) {
-    return (
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="shrink-0 flex items-center gap-3 px-5 sm:px-8 pt-4 pb-3 border-b border-neutral-100">
-          <button
-            onClick={() => setSelected(null)}
-            className="flex items-center gap-1.5 text-neutral-400 hover:text-neutral-900 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-            <span className="text-[10px] tracking-[0.15em] uppercase">Collections</span>
-          </button>
-          <span className="text-neutral-200 text-xs">/</span>
-          <span className="text-[12px] font-semibold text-neutral-900">{selected.name}</span>
-          <span className="text-[10px] text-neutral-400 ml-auto">{selected.artwork_count} works</span>
-        </div>
-        {/* Grid */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 pt-4 pb-32">
-          <p className="text-[11px] text-neutral-400 mb-4">{selected.hook}</p>
-          {selectedItems.length === 0 ? (
-            <div className="flex items-center justify-center h-32">
-              <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No loaded works match</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
-              {selectedItems.map(item => (
-                <div
-                  key={item.id}
-                  className="aspect-square cursor-pointer overflow-hidden rounded bg-neutral-100 hover:opacity-90 transition-opacity"
-                  onClick={() => onInterpret(item)}
-                >
-                  <img src={item.url} alt="" className="w-full h-full object-cover" />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="h-full overflow-y-auto">
@@ -113,10 +63,9 @@ const SmartCollectionsView: React.FC<Props> = ({ items, userId, onInterpret }) =
               return (
                 <button
                   key={col.id}
-                  onClick={() => setSelected(col)}
+                  onClick={() => onSelect(col)}
                   className="text-left group"
                 >
-                  {/* Cover grid */}
                   <div className="grid grid-cols-2 gap-0.5 bg-neutral-100 overflow-hidden rounded-xl aspect-square mb-2.5">
                     {col.cover_uris.slice(0, 4).map((uri, i) => (
                       <img
@@ -130,11 +79,7 @@ const SmartCollectionsView: React.FC<Props> = ({ items, userId, onInterpret }) =
                       <div key={`e${i}`} className="bg-neutral-100 aspect-square" />
                     ))}
                   </div>
-
-                  {/* Name */}
                   <p className="text-[12px] font-semibold text-neutral-900 leading-tight mb-1">{col.name}</p>
-
-                  {/* Rarity + hook */}
                   <div className="flex items-start gap-1.5">
                     <span className={`shrink-0 text-[8px] tracking-[0.15em] uppercase font-semibold px-1.5 py-0.5 rounded-full mt-px ${rarity.classes}`}>
                       {rarity.label}
