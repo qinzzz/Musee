@@ -177,9 +177,16 @@ const TasteProfileView: React.FC<Props> = ({ userId }) => {
                           <span style={{ fontSize: 11, color: score < -0.15 ? '#1a1714' : '#bbb', fontWeight: score < -0.15 ? 600 : 400, transition: 'all 0.3s', letterSpacing: '.04em' }}>
                             {left}
                           </span>
-                          {hasExamples && (
+                          {hasExamples ? (
                             <span style={{ fontSize: 9, fontFamily: 'monospace', color: '#ccc', letterSpacing: '.08em' }}>
                               {isExpanded ? '▲' : '▼'}
+                            </span>
+                          ) : (
+                            <span
+                              title="品味较中性，暂无代表作品"
+                              style={{ fontSize: 9, color: '#ddd', cursor: 'help', userSelect: 'none' }}
+                            >
+                              ·
                             </span>
                           )}
                           <span style={{ fontSize: 11, color: score > 0.15 ? '#1a1714' : '#bbb', fontWeight: score > 0.15 ? 600 : 400, transition: 'all 0.3s', letterSpacing: '.04em' }}>
