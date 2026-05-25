@@ -1941,8 +1941,6 @@ async def get_taste_profile(user_id: str, db: Session = Depends(get_db)):
                 continue
             seen_names.add(name_key)
             candidates.append(r)
-            if len(candidates) == 3:
-                break
 
         pole_label = right_label if dominant_sign > 0 else left_label
         other_label = left_label if dominant_sign > 0 else right_label
