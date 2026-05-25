@@ -15,6 +15,7 @@ export default function ArtistProfileSheet({ artistEntityId, artworkId, artistNa
 
   useEffect(() => {
     let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
     async function load() {
       setIsLoading(true);
@@ -25,7 +26,27 @@ export default function ArtistProfileSheet({ artistEntityId, artworkId, artistNa
         } else if (artworkId) {
           profile = await backfillArtworkArtist(artworkId);
         }
-        if (!cancelled) setArtist(profile);
+        if (!cancelled) {
+          setArtist(profile);
+          // Poll if bio is still being computed (new-upload background case)
+          if (profile && profile.id && profile.bio_status === 'processing') {
+            let attempts = 0;
+            const poll = async () => {
+              if (cancelled || attempts >= 12) return;
+              attempts++;
+              try {
+                const updated = await fetchArtistProfile(profile!.id);
+                if (!cancelled && updated) {
+                  setArtist(updated);
+                  if (updated.bio_status === 'processing') {
+                    pollTimer = setTimeout(poll, 2500);
+                  }
+                }
+              } catch { /* ignore */ }
+            };
+            pollTimer = setTimeout(poll, 2500);
+          }
+        }
       } catch {
         // silently fail — sheet still shows with artist name
       } finally {
@@ -34,7 +55,10 @@ export default function ArtistProfileSheet({ artistEntityId, artworkId, artistNa
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
   }, [artistEntityId, artworkId]);
 
   const lifespan = (() => {
@@ -101,9 +125,13 @@ export default function ArtistProfileSheet({ artistEntityId, artworkId, artistNa
               <p style={{ color: '#ccc', fontSize: 14, lineHeight: 1.65, margin: 0 }}>
                 {artist.bio}
               </p>
-            ) : (
+            ) : artist?.bio_status === 'processing' ? (
               <p style={{ color: '#555', fontSize: 14, margin: 0, fontStyle: 'italic' }}>
                 Biography loading…
+              </p>
+            ) : (
+              <p style={{ color: '#555', fontSize: 14, margin: 0, fontStyle: 'italic' }}>
+                No biography available.
               </p>
             )}
           </>

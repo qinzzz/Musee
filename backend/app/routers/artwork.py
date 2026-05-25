@@ -1832,6 +1832,7 @@ async def _do_artist_bio(artist_entity_id: str) -> None:
             return
         artist_name = entity.display_name
         entity.bio_status = "processing"
+        entity.bio = None
         db.commit()
     try:
         ai_service = AIServiceFactory.get_service(determine_ai_provider(None))
@@ -2381,9 +2382,8 @@ async def get_artist(artist_id: str, db: Session = Depends(get_db)):
 async def backfill_artwork_artist(
     artwork_id: str,
     db: Session = Depends(get_db),
-    background_tasks: BackgroundTasks = None,
 ):
-    """Lazily link or compute the ArtistEntity for an existing artwork."""
+    """Lazily link and compute the ArtistEntity for an existing artwork. Awaits bio so the response is complete."""
     artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
@@ -2392,24 +2392,32 @@ async def backfill_artwork_artist(
     if not artist_name or artist_name.lower() in ("unknown", "unknown artist", ""):
         return {"artist_entity_id": None}
 
-    # If already linked, return cached
+    # If already linked and bio is done, return immediately
     if artwork.artist_entity_id:
         entity = db.query(ArtistEntity).filter(ArtistEntity.id == artwork.artist_entity_id).first()
-        if entity:
+        if entity and entity.bio_status == "done":
             return entity.to_dict()
+        if entity:
+            # Retry bio computation (handles pending, processing, or failed states)
+            artist_entity_id = entity.id
+            db.close()
+            await _do_artist_bio(artist_entity_id)
+            with SessionLocal() as fresh_db:
+                entity = fresh_db.query(ArtistEntity).filter(ArtistEntity.id == artist_entity_id).first()
+                return entity.to_dict() if entity else {"artist_entity_id": artist_entity_id}
 
-    # Create/link entity
+    # Create/link entity then compute bio inline
     artist_ent = upsert_artist_entity(db, artist_name)
     db.flush()
     artwork.artist_entity_id = artist_ent.id
     db.commit()
-    db.refresh(artist_ent)
+    artist_entity_id = artist_ent.id
+    db.close()
 
-    # Fire bio computation if needed
-    if artist_ent.bio_status in (None, "pending") and background_tasks:
-        background_tasks.add_task(_run_artist_bio_bg, artist_ent.id)
-
-    return artist_ent.to_dict()
+    await _do_artist_bio(artist_entity_id)
+    with SessionLocal() as fresh_db:
+        entity = fresh_db.query(ArtistEntity).filter(ArtistEntity.id == artist_entity_id).first()
+        return entity.to_dict() if entity else {"artist_entity_id": artist_entity_id}
 
 
 @router.get("/artworks/{artwork_id}")
