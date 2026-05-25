@@ -64,3 +64,12 @@ backend/uploads/*
 .vercel
 logo/
 .env.*!.env.example
+
+# Local tooling / Claude
+.claude/
+.claude-code-hermit/
+assets/
+dataset/
+plans/
+backend/eval/
+backend/.vercelignore
