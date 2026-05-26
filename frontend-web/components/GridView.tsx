@@ -12,10 +12,7 @@ interface Props {
 }
 
 const GridView: React.FC<Props> = ({ items, visit, filteredVisitId, isAnalyzing, onInterpret, onDelete }) => {
-  const activeId = filteredVisitId || (visit.active ? visit.id : null);
-  const displayItems = activeId
-    ? items.filter(i => i.visitId === activeId || (visit.active && visit.itemIds.includes(i.id)))
-    : items;
+  const displayItems = items;
 
   return (
     <div className="w-full h-full overflow-y-auto">

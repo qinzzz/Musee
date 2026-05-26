@@ -27,21 +27,21 @@ export default function ArtistsIndexPage({ userId, onSelectArtist, onClose }: Pr
 
   return (
     <div
-      className="fixed inset-0 z-[1200] bg-[#0e0e0e] flex flex-col overflow-hidden"
+      className="fixed inset-0 z-[1200] bg-[#faf9f7] flex flex-col overflow-hidden"
       style={{ fontFamily: 'system-ui, sans-serif' }}
     >
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-safe pt-4 pb-3 border-b border-white/10 shrink-0">
+      <div className="flex items-center gap-3 px-4 pt-safe pt-4 pb-3 border-b border-neutral-200/80 shrink-0">
         <button
           onClick={onClose}
-          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-200/50 transition-colors"
           aria-label="Back"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-700">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <h1 className="text-white text-base font-semibold tracking-tight">Artists</h1>
+        <h1 className="text-neutral-900 text-base font-semibold tracking-tight">Artists</h1>
       </div>
 
       {/* Body */}
@@ -50,35 +50,34 @@ export default function ArtistsIndexPage({ userId, onSelectArtist, onClose }: Pr
           {isLoading ? (
             <div className="space-y-3 mt-2">
               {[1, 2, 3, 4].map(i => (
-                <div key={i} className="h-16 rounded-xl bg-white/5 animate-pulse" />
+                <div key={i} className="h-16 rounded-xl bg-neutral-200/40 animate-pulse" />
               ))}
             </div>
           ) : artists.length === 0 ? (
-            <p className="text-white/30 text-sm italic mt-8 text-center">
+            <p className="text-neutral-400 text-sm italic mt-8 text-center">
               No artists recorded yet.
             </p>
           ) : (
-            <ul className="divide-y divide-white/5">
+            <ul className="divide-y divide-neutral-200/60">
               {artists.map(artist => (
                 <li key={artist.id}>
                   <button
                     onClick={() => onSelectArtist(artist)}
-                    className="w-full flex items-center gap-4 py-4 hover:bg-white/5 rounded-xl px-2 -mx-2 transition-colors text-left"
+                    className="w-full flex items-center gap-4 py-4 hover:bg-[#f1ece1] rounded-xl px-2 -mx-2 transition-colors text-left"
                   >
                     {/* Avatar */}
                     <div
-                      className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-lg font-semibold text-white/60"
-                      style={{ background: '#252525' }}
+                      className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-lg font-semibold text-neutral-600 bg-[#efe8dc]"
                     >
                       {artist.display_name[0]?.toUpperCase() ?? '?'}
                     </div>
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-[15px] font-medium truncate leading-tight">
+                      <p className="text-neutral-900 text-[15px] font-medium truncate leading-tight">
                         {artist.display_name}
                       </p>
-                      <p className="text-white/40 text-xs mt-0.5 truncate">
+                      <p className="text-neutral-500 text-xs mt-0.5 truncate">
                         {[
                           artist.nationality,
                           artist.birth_year && artist.death_year
@@ -93,12 +92,12 @@ export default function ArtistsIndexPage({ userId, onSelectArtist, onClose }: Pr
                     </div>
 
                     {/* Artwork count badge */}
-                    <span className="text-white/30 text-xs shrink-0">
+                    <span className="text-neutral-400 text-xs shrink-0">
                       {artist.artwork_count} {artist.artwork_count === 1 ? 'work' : 'works'}
                     </span>
 
                     {/* Chevron */}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/20 shrink-0">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-300 shrink-0">
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
                   </button>
