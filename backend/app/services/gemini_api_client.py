@@ -164,15 +164,15 @@ class GeminiAPIClient(AIClientInterface):
             role="user",
             parts=[types.Part.from_text(text=initial_prompt)]
         ))
-        
-        # Artwork image
-        contents.append(types.Content(
-            role="user",
-            parts=[
-                types.Part.from_text(text="Here is the artwork to analyze:"),
-                types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
-            ]
-        ))
+
+        if image_data:
+            contents.append(types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_text(text="Here is the artwork to analyze:"),
+                    types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
+                ]
+            ))
         
         # Previous conversation
         if previous_messages:
