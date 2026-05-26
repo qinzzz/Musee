@@ -20,12 +20,11 @@ import {
   deleteArtwork,
   prefetchExploreDataWithContext,
   reanalyzeArtwork,
+  exhibitionChatStream,
 } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
 import InterpretationModal from './components/InterpretationModal';
-import CuratorRoom from './components/CuratorRoom';
-import ExhibitionHallView from './components/ExhibitionHallView';
 import EmptyWall from './components/EmptyWall';
 import OrganizeView from './components/OrganizeView';
 import TopographyView from './components/TopographyView';
@@ -35,6 +34,7 @@ import ArtMovementPage from './components/ArtMovementPage';
 import LearningHubPage from './components/LearningHubPage';
 import Toast, { ToastAction } from './components/Toast';
 import ContextualActionBar from './components/ContextualActionBar';
+import CanvasHeader from './components/CanvasHeader';
 
 // Helper to report metrics (can integrate with @vercel/speed-insights or custom analytics)
 const reportStreamingMetrics = (metrics: StreamingMetrics) => {
@@ -217,21 +217,44 @@ const MOCK_NEIGHBORS: NeighborItem[] = [
 
 // Persistent user ID for the current browser session
 const USER_ID = getOrCreateUserId();
+const VISIT_DRAFTS_STORAGE_KEY = 'musee_visit_drafts';
+const VISIT_STREAMS_STORAGE_KEY = 'musee_visit_streams';
+const DEFAULT_VISIT_TITLE = 'Untitled Visit';
+
+type VisitStreamMessage = Message & {
+  id: string;
+  createdAt: number;
+};
+
+type VisitDraft = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type VisitSummary = {
+  id: string;
+  title: string;
+  location: string | null;
+  artworkCount: number;
+  updatedAt: number;
+  dateLabel: string | null;
+  items: GalleryItem[];
+};
 
 const App: React.FC = () => {
   const albumInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
-  const [activeTab, setActiveTab] = useState<'explore' | 'collect' | 'profile'>(() => {
+  const [activeTab, setActiveTab] = useState<'explore' | 'collect' | 'profile' | 'learn'>(() => {
     const p = window.location.pathname;
     if (p === '/profile') return 'profile';
     if (p === '/saved' || p === '/boards' || p === '/art-movements' || p === '/artists' || p.startsWith('/art-movements/')) return 'collect';
+    if (p.startsWith('/learning')) return 'learn';
     return 'explore';
   });
-  const [showLearningHub, setShowLearningHub] = useState<boolean>(() =>
-    window.location.pathname.startsWith('/learning')
-  );
   const [learningInitialGuide] = useState<string | null>(() => {
     const p = window.location.pathname;
     if (p.startsWith('/learning/')) return p.slice('/learning/'.length) || null;
@@ -267,16 +290,12 @@ const App: React.FC = () => {
     photoTime?: string,
     location?: string,
   } | null>(null);
-  const [curatorRoomContext, setCuratorRoomContext] = useState<{ items: GalleryItem[], visitId?: string, initialMessage?: string } | null>(null);
 
   // Curator conversation history — persisted to localStorage
   const [curatorConversations, setCuratorConversations] = useState<CuratorConversation[]>(() => {
     try { return JSON.parse(localStorage.getItem('musee_curator_conversations') || '[]'); }
     catch { return []; }
   });
-  const [exhibitionInput, setExhibitionInput] = useState('');
-  const [exhibitionInputFocused, setExhibitionInputFocused] = useState(false);
-  const exhibitionInputRef = useRef<HTMLInputElement>(null);
   const [galleryEdges, setGalleryEdges] = useState({ hasPrev: false, hasNext: false });
   const [activeThumbIndex, setActiveThumbIndex] = useState(0);
   const thumbStripRef = useRef<HTMLDivElement>(null);
@@ -308,6 +327,7 @@ const App: React.FC = () => {
   // ── Centralised URL ↔ state helpers ──────────────────────────────────────
   function stateToPath(tab: string, collectSub: string): string {
     if (tab === 'profile') return '/profile';
+    if (tab === 'learn') return '/learning';
     if (tab === 'collect') {
       if (collectSub === 'boards') return '/boards';
       if (collectSub === 'movements') return '/art-movements';
@@ -338,10 +358,9 @@ const App: React.FC = () => {
       setArtistPageContext(null);
       setMovementPageContext(null);
       if (path.startsWith('/learning')) {
-        setShowLearningHub(true);
+        setActiveTab('learn');
         return;
       }
-      setShowLearningHub(false);
       if (path === '/profile') {
         setActiveTab('profile');
       } else if (path === '/saved' || path === '/boards' || path === '/art-movements' || path === '/artists') {
@@ -360,12 +379,12 @@ const App: React.FC = () => {
 
   // Sync state → URL whenever a tab changes (skip when overlay pages own the URL)
   useEffect(() => {
-    if (artistPageContext || movementPageContext || showLearningHub) return;
+    if (artistPageContext || movementPageContext) return;
     const path = stateToPath(activeTab, collectTab);
     if (window.location.pathname !== path) {
       window.history.pushState({}, '', path);
     }
-  }, [activeTab, collectTab, artistPageContext, movementPageContext, showLearningHub]);
+  }, [activeTab, collectTab, artistPageContext, movementPageContext]);
 
   /** 
    * Algorithmic Session Determination (Phase 7)
@@ -449,8 +468,20 @@ const App: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
   const [quotaInfo, setQuotaInfo] = useState<UserQuota | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
+  const [visitSearch, setVisitSearch] = useState('');
+  const [visitDrafts, setVisitDrafts] = useState<VisitDraft[]>(() => {
+    try { return JSON.parse(localStorage.getItem(VISIT_DRAFTS_STORAGE_KEY) || '[]'); }
+    catch { return []; }
+  });
+  const [visitStreams, setVisitStreams] = useState<Record<string, VisitStreamMessage[]>>(() => {
+    try { return JSON.parse(localStorage.getItem(VISIT_STREAMS_STORAGE_KEY) || '{}'); }
+    catch { return {}; }
+  });
+  const [streamingVisitResponses, setStreamingVisitResponses] = useState<Record<string, string>>({});
 
   const [likedIds, setLikedIds] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('musee_liked_ids') || '[]')); }
@@ -506,33 +537,24 @@ const App: React.FC = () => {
     });
   };
 
-  const handleOpenCurator = () => {
-    setCuratorRoomContext({ items: items.slice(0, 10) });
-  };
-
-  const [artworkChatMessage, setArtworkChatMessage] = useState<string | null>(null);
-  const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'chat' | 'community'>('metadata');
-  const [interpretationAskExpanded, setInterpretationAskExpanded] = useState(false);
+  const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'community'>('metadata');
   const [interpretingMode, setInterpretingMode] = useState<'professional' | 'interactive'>(
     () => (localStorage.getItem('musee_analysis_mode') as 'professional' | 'interactive') ?? 'professional'
   );
-
-  const handleInquiry = (text: string) => {
-    if (interpretingItem) {
-      setArtworkChatMessage(text);
-    } else if (filteredVisitId) {
-      const visitItems = items.filter(i => i.visitId === filteredVisitId);
-      setCuratorRoomContext({ items: visitItems, visitId: filteredVisitId, initialMessage: text });
-    } else {
-      setCuratorRoomContext({ items: items.slice(0, 10), initialMessage: text });
-    }
-  };
 
   const [visit, setVisit] = useState<Visit>({
     id: 'initial-' + Math.random().toString(36).substring(7),
     itemIds: [],
     globalConversation: []
   });
+
+  useEffect(() => {
+    localStorage.setItem(VISIT_DRAFTS_STORAGE_KEY, JSON.stringify(visitDrafts));
+  }, [visitDrafts]);
+
+  useEffect(() => {
+    localStorage.setItem(VISIT_STREAMS_STORAGE_KEY, JSON.stringify(visitStreams));
+  }, [visitStreams]);
 
   // Fetch previous artworks on mount
   useEffect(() => {
@@ -697,6 +719,108 @@ const App: React.FC = () => {
     } catch { return dateStr; }
   };
 
+  const visitSummaries = useMemo(() => {
+    const grouped = new Map<string, GalleryItem[]>();
+    items.forEach(item => {
+      if (!item.visitId) return;
+      if (!grouped.has(item.visitId)) grouped.set(item.visitId, []);
+      grouped.get(item.visitId)!.push(item);
+    });
+
+    const summaries: VisitSummary[] = [];
+    const knownIds = new Set<string>();
+
+    grouped.forEach((visitItems, id) => {
+      knownIds.add(id);
+      const sortedItems = [...visitItems].sort((a, b) => a.timestamp - b.timestamp);
+      const latestItem = sortedItems[sortedItems.length - 1];
+      const firstItem = sortedItems[0];
+      const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
+      const title = latestItem?.sessionTitle || location || visitDrafts.find(v => v.id === id)?.title || DEFAULT_VISIT_TITLE;
+      summaries.push({
+        id,
+        title,
+        location,
+        artworkCount: sortedItems.length,
+        updatedAt: latestItem?.timestamp || Date.now(),
+        dateLabel: latestItem?.photoTime ? parseDisplayDate(latestItem.photoTime) : null,
+        items: sortedItems,
+      });
+    });
+
+    visitDrafts.forEach(draft => {
+      if (knownIds.has(draft.id)) return;
+      summaries.push({
+        id: draft.id,
+        title: draft.title || DEFAULT_VISIT_TITLE,
+        location: null,
+        artworkCount: 0,
+        updatedAt: draft.updatedAt,
+        dateLabel: new Date(draft.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        items: [],
+      });
+    });
+
+    const search = visitSearch.trim().toLowerCase();
+    return summaries
+      .filter(summary => {
+        if (!search) return true;
+        return summary.title.toLowerCase().includes(search) || (summary.location || '').toLowerCase().includes(search);
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [items, visitDrafts, visitSearch]);
+
+  const activeVisitSummary = useMemo(() => {
+    if (filteredVisitId === 'new_visit') {
+      return {
+        id: 'new_visit',
+        title: DEFAULT_VISIT_TITLE,
+        location: null,
+        artworkCount: 0,
+        updatedAt: Date.now(),
+        dateLabel: null,
+        items: [],
+      };
+    }
+    return visitSummaries.find(summary => summary.id === filteredVisitId) || visitSummaries[0] || null;
+  }, [visitSummaries, filteredVisitId]);
+
+  const activeVisitStream = useMemo(() => {
+    if (!activeVisitSummary) return [];
+    const messages = visitStreams[activeVisitSummary.id] || [];
+    const artworkEntries = activeVisitSummary.items.map(item => ({
+      id: `artwork-${item.id}`,
+      createdAt: item.timestamp,
+      type: 'artwork' as const,
+      item,
+    }));
+    const messageEntries = messages.map(entry => ({
+      id: entry.id,
+      createdAt: entry.createdAt,
+      type: 'message' as const,
+      message: entry,
+    }));
+    return [...artworkEntries, ...messageEntries].sort((a, b) => a.createdAt - b.createdAt);
+  }, [activeVisitSummary, visitStreams]);
+
+  useEffect(() => {
+    if (filteredVisitId && visitSummaries.some(summary => summary.id === filteredVisitId)) return;
+    setFilteredVisitId(visitSummaries[0]?.id || null);
+  }, [visitSummaries, filteredVisitId]);
+
+  useEffect(() => {
+    const syncSidebarForViewport = () => {
+      if (window.innerWidth >= 768) {
+        setSidebarOpen(true);
+      } else {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', syncSidebarForViewport);
+    return () => window.removeEventListener('resize', syncSidebarForViewport);
+  }, []);
+
   const handleScroll = () => {
     if (!scrollRef.current) return;
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
@@ -769,6 +893,95 @@ const App: React.FC = () => {
       itemIds: [item.id],
       globalConversation: []
     });
+  };
+
+  const createVisitDraft = () => {
+    const now = Date.now();
+    const newVisit: VisitDraft = {
+      id: `visit_${Math.random().toString(36).substring(2, 11)}`,
+      title: DEFAULT_VISIT_TITLE,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setVisitDrafts(prev => [newVisit, ...prev.filter(v => v.id !== newVisit.id)]);
+    setFilteredVisitId(newVisit.id);
+    setVisit({
+      id: newVisit.id,
+      itemIds: [],
+      globalConversation: [],
+    });
+    return newVisit.id;
+  };
+
+  const appendVisitMessages = (visitId: string, newMessages: VisitStreamMessage[]) => {
+    setVisitStreams(prev => ({
+      ...prev,
+      [visitId]: [...(prev[visitId] || []), ...newMessages],
+    }));
+    setVisitDrafts(prev => prev.map(draft =>
+      draft.id === visitId ? { ...draft, updatedAt: newMessages[newMessages.length - 1]?.createdAt || draft.updatedAt } : draft
+    ));
+  };
+
+  const handleVisitInquiry = (text: string) => {
+    let targetVisitId = activeVisitSummary?.id;
+    if (!targetVisitId || targetVisitId === 'new_visit') {
+      targetVisitId = createVisitDraft();
+    }
+    const createdAt = Date.now();
+    const userMsg: VisitStreamMessage = {
+      id: `visit-msg-${createdAt}`,
+      role: 'user',
+      text,
+      createdAt,
+    };
+    const existingMessages = visitStreams[targetVisitId] || [];
+    appendVisitMessages(targetVisitId, [userMsg]);
+    setStreamingVisitResponses(prev => ({ ...prev, [targetVisitId]: '' }));
+
+    exhibitionChatStream(
+      (activeVisitSummary?.id === targetVisitId ? activeVisitSummary.items : items.filter(item => item.visitId === targetVisitId)).map(i => ({
+        id: i.id,
+        url: i.url,
+        keywords: i.keywords,
+      })),
+      existingMessages.map(({ role, text: messageText }) => ({ role, text: messageText })),
+      text,
+      (chunk) => {
+        setStreamingVisitResponses(prev => ({
+          ...prev,
+          [targetVisitId]: (prev[targetVisitId] || '') + chunk,
+        }));
+      },
+      (fullResponse) => {
+        const assistantMsg: VisitStreamMessage = {
+          id: `visit-msg-${Date.now()}-assistant`,
+          role: 'model',
+          text: fullResponse,
+          createdAt: Date.now(),
+        };
+        appendVisitMessages(targetVisitId, [assistantMsg]);
+        setStreamingVisitResponses(prev => {
+          const next = { ...prev };
+          delete next[targetVisitId];
+          return next;
+        });
+      },
+      () => {
+        const assistantMsg: VisitStreamMessage = {
+          id: `visit-msg-${Date.now()}-error`,
+          role: 'model',
+          text: 'Something interrupted the reflection stream. Please try again.',
+          createdAt: Date.now(),
+        };
+        appendVisitMessages(targetVisitId, [assistantMsg]);
+        setStreamingVisitResponses(prev => {
+          const next = { ...prev };
+          delete next[targetVisitId];
+          return next;
+        });
+      }
+    );
   };
 
   useEffect(() => {
@@ -987,6 +1200,21 @@ const App: React.FC = () => {
           contextVisitId: filteredVisitId
         });
 
+        if (filteredVisitId === 'new_visit') {
+          setFilteredVisitId(visitId);
+        }
+
+        if (isNew || filteredVisitId === 'new_visit') {
+          const now = Date.now();
+          const newVisit: VisitDraft = {
+            id: visitId,
+            title: DEFAULT_VISIT_TITLE,
+            createdAt: now,
+            updatedAt: now,
+          };
+          setVisitDrafts(prev => [newVisit, ...prev.filter(v => v.id !== visitId)]);
+        }
+
         const newItemId = Math.random().toString(36).substring(2, 11);
         const placeholderItem: GalleryItem = {
           id: newItemId,
@@ -1106,6 +1334,21 @@ const App: React.FC = () => {
         lat: anchorMeta.latitude,
         lng: anchorMeta.longitude
       });
+
+      if (filteredVisitId === 'new_visit') {
+        setFilteredVisitId(batchVisitId);
+      }
+
+      {
+        const now = Date.now();
+        const newVisit: VisitDraft = {
+          id: batchVisitId,
+          title: DEFAULT_VISIT_TITLE,
+          createdAt: now,
+          updatedAt: now,
+        };
+        setVisitDrafts(prev => [newVisit, ...prev.filter(v => v.id !== batchVisitId)]);
+      }
       
       setVisit(prev => ({ ...prev, id: batchVisitId, itemIds: [], globalConversation: [] }));
 
@@ -1184,8 +1427,6 @@ const App: React.FC = () => {
   // Reset interpretation panel state when opening a new artwork
   useEffect(() => {
     setInterpretationRightMode('metadata');
-    setInterpretationAskExpanded(false);
-    setArtworkChatMessage(null);
   }, [interpretingItem?.id]);
 
   useEffect(() => {
@@ -1328,21 +1569,13 @@ const App: React.FC = () => {
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
 
-  const isVisitMode = !!filteredVisitId;
-
-  // ── Visit mode theme — change these to restyle the immersive visit look ──
-  const visitTheme = {
-    bg: '#1a1a1a',
-    text: 'text-white',
-  } as const;
+  const isVisitMode = activeTab === 'explore' && !!filteredVisitId;
 
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <div
-        className={`relative w-screen h-dvh overflow-hidden flex flex-col transition-colors duration-700 ${isVisitMode ? visitTheme.text : ''}`}
-        style={{ backgroundColor: isVisitMode ? visitTheme.bg : '#ffffff' }}
+        className="relative flex h-dvh w-screen flex-row overflow-hidden bg-[#faf9f7] text-neutral-900"
       >
-        {/* Toast Notifier (Phase 7) */}
         {toast && (
           <Toast
             message={toast.message}
@@ -1352,188 +1585,67 @@ const App: React.FC = () => {
           />
         )}
 
-        {/* Bottom-left user panel */}
-        {!filteredVisitId && (
-          <div className="fixed bottom-4 left-4 z-50">
-            {currentUser ? (
-              <div className="relative">
-                {/* Avatar trigger */}
-                <button
-                  onClick={() => setShowUserMenu(v => !v)}
-                  className="w-9 h-9 rounded-full overflow-hidden border-2 border-white/30 shadow-lg hover:scale-105 active:scale-95 transition-all"
-                >
-                  <img src={currentUser.profile_picture_url} alt={currentUser.full_name} className="w-full h-full object-cover" />
-                </button>
-
-                {/* Dropdown */}
-                {showUserMenu && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                    <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-neutral-200 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                      {/* User header */}
-                      <div className="px-4 pt-4 pb-3">
-                        <div className="flex items-center gap-3">
-                          <img src={currentUser.profile_picture_url} alt={currentUser.full_name} className="w-9 h-9 rounded-full object-cover shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-semibold text-neutral-900 truncate leading-tight">{currentUser.full_name}</p>
-                            <p className="text-[11px] text-neutral-400 truncate leading-tight mt-0.5">{currentUser.email}</p>
-                          </div>
-                          <span className="text-[10px] bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-md font-semibold shrink-0 capitalize">{quotaInfo?.tier ?? 'free'}</span>
-                        </div>
-                        {quotaInfo && quotaInfo.limit !== null && (
-                          <div className="mt-3">
-                            <div className="h-1 bg-neutral-100 rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all"
-                                style={{
-                                  width: `${Math.min(100, (quotaInfo.used / quotaInfo.limit) * 100)}%`,
-                                  backgroundColor: quotaInfo.used >= quotaInfo.limit ? '#ef4444' : quotaInfo.used / quotaInfo.limit > 0.8 ? '#f59e0b' : '#262626',
-                                }}
-                              />
-                            </div>
-                            <p className="text-[11px] text-neutral-400 mt-1.5">{quotaInfo.used} / {quotaInfo.limit} artworks</p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="h-px bg-neutral-100 mx-3" />
-
-                      {/* Language row */}
-                      <div className="px-4 py-3 flex items-center justify-between">
-                        <span className="text-[13px] text-neutral-600">Language</span>
-                        <div className="flex bg-neutral-100 rounded-full p-0.5 gap-0.5">
-                          <button
-                            onClick={() => { setLanguage('en'); localStorage.setItem('musee_language', 'en'); }}
-                            className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all ${language === 'en' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-700'}`}
-                          >EN</button>
-                          <button
-                            onClick={() => { setLanguage('zh'); localStorage.setItem('musee_language', 'zh'); }}
-                            className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all ${language === 'zh' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-700'}`}
-                          >中文</button>
-                        </div>
-                      </div>
-
-                      <div className="h-px bg-neutral-100 mx-3" />
-
-                      {/* Menu items */}
-                      <div className="py-1.5">
-                        {[
-                          {
-                            label: 'Account Settings',
-                            icon: <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>,
-                            action: () => { setShowUserMenu(false); setShowAccountModal('account'); },
-                            extra: <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                          },
-                          {
-                            label: 'Personalization',
-                            icon: <path d="M12 20h9"/>,
-                            action: () => { setShowUserMenu(false); setShowAccountModal('personalization'); },
-                            extra: <><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></>
-                          },
-                          {
-                            label: 'Give feedback',
-                            icon: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>,
-                            action: () => setShowUserMenu(false),
-                            extra: null
-                          },
-                          {
-                            label: 'Terms and Privacy',
-                            icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>,
-                            action: () => { setShowUserMenu(false); window.open('/terms.html', '_blank'); },
-                            extra: null
-                          },
-                        ].map(({ label, icon, extra, action }) => (
-                          <button key={label} onClick={action} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors text-left" style={{ cursor: 'pointer' }}>
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400 shrink-0">
-                              {icon}{extra}
-                            </svg>
-                            <span className="text-[13px] text-neutral-700">{label}</span>
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="h-px bg-neutral-100 mx-3" />
-
-                      {/* Log out */}
-                      <div className="py-1.5">
-                        <button
-                          onClick={() => { setShowUserMenu(false); handleLogout(); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors text-left"
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400 shrink-0">
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-                          </svg>
-                          <span className="text-[13px] text-neutral-700">Log out</span>
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
+        {showLoginModal && !currentUser && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowLoginModal(false)} />
+            <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+              <h3 className="text-lg font-bold text-neutral-900 mb-2">Sign in to Musee</h3>
+              <p className="mb-6 text-[13px] leading-relaxed text-neutral-500">
+                Sign in to save your collections, view your aesthetic taste profile, and access your artwork analysis history.
+              </p>
+              <div className="flex justify-center">
+                <GoogleLogin
+                  onLoginSuccess={(user) => {
+                    handleLoginSuccess(user);
+                    setShowLoginModal(false);
+                  }}
+                  onLoginError={() => alert('Login Error')}
+                />
               </div>
-            ) : (
-              <div className="relative">
-                {/* Anonymous icon — indicates not signed in */}
-                <button
-                  onClick={() => setShowLoginModal(v => !v)}
-                  title="Sign in"
-                  className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 shadow-lg flex items-center justify-center text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                  </svg>
-                </button>
-                {/* Sign-in popover */}
-                {showLoginModal && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowLoginModal(false)} />
-                    <div className="absolute bottom-full left-0 mb-2 z-50 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 w-64 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                      <p className="text-[12px] text-neutral-500 mb-3 leading-relaxed">Sign in to save your collection and analysis history.</p>
-                      <div className="flex justify-center">
-                      <GoogleLogin
-                        onLoginSuccess={(user) => { handleLoginSuccess(user); setShowLoginModal(false); }}
-                        onLoginError={() => alert(`Login Error`)}
-                      />
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+            </div>
           </div>
         )}
 
-        {/* Account Settings / Personalization Modal */}
         {showAccountModal && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAccountModal(null)} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border border-neutral-200">
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
-                <h2 className="text-[15px] font-semibold text-neutral-900">{showAccountModal === 'account' ? 'Account settings' : 'Personalization'}</h2>
-                <button onClick={() => setShowAccountModal(null)} className="w-7 h-7 flex items-center justify-center rounded-full text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors text-base">✕</button>
+            <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
+                <h2 className="text-[15px] font-semibold text-neutral-900">
+                  {showAccountModal === 'account' ? 'Account settings' : 'Personalization'}
+                </h2>
+                <button
+                  onClick={() => setShowAccountModal(null)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-base text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                >
+                  ✕
+                </button>
               </div>
 
               {showAccountModal === 'account' ? (
-                <div className="px-5 py-5 flex flex-col gap-5">
+                <div className="flex flex-col gap-5 px-5 py-5">
                   <div>
-                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Display name</label>
-                    <div className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-900">{currentUser?.full_name || '—'}</div>
+                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Display name</label>
+                    <div className="mt-1.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-900">
+                      {currentUser?.full_name || '—'}
+                    </div>
                   </div>
                   <div>
-                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Username</label>
-                    <div className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-900">{currentUser?.full_name?.toLowerCase().replace(/\s+/g, '') || '—'}</div>
+                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Username</label>
+                    <div className="mt-1.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-900">
+                      {currentUser?.full_name?.toLowerCase().replace(/\s+/g, '') || '—'}
+                    </div>
                   </div>
                   <div>
-                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Email</label>
-                    <div className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-500">{currentUser?.email || '—'}</div>
+                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Email</label>
+                    <div className="mt-1.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-500">
+                      {currentUser?.email || '—'}
+                    </div>
                   </div>
-                  {/* Quota bar */}
                   <div className="border-t border-neutral-100 pt-4">
-                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Plan</label>
+                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Plan</label>
                     <div className="mt-2 flex items-center justify-between">
-                      <span className="text-[13px] text-neutral-700 capitalize">{quotaInfo?.tier ?? 'free'}</span>
+                      <span className="text-[13px] capitalize text-neutral-700">{quotaInfo?.tier ?? 'free'}</span>
                       <span className="text-[11px] text-neutral-400">
                         {quotaInfo
                           ? quotaInfo.limit === null
@@ -1543,322 +1655,646 @@ const App: React.FC = () => {
                       </span>
                     </div>
                     {quotaInfo && quotaInfo.limit !== null && (
-                      <div className="mt-1.5 w-full bg-neutral-100 rounded-full h-1.5 overflow-hidden">
+                      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{
                             width: `${Math.min(100, (quotaInfo.used / quotaInfo.limit) * 100)}%`,
-                            backgroundColor: quotaInfo.used >= quotaInfo.limit ? '#ef4444' : quotaInfo.used / quotaInfo.limit > 0.8 ? '#f59e0b' : '#a3a3a3',
+                            backgroundColor:
+                              quotaInfo.used >= quotaInfo.limit
+                                ? '#ef4444'
+                                : quotaInfo.used / quotaInfo.limit > 0.8
+                                  ? '#f59e0b'
+                                  : '#a3a3a3',
                           }}
                         />
                       </div>
                     )}
                   </div>
-
-                  <div className="border-t border-neutral-100 pt-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] text-neutral-700">Keep analyses private</span>
-                          <span className="text-[9px] bg-neutral-200 text-neutral-500 px-1.5 py-0.5 rounded-md font-semibold">Pro</span>
-                        </div>
-                        <p className="text-[11px] text-neutral-400 mt-0.5 leading-snug">Your gallery won't be visible to others</p>
-                      </div>
-                      <div className="w-10 h-6 bg-neutral-200 rounded-full relative shrink-0 opacity-50 cursor-not-allowed mt-0.5">
-                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow-sm" />
-                      </div>
-                    </div>
-                  </div>
                 </div>
               ) : (
-                <div className="px-5 py-5 flex flex-col gap-5">
+                <div className="flex flex-col gap-5 px-5 py-5">
                   <div>
-                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Gallery theme</label>
-                    <select className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-600 outline-none appearance-none">
+                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Gallery theme</label>
+                    <select className="mt-1.5 w-full appearance-none rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-600 outline-none">
                       <option value="">Minimal (default)</option>
                       <option value="warm">Warm</option>
                       <option value="dark">Dark</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Card density</label>
-                    <select className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-600 outline-none appearance-none">
+                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Card density</label>
+                    <select className="mt-1.5 w-full appearance-none rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-600 outline-none">
                       <option value="">Comfortable (default)</option>
                       <option value="compact">Compact</option>
                       <option value="spacious">Spacious</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">Analysis language</label>
-                    <select className="mt-1.5 w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-[14px] text-neutral-600 outline-none appearance-none">
+                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Analysis language</label>
+                    <select
+                      value={language}
+                      onChange={(event) => {
+                        const nextLanguage = event.target.value;
+                        setLanguage(nextLanguage);
+                        localStorage.setItem('musee_language', nextLanguage);
+                      }}
+                      className="mt-1.5 w-full appearance-none rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-600 outline-none"
+                    >
                       <option value="en">English</option>
                       <option value="zh">中文</option>
                     </select>
                   </div>
-                  <p className="text-[11px] text-neutral-300 text-center">More personalization options coming soon</p>
+                  {currentUser && (
+                    <button
+                      onClick={handleLogout}
+                      className="rounded-xl border border-neutral-200 px-3 py-2.5 text-left text-[14px] text-neutral-700 transition-colors hover:bg-neutral-50"
+                    >
+                      Sign out
+                    </button>
+                  )}
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* Solid background strip behind top nav — height expands on taste-map to cover sub-tab bar */}
-        <div
-          className="fixed top-0 left-0 right-0 z-[65] bg-[#faf9f7] transition-all duration-300"
-          style={{ height: 44 }}
-        />
-
-        {/* Top Tab Bar — Explore / Collect / Profile */}
-        {!filteredVisitId && (
-          <>
-            <div
-              className="fixed top-2 left-1/2 -translate-x-1/2 z-[70] flex items-center bg-white border border-neutral-200 rounded-full shadow-sm px-1 py-1"
-              style={{ pointerEvents: 'auto' }}
-            >
-              {(['explore', 'collect', 'profile'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-3 sm:px-4 py-1 rounded-full text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-bold transition-all whitespace-nowrap ${
-                    activeTab === tab
-                      ? 'bg-neutral-900 text-white'
-                      : 'text-neutral-400 hover:text-neutral-700'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-
-            {/* Learning Hub button — top right */}
+        {/* Global unified sidebar */}
+        <aside
+          className={`shrink-0 z-30 overflow-hidden border-r border-neutral-200 bg-[#fbf8f2] transition-all duration-300 flex flex-col h-full ${
+            sidebarOpen
+              ? 'fixed inset-y-0 left-0 w-[260px] translate-x-0 shadow-[0_18px_60px_rgba(0,0,0,0.12)] md:shadow-none md:relative md:inset-auto md:translate-x-0'
+              : 'fixed inset-y-0 left-0 w-[260px] -translate-x-full md:translate-x-0 md:relative md:inset-auto'
+          } ${sidebarCollapsed ? 'md:w-0 md:border-r-0 md:opacity-0 md:pointer-events-none' : 'md:w-[260px] md:opacity-100'}`}
+        >
+          {/* Brand & Collapse Row */}
+          <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-[18px] shrink-0">
+            <h1 className="text-[14px] font-bold tracking-[0.2em] uppercase text-neutral-800">Musee</h1>
             <button
-              onClick={() => setShowLearningHub(true)}
-              className="fixed top-2 right-4 z-[70] flex items-center gap-1.5 bg-white border border-neutral-200 rounded-full shadow-sm px-3 py-1.5 text-neutral-500 hover:text-neutral-900 hover:border-neutral-400 transition-all"
-              title="Learning Hub"
+              onClick={() => {
+                if (window.innerWidth < 768) {
+                  setSidebarOpen(false);
+                } else {
+                  setSidebarCollapsed(true);
+                }
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors hover:text-neutral-900"
+              title="Collapse sidebar"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+                <path d="M16 15l-3-3 3-3" />
               </svg>
-              <span className="text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-bold hidden sm:inline">Learn</span>
             </button>
-          </>
+          </div>
+
+          {/* Top Navigation Links */}
+          <div className="flex flex-col gap-1 px-3 py-4 shrink-0">
+            {[
+              {
+                id: 'explore',
+                label: 'Explore',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                  </svg>
+                )
+              },
+              {
+                id: 'collect',
+                label: 'Collect',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2 2H2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                )
+              },
+              {
+                id: 'profile',
+                label: 'Profile',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/>
+                  </svg>
+                )
+              },
+              {
+                id: 'learn',
+                label: 'Learn',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                    <path d="M22 3h-6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3h7z"/>
+                  </svg>
+                )
+              }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  setArtistPageContext(null);
+                  setMovementPageContext(null);
+                  setInterpretingItem(null);
+                  if (window.innerWidth < 768) {
+                    setSidebarOpen(false);
+                  }
+                }}
+                className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-[12px] font-semibold tracking-[0.1em] uppercase text-left transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-neutral-900 text-white shadow-md'
+                    : 'text-neutral-500 hover:text-neutral-955 hover:bg-neutral-100'
+                }`}
+              >
+                <span className={activeTab === tab.id ? 'text-white' : 'text-neutral-400'}>
+                  {tab.icon}
+                </span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="h-px bg-neutral-200/60 my-1 mx-4" />
+
+          {/* Sessions Section */}
+          <div className="px-4 pt-3 pb-1 shrink-0">
+            <p className="text-[10px] tracking-[0.2em] uppercase font-bold text-neutral-400">Sessions</p>
+          </div>
+
+          {/* New visit button inside sidebar above all sessions */}
+          <div className="px-3 py-1.5 shrink-0">
+            <button
+              onClick={() => {
+                setActiveTab('explore');
+                setFilteredVisitId('new_visit');
+                setVisit({
+                  id: 'new_visit',
+                  itemIds: [],
+                  globalConversation: [],
+                });
+                setArtistPageContext(null);
+                setMovementPageContext(null);
+                setInterpretingItem(null);
+                if (window.innerWidth < 768) {
+                  setSidebarOpen(false);
+                }
+              }}
+              className="flex w-full items-center justify-center gap-3 rounded-[16px] bg-neutral-900 px-4 py-3 text-[13px] font-bold uppercase tracking-[0.12em] text-white hover:bg-neutral-800 transition-colors shadow-sm"
+            >
+              <span className="text-[18px] leading-none font-normal">+</span>
+              <span>New visit</span>
+            </button>
+          </div>
+
+          {/* Search bar inside sidebar */}
+          <div className="px-3 py-1.5 shrink-0">
+            <div className="flex items-center gap-2.5 rounded-[16px] border border-neutral-200 bg-[#f4efe4]/60 px-3.5 py-2 text-neutral-700 shadow-inner">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-neutral-400">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              <input
+                value={visitSearch}
+                onChange={(event) => setVisitSearch(event.target.value)}
+                placeholder="Search sessions"
+                className="w-full bg-transparent text-[12px] placeholder-neutral-400 outline-none font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Sessions Scroll List */}
+          <div className="flex-1 overflow-y-auto px-3 py-2 min-h-0 space-y-1 scrollbar-thin">
+            {visitSummaries.map((summary) => (
+              <button
+                key={summary.id}
+                onClick={() => {
+                  setActiveTab('explore');
+                  setFilteredVisitId(summary.id);
+                  setArtistPageContext(null);
+                  setMovementPageContext(null);
+                  setInterpretingItem(null);
+                  if (window.innerWidth < 768) {
+                    setSidebarOpen(false);
+                  }
+                }}
+                className={`w-full rounded-xl px-4.5 py-3.5 text-left transition-all border ${
+                  activeVisitSummary?.id === summary.id && activeTab === 'explore'
+                    ? 'border-neutral-200 bg-[#efe9dc]/80 font-semibold text-neutral-955 shadow-sm'
+                    : 'border-transparent hover:bg-neutral-100/70 text-neutral-600 hover:text-neutral-900 font-medium'
+                }`}
+              >
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <p className="truncate text-[13px] leading-tight">{summary.title}</p>
+                  <p className="truncate text-[10px] text-neutral-400/90 tracking-wide font-semibold font-mono leading-none mt-1">
+                    {summary.artworkCount} {summary.artworkCount === 1 ? 'piece' : 'pieces'}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="h-px bg-neutral-200/60 my-1 mx-4" />
+
+          {/* User Profile Footer */}
+          <div className="p-3 shrink-0 relative">
+            <button
+              onClick={() => setUserMenuOpen(prev => !prev)}
+              className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-white shadow-sm hover:bg-neutral-50 transition-colors text-left"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                {/* Avatar */}
+                <div className="w-6 h-6 rounded-full bg-neutral-900 text-white font-bold flex items-center justify-center text-[10px] tracking-wider shrink-0 uppercase shadow-sm">
+                  {currentUser ? currentUser.username[0] : 'U'}
+                </div>
+                {/* Username */}
+                <span className="text-[13px] font-semibold text-neutral-800 truncate">
+                  {currentUser ? currentUser.username : 'User'}
+                </span>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`text-neutral-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {/* Popover Settings Dropdown Menu */}
+            {userMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+                <div className="absolute bottom-full left-3 right-3 mb-2 z-50 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  {/* Language Select */}
+                  <div>
+                    <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400">Language</label>
+                    <select
+                      value={language}
+                      onChange={(event) => {
+                        const nextLanguage = event.target.value;
+                        setLanguage(nextLanguage);
+                        localStorage.setItem('musee_language', nextLanguage);
+                        setUserMenuOpen(false);
+                      }}
+                      className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 outline-none focus:border-neutral-400 transition-colors"
+                    >
+                      <option value="en">English</option>
+                      <option value="zh">中文</option>
+                    </select>
+                  </div>
+
+                  {/* Settings (Account details) */}
+                  {currentUser && (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setShowAccountModal('account');
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 rounded-xl transition-all"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                      </svg>
+                      <span>Settings</span>
+                    </button>
+                  )}
+
+                  {/* Sign out / Sign in */}
+                  {currentUser ? (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                      </svg>
+                      <span>Sign out</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setShowLoginModal(true);
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 rounded-xl transition-all"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+                      </svg>
+                      <span>Sign in</span>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </aside>
+
+        {/* Backdrop for mobile drawer */}
+        {sidebarOpen && (
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="fixed inset-0 z-20 bg-neutral-900/20 backdrop-blur-[1px] md:hidden animate-in fade-in duration-300"
+            onClick={() => setSidebarOpen(false)}
+          />
         )}
 
-
-
-
-
-        <div className={`relative z-10 flex-1 min-h-0 overflow-hidden transition-all duration-700 ease-in-out ${activeTab !== 'explore' ? 'pt-11' : 'pt-14 sm:pt-10 pb-20 sm:pb-4'} ${(interpretingItem || curatorRoomContext) ? 'opacity-40 blur-sm' : 'opacity-100'}`}>
-          {activeTab === 'profile' ? (
-            <TasteProfileView userId={currentUser?.user_id || USER_ID} />
-          ) : activeTab === 'collect' ? (
-            <OrganizeView
-              items={items}
-              visit={visit}
-              filteredVisitId={filteredVisitId}
-              isAnalyzing={isAnalyzing}
-              likedIds={likedIds}
-              albums={albums}
-              userId={USER_ID}
-              collectTab={collectTab}
-              onCollectTabChange={setCollectTab}
-              onOpenArtist={(artistEntityId, artistName) => {
-                setArtistPageContext({ artistEntityId, artistName });
+        {/* Right-hand Canvas main container */}
+        <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+          
+          {/* Collapse/Expand Sidebar Trigger Button (Desktop & Mobile) */}
+          {(sidebarCollapsed || !sidebarOpen) && (
+            <button
+              onClick={() => {
+                if (window.innerWidth < 768) {
+                  setSidebarOpen(true);
+                } else {
+                  setSidebarCollapsed(false);
+                }
               }}
-              onOpenMovement={(collection) => {
-                setMovementPageContext(collection);
-              }}
-              onInterpret={(item) => {
-                const activeId = filteredVisitId;
-                const sessionItems = activeId ? items.filter(i => i.visitId === activeId) : [item];
-                setInterpretingItem({ ...item, visitId: item.visitId, allVisitItems: sessionItems });
-              }}
-              onDelete={handleDeleteItem}
-            />
-          ) : (
-            /* Explore tab — editorial corridor */
-            filteredVisitId ? (() => {
-              const activeVisit = filteredVisitId === 'active' ? visit : undefined; // Simplified for now, or fetch from a list if we had one
-              const exhibitionItems = items.filter(i => i.visitId === filteredVisitId || (filteredVisitId === 'active' && i.visitId === visit.id));
-              return (
-                <ExhibitionHallView
-                  items={exhibitionItems}
-                  visit={activeVisit || { id: filteredVisitId, title: exhibitionItems[0]?.sessionTitle || "PERSONAL VISIT", itemIds: exhibitionItems.map(i => i.id), globalConversation: [] }}
-                  onClose={() => setFilteredVisitId(null)}
-                  onInterpret={setInterpretingItem}
-                  onOpenCuratorRoom={(msg) => setCuratorRoomContext({ items: exhibitionItems, visitId: filteredVisitId, initialMessage: msg })}
-                  onDeleteItem={handleDeleteItem}
-                  onContinueVisit={() => {
-                    handleResumeVisit(filteredVisitId);
-                    // Automatically trigger album picker when continuing visit
-                    albumInputRef.current?.click();
+              className="absolute left-4 top-4 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white/96 text-neutral-700 shadow-md backdrop-blur transition-all hover:scale-105"
+              title="Expand sidebar"
+            >
+              {window.innerWidth < 768 ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" />
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /><path d="M13 9l3 3-3 3" />
+                </svg>
+              )}
+            </button>
+          )}
+
+          {/* Dynamic Content view wrapper */}
+          <div className="flex-1 min-h-0 relative flex flex-col">
+            {artistPageContext ? (
+              <div className="flex h-full min-w-0 flex-1 flex-col bg-[#faf9f7] animate-in fade-in duration-300">
+                <ArtistPage
+                  artistEntityId={artistPageContext.artistEntityId}
+                  artworkId={artistPageContext.artworkId}
+                  artistName={artistPageContext.artistName}
+                  userId={currentUser?.user_id || USER_ID}
+                  onClose={() => {
+                    setArtistPageContext(null);
+                    window.history.pushState({}, '', stateToPath(activeTab, collectTab));
                   }}
+                  onOpenArtwork={(item) => {
+                    const sessionItems = item.visitId ? items.filter(i => i.visitId === item.visitId) : [item];
+                    setInterpretingItem({ ...item, allVisitItems: sessionItems });
+                  }}
+                  onNavigateToIndex={() => {
+                    setArtistPageContext(null);
+                    setActiveTab('collect');
+                    setCollectTab('artists');
+                  }}
+                  isInline={true}
                 />
-              );
-            })() : (
-              <div className="flex flex-col w-full h-full">
-
-              {/* ① Dynamic metadata row — Center aligned visit name + date */}
-              <div className="shrink-0 h-auto flex flex-col items-center justify-center px-10 sm:px-16 overflow-hidden py-4">
-                {activeDisplayItem && (() => {
-                  const title = activeDisplayItem.sessionTitle || parseDisplayLocation(activeDisplayItem.location) || "Personal Visit";
-                  const dt = activeDisplayItem.photoTime ? parseDisplayDate(activeDisplayItem.photoTime) : null;
-                  return (
-                    <div className="text-center" key={activeDisplayItem.id}>
-                      <h2 className="text-[10px] sm:text-[11px] tracking-[0.3em] uppercase text-neutral-800 font-bold mb-1 truncate max-w-[80vw]">
-                        {title}
-                      </h2>
-                      {dt && (
-                        <p className="text-[9px] sm:text-[10px] tracking-[0.2em] uppercase text-neutral-400 font-medium">
-                          {dt}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
               </div>
-
-              {/* ② Image strip — fills remaining vertical space */}
-              <div
-                ref={scrollRef}
-                onScroll={handleScroll}
-                className="flex-1 min-h-0 flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory horizontal-corridor no-scrollbar"
-              >
-                {isGalleryEmpty ? (
-                  <div className="snap-center shrink-0 w-screen flex items-center justify-center">
-                    <EmptyWall isVisitMode={isVisitMode} />
-                  </div>
-                ) : (
-                  <div className="min-w-[calc(50vw-32vh)] sm:min-w-[calc(50vw-28vh)] h-full shrink-0" />
-                )}
-
-                {!isGalleryEmpty && corridorEntries.map((entry, idx) => {
-                  const isActive = idx === (thumbEntries[activeThumbIndex]?.sourceIndex ?? 0);
-                  return (
-                    <div
-                      key={entry.type === 'item' ? entry.item.id : entry.visitId}
-                      className="snap-center shrink-0 h-full flex items-center mx-6 sm:mx-16"
-                      ref={(el) => { galleryEntryRefs.current[idx] = el; }}
-                    >
-                      {entry.type === 'item' ? (
-                        <GalleryCard
-                          item={entry.item}
-                          isActive={isActive}
-                          onInterpret={() => {
-                            const visitItems = items.filter(i => i.visitId === entry.item.visitId);
-                            setInterpretingItem({
-                              ...entry.item,
-                              visitId: entry.item.visitId,
-                              allVisitItems: visitItems.length > 0 ? visitItems : [entry.item]
-                            });
-                          }}
-                          onDelete={() => handleDeleteItem(entry.item.id)}
-                          onRetry={(!entry.item.isAnalyzing && entry.item.streamingText && !entry.item.artistName) ? () => handleRetryAnalysis(entry.item) : undefined}
-                          onContinueVision={!filteredVisitId ? () => handleContinueVision(entry.item) : undefined}
-                        />
-                      ) : (
-                        <VisitStack
-                          items={entry.items}
-                          isActive={isActive}
-                          onOpenExhibition={() => setFilteredVisitId(entry.visitId)}
-                          onInterpret={(item) => setInterpretingItem({ ...item, allVisitItems: entry.items, visitId: entry.visitId })}
-                          onResumeVisit={!filteredVisitId ? (source) => {
-                            handleResumeVisit(entry.visitId);
-                            setTimeout(() => {
-                              if (source === 'camera') cameraInputRef.current?.click();
-                              else albumInputRef.current?.click();
-                            }, 100);
-                          } : undefined}
-                          onDeleteItem={handleDeleteItem}
-                          onDeleteSession={() => handleDeleteSession(entry.visitId)}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Global analyzing loader removed from corridor to prevent layout jumps/blinking. 
-                    The FAB loader and modal badges sufficiently cover this state. */}
-
-                {!isGalleryEmpty && <div className="min-w-[calc(50vw-32vh)] sm:min-w-[calc(50vw-28vh)] h-full shrink-0" />}
+            ) : movementPageContext ? (
+              <div className="flex h-full min-w-0 flex-1 flex-col bg-[#faf9f7] animate-in fade-in duration-300">
+                <ArtMovementPage
+                  collection={movementPageContext}
+                  items={items}
+                  onClose={() => {
+                    setMovementPageContext(null);
+                    window.history.pushState({}, '', stateToPath(activeTab, collectTab));
+                  }}
+                  onOpenArtwork={(item) => {
+                    const sessionItems = item.visitId ? items.filter(i => i.visitId === item.visitId) : [item];
+                    setInterpretingItem({ ...item, allVisitItems: sessionItems });
+                  }}
+                  isInline={true}
+                />
               </div>
-
-              {/* ③ Tags row */}
-              <div className="shrink-0 h-8 flex items-center gap-5 px-10 sm:px-16 overflow-x-auto no-scrollbar">
-                {activeDisplayItem?.keywords?.map((kw, i) => (
-                  <span key={i} className="text-[8px] sm:text-[9px] tracking-[0.22em] uppercase text-neutral-400 whitespace-nowrap font-medium">
-                    {kw}
-                  </span>
-                ))}
-              </div>
-
-              {/* ④ Thumbnail strip — in flow, never overlaps images */}
-              {thumbEntries.length > 1 && (
-                <div className="shrink-0 flex items-center justify-center gap-4 px-10 sm:px-16 h-11">
-                  {/* Counter */}
-                  <span className="text-[9px] tracking-[0.15em] text-neutral-300 tabular-nums shrink-0 font-medium">
-                    {String(activeThumbIndex + 1).padStart(2, '0')}<span className="text-neutral-200 mx-0.5">/</span>{String(thumbEntries.length).padStart(2, '0')}
-                  </span>
-                  {/* Thumbnails */}
-                  <div
-                    ref={thumbStripRef}
-                    className="flex items-center gap-2 overflow-x-auto no-scrollbar"
-                  >
-                    {thumbEntries.map((entry, idx) => (
-                      <button
-                        key={entry.id}
-                        type="button"
-                        onClick={() => {
-                          galleryEntryRefs.current[entry.sourceIndex]?.scrollIntoView({
-                            behavior: 'smooth', block: 'nearest', inline: 'center'
-                          });
+            ) : activeTab === 'explore' ? (
+              activeVisitSummary ? (
+                interpretingItem ? (
+                  <>
+                    <CanvasHeader
+                      parentLabel={activeVisitSummary.title}
+                      parentClick={() => setInterpretingItem(null)}
+                      childLabel={interpretingItem.artworkName || 'Untitled'}
+                      isInline={true}
+                    />
+                    <div className="flex-1 overflow-hidden animate-in fade-in zoom-in-98 duration-300">
+                      <InterpretationModal
+                        item={interpretingItem}
+                        onClose={() => setInterpretingItem(null)}
+                        onUpdateMetadata={updateItemMetadata}
+                        onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
+                        allVisitItems={interpretingItem.allVisitItems}
+                        onNavigate={handleNavigateInterpretation}
+                        rightMode={interpretationRightMode}
+                        onRightModeChange={setInterpretationRightMode}
+                        interpretingMode={interpretingMode}
+                        onSwitchMode={() => {
+                          const nextMode = interpretingMode === 'professional' ? 'interactive' : 'professional';
+                          setInterpretingMode(nextMode);
+                          localStorage.setItem('musee_analysis_mode', nextMode);
                         }}
-                        className={`overflow-hidden shrink-0 transition-all duration-300 ${
-                          idx === activeThumbIndex
-                            ? 'w-7 h-7 opacity-100 outline outline-1 outline-neutral-400 outline-offset-1'
-                            : 'w-5 h-5 opacity-25 hover:opacity-55'
-                        }`}
-                      >
-                        <img src={entry.url} alt="" className="w-full h-full object-cover" />
-                      </button>
-                    ))}
+                        onReanalyze={handleReanalyze}
+                        userId={currentUser?.user_id || USER_ID}
+                        onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
+                          setArtistPageContext({ artistEntityId, artworkId, artistName });
+                        }}
+                        isInline={true}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <CanvasHeader
+                      parentLabel=""
+                      childLabel={activeVisitSummary.title}
+                      subtitle={activeVisitSummary.location || undefined}
+                      isInline={true}
+                    />
+
+                    <div className={`flex-1 overflow-y-auto px-4 pb-40 pt-6 sm:px-10 flex flex-col ${activeVisitStream.length === 0 ? 'justify-center' : ''}`}>
+                      <div className={`mx-auto w-full max-w-[640px] ${activeVisitStream.length === 0 ? 'flex-1 flex flex-col items-center justify-center pb-20' : 'space-y-6'}`}>
+                        {activeVisitStream.length === 0 && (
+                          <div className="text-center animate-in fade-in zoom-in-95 duration-500">
+                            <h2 className="text-[32px] sm:text-[40px] font-semibold tracking-tight text-neutral-800 font-sans mb-3">
+                              What's on your mind today?
+                            </h2>
+                            <p className="text-[16px] text-neutral-400 font-medium font-sans">
+                              Capture an artwork or type a reflection to start your visit.
+                            </p>
+                          </div>
+                        )}
+
+                        {activeVisitStream.map((entry) =>
+                          entry.type === 'artwork' ? (
+                            <button
+                              key={entry.id}
+                              onClick={() =>
+                                setInterpretingItem({
+                                  ...entry.item,
+                                  visitId: activeVisitSummary.id,
+                                  allVisitItems: activeVisitSummary.items,
+                                })
+                              }
+                              className="w-full overflow-hidden rounded-[36px] border border-neutral-200 bg-white text-left shadow-[0_10px_40px_rgba(0,0,0,0.05)] hover:shadow-md transition-shadow"
+                            >
+                              <div className="bg-[#f3ede2]">
+                                <img
+                                  src={entry.item.url}
+                                  alt={entry.item.artworkName || 'Artwork'}
+                                  className="max-h-[620px] w-full object-cover"
+                                />
+                              </div>
+                              <div className="px-6 py-7 sm:px-10">
+                                <div className="flex items-center justify-between gap-4">
+                                  <div>
+                                    <h3 className="text-[24px] font-semibold tracking-tight text-neutral-900 sm:text-[32px]">
+                                      {entry.item.artworkName || 'Untitled'}
+                                    </h3>
+                                    <p className="mt-2 text-[16px] text-neutral-500">
+                                      {entry.item.artistName || 'Visit artifact during visit'}
+                                    </p>
+                                  </div>
+                                  <div className="hidden items-center gap-3 text-[13px] text-neutral-500 sm:flex">
+                                    <span className="rounded-full bg-[#f3eee4] px-4 py-2">Reflection stream</span>
+                                    <span className="rounded-full bg-[#f3eee4] px-4 py-2">Visit artifact</span>
+                                  </div>
+                                </div>
+                                {entry.item.description && (
+                                  <p className="mt-8 text-[16px] leading-[1.8] text-neutral-600">
+                                    {parseAnalysis(entry.item.description)}
+                                  </p>
+                                )}
+                              </div>
+                            </button>
+                          ) : (
+                            <div key={entry.id} className={`flex ${entry.message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                              <div
+                                className={`max-w-full rounded-[28px] px-6 py-5 ${
+                                  entry.message.role === 'user'
+                                    ? 'bg-neutral-900 text-white'
+                                    : 'bg-[#efe8dc] text-neutral-800'
+                                }`}
+                              >
+                                <p className="whitespace-pre-wrap text-[16px] leading-[1.8]">{entry.message.text}</p>
+                              </div>
+                            </div>
+                          )
+                        )}
+
+                        {activeVisitSummary && streamingVisitResponses[activeVisitSummary.id] && (
+                          <div className="flex justify-start">
+                            <div className="max-w-full rounded-[28px] bg-[#efe8dc] px-6 py-5 text-neutral-800">
+                              <p className="whitespace-pre-wrap text-[16px] leading-[1.8]">
+                                {streamingVisitResponses[activeVisitSummary.id]}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )
+              ) : (
+                <div className="flex flex-1 items-center justify-center px-6 bg-[#f7f4ee]">
+                  <EmptyWall isVisitMode={false} />
+                </div>
+              )
+            ) : activeTab === 'collect' ? (
+              interpretingItem ? (
+                <div className="flex h-full min-w-0 flex-1 flex-col bg-[#f7f4ee]">
+                  <CanvasHeader
+                    parentLabel="Saved Artworks"
+                    parentClick={() => setInterpretingItem(null)}
+                    childLabel={interpretingItem.artworkName || 'Untitled'}
+                    isInline={true}
+                  />
+                  <div className="flex-1 overflow-hidden animate-in fade-in zoom-in-98 duration-300">
+                    <InterpretationModal
+                      item={interpretingItem}
+                      onClose={() => setInterpretingItem(null)}
+                      onUpdateMetadata={updateItemMetadata}
+                      onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
+                      allVisitItems={interpretingItem.allVisitItems}
+                      onNavigate={handleNavigateInterpretation}
+                      rightMode={interpretationRightMode}
+                      onRightModeChange={setInterpretationRightMode}
+                      interpretingMode={interpretingMode}
+                      onSwitchMode={() => {
+                        const nextMode = interpretingMode === 'professional' ? 'interactive' : 'professional';
+                        setInterpretingMode(nextMode);
+                        localStorage.setItem('musee_analysis_mode', nextMode);
+                      }}
+                      onReanalyze={handleReanalyze}
+                      userId={currentUser?.user_id || USER_ID}
+                      onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
+                        setArtistPageContext({ artistEntityId, artworkId, artistName });
+                      }}
+                      isInline={true}
+                    />
                   </div>
                 </div>
-              )}
+              ) : (
+                <div className="flex-1 overflow-hidden pl-0 pt-16 md:pt-4">
+                  <OrganizeView
+                    items={items}
+                    visit={visit}
+                    filteredVisitId={filteredVisitId}
+                    isAnalyzing={isAnalyzing}
+                    likedIds={likedIds}
+                    albums={albums}
+                    userId={USER_ID}
+                    collectTab={collectTab}
+                    onCollectTabChange={setCollectTab}
+                    onOpenArtist={(artistEntityId, artistName) => {
+                      setArtistPageContext({ artistEntityId, artistName });
+                    }}
+                    onOpenMovement={(collection) => {
+                      setMovementPageContext(collection);
+                    }}
+                    onInterpret={(item) => {
+                      const activeId = filteredVisitId;
+                      const sessionItems = activeId ? items.filter((entry) => entry.visitId === activeId) : [item];
+                      setInterpretingItem({ ...item, visitId: item.visitId, allVisitItems: sessionItems });
+                    }}
+                    onDelete={handleDeleteItem}
+                  />
+                </div>
+              )
+            ) : activeTab === 'profile' ? (
+              <div className="flex h-full min-w-0 flex-1 flex-col bg-[#faf9f7] overflow-hidden animate-in fade-in duration-300">
+                <CanvasHeader
+                  parentLabel=""
+                  childLabel="Taste Profile"
+                  isInline={true}
+                />
+                <div className="flex-1 overflow-y-auto">
+                  <TasteProfileView userId={currentUser?.user_id || USER_ID} />
+                </div>
+              </div>
+            ) : activeTab === 'learn' ? (
+              <div className="flex-1 overflow-hidden bg-[#faf9f7] pt-16 md:pt-0">
+                <LearningHubPage inline={true} initialGuide={learningInitialGuide} />
+              </div>
+            ) : null}
+          </div>
 
-              {/* Spacer for fixed controls bar */}
-              <div className="shrink-0" style={{ height: 'max(calc(env(safe-area-inset-bottom, 0px) + 5rem), 5.5rem)' }} />
-            </div>
-          ))}
-        </div>
-
-
-        {interpretingItem && (
+        {interpretingItem && activeTab !== 'explore' && activeTab !== 'collect' && (
           <InterpretationModal
             item={interpretingItem}
             onClose={() => setInterpretingItem(null)}
-            onUpdateConversation={updateItemConversation}
             onUpdateMetadata={updateItemMetadata}
-            onDelete={handleDeleteItem}
-            sessionId={visit.id}
+            onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
             allVisitItems={interpretingItem.allVisitItems}
             onNavigate={handleNavigateInterpretation}
-            externalMessage={artworkChatMessage ?? undefined}
-            onExternalMessageConsumed={() => setArtworkChatMessage(null)}
             rightMode={interpretationRightMode}
             onRightModeChange={setInterpretationRightMode}
-            isLiked={likedIds.has(interpretingItem.id)}
-            albums={albums}
-            itemAlbumIds={albums.filter(a => a.itemIds.includes(interpretingItem.id)).map(a => a.id)}
-            onToggleLike={() => handleToggleLike(interpretingItem.id)}
-            onSaveToAlbum={(albumIds) => handleSaveToAlbums(interpretingItem.id, albumIds)}
-            onCreateAlbum={(name) => handleCreateAlbum(name, interpretingItem.id)}
             interpretingMode={interpretingMode}
             onSwitchMode={() => {
-              const next = interpretingMode === 'professional' ? 'interactive' : 'professional';
-              setInterpretingMode(next);
-              localStorage.setItem('musee_analysis_mode', next);
+              const nextMode = interpretingMode === 'professional' ? 'interactive' : 'professional';
+              setInterpretingMode(nextMode);
+              localStorage.setItem('musee_analysis_mode', nextMode);
             }}
             onReanalyze={handleReanalyze}
             userId={currentUser?.user_id || USER_ID}
@@ -1868,53 +2304,19 @@ const App: React.FC = () => {
           />
         )}
 
-        {curatorRoomContext && (
-          <CuratorRoom
-            items={
-              items.filter(i => 
-                curatorRoomContext.visitId ? i.visitId === curatorRoomContext.visitId : 
-                curatorRoomContext.items.some(ci => ci.id === i.id)
-              )
-            }
-            conversation={visit.globalConversation}
-            onClose={() => setCuratorRoomContext(null)}
-            onUpdateConversation={(msgs) => setVisit(prev => ({ ...prev, globalConversation: [...prev.globalConversation, ...msgs] }))}
-            onDeleteItem={handleDeleteItem}
-            onInterpret={setInterpretingItem}
-            initialMessage={curatorRoomContext.initialMessage}
-          />
-        )}
-
-        {/* Hidden inputs for programmatic triggering */}
-        <input
-          ref={albumInputRef}
-          type="file"
-          className="hidden"
-          accept="image/*"
-          onChange={e => handleFileUpload(e, 'gallery')}
-          multiple
-        />
-        <input
-          ref={cameraInputRef}
-          type="file"
-          className="hidden"
-          accept="image/*"
-          capture="environment"
-          onChange={e => handleFileUpload(e, 'camera')}
-        />
-
-        {/* Delete Confirmation Modal */}
         {deleteConfirmation && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
             <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm" onClick={() => setDeleteConfirmation(null)} />
-            <div className="relative bg-white rounded-[2rem] p-10 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
-              <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mb-6">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#171717" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+            <div className="relative w-full max-w-md rounded-[2rem] bg-white p-10 shadow-2xl">
+              <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#171717" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
               </div>
-              <h3 className="text-xl font-serif text-neutral-900 mb-3">
+              <h3 className="mb-3 text-xl font-serif text-neutral-900">
                 {deleteConfirmation.type === 'item' ? 'Remove Artwork?' : 'Delete Visit Record?'}
               </h3>
-              <p className="text-sm text-neutral-500 leading-relaxed mb-8">
+              <p className="mb-8 text-sm leading-relaxed text-neutral-500">
                 {deleteConfirmation.type === 'item'
                   ? 'This will permanently remove this piece and its curated analysis from your Musee.'
                   : 'This will delete the entire visit record and all associated artwork analysis.'}
@@ -1922,7 +2324,7 @@ const App: React.FC = () => {
               <div className="flex space-x-3">
                 <button
                   onClick={() => setDeleteConfirmation(null)}
-                  className="flex-1 px-6 py-3 rounded-full text-[10px] tracking-[0.3em] uppercase font-bold text-neutral-500 hover:bg-neutral-50 transition-colors"
+                  className="flex-1 rounded-full px-6 py-3 text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 transition-colors hover:bg-neutral-50"
                 >
                   Cancel
                 </button>
@@ -1931,7 +2333,7 @@ const App: React.FC = () => {
                     if (deleteConfirmation.type === 'item') confirmDeleteItem(deleteConfirmation.id);
                     else confirmDeleteSession(deleteConfirmation.id);
                   }}
-                  className="flex-1 bg-neutral-900 text-white px-6 py-3 rounded-full text-[10px] tracking-[0.3em] uppercase font-bold hover:bg-black transition-colors shadow-lg shadow-neutral-200"
+                  className="flex-1 rounded-full bg-neutral-900 px-6 py-3 text-[10px] font-bold uppercase tracking-[0.3em] text-white transition-colors hover:bg-black"
                 >
                   Delete
                 </button>
@@ -1940,83 +2342,27 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Universal Contextual Action Bar (Phase 8) */}
-        {activeTab === 'explore' && (
+        {activeTab === 'explore' && !interpretingItem && (
           <ContextualActionBar
-            mode={interpretingItem ? 'interpretation' : filteredVisitId ? 'hall' : 'corridor'}
+            mode="session"
             onUpload={handleFileUpload}
             isAnalyzing={isAnalyzing}
-            onChat={handleOpenCurator}
-            onInquiry={handleInquiry}
+            onInquiry={handleVisitInquiry}
             onLike={() => interpretingItem && handleToggleLike(interpretingItem.id)}
-            isLiked={!!(interpretingItem && likedIds.has(interpretingItem.id))}
+            isLiked={Boolean(interpretingItem && likedIds.has(interpretingItem.id))}
             onDelete={() => interpretingItem && setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
-            onCollect={() => interpretingItem && alert('Collection feature coming soon')}
-            onCommunity={() => setInterpretationRightMode(prev => prev === 'community' ? 'metadata' : 'community')}
+            onCollect={() => interpretingItem && showToast('Collection feature coming soon')}
+            onCommunity={() => setInterpretationRightMode((mode) => (mode === 'community' ? 'metadata' : 'community'))}
             isCommunityActive={interpretationRightMode === 'community'}
             activeItem={interpretingItem as unknown as GalleryItem || undefined}
-            placeholder={filteredVisitId ? `Ask about ${items.find(i => i.visitId === filteredVisitId)?.sessionTitle || 'this exhibition'}...` : undefined}
-            isAskExpanded={interpretationAskExpanded}
-            onAskExpand={() => { setInterpretationAskExpanded(true); setInterpretationRightMode('chat'); }}
-            onAskCollapse={() => { setInterpretationAskExpanded(false); setInterpretationRightMode('metadata'); }}
+            placeholder={activeVisitSummary ? 'Add a reflection, memory, or association...' : 'Start a visit or capture an artwork...'}
           />
         )}
+      </main>
+
+
 
       </div>
-
-      {/* Learning hub */}
-      {showLearningHub && (
-        <LearningHubPage
-          initialGuide={learningInitialGuide}
-          onClose={() => {
-            setShowLearningHub(false);
-            window.history.pushState({}, '', stateToPath(activeTab, collectTab));
-          }}
-        />
-      )}
-
-      {/* Art movement detail page */}
-      {movementPageContext && (
-        <ArtMovementPage
-          collection={movementPageContext}
-          items={items}
-          onClose={() => {
-            setMovementPageContext(null);
-            window.history.pushState({}, '', '/art-movements');
-          }}
-          onOpenArtwork={(item) => {
-            setMovementPageContext(null);
-            window.history.pushState({}, '', '/art-movements');
-            const sessionItems = item.visitId ? items.filter(i => i.visitId === item.visitId) : [item];
-            setInterpretingItem({ ...item, allVisitItems: sessionItems });
-          }}
-        />
-      )}
-
-      {/* Full-screen artist detail page */}
-      {artistPageContext && (
-        <ArtistPage
-          artistEntityId={artistPageContext.artistEntityId}
-          artworkId={artistPageContext.artworkId}
-          artistName={artistPageContext.artistName}
-          userId={currentUser?.user_id || USER_ID}
-          onClose={() => {
-            setArtistPageContext(null);
-            window.history.pushState({}, '', '/artists');
-          }}
-          onOpenArtwork={(item) => {
-            setArtistPageContext(null);
-            window.history.pushState({}, '', '/artists');
-            setInterpretingItem(item as any);
-          }}
-          onNavigateToIndex={() => {
-            setArtistPageContext(null);
-            setActiveTab('collect');
-            setCollectTab('artists');
-          }}
-        />
-      )}
-
     </GoogleOAuthProvider>
   );
 };

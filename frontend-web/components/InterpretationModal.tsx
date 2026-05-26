@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, NeighborItem, Visit, GalleryItem } from '../types';
-import { chatWithArtwork, chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type PublicComment, type CommunityData } from '../apiService';
+import { chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../apiService';
 interface Props {
   item: {
     url: string;
@@ -26,21 +26,19 @@ interface Props {
     artistEntityId?: string;
   };
   onClose: () => void;
-  onUpdateConversation: (id: string, newMessages: Message[]) => void;
+  onUpdateConversation?: (id: string, newMessages: Message[]) => void;
   onUpdateMetadata?: (id: string, updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => void;
-  sessionId?: string;
   allVisitItems?: any[];
   onNavigate?: (direction: 'prev' | 'next') => void;
-  externalMessage?: string;
-  onExternalMessageConsumed?: () => void;
-  rightMode: 'metadata' | 'chat' | 'community';
-  onRightModeChange: (mode: 'metadata' | 'chat' | 'community') => void;
+  rightMode: 'metadata' | 'community';
+  onRightModeChange: (mode: 'metadata' | 'community') => void;
   onSwitchMode?: () => void;
   interpretingMode?: 'professional' | 'interactive';
   onReanalyze?: () => Promise<void>;
   onDelete?: () => void;
   userId?: string;
   onNavigateToArtist?: (artistEntityId: string | undefined, artworkId: string | undefined, artistName: string | undefined) => void;
+  isInline?: boolean;
 }
 
 // Tag component with explanation tooltip on hover
@@ -137,7 +135,7 @@ const Insight: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, sessionId, allVisitItems, onNavigate, externalMessage, onExternalMessageConsumed, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onReanalyze, onDelete, userId, onNavigateToArtist }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onReanalyze, onDelete, userId, onNavigateToArtist, isInline }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
@@ -451,17 +449,8 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     }
   }, [item.isAnalyzing, item.artistName, item.artworkName]);
 
-  // Handle message sent from the external action bar
-  useEffect(() => {
-    if (externalMessage) {
-      handleSend(externalMessage);
-      onExternalMessageConsumed?.();
-    }
-  }, [externalMessage]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
-    onRightModeChange('chat'); // Switch right panel to chat on send
     const userMsg: Message = { role: 'user', text };
     setMessages(prev => [...prev, userMsg]);
     setSuggestedTopics([]);
@@ -511,7 +500,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
           });
 
           const updatedMessages: Message[] = [...messages, userMsg, { role: 'model' as const, text: fullResponse }];
-          onUpdateConversation(item.id, [userMsg, { role: 'model', text: fullResponse }]);
+          onUpdateConversation?.(item.id, [userMsg, { role: 'model', text: fullResponse }]);
 
           // Fetch new suggestions based on the updated conversation
           fetchSuggestions(updatedMessages);
@@ -520,14 +509,13 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
           console.error('Chat error:', error);
           const errorMsg: Message = { role: 'model', text: 'Apologies, the architectural dialogue has been interrupted.' };
           setMessages(prev => [...prev, errorMsg]);
-          onUpdateConversation(item.id, [userMsg, errorMsg]);
+          onUpdateConversation?.(item.id, [userMsg, errorMsg]);
         },
         item.artworkId,
         item.artistName,
         item.artworkName,
         messages,
-        imageFile,
-        sessionId
+        imageFile
       );
     } catch (e) {
       console.error(e);
@@ -550,6 +538,9 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
   // Calculate modal dimensions based on screen size
   const getModalStyle = () => {
+    if (isInline) {
+      return { width: '100%', height: '100%', maxWidth: 'none' };
+    }
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
     const isMobile = viewportWidth < 640;
@@ -625,69 +616,65 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     </div>
   ) : null;
 
-  return (
-    <>
+  const mainDiv = (
     <div
-      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center sm:overflow-y-auto sm:p-12"
+      className={isInline ? `relative bg-white overflow-hidden flex flex-col w-full h-full transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}` : `relative bg-white sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+      style={getModalStyle()}
     >
-      <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xl" onClick={onClose} />
-
-      {/* Loading spinner */}
+      {/* Loading spinner inside main container for inline mode */}
       {!imageLoaded && (
-        <div className="absolute z-10 flex flex-col items-center space-y-4">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white space-y-4">
           <div className="w-12 h-12 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
           <p className="text-[10px] tracking-widest text-neutral-400 uppercase">Loading...</p>
         </div>
       )}
 
-      <div
-        className={`relative bg-white sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500 transition-all ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-        style={getModalStyle()}
-      >
         {/* ── MOBILE HEADER BAR (mobile only): prev/next + close ── */}
-        <div className="sm:hidden flex items-center justify-between px-2 shrink-0 bg-white border-b border-neutral-100" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.5rem)', paddingBottom: '0.25rem' }}>
-          {/* Left: Prev or spacer */}
-          {allVisitItems && allVisitItems.length > 1 && onNavigate ? (
-            <button
-              onClick={() => onNavigate('prev')}
-              className="flex items-center gap-1 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-              <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Prev</span>
-            </button>
-          ) : (
-            <div className="w-16" />
-          )}
-
-          {/* Center: Back button (replaces ✕) */}
-          <button
-            onClick={onClose}
-            className="flex flex-col items-center justify-center gap-0.5 text-neutral-500 active:text-neutral-900 transition-colors py-1"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="19 12 5 12"/><polyline points="12 19 5 12 12 5"/></svg>
-            <span className="text-[9px] tracking-[0.2em] uppercase font-bold">Back</span>
-            {allVisitItems && allVisitItems.length > 1 && (
-              <span className="text-[8px] font-mono text-neutral-400 tracking-wider">
-                {allVisitItems.findIndex(i => i.id === item.id) + 1}/{allVisitItems.length}
-              </span>
-            )}
-          </button>
-
-          {/* Right: Next (if multi-item) + overflow "..." menu */}
-          <div className="flex items-center gap-1 min-w-[4rem] justify-end">
-            {allVisitItems && allVisitItems.length > 1 && onNavigate && (
+        {!isInline && (
+          <div className="sm:hidden flex items-center justify-between px-2 shrink-0 bg-white border-b border-neutral-100" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.5rem)', paddingBottom: '0.25rem' }}>
+            {/* Left: Prev or spacer */}
+            {allVisitItems && allVisitItems.length > 1 && onNavigate ? (
               <button
-                onClick={() => onNavigate('next')}
-                className="flex items-center gap-0.5 text-neutral-500 active:text-neutral-900 transition-colors px-1 py-1.5"
+                onClick={() => onNavigate('prev')}
+                className="flex items-center gap-1 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
               >
-                <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Prev</span>
               </button>
+            ) : (
+              <div className="w-16" />
             )}
-            {/* Overflow menu — edit, refresh, retry, delete */}
-            {overflowMenu}
+
+            {/* Center: Back button (replaces ✕) */}
+            <button
+              onClick={onClose}
+              className="flex flex-col items-center justify-center gap-0.5 text-neutral-500 active:text-neutral-900 transition-colors py-1"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="19 12 5 12"/><polyline points="12 19 5 12 12 5"/></svg>
+              <span className="text-[9px] tracking-[0.2em] uppercase font-bold">Back</span>
+              {allVisitItems && allVisitItems.length > 1 && (
+                <span className="text-[8px] font-mono text-neutral-400 tracking-wider">
+                  {allVisitItems.findIndex(i => i.id === item.id) + 1}/{allVisitItems.length}
+                </span>
+              )}
+            </button>
+
+            {/* Right: Next (if multi-item) + overflow "..." menu */}
+            <div className="flex items-center gap-1 min-w-[4rem] justify-end">
+              {allVisitItems && allVisitItems.length > 1 && onNavigate && (
+                <button
+                  onClick={() => onNavigate('next')}
+                  className="flex items-center gap-0.5 text-neutral-500 active:text-neutral-900 transition-colors px-1 py-1.5"
+                >
+                  <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              )}
+              {/* Overflow menu — edit, refresh, retry, delete */}
+              {overflowMenu}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ── MAIN AREA: left photo panel + right content panel ── */}
         <div className="flex flex-col sm:flex-row flex-1 sm:min-h-0 overflow-y-auto sm:overflow-hidden">
@@ -766,9 +753,9 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
             <div className={`px-2 py-2 border-b border-neutral-100 items-center justify-between shrink-0 relative ${isEditing ? 'flex' : 'hidden sm:flex'}`} onClick={handleToolbarClick}>
               {/* LEFT: action icons */}
               <div className="flex items-center gap-1">
-                {rightMode === 'metadata' && messages.length > 0 && (
+                {false && rightMode === 'metadata' && messages.length > 0 && (
                   <button
-                    onClick={() => onRightModeChange('chat')}
+                    onClick={() => onRightModeChange('metadata')}
                     title="View conversation"
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-neutral-400 hover:text-neutral-700 hover:bg-neutral-50 transition-all"
                   >
@@ -796,7 +783,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
               {/* RIGHT: mode label + close */}
               <div className="flex items-center gap-1">
-                {rightMode === 'chat' && (
+                {false && rightMode === 'community' && (
                   <>
                     <button
                       onClick={() => onRightModeChange('metadata')}
@@ -809,7 +796,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </>
                 )}
                 {overflowMenu}
-                <button onClick={onClose} className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>
+                {!isInline && <button onClick={onClose} className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>}
               </div>
             </div>
 
@@ -1132,7 +1119,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 )}
 
-                {/* Suggested explorations — clicking sends and switches to chat */}
+                {/* Suggested explorations — legacy prompts shown as passive cues */}
                 {!item.isAnalyzing && suggestedTopics.length > 0 && (
                   <div className="pt-2 border-t border-neutral-50 animate-in fade-in slide-in-from-bottom-2 duration-500">
                     <div className="flex items-center justify-between mb-3">
@@ -1150,13 +1137,12 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {suggestedTopics.map((topic, idx) => (
-                        <button
+                        <div
                           key={idx}
-                          onClick={() => handleSend(topic)}
                           className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-right"
                         >
                           {topic}
-                        </button>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -1267,7 +1253,55 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
             </button>
           </div>
         )}
-      </div>
+    </div>
+  );
+
+  if (isInline) {
+    return (
+      <>
+        {mainDiv}
+        {/* Lightbox — tap image on mobile to view full */}
+        {lightboxOpen && createPortal(
+          <div
+            className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center cursor-zoom-out"
+            onClick={() => setLightboxOpen(false)}
+          >
+            <img
+              src={item.url}
+              className="max-w-full max-h-full object-contain"
+              alt="Full view"
+            />
+            <button
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
+              onClick={() => setLightboxOpen(false)}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>,
+          document.body
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+    <div
+      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center sm:overflow-y-auto sm:p-12"
+    >
+      <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xl" onClick={onClose} />
+
+      {/* Loading spinner */}
+      {!imageLoaded && (
+        <div className="absolute z-10 flex flex-col items-center space-y-4">
+          <div className="w-12 h-12 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
+          <p className="text-[10px] tracking-widest text-neutral-400 uppercase">Loading...</p>
+        </div>
+      )}
+
+      {mainDiv}
     </div>
 
     {/* Lightbox — tap image on mobile to view full */}

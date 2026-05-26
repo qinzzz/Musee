@@ -80,6 +80,9 @@ async def lifespan(app: FastAPI):
                 _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS skill_stats JSONB"))
                 _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'free'"))
                 _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS reference_urls JSONB"))
+                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS artwork_entity_id VARCHAR"))
+                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS artist_entity_id VARCHAR"))
+                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS insights JSONB"))
                 _conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS skill_events (
                         id SERIAL PRIMARY KEY,
@@ -109,6 +112,7 @@ app = FastAPI(
 allowed_origins = [
     "https://musee-web.vercel.app",
     "http://localhost:3000",
+    "http://localhost:3001",
     "http://localhost:3002",
     "http://localhost:5173",
 ]
