@@ -1297,6 +1297,39 @@ export async function deleteSession(sessionId: string, userId: string): Promise<
   return response.json();
 }
 
+export async function updateSession(sessionId: string, userId: string, title: string): Promise<any> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}?user_id=${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}
+
+export async function createSession(userId: string, sessionId?: string, title?: string): Promise<any> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions?user_id=${encodeURIComponent(userId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      session_id: sessionId,
+      title,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}
+
 export interface PublicComment {
   id: string;
   entity_id: string;

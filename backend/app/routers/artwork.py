@@ -1516,6 +1516,15 @@ class ExhibitionChatRequest(BaseModel):
     conversation_history: List[Dict[str, str]]  # [{role, content}]
     new_message: str
 
+
+class UpdateSessionRequest(BaseModel):
+    title: str
+
+
+class CreateSessionRequest(BaseModel):
+    session_id: Optional[str] = None
+    title: Optional[str] = None
+
 async def _image_url_to_bytes(url: str) -> Optional[bytes]:
     """Return image bytes from data URL or HTTP URL, or None on failure."""
     if not url:
@@ -2834,6 +2843,75 @@ async def delete_session(session_id: str, user_id: str = Query(...), db: Session
 
     logger.info(f"Session {session_id} and all its artworks deleted successfully")
     return {"message": "Session deleted successfully"}
+
+
+@router.post("/sessions")
+async def create_session(
+    request: CreateSessionRequest,
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Create a session record, or return the existing one if the id already exists for this user."""
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if not user:
+        user = User(user_id=user_id, device_id=user_id)
+        db.add(user)
+        db.flush()
+
+    session_id = request.session_id or f"sess_{uuid.uuid4().hex[:8]}"
+    session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+
+    if session_record:
+        if session_record.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this session")
+        return {
+            "message": "Session already exists",
+            "session": session_record.to_dict(),
+        }
+
+    session_record = SessionModel(
+        id=session_id,
+        user_id=user_id,
+        title=(request.title or "Untitled Session").strip() or "Untitled Session",
+    )
+    db.add(session_record)
+    db.commit()
+    db.refresh(session_record)
+
+    return {
+        "message": "Session created successfully",
+        "session": session_record.to_dict(),
+    }
+
+
+@router.put("/sessions/{session_id}")
+async def update_session(
+    session_id: str,
+    request: UpdateSessionRequest,
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Rename a session — caller must supply their user_id."""
+    session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+
+    if not session_record:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session_record.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this session")
+
+    next_title = request.title.strip()
+    if not next_title:
+        raise HTTPException(status_code=400, detail="Session title cannot be empty")
+
+    session_record.title = next_title
+    db.commit()
+    db.refresh(session_record)
+
+    return {
+        "message": "Session updated successfully",
+        "session": session_record.to_dict(),
+    }
 
 
 # =============================================================================
