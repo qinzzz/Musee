@@ -975,7 +975,6 @@ const App: React.FC = () => {
     const visitId = createVisitDraft();
     return { visitId, isNew: true };
   };
-
   const appendVisitMessages = (visitId: string, newMessages: VisitStreamMessage[]) => {
     setVisitStreams(prev => ({
       ...prev,
