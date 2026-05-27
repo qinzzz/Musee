@@ -119,22 +119,23 @@ class ClaudeAPIClient(AIClientInterface):
     ) -> list:
         """Build conversation messages in Claude format"""
         # Initial message with prompt and image
-        initial_message = {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": initial_prompt
-                },
-                {
+        content = [{"type": "text", "text": initial_prompt}]
+        if image_data:
+            payloads = image_data if isinstance(image_data, list) else [image_data]
+            for data in payloads:
+                if not data:
+                    continue
+                content.append({
                     "type": "image",
                     "source": {
                         "type": "base64",
                         "media_type": "image/jpeg",
-                        "data": image_data
+                        "data": data
                     }
-                }
-            ]
+                })
+        initial_message = {
+            "role": "user",
+            "content": content
         }
         messages = [initial_message]
 

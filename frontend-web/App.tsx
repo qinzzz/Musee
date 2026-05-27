@@ -967,6 +967,14 @@ const App: React.FC = () => {
     return createSession(USER_ID, sessionId, summary?.title || DEFAULT_VISIT_TITLE);
   };
 
+  const resolveUploadSession = () => {
+    if (filteredVisitId) {
+      return { visitId: filteredVisitId, isNew: false };
+    }
+
+    const visitId = createVisitDraft();
+    return { visitId, isNew: true };
+  };
   const appendVisitMessages = (visitId: string, newMessages: VisitStreamMessage[]) => {
     setVisitStreams(prev => ({
       ...prev,
@@ -1261,19 +1269,9 @@ const App: React.FC = () => {
           reader.readAsDataURL(file);
         });
 
-        const { visitId, isNew } = await autoDetermineVisit({
-          lat: coords?.latitude,
-          lng: coords?.longitude,
-          exifTime: photoTimestamp,
-          contextVisitId: isComposingNewSession ? null : filteredVisitId
-        });
+        const { visitId, isNew } = resolveUploadSession();
 
-        if (isComposingNewSession) {
-          setFilteredVisitId(visitId);
-          setIsComposingNewSession(false);
-        }
-
-        if (isNew || isComposingNewSession) {
+        if (isNew) {
           const now = Date.now();
           const newVisit: VisitDraft = {
             id: visitId,
@@ -1307,11 +1305,11 @@ const App: React.FC = () => {
             const resolved = JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city, country, museum });
             setItems(prev => prev.map(item => item.id === newItemId ? { ...item, location: resolved } : item));
             const contextName = museum || city || 'your collection';
-            if (isNew) showToast(`Created a new visit for ${contextName}`, 'success');
+            if (isNew) showToast(`Created a new session for ${contextName}`, 'success');
             else showToast(`Added to ${contextName} collection`, 'info');
-          }).catch(() => showToast(isNew ? 'Created a new visit' : 'Added to collection'));
+          }).catch(() => showToast(isNew ? 'Created a new session' : 'Added to collection'));
         } else {
-          showToast(isNew ? 'Created a new visit' : 'Added to collection');
+          showToast(isNew ? 'Created a new session' : 'Added to collection');
         }
 
         // Prefetch skills with artist context as soon as it appears in the stream (~2-5s in)
@@ -1389,20 +1387,9 @@ const App: React.FC = () => {
       const anchorTime = anchorMeta.timestamp || Date.now();
       const anchorTimeLabel = new Date(anchorTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-      const { visitId: batchVisitId } = await autoDetermineVisit({ 
-        isBatch: true, 
-        contextVisitId: isComposingNewSession ? null : filteredVisitId,
-        exifTime: anchorTime,
-        lat: anchorMeta.latitude,
-        lng: anchorMeta.longitude
-      });
+      const { visitId: batchVisitId, isNew } = resolveUploadSession();
 
-      if (isComposingNewSession) {
-        setFilteredVisitId(batchVisitId);
-        setIsComposingNewSession(false);
-      }
-
-      {
+      if (isNew) {
         const now = Date.now();
         const newVisit: VisitDraft = {
           id: batchVisitId,
@@ -1441,10 +1428,25 @@ const App: React.FC = () => {
           const resolved = JSON.stringify({ latitude: anchorMeta.latitude, longitude: anchorMeta.longitude, city, country, museum });
           resolvedLocation.current = resolved;
           setItems(prev => prev.map(item => batchPlaceholders.some(p => p.id === item.id) ? { ...item, location: resolved } : item));
-          showToast(`Started a new visit at ${museum || city || 'museum'} with ${batchPlaceholders.length} works`, 'success');
-        }).catch(() => showToast(`Started a new visit with ${batchPlaceholders.length} works`, 'success'));
+          showToast(
+            isNew
+              ? `Started a new session at ${museum || city || 'museum'} with ${batchPlaceholders.length} works`
+              : `Added ${batchPlaceholders.length} works to ${museum || city || 'session'}`,
+            isNew ? 'success' : 'info'
+          );
+        }).catch(() => showToast(
+          isNew
+            ? `Started a new session with ${batchPlaceholders.length} works`
+            : `Added ${batchPlaceholders.length} works to the session`,
+          isNew ? 'success' : 'info'
+        ));
       } else {
-        showToast(`Started a new visit with ${batchPlaceholders.length} works`, 'success');
+        showToast(
+          isNew
+            ? `Started a new session with ${batchPlaceholders.length} works`
+            : `Added ${batchPlaceholders.length} works to the session`,
+          isNew ? 'success' : 'info'
+        );
       }
 
       for (const memFile of memoryFiles) {

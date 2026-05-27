@@ -166,12 +166,15 @@ class GeminiAPIClient(AIClientInterface):
         ))
 
         if image_data:
+            payloads = image_data if isinstance(image_data, list) else [image_data]
+            parts = [types.Part.from_text(text="Here is the artwork to analyze:")]
+            for data in payloads:
+                if not data:
+                    continue
+                parts.append(types.Part.from_bytes(data=data, mime_type="image/jpeg"))
             contents.append(types.Content(
                 role="user",
-                parts=[
-                    types.Part.from_text(text="Here is the artwork to analyze:"),
-                    types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
-                ]
+                parts=parts
             ))
         
         # Previous conversation
