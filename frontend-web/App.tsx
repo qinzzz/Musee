@@ -11,9 +11,11 @@ import {
   UserQuota,
   getUserQuota,
   getOrCreateUserId,
+  createSession,
   fetchUserArtworks,
   resolveImageUrl,
   deleteSession,
+  updateSession,
   base64ToFile,
   getCurrentUser,
   logout,
@@ -219,7 +221,7 @@ const MOCK_NEIGHBORS: NeighborItem[] = [
 const USER_ID = getOrCreateUserId();
 const VISIT_DRAFTS_STORAGE_KEY = 'musee_visit_drafts';
 const VISIT_STREAMS_STORAGE_KEY = 'musee_visit_streams';
-const DEFAULT_VISIT_TITLE = 'Untitled Visit';
+const DEFAULT_VISIT_TITLE = 'Untitled Session';
 
 type VisitStreamMessage = Message & {
   id: string;
@@ -246,6 +248,9 @@ type VisitSummary = {
 const App: React.FC = () => {
   const albumInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const visitStreamScrollRef = useRef<HTMLDivElement>(null);
+  const visitStreamEndRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
   const [activeTab, setActiveTab] = useState<'explore' | 'collect' | 'profile' | 'learn'>(() => {
@@ -302,9 +307,13 @@ const App: React.FC = () => {
   const galleryEntryRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(getCurrentUser());
   const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
+  const [isComposingNewSession, setIsComposingNewSession] = useState(false);
   const locationCache = useRef<Map<string, { city: string, country: string, museum: string }>>(new Map());
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
   const [toast, setToast] = useState<{ message: string, type: 'info' | 'success', action?: ToastAction } | null>(null);
+  const [openVisitMenuId, setOpenVisitMenuId] = useState<string | null>(null);
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
+  const [editingVisitTitle, setEditingVisitTitle] = useState('');
   const [artistPageContext, setArtistPageContext] = useState<{
     artistEntityId?: string;
     artworkId?: string;
@@ -399,12 +408,13 @@ const App: React.FC = () => {
   }): Promise<{ visitId: string, isNew: boolean, museumName?: string }> => {
     const { lat, lng, exifTime, contextVisitId, isBatch } = options;
     const currentTime = exifTime || Date.now();
+    const resolvedContextVisitId = contextVisitId;
 
     // 1. Context-Aware Priority: If inside an Exhibition Hall, always use that visitId.
-    if (contextVisitId) {
-      const visitItems = items.filter(i => i.visitId === contextVisitId);
+    if (resolvedContextVisitId) {
+      const visitItems = items.filter(i => i.visitId === resolvedContextVisitId);
       return { 
-        visitId: contextVisitId, 
+        visitId: resolvedContextVisitId, 
         isNew: false, 
         museumName: visitItems[0]?.sessionTitle 
       };
@@ -771,9 +781,9 @@ const App: React.FC = () => {
   }, [items, visitDrafts, visitSearch]);
 
   const activeVisitSummary = useMemo(() => {
-    if (filteredVisitId === 'new_visit') {
+    if (isComposingNewSession) {
       return {
-        id: 'new_visit',
+        id: '',
         title: DEFAULT_VISIT_TITLE,
         location: null,
         artworkCount: 0,
@@ -783,7 +793,12 @@ const App: React.FC = () => {
       };
     }
     return visitSummaries.find(summary => summary.id === filteredVisitId) || visitSummaries[0] || null;
-  }, [visitSummaries, filteredVisitId]);
+  }, [visitSummaries, filteredVisitId, isComposingNewSession]);
+
+  const pendingDeleteVisitSummary = useMemo(() => {
+    if (!deleteConfirmation || deleteConfirmation.type !== 'session') return null;
+    return visitSummaries.find(summary => summary.id === deleteConfirmation.id) || null;
+  }, [deleteConfirmation, visitSummaries]);
 
   const activeVisitStream = useMemo(() => {
     if (!activeVisitSummary) return [];
@@ -804,9 +819,42 @@ const App: React.FC = () => {
   }, [activeVisitSummary, visitStreams]);
 
   useEffect(() => {
+    if (activeTab !== 'explore' || interpretingItem || !visitStreamEndRef.current || !activeVisitSummary) return;
+
+    requestAnimationFrame(() => {
+      visitStreamEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    });
+  }, [
+    activeTab,
+    interpretingItem,
+    activeVisitSummary?.id,
+    activeVisitStream.length,
+    activeVisitSummary ? streamingVisitResponses[activeVisitSummary.id] : '',
+  ]);
+
+  useEffect(() => {
+    if (isComposingNewSession) return;
     if (filteredVisitId && visitSummaries.some(summary => summary.id === filteredVisitId)) return;
     setFilteredVisitId(visitSummaries[0]?.id || null);
-  }, [visitSummaries, filteredVisitId]);
+  }, [visitSummaries, filteredVisitId, isComposingNewSession]);
+
+  useEffect(() => {
+    if (!openVisitMenuId) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-visit-menu-root="true"]')) return;
+      setOpenVisitMenuId(null);
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, [openVisitMenuId]);
+
+  useEffect(() => {
+    if (!editingVisitId || !renameInputRef.current) return;
+    renameInputRef.current.focus();
+    renameInputRef.current.select();
+  }, [editingVisitId]);
 
   useEffect(() => {
     const syncSidebarForViewport = () => {
@@ -905,12 +953,18 @@ const App: React.FC = () => {
     };
     setVisitDrafts(prev => [newVisit, ...prev.filter(v => v.id !== newVisit.id)]);
     setFilteredVisitId(newVisit.id);
+    setIsComposingNewSession(false);
     setVisit({
       id: newVisit.id,
       itemIds: [],
       globalConversation: [],
     });
     return newVisit.id;
+  };
+
+  const ensureSessionRecord = async (sessionId: string) => {
+    const summary = visitSummaries.find(visitSummary => visitSummary.id === sessionId);
+    return createSession(USER_ID, sessionId, summary?.title || DEFAULT_VISIT_TITLE);
   };
 
   const appendVisitMessages = (visitId: string, newMessages: VisitStreamMessage[]) => {
@@ -923,11 +977,25 @@ const App: React.FC = () => {
     ));
   };
 
-  const handleVisitInquiry = (text: string) => {
+  const handleVisitInquiry = async (text: string) => {
     let targetVisitId = activeVisitSummary?.id;
-    if (!targetVisitId || targetVisitId === 'new_visit') {
+    if (!targetVisitId || isComposingNewSession) {
       targetVisitId = createVisitDraft();
     }
+
+    const targetSummary = visitSummaries.find(summary => summary.id === targetVisitId);
+    const shouldPersistSession = !targetSummary || targetSummary.items.length === 0;
+
+    if (shouldPersistSession) {
+      try {
+        await ensureSessionRecord(targetVisitId);
+      } catch (error) {
+        console.error('Failed to create session before reflection:', error);
+        showToast('Could not start session', 'info');
+        return;
+      }
+    }
+
     const createdAt = Date.now();
     const userMsg: VisitStreamMessage = {
       id: `visit-msg-${createdAt}`,
@@ -1197,14 +1265,15 @@ const App: React.FC = () => {
           lat: coords?.latitude,
           lng: coords?.longitude,
           exifTime: photoTimestamp,
-          contextVisitId: filteredVisitId
+          contextVisitId: isComposingNewSession ? null : filteredVisitId
         });
 
-        if (filteredVisitId === 'new_visit') {
+        if (isComposingNewSession) {
           setFilteredVisitId(visitId);
+          setIsComposingNewSession(false);
         }
 
-        if (isNew || filteredVisitId === 'new_visit') {
+        if (isNew || isComposingNewSession) {
           const now = Date.now();
           const newVisit: VisitDraft = {
             id: visitId,
@@ -1244,13 +1313,6 @@ const App: React.FC = () => {
         } else {
           showToast(isNew ? 'Created a new visit' : 'Added to collection');
         }
-
-        setInterpretingItem({
-          ...placeholderItem,
-          visitId: visitId,
-          allVisitItems: items.filter(i => i.visitId === visitId).concat([placeholderItem]),
-          streamingText: ''
-        });
 
         // Prefetch skills with artist context as soon as it appears in the stream (~2-5s in)
         const exploreContextFired = { current: false };
@@ -1329,14 +1391,15 @@ const App: React.FC = () => {
 
       const { visitId: batchVisitId } = await autoDetermineVisit({ 
         isBatch: true, 
-        contextVisitId: filteredVisitId,
+        contextVisitId: isComposingNewSession ? null : filteredVisitId,
         exifTime: anchorTime,
         lat: anchorMeta.latitude,
         lng: anchorMeta.longitude
       });
 
-      if (filteredVisitId === 'new_visit') {
+      if (isComposingNewSession) {
         setFilteredVisitId(batchVisitId);
+        setIsComposingNewSession(false);
       }
 
       {
@@ -1352,7 +1415,7 @@ const App: React.FC = () => {
       
       setVisit(prev => ({ ...prev, id: batchVisitId, itemIds: [], globalConversation: [] }));
 
-      const batchPlaceholders: GalleryItem[] = memoryFiles.map(memFile => {
+      const batchPlaceholders: GalleryItem[] = memoryFiles.map((memFile) => {
         const id = Math.random().toString(36).substring(2, 11);
         (memFile as any).generatedId = id;
         const itemTime = memFile.metadata.timestamp || Date.now();
@@ -1545,19 +1608,93 @@ const App: React.FC = () => {
   };
 
   const handleDeleteSession = (sessionId: string) => {
+    setOpenVisitMenuId(null);
     setDeleteConfirmation({ id: sessionId, type: 'session' });
+  };
+
+  const handleStartRenameVisit = (visitId: string, currentTitle: string) => {
+    setOpenVisitMenuId(null);
+    setEditingVisitId(visitId);
+    setEditingVisitTitle(currentTitle);
+  };
+
+  const commitVisitRename = async (visitId: string) => {
+    const trimmedTitle = editingVisitTitle.trim() || DEFAULT_VISIT_TITLE;
+    const currentSummary = visitSummaries.find(summary => summary.id === visitId);
+
+    if (!currentSummary) {
+      setEditingVisitId(null);
+      setEditingVisitTitle('');
+      return;
+    }
+
+    if (trimmedTitle === currentSummary.title) {
+      setEditingVisitId(null);
+      setEditingVisitTitle('');
+      return;
+    }
+
+    try {
+      if (currentSummary.items.length > 0) {
+        await updateSession(visitId, USER_ID, trimmedTitle);
+        setItems(prev => prev.map(item =>
+          item.visitId === visitId ? { ...item, sessionTitle: trimmedTitle } : item
+        ));
+      }
+
+      setVisitDrafts(prev => {
+        const now = Date.now();
+        const existingDraft = prev.find(draft => draft.id === visitId);
+        if (existingDraft) {
+          return prev.map(draft =>
+            draft.id === visitId ? { ...draft, title: trimmedTitle, updatedAt: now } : draft
+          );
+        }
+        return [{ id: visitId, title: trimmedTitle, createdAt: now, updatedAt: now }, ...prev];
+      });
+
+      showToast('Session renamed', 'success');
+    } catch (error) {
+      console.error('Failed to rename visit:', error);
+      showToast('Could not rename session', 'info');
+    } finally {
+      setEditingVisitId(null);
+      setEditingVisitTitle('');
+    }
+  };
+
+  const removeVisitLocally = (sessionId: string) => {
+    setItems(prev => prev.filter(item => item.visitId !== sessionId));
+    setVisitDrafts(prev => prev.filter(draft => draft.id !== sessionId));
+    setVisitStreams(prev => {
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
+    setStreamingVisitResponses(prev => {
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
+    setVisit(prev => prev.id === sessionId ? { ...prev, id: '', itemIds: [], globalConversation: [] } : prev);
+    if (interpretingItem?.visitId === sessionId) {
+      setInterpretingItem(null);
+    }
+    setFilteredVisitId(prev => (prev === sessionId ? null : prev));
   };
 
   const confirmDeleteSession = async (sessionId: string) => {
     try {
-      await deleteSession(sessionId, USER_ID);
-      setItems(prev => prev.filter(item => item.visitId !== sessionId));
-      if (interpretingItem && interpretingItem.visitId === sessionId) {
-        setInterpretingItem(null);
+      const sessionSummary = visitSummaries.find(summary => summary.id === sessionId);
+      if (sessionSummary?.items.length) {
+        await deleteSession(sessionId, USER_ID);
       }
+      removeVisitLocally(sessionId);
+      showToast('Session deleted', 'success');
       console.log(`Successfully deleted session: ${sessionId}`);
     } catch (error) {
       console.error("Failed to delete session:", error);
+      showToast('Could not delete session', 'info');
     } finally {
       setDeleteConfirmation(null);
     }
@@ -1569,7 +1706,8 @@ const App: React.FC = () => {
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
 
-  const isVisitMode = activeTab === 'explore' && !!filteredVisitId;
+  const isVisitMode = activeTab === 'explore' && (isComposingNewSession || !!filteredVisitId);
+  const isNewSessionEntryActive = activeTab === 'explore' && isComposingNewSession;
 
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
@@ -1754,7 +1892,7 @@ const App: React.FC = () => {
             {[
               {
                 id: 'explore',
-                label: 'Explore',
+                label: 'New Session',
                 icon: (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
@@ -1763,7 +1901,7 @@ const App: React.FC = () => {
               },
               {
                 id: 'collect',
-                label: 'Collect',
+                label: 'Collection',
                 icon: (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2 2H2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -1794,6 +1932,15 @@ const App: React.FC = () => {
                 key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id as any);
+                  if (tab.id === 'explore') {
+                    setFilteredVisitId(null);
+                    setIsComposingNewSession(true);
+                    setVisit({
+                      id: '',
+                      itemIds: [],
+                      globalConversation: [],
+                    });
+                  }
                   setArtistPageContext(null);
                   setMovementPageContext(null);
                   setInterpretingItem(null);
@@ -1802,12 +1949,12 @@ const App: React.FC = () => {
                   }
                 }}
                 className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-[12px] font-semibold tracking-[0.1em] uppercase text-left transition-all ${
-                  activeTab === tab.id
+                  (tab.id === 'explore' ? isNewSessionEntryActive : activeTab === tab.id)
                     ? 'bg-neutral-900 text-white shadow-md'
                     : 'text-neutral-500 hover:text-neutral-955 hover:bg-neutral-100'
                 }`}
               >
-                <span className={activeTab === tab.id ? 'text-white' : 'text-neutral-400'}>
+                <span className={(tab.id === 'explore' ? isNewSessionEntryActive : activeTab === tab.id) ? 'text-white' : 'text-neutral-400'}>
                   {tab.icon}
                 </span>
                 <span>{tab.label}</span>
@@ -1820,31 +1967,6 @@ const App: React.FC = () => {
           {/* Sessions Section */}
           <div className="px-4 pt-3 pb-1 shrink-0">
             <p className="text-[10px] tracking-[0.2em] uppercase font-bold text-neutral-400">Sessions</p>
-          </div>
-
-          {/* New visit button inside sidebar above all sessions */}
-          <div className="px-3 py-1.5 shrink-0">
-            <button
-              onClick={() => {
-                setActiveTab('explore');
-                setFilteredVisitId('new_visit');
-                setVisit({
-                  id: 'new_visit',
-                  itemIds: [],
-                  globalConversation: [],
-                });
-                setArtistPageContext(null);
-                setMovementPageContext(null);
-                setInterpretingItem(null);
-                if (window.innerWidth < 768) {
-                  setSidebarOpen(false);
-                }
-              }}
-              className="flex w-full items-center justify-center gap-3 rounded-[16px] bg-neutral-900 px-4 py-3 text-[13px] font-bold uppercase tracking-[0.12em] text-white hover:bg-neutral-800 transition-colors shadow-sm"
-            >
-              <span className="text-[18px] leading-none font-normal">+</span>
-              <span>New visit</span>
-            </button>
           </div>
 
           {/* Search bar inside sidebar */}
@@ -1864,33 +1986,113 @@ const App: React.FC = () => {
           </div>
 
           {/* Sessions Scroll List */}
-          <div className="flex-1 overflow-y-auto px-3 py-2 min-h-0 space-y-1 scrollbar-thin">
+          <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0 space-y-2 scrollbar-thin">
             {visitSummaries.map((summary) => (
-              <button
+              <div
                 key={summary.id}
-                onClick={() => {
-                  setActiveTab('explore');
-                  setFilteredVisitId(summary.id);
-                  setArtistPageContext(null);
-                  setMovementPageContext(null);
-                  setInterpretingItem(null);
-                  if (window.innerWidth < 768) {
-                    setSidebarOpen(false);
-                  }
-                }}
-                className={`w-full rounded-xl px-4.5 py-3.5 text-left transition-all border ${
+                data-visit-menu-root="true"
+                className={`relative w-full rounded-[20px] p-1 transition-all ${
                   activeVisitSummary?.id === summary.id && activeTab === 'explore'
-                    ? 'border-neutral-200 bg-[#efe9dc]/80 font-semibold text-neutral-955 shadow-sm'
-                    : 'border-transparent hover:bg-neutral-100/70 text-neutral-600 hover:text-neutral-900 font-medium'
+                    ? 'bg-neutral-900 text-white shadow-md'
+                    : 'text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-900 font-medium'
                 }`}
               >
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <p className="truncate text-[13px] leading-tight">{summary.title}</p>
-                  <p className="truncate text-[10px] text-neutral-400/90 tracking-wide font-semibold font-mono leading-none mt-1">
-                    {summary.artworkCount} {summary.artworkCount === 1 ? 'piece' : 'pieces'}
-                  </p>
-                </div>
-              </button>
+                <button
+                  onClick={() => {
+                    if (editingVisitId === summary.id) return;
+                    setActiveTab('explore');
+                    setFilteredVisitId(summary.id);
+                    setIsComposingNewSession(false);
+                    setArtistPageContext(null);
+                    setMovementPageContext(null);
+                    setInterpretingItem(null);
+                    setOpenVisitMenuId(null);
+                    if (window.innerWidth < 768) {
+                      setSidebarOpen(false);
+                    }
+                  }}
+                  className="w-full rounded-[16px] px-4 py-3.5 pr-12 text-left"
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    {editingVisitId === summary.id ? (
+                      <input
+                        ref={renameInputRef}
+                        value={editingVisitTitle}
+                        onChange={(event) => setEditingVisitTitle(event.target.value)}
+                        onBlur={() => void commitVisitRename(summary.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void commitVisitRename(summary.id);
+                          }
+                          if (event.key === 'Escape') {
+                            setEditingVisitId(null);
+                            setEditingVisitTitle('');
+                          }
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                        className="w-full rounded-md bg-white/90 px-2 py-1 text-[13px] leading-tight text-neutral-900 outline-none ring-1 ring-neutral-200 focus:ring-2 focus:ring-neutral-400"
+                      />
+                    ) : (
+                      <p className="truncate text-[13px] leading-tight">{summary.title}</p>
+                    )}
+                    <p className={`truncate text-[10px] tracking-wide font-semibold font-mono leading-none mt-1 ${
+                      activeVisitSummary?.id === summary.id && activeTab === 'explore' ? 'text-neutral-300' : 'text-neutral-400/90'
+                    }`}>
+                      {summary.artworkCount} {summary.artworkCount === 1 ? 'piece' : 'pieces'}
+                    </p>
+                  </div>
+                </button>
+                {editingVisitId !== summary.id && (
+                  <>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpenVisitMenuId(prev => prev === summary.id ? null : summary.id);
+                      }}
+                      className={`absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-colors ${
+                        activeVisitSummary?.id === summary.id && activeTab === 'explore'
+                          ? 'text-white/70 hover:bg-white/10 hover:text-white'
+                          : 'text-neutral-400 hover:bg-white/80 hover:text-neutral-700'
+                      }`}
+                      aria-label={`Open actions for ${summary.title}`}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <circle cx="5" cy="12" r="1.7" />
+                        <circle cx="12" cy="12" r="1.7" />
+                        <circle cx="19" cy="12" r="1.7" />
+                      </svg>
+                    </button>
+                    {openVisitMenuId === summary.id && (
+                      <div
+                        data-visit-menu-root="true"
+                        className="absolute right-2 top-[calc(50%+22px)] z-20 min-w-[170px] rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.12)]"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => handleStartRenameVisit(summary.id, summary.title)}
+                          className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[12px] font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          </svg>
+                          <span>Rename session</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSession(summary.id)}
+                          className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[12px] font-medium text-red-600 transition-colors hover:bg-red-50"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                          <span>Delete session</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             ))}
           </div>
 
@@ -2113,7 +2315,7 @@ const App: React.FC = () => {
                       isInline={true}
                     />
 
-                    <div className={`flex-1 overflow-y-auto px-4 pb-40 pt-6 sm:px-10 flex flex-col ${activeVisitStream.length === 0 ? 'justify-center' : ''}`}>
+                    <div ref={visitStreamScrollRef} className={`flex-1 overflow-y-auto px-4 pb-56 pt-6 sm:px-10 flex flex-col ${activeVisitStream.length === 0 ? 'justify-center' : ''}`}>
                       <div className={`mx-auto w-full max-w-[640px] ${activeVisitStream.length === 0 ? 'flex-1 flex flex-col items-center justify-center pb-20' : 'space-y-6'}`}>
                         {activeVisitStream.length === 0 && (
                           <div className="text-center animate-in fade-in zoom-in-95 duration-500">
@@ -2121,7 +2323,7 @@ const App: React.FC = () => {
                               What's on your mind today?
                             </h2>
                             <p className="text-[16px] text-neutral-400 font-medium font-sans">
-                              Capture an artwork or type a reflection to start your visit.
+                              Capture an artwork or type a reflection to start your session.
                             </p>
                           </div>
                         )}
@@ -2156,10 +2358,6 @@ const App: React.FC = () => {
                                       {entry.item.artistName || 'Visit artifact during visit'}
                                     </p>
                                   </div>
-                                  <div className="hidden items-center gap-3 text-[13px] text-neutral-500 sm:flex">
-                                    <span className="rounded-full bg-[#f3eee4] px-4 py-2">Reflection stream</span>
-                                    <span className="rounded-full bg-[#f3eee4] px-4 py-2">Visit artifact</span>
-                                  </div>
                                 </div>
                                 {entry.item.description && (
                                   <p className="mt-8 text-[16px] leading-[1.8] text-neutral-600">
@@ -2192,6 +2390,7 @@ const App: React.FC = () => {
                             </div>
                           </div>
                         )}
+                        <div ref={visitStreamEndRef} className="h-24 shrink-0" />
                       </div>
                     </div>
                   </>
@@ -2314,12 +2513,12 @@ const App: React.FC = () => {
                 </svg>
               </div>
               <h3 className="mb-3 text-xl font-serif text-neutral-900">
-                {deleteConfirmation.type === 'item' ? 'Remove Artwork?' : 'Delete Visit Record?'}
+                {deleteConfirmation.type === 'item' ? 'Remove Artwork?' : 'Delete Session?'}
               </h3>
               <p className="mb-8 text-sm leading-relaxed text-neutral-500">
                 {deleteConfirmation.type === 'item'
                   ? 'This will permanently remove this piece and its curated analysis from your Musee.'
-                  : 'This will delete the entire visit record and all associated artwork analysis.'}
+                  : `This will permanently delete ${pendingDeleteVisitSummary?.title || 'this session'} and its ${pendingDeleteVisitSummary?.artworkCount || 0} ${pendingDeleteVisitSummary?.artworkCount === 1 ? 'captured artwork' : 'captured artworks'} from Musee.`}
               </p>
               <div className="flex space-x-3">
                 <button
