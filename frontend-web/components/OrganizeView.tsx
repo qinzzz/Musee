@@ -4,6 +4,17 @@ import { GalleryItem, Visit, Album, ArtistEntity } from '../types';
 import { fetchUserArtists, SmartCollection } from '../apiService';
 import GridView from './GridView';
 import SmartCollectionsView from './SmartCollectionsView';
+import CreateBoardModal from './CreateBoardModal';
+import ConfirmBoardDeleteModal from './ConfirmBoardDeleteModal';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+
+const OverflowDotsIcon: React.FC<{ className?: string }> = ({ className = 'h-3.5 w-3.5' }) => (
+  <svg viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+    <circle cx="3" cy="8" r="1.25" />
+    <circle cx="8" cy="8" r="1.25" />
+    <circle cx="13" cy="8" r="1.25" />
+  </svg>
+);
 
 export type CollectTab = 'saved' | 'boards' | 'movements' | 'artists';
 type SavedLayout = 'grid' | 'grouped';
@@ -20,9 +31,14 @@ interface Props {
   isAnalyzing: boolean;
   likedIds?: Set<string>;
   albums?: Album[];
+  boardsLoading?: boolean;
   userId?: string | null;
   collectTab: CollectTab;
   onCollectTabChange: (tab: CollectTab) => void;
+  onCreateBoard: (name: string, itemIds?: string[]) => Promise<Album>;
+  onRenameBoard: (boardId: string, name: string) => Promise<Album>;
+  onDeleteBoard: (boardId: string) => Promise<void>;
+  onAddItemsToBoard: (boardId: string, itemIds: string[]) => Promise<void>;
   onOpenArtist: (artistEntityId: string, artistName: string) => void;
   onOpenMovement: (collection: SmartCollection) => void;
   onInterpret: (item: GalleryItem) => void;
@@ -31,16 +47,29 @@ interface Props {
 
 const OrganizeView: React.FC<Props> = ({
   items, visit, filteredVisitId, isAnalyzing,
-  likedIds, albums, userId,
+  likedIds, albums, boardsLoading, userId,
   collectTab, onCollectTabChange,
+  onCreateBoard,
+  onRenameBoard,
+  onDeleteBoard,
+  onAddItemsToBoard,
   onOpenArtist, onOpenMovement,
   onInterpret, onDelete,
 }) => {
   const [savedLayout, setSavedLayout] = useState<SavedLayout>('grid');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [selectedBoard, setSelectedBoard] = useState<'liked' | string | null>(null);
+  const [newBoardName, setNewBoardName] = useState('');
+  const [isSubmittingBoard, setIsSubmittingBoard] = useState(false);
+  const [createBoardRequest, setCreateBoardRequest] = useState<{
+    itemIds?: string[];
+    onCreated?: (board: Album) => void;
+  } | null>(null);
+  const [renameBoardTarget, setRenameBoardTarget] = useState<Album | null>(null);
+  const [deleteBoardTarget, setDeleteBoardTarget] = useState<Album | null>(null);
   const [artists, setArtists] = useState<ArtistRow[]>([]);
   const [artistsLoading, setArtistsLoading] = useState(false);
+  const boards = albums || [];
 
   // Fetch artists when the tab is first activated
   useEffect(() => {
@@ -56,17 +85,17 @@ const OrganizeView: React.FC<Props> = ({
 
   const likedItems = useMemo(() => items.filter(i => likedIds?.has(i.id)), [items, likedIds]);
   const activeAlbums = useMemo(() =>
-    (albums || []).filter(a => a.itemIds.some(id => items.find(i => i.id === id))),
-    [albums, items]
+    boards.filter(a => a.itemIds.some(id => items.find(i => i.id === id))),
+    [boards, items]
   );
   const showFilterBar = likedItems.length > 0 || activeAlbums.length > 0;
 
   const filteredItems = useMemo(() => {
     if (activeFilter === 'all') return items;
     if (activeFilter === 'liked') return likedItems;
-    const album = (albums || []).find(a => a.id === activeFilter);
+    const album = boards.find(a => a.id === activeFilter);
     return album ? items.filter(i => album.itemIds.includes(i.id)) : items;
-  }, [items, activeFilter, likedItems, albums]);
+  }, [items, activeFilter, likedItems, boards]);
 
   const groupedItems = useMemo(() => {
     const groups = new Map<string, GalleryItem[]>();
@@ -82,15 +111,15 @@ const OrganizeView: React.FC<Props> = ({
   const boardDetailItems = useMemo(() => {
     if (!selectedBoard) return [];
     if (selectedBoard === 'liked') return likedItems;
-    const album = (albums || []).find(a => a.id === selectedBoard);
+    const album = boards.find(a => a.id === selectedBoard);
     return album ? items.filter(i => album.itemIds.includes(i.id)) : [];
-  }, [selectedBoard, likedItems, albums, items]);
+  }, [selectedBoard, likedItems, boards, items]);
 
   const boardDetailName = useMemo(() => {
     if (!selectedBoard) return '';
     if (selectedBoard === 'liked') return 'Liked';
-    return (albums || []).find(a => a.id === selectedBoard)?.name ?? '';
-  }, [selectedBoard, albums]);
+    return boards.find(a => a.id === selectedBoard)?.name ?? '';
+  }, [selectedBoard, boards]);
 
   const getCoverImages = (itemIds: string[]) =>
     itemIds.slice(0, 4).map(id => items.find(i => i.id === id)?.url).filter(Boolean) as string[];
@@ -99,12 +128,90 @@ const OrganizeView: React.FC<Props> = ({
   const getArtistCovers = (artistId: string) =>
     items.filter(i => i.artistEntityId === artistId).slice(0, 4).map(i => i.url);
 
+  const boardOverflowButtonClassName =
+    'flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-400 transition-colors hover:border-neutral-300 hover:text-neutral-700';
+
   const TABS: { id: CollectTab; label: string }[] = [
-    { id: 'saved',     label: 'Saved' },
+    { id: 'saved',     label: 'All Artworks' },
     { id: 'boards',    label: 'Boards' },
     { id: 'movements', label: 'Art Movements' },
     { id: 'artists',   label: 'Artists' },
   ];
+
+  const submitBoard = async () => {
+    const trimmedName = newBoardName.trim();
+    const pendingRequest = createBoardRequest;
+    if (!trimmedName || isSubmittingBoard || !pendingRequest) return;
+
+    try {
+      setIsSubmittingBoard(true);
+      const createdBoard = await onCreateBoard(trimmedName, pendingRequest.itemIds);
+      pendingRequest.onCreated?.(createdBoard);
+      setNewBoardName('');
+      setCreateBoardRequest(null);
+    } catch (error) {
+      console.error('Failed to create board:', error);
+    } finally {
+      setIsSubmittingBoard(false);
+    }
+  };
+
+  const openCreateBoardModal = (options?: { itemIds?: string[]; onCreated?: (board: Album) => void }) => {
+    setNewBoardName('');
+    setCreateBoardRequest({
+      itemIds: options?.itemIds,
+      onCreated: options?.onCreated,
+    });
+  };
+
+  const closeCreateBoardModal = () => {
+    if (isSubmittingBoard) return;
+    setCreateBoardRequest(null);
+    setNewBoardName('');
+  };
+
+  const submitRenameBoard = async () => {
+    const trimmedName = newBoardName.trim();
+    if (!trimmedName || isSubmittingBoard || !renameBoardTarget) return;
+
+    try {
+      setIsSubmittingBoard(true);
+      await onRenameBoard(renameBoardTarget.id, trimmedName);
+      setRenameBoardTarget(null);
+      setNewBoardName('');
+    } catch (error) {
+      console.error('Failed to rename board:', error);
+    } finally {
+      setIsSubmittingBoard(false);
+    }
+  };
+
+  const openRenameBoardModal = (board: Album) => {
+    setCreateBoardRequest(null);
+    setRenameBoardTarget(board);
+    setNewBoardName(board.name);
+  };
+
+  const closeRenameBoardModal = () => {
+    if (isSubmittingBoard) return;
+    setRenameBoardTarget(null);
+    setNewBoardName('');
+  };
+
+  const handleDeleteBoard = async (board: Album) => {
+    try {
+      setIsSubmittingBoard(true);
+      await onDeleteBoard(board.id);
+      if (selectedBoard === board.id) {
+        setSelectedBoard(null);
+      }
+      setDeleteBoardTarget(null);
+    } catch (error) {
+      console.error('Failed to delete board:', error);
+    } finally {
+      setIsSubmittingBoard(false);
+    }
+  };
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden">
@@ -199,8 +306,11 @@ const OrganizeView: React.FC<Props> = ({
                   visit={visit}
                   filteredVisitId={filteredVisitId}
                   isAnalyzing={isAnalyzing}
+                  boards={boards}
                   onInterpret={onInterpret}
                   onDelete={onDelete}
+                  onRequestCreateBoard={openCreateBoardModal}
+                  onAddToBoard={onAddItemsToBoard}
                 />
               ) : (
                 <div className="h-full overflow-y-auto">
@@ -247,10 +357,37 @@ const OrganizeView: React.FC<Props> = ({
           <div className="h-full overflow-y-auto">
             {selectedBoard === null ? (
               <div className="px-5 sm:px-8 pt-5 pb-32">
-                {likedItems.length === 0 && activeAlbums.length === 0 ? (
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] tracking-[0.25em] uppercase text-neutral-400 font-medium">Boards</p>
+                    <p className="mt-1 text-[12px] text-neutral-500">Curate your own collections of artworks.</p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      openCreateBoardModal({
+                        onCreated: (createdBoard) => setSelectedBoard(createdBoard.id),
+                      })
+                    }
+                    className="shrink-0 rounded-full border border-neutral-200 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-700 transition-colors hover:border-neutral-400"
+                  >
+                    New board
+                  </button>
+                </div>
+
+                {boardsLoading ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} className="text-left">
+                        <div className="rounded-xl aspect-square bg-neutral-100 animate-pulse mb-2.5" />
+                        <div className="h-3 bg-neutral-100 rounded animate-pulse w-3/4 mb-1" />
+                        <div className="h-2.5 bg-neutral-100 rounded animate-pulse w-1/2" />
+                      </div>
+                    ))}
+                  </div>
+                ) : likedItems.length === 0 && boards.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-48 gap-2">
                     <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No boards yet</p>
-                    <p className="text-[11px] text-neutral-400">Like artworks or create albums to get started</p>
+                    <p className="text-[11px] text-neutral-400">Create a board to start curating your collection.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
@@ -268,22 +405,66 @@ const OrganizeView: React.FC<Props> = ({
                         <p className="text-[11px] text-neutral-400 mt-0.5">{likedItems.length} {likedItems.length === 1 ? 'piece' : 'pieces'}</p>
                       </button>
                     )}
-                    {activeAlbums.map(album => {
+                    {boards.map(album => {
                       const covers = getCoverImages(album.itemIds);
                       const count = album.itemIds.filter(id => items.find(i => i.id === id)).length;
                       return (
-                        <button key={album.id} onClick={() => setSelectedBoard(album.id)} className="text-left group">
-                          <div className="grid grid-cols-2 gap-0.5 bg-neutral-100 overflow-hidden rounded-xl aspect-square mb-2.5">
-                            {covers.slice(0, 4).map((url, i) => (
-                              <img key={i} src={url} alt="" className="w-full h-full object-cover aspect-square" />
-                            ))}
-                            {Array(Math.max(0, 4 - covers.length)).fill(null).map((_, i) => (
-                              <div key={`e${i}`} className="bg-neutral-50 aspect-square" />
-                            ))}
+                        <div key={album.id} className="text-left group">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBoard(album.id)}
+                            className="block w-full"
+                          >
+                            <div className="grid grid-cols-2 gap-0.5 bg-neutral-100 overflow-hidden rounded-xl aspect-square mb-2.5">
+                              {covers.slice(0, 4).map((url, i) => (
+                                <img key={i} src={url} alt="" className="w-full h-full object-cover aspect-square" />
+                              ))}
+                              {Array(Math.max(0, 4 - covers.length)).fill(null).map((_, i) => (
+                                <div key={`e${i}`} className="bg-neutral-50 aspect-square" />
+                              ))}
+                            </div>
+                          </button>
+                          <div className="flex items-start justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedBoard(album.id)}
+                              className="min-w-0 flex-1 text-left"
+                            >
+                              <p className="text-[12px] font-semibold text-neutral-900 leading-tight truncate">{album.name}</p>
+                              <p className="mt-0.5 text-[11px] text-neutral-400">{count} {count === 1 ? 'piece' : 'pieces'}</p>
+                            </button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className={boardOverflowButtonClassName}
+                                  aria-label={`${album.name} board actions`}
+                                >
+                                  <OverflowDotsIcon />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="min-w-[180px]">
+                                <DropdownMenuItem
+                                  onSelect={(event) => {
+                                    event.preventDefault();
+                                    openRenameBoardModal(album);
+                                  }}
+                                >
+                                  Rename board
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  destructive
+                                  onSelect={(event) => {
+                                    event.preventDefault();
+                                    setDeleteBoardTarget(album);
+                                  }}
+                                >
+                                  Delete board
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
-                          <p className="text-[12px] font-semibold text-neutral-900 leading-tight truncate">{album.name}</p>
-                          <p className="text-[11px] text-neutral-400 mt-0.5">{count} {count === 1 ? 'piece' : 'pieces'}</p>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -398,6 +579,43 @@ const OrganizeView: React.FC<Props> = ({
             </div>
           </div>
         )}
+
+        <CreateBoardModal
+          open={createBoardRequest !== null}
+          value={newBoardName}
+          title="New board"
+          heading="Name your board"
+          description="Create a board to group artworks into a collection you can return to later."
+          submitLabel="Create board"
+          isSubmitting={isSubmittingBoard}
+          onValueChange={setNewBoardName}
+          onClose={closeCreateBoardModal}
+          onSubmit={submitBoard}
+        />
+
+        <CreateBoardModal
+          open={renameBoardTarget !== null}
+          value={newBoardName}
+          title="Rename board"
+          heading="Update board name"
+          description="Give this board a clearer name without changing the artworks inside it."
+          submitLabel="Save name"
+          isSubmitting={isSubmittingBoard}
+          onValueChange={setNewBoardName}
+          onClose={closeRenameBoardModal}
+          onSubmit={submitRenameBoard}
+        />
+
+        <ConfirmBoardDeleteModal
+          board={deleteBoardTarget}
+          isDeleting={isSubmittingBoard}
+          onClose={() => {
+            if (!isSubmittingBoard) setDeleteBoardTarget(null);
+          }}
+          onConfirm={(board) => {
+            void handleDeleteBoard(board);
+          }}
+        />
 
       </div>
     </div>

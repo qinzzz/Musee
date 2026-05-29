@@ -1,4 +1,4 @@
-import { Message, ArtworkSkill, ReferenceItem } from './types';
+import { Message, ArtworkSkill, ReferenceItem, Album } from './types';
 
 /**
  * Suggested topic API endpoint
@@ -196,6 +196,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 const API_TIMEOUT = 120000; // 120 seconds
 const AUTH_TOKEN_KEY = 'musee_auth_token';
 const USER_INFO_KEY = 'musee_user_info';
+const DEV_FIXED_USER_ID = import.meta.env.VITE_DEV_USER_ID || 'musee-dev-user';
 
 /** Read the user's language preference from localStorage */
 function getLanguage(): string | null {
@@ -334,6 +335,14 @@ export interface TopicSuggestionResponse {
  */
 export function getOrCreateUserId(): string {
   const STORAGE_KEY = 'musee_user_id';
+
+  if (import.meta.env.DEV) {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, DEV_FIXED_USER_ID);
+    }
+    return DEV_FIXED_USER_ID;
+  }
+
   let userId = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
 
   if (!userId) {
@@ -929,6 +938,87 @@ export async function fetchUserArtworks(userId: string): Promise<any> {
   }
 
   return response.json();
+}
+
+interface CollectionResponse {
+  id: string;
+  name: string;
+  description?: string | null;
+  artworks?: Array<{ id: string }>;
+}
+
+function mapCollectionToAlbum(collection: CollectionResponse): Album {
+  return {
+    id: collection.id,
+    name: collection.name,
+    description: collection.description ?? null,
+    itemIds: (collection.artworks || []).map(artwork => artwork.id),
+  };
+}
+
+export async function fetchCollections(userId: string): Promise<Album[]> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/collections?user_id=${encodeURIComponent(userId)}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`collections error (${response.status}): ${errorText}`);
+  }
+  const data: CollectionResponse[] = await response.json();
+  return data.map(mapCollectionToAlbum);
+}
+
+export async function createCollection(
+  userId: string,
+  name: string,
+  artworkIds: string[] = [],
+  description?: string,
+): Promise<Album> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/collections`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      name,
+      description,
+      artwork_ids: artworkIds,
+    }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`create collection error (${response.status}): ${errorText}`);
+  }
+  const data: CollectionResponse = await response.json();
+  return mapCollectionToAlbum(data);
+}
+
+export async function updateCollection(
+  collectionId: string,
+  updates: { name?: string; description?: string; artworkIds?: string[] },
+): Promise<Album> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/collections/${collectionId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: updates.name,
+      description: updates.description,
+      artwork_ids: updates.artworkIds,
+    }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`update collection error (${response.status}): ${errorText}`);
+  }
+  const data: CollectionResponse = await response.json();
+  return mapCollectionToAlbum(data);
+}
+
+export async function deleteCollection(collectionId: string): Promise<void> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/collections/${collectionId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`delete collection error (${response.status}): ${errorText}`);
+  }
 }
 
 export async function getTasteProfile(userId: string): Promise<any> {

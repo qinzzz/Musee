@@ -11,6 +11,7 @@ interface Props {
   onClose: () => void;
   onOpenArtwork: (item: GalleryItem) => void;
   onNavigateToIndex?: () => void; // navigate to /artists index
+  parentLabel?: string;
   isInline?: boolean;
 }
 
@@ -38,7 +39,7 @@ function rawToGalleryItem(raw: any): GalleryItem {
   };
 }
 
-export default function ArtistPage({ artistEntityId, artworkId, artistName, userId, onClose, onOpenArtwork, onNavigateToIndex, isInline }: Props) {
+export default function ArtistPage({ artistEntityId, artworkId, artistName, userId, onClose, onOpenArtwork, onNavigateToIndex, parentLabel, isInline }: Props) {
   const [artist, setArtist] = useState<ArtistEntity | null>(null);
   const [artworks, setArtworks] = useState<GalleryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,7 +108,7 @@ export default function ArtistPage({ artistEntityId, artworkId, artistName, user
     >
       {/* Header */}
       <CanvasHeader
-        parentLabel="Artists"
+        parentLabel={parentLabel || 'Artists'}
         parentClick={onNavigateToIndex || onClose}
         childLabel={artist?.display_name || artistName || '…'}
         isInline={isInline}
