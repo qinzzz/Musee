@@ -32,16 +32,7 @@ export default function CanvasHeader({ parentLabel, parentClick, childLabel, isI
         <div className="flex items-center gap-2 text-[13px] sm:text-[14px] min-w-0 font-medium tracking-wide">
           {parentLabel && (
             <>
-              {parentClick ? (
-                <button
-                  onClick={parentClick}
-                  className="text-neutral-400 hover:text-neutral-700 transition-colors whitespace-nowrap font-medium"
-                >
-                  {parentLabel}
-                </button>
-              ) : (
-                <span className="text-neutral-400 whitespace-nowrap">{parentLabel}</span>
-              )}
+              <span className="text-neutral-400 whitespace-nowrap">{parentLabel}</span>
               <span className="text-neutral-300 font-normal">/</span>
             </>
           )}

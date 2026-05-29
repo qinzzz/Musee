@@ -97,6 +97,7 @@ export interface NeighborItem {
 export interface Album {
   id: string;
   name: string;
+  description?: string | null;
   itemIds: string[];
 }
 
