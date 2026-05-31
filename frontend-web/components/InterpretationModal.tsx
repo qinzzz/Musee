@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, NeighborItem, Visit, GalleryItem } from '../types';
-import { chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../apiService';
+import { chatWithArtworkStream, getTagExplanation, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../apiService';
 interface Props {
   item: {
     url: string;
@@ -148,8 +148,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
-  const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
-  const [isSuggesting, setIsSuggesting] = useState(false);
 const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const [mobileImageHeight, setMobileImageHeight] = useState(-1); // -1 = unset (uses CSS). Set on mount for mobile = 4:3 aspect ratio
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -287,7 +285,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   // Sync internal state when navigating between items in a session
   useEffect(() => {
     setMessages(item.conversation || []);
-    setSuggestedTopics([]);
     setInsights([]);
     onRightModeChange('metadata'); // Reset to metadata view for the new piece
     // mobileImageHeight no longer used for mobile
@@ -331,7 +328,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, suggestedTopics]);
+  }, [messages]);
 
   // Parse streaming JSON to extract fields progressively during analysis
   const streamingFields = useMemo(() => {
@@ -425,35 +422,10 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     if (e.key === 'Escape') { cancelEditing(); }
   };
 
-  const fetchSuggestions = async (currentMessages: Message[]) => {
-    if (!item.artistName || !item.artworkName) return;
-    setIsSuggesting(true);
-    setSuggestedTopics([]);
-    try {
-      const historyToSuggest = currentMessages.length > 0
-        ? currentMessages
-        : (item.description ? [{ role: 'model', text: item.description }] as Message[] : []);
-      const topics = await suggestTopics(item.artistName, item.artworkName, historyToSuggest);
-      setSuggestedTopics(topics);
-    } catch (e) {
-      console.error('Failed to fetch topics:', e);
-    } finally {
-      setIsSuggesting(false);
-    }
-  };
-
-  // Fetch initial suggestions when analysis is complete or when opening an existing item
-  useEffect(() => {
-    if (!item.isAnalyzing && item.artistName && item.artworkName && suggestedTopics.length === 0) {
-      fetchSuggestions(messages);
-    }
-  }, [item.isAnalyzing, item.artistName, item.artworkName]);
-
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
     const userMsg: Message = { role: 'user', text };
     setMessages(prev => [...prev, userMsg]);
-    setSuggestedTopics([]);
     setIsTyping(true);
 
     try {
@@ -502,8 +474,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
           const updatedMessages: Message[] = [...messages, userMsg, { role: 'model' as const, text: fullResponse }];
           onUpdateConversation?.(item.id, [userMsg, { role: 'model', text: fullResponse }]);
 
-          // Fetch new suggestions based on the updated conversation
-          fetchSuggestions(updatedMessages);
         },
         (error) => {
           console.error('Chat error:', error);
@@ -1045,7 +1015,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
                 {insights.length > 0 && (
                   <div className="border-t border-neutral-50 pt-5">
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-3">Behind the Frame</p>
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-3">Fun Facts</p>
                     <div className="space-y-1.5">
                       {insights.map((pt, idx) => {
                           const colors = [
@@ -1119,34 +1089,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 )}
 
-                {/* Suggested explorations — legacy prompts shown as passive cues */}
-                {!item.isAnalyzing && suggestedTopics.length > 0 && (
-                  <div className="pt-2 border-t border-neutral-50 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <div className="flex items-center justify-between mb-3">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="text-neutral-300">
-                        <path d="M12 2l2.9 6.3 6.8.6-5 4.6 1.5 6.7L12 17l-6.2 3.2 1.5-6.7-5-4.6 6.8-.6z"/>
-                      </svg>
-                      <button
-                        onClick={() => fetchSuggestions(messages)}
-                        disabled={isSuggesting}
-                        className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors disabled:opacity-30"
-                        title="Suggest more topics"
-                      >
-                        {isSuggesting ? '...' : '↺'}
-                      </button>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      {suggestedTopics.map((topic, idx) => (
-                        <div
-                          key={idx}
-                          className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-right"
-                        >
-                          {topic}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             ) : (
               /* ── CHAT MODE ── */
@@ -1193,34 +1135,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 )}
 
-                {!item.isAnalyzing && suggestedTopics.length > 0 && !isTyping && (
-                  <div className="pt-2 animate-in fade-in slide-in-from-bottom-2 duration-500 px-1">
-                    <div className="flex items-center justify-between mb-3">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="text-neutral-300">
-                        <path d="M12 2l2.9 6.3 6.8.6-5 4.6 1.5 6.7L12 17l-6.2 3.2 1.5-6.7-5-4.6 6.8-.6z"/>
-                      </svg>
-                      <button
-                        onClick={() => fetchSuggestions(messages)}
-                        disabled={isSuggesting}
-                        className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors disabled:opacity-30"
-                        title="Suggest more topics"
-                      >
-                        {isSuggesting ? '...' : '↺'}
-                      </button>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      {suggestedTopics.map((topic, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleSend(topic)}
-                          className="text-[11px] text-neutral-600 bg-white border border-neutral-100 px-4 py-2 rounded-full hover:border-neutral-300 hover:text-neutral-900 hover:shadow-sm transition-all text-right"
-                        >
-                          {topic}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>

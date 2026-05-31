@@ -77,17 +77,13 @@ class SavedArtwork(Base):
     user = relationship("User", back_populates="artworks")
     artwork_entity = relationship("ArtworkEntity", back_populates="instances")
     artist_entity = relationship("ArtistEntity", back_populates="artworks")
-    conversations = relationship("Conversation", back_populates="artwork", cascade="all, delete-orphan", order_by="Conversation.sequence_number")
+    # conversations relationship removed — table deprecated, all chat is now session-level (see SessionMessage)
     collections = relationship("Collection", secondary="collection_artworks", back_populates="artworks")
     artwork_tags = relationship("Tag", secondary="artwork_tags", back_populates="artworks")
     session = relationship("Session", back_populates="artworks")
 
-    def to_dict(self, include_conversations=True):
-        """Convert model to dictionary
-
-        Args:
-            include_conversations: Whether to include conversation_history array (default True)
-        """
+    def to_dict(self, include_conversations=False):
+        """Convert model to dictionary. include_conversations param retained for call-site compatibility but no longer used."""
         result = {
             "id": self.id,
             "photo_uri": self.photo_uri,
@@ -116,22 +112,14 @@ class SavedArtwork(Base):
             "artist_entity_id": self.artist_entity_id,
         }
 
-        # Include conversation_history for backward compatibility with frontend
-        if include_conversations:
-            result["conversation_history"] = [
-                {
-                    "role": conv.role,
-                    "content": conv.content,
-                    "metadata": conv.message_metadata
-                }
-                for conv in sorted(self.conversations, key=lambda x: x.sequence_number)
-            ]
+        result["conversation_history"] = []  # deprecated; conversations now live in session_messages
 
         return result
 
 
 class Conversation(Base):
-    """Database model for individual conversation messages"""
+    """DEPRECATED — per-artwork chat messages. All chat is now session-level; see SessionMessage.
+    Table retained for historical data only. Do not write new records here."""
 
     __tablename__ = "conversations"
     __table_args__ = (
@@ -146,8 +134,7 @@ class Conversation(Base):
     message_metadata = Column(JSON, nullable=True)  # Optional metadata (topic, timestamp, etc.)
     created_at = Column(DateTime, server_default=func.now())
 
-    # Relationship to artwork
-    artwork = relationship("SavedArtwork", back_populates="conversations")
+    # relationship removed — table deprecated
 
     def to_dict(self):
         """Convert model to dictionary"""
@@ -268,6 +255,7 @@ class Session(Base):
     # Relationships
     user = relationship("User", back_populates="sessions")
     artworks = relationship("SavedArtwork", back_populates="session")
+    messages = relationship("SessionMessage", back_populates="session", cascade="all, delete-orphan", order_by="SessionMessage.sequence_number")
 
     def to_dict(self, include_artworks=False):
         """Convert model to dictionary"""
@@ -283,6 +271,41 @@ class Session(Base):
         if include_artworks:
             result["artworks"] = [artwork.to_dict(include_conversations=False) for artwork in self.artworks]
         return result
+
+
+class SessionMessage(Base):
+    """A single event in a visit/session conversation stream.
+
+    type='text'            — user or model free-text message
+    type='artwork_capture' — user uploaded an artwork (role='user')
+    type='artwork_card'    — model's artwork analysis card response (role='model')
+    """
+
+    __tablename__ = "session_messages"
+
+    id              = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id      = Column(String, ForeignKey('sessions.id', ondelete='CASCADE'), nullable=False, index=True)
+    role            = Column(String(10), nullable=False)   # 'user' | 'model'
+    type            = Column(String(20), nullable=False, default='text')  # 'text' | 'artwork_capture' | 'artwork_card'
+    content         = Column(Text, nullable=True)          # populated for type='text'
+    artwork_id      = Column(String, ForeignKey('saved_artworks.id', ondelete='SET NULL'), nullable=True)
+    sequence_number = Column(Integer, nullable=False)
+    created_at      = Column(DateTime, server_default=func.now())
+
+    session = relationship("Session", back_populates="messages")
+    artwork = relationship("SavedArtwork")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "role": self.role,
+            "type": self.type,
+            "content": self.content,
+            "artwork_id": self.artwork_id,
+            "sequence_number": self.sequence_number,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 class ArtworkEntity(Base):
@@ -372,6 +395,7 @@ class ArtistEntity(Base):
     birth_year = Column(Integer, nullable=True)
     death_year = Column(Integer, nullable=True)
     movements = Column(JSON, nullable=True)                        # list of movement name strings
+    profile_image_url = Column(String, nullable=True)              # Wikimedia Commons thumbnail
     instance_count = Column(Integer, default=1)
     bio_status = Column(String(20), default='pending')             # 'pending' | 'done' | 'failed'
     created_at = Column(DateTime, server_default=func.now())
@@ -388,6 +412,7 @@ class ArtistEntity(Base):
             "birth_year": self.birth_year,
             "death_year": self.death_year,
             "movements": self.movements or [],
+            "profile_image_url": self.profile_image_url,
             "instance_count": self.instance_count,
             "bio_status": self.bio_status,
         }

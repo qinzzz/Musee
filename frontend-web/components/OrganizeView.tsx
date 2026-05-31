@@ -134,7 +134,7 @@ const OrganizeView: React.FC<Props> = ({
   const TABS: { id: CollectTab; label: string }[] = [
     { id: 'saved',     label: 'All Artworks' },
     { id: 'boards',    label: 'Boards' },
-    { id: 'movements', label: 'Art Movements' },
+    { id: 'movements', label: 'Smart Collections' },
     { id: 'artists',   label: 'Artists' },
   ];
 
