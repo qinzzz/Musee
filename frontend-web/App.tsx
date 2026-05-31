@@ -23,6 +23,10 @@ import {
   prefetchExploreDataWithContext,
   reanalyzeArtwork,
   exhibitionChatStream,
+  fetchAndPersistInsights,
+  fetchSessionMessages,
+  appendSessionMessages,
+  setSessionGoal,
   fetchCollections,
   createCollection,
   updateCollection,
@@ -231,6 +235,8 @@ type CollectTab = 'saved' | 'boards' | 'movements' | 'artists';
 type VisitStreamMessage = Message & {
   id: string;
   createdAt: number;
+  type?: 'text' | 'artwork_capture' | 'artwork_card';
+  artworkId?: string;
 };
 
 type VisitDraft = {
@@ -285,8 +291,62 @@ type NavigationHistoryState =
       collectTab: CollectTab;
     };
 
+const GoalBanner: React.FC<{ goal: string; onSave: (g: string) => void }> = ({ goal, onSave }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(goal);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== goal) onSave(trimmed);
+    setEditing(false);
+  };
+
+  React.useEffect(() => {
+    if (editing) { setDraft(goal); inputRef.current?.focus(); }
+  }, [editing]);
+
+  return (
+    <div className="flex items-center gap-2 px-5 sm:px-10 py-2.5 bg-[#f7f4ee] border-b border-neutral-200/60">
+      <span className="text-[13px] shrink-0">🎯</span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') setEditing(false); }}
+          className="flex-1 text-[14px] text-neutral-700 bg-transparent outline-none border-b border-neutral-400 leading-snug py-0.5"
+        />
+      ) : (
+        <button
+          onClick={() => setEditing(true)}
+          className="flex-1 text-left text-[14px] text-neutral-500 leading-snug hover:text-neutral-700 transition-colors"
+        >
+          {goal}
+        </button>
+      )}
+    </div>
+  );
+};
+
+const InsightPill: React.FC<{ title: string; text: string }> = ({ title, text }) => {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <button
+      onClick={() => setExpanded(e => !e)}
+      className="w-full text-left rounded-[14px] bg-white px-3 py-2.5 shadow-sm hover:shadow-md transition-shadow"
+    >
+      <p className="text-[11px] font-semibold text-neutral-800 leading-snug">{title}</p>
+      {expanded && <p className="text-[11px] text-neutral-600 leading-relaxed mt-1.5">{text}</p>}
+    </button>
+  );
+};
+
 const App: React.FC = () => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const goalGalleryInputRef = useRef<HTMLInputElement>(null);
+  const goalCameraInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const visitStreamScrollRef = useRef<HTMLDivElement>(null);
   const visitStreamEndRef = useRef<HTMLDivElement>(null);
@@ -657,6 +717,17 @@ const App: React.FC = () => {
     catch { return {}; }
   });
   const [streamingVisitResponses, setStreamingVisitResponses] = useState<Record<string, string>>({});
+  const [sessionGoalDismissed, setSessionGoalDismissed] = useState<Set<string>>(new Set());
+  const [sessionGoalInput, setSessionGoalInput] = useState('');
+  // Per-session goals persisted to localStorage
+  const [sessionGoals, setSessionGoals] = useState<Record<string, string>>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('musee_session_goals') || '{}');
+      // Strip any entry stored under an empty key (from a prior bug)
+      const { '': _dropped, ...clean } = raw;
+      return clean;
+    } catch { return {}; }
+  });
 
   const [likedIds, setLikedIds] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('musee_liked_ids') || '[]')); }
@@ -737,6 +808,10 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(VISIT_STREAMS_STORAGE_KEY, JSON.stringify(visitStreams));
   }, [visitStreams]);
+
+  useEffect(() => {
+    localStorage.setItem('musee_session_goals', JSON.stringify(sessionGoals));
+  }, [sessionGoals]);
 
   useEffect(() => {
     const userId = currentUser?.user_id || USER_ID;
@@ -1003,18 +1078,32 @@ const App: React.FC = () => {
   const activeVisitStream = useMemo(() => {
     if (!activeVisitSummary) return [];
     const messages = visitStreams[activeVisitSummary.id] || [];
+
+    // Build a map from artworkId → upload timestamp using artwork_capture events
+    const captureTimeByArtworkId = new Map<string, number>();
+    for (const m of messages) {
+      if (m.type === 'artwork_capture' && m.artworkId) {
+        captureTimeByArtworkId.set(m.artworkId, m.createdAt);
+      }
+    }
+
     const artworkEntries = activeVisitSummary.items.map(item => ({
       id: `artwork-${item.id}`,
-      createdAt: item.timestamp,
+      // Use upload time from capture event; fall back to item.timestamp (EXIF) only if unavailable
+      createdAt: (item.artworkId && captureTimeByArtworkId.get(item.artworkId)) || item.timestamp,
       type: 'artwork' as const,
       item,
     }));
-    const messageEntries = messages.map(entry => ({
-      id: entry.id,
-      createdAt: entry.createdAt,
-      type: 'message' as const,
-      message: entry,
-    }));
+
+    // Exclude artwork_capture / artwork_card entries — those are represented by artworkEntries above
+    const messageEntries = messages
+      .filter(m => m.type !== 'artwork_capture' && m.type !== 'artwork_card')
+      .map(entry => ({
+        id: entry.id,
+        createdAt: entry.createdAt,
+        type: 'message' as const,
+        message: entry,
+      }));
     return [...artworkEntries, ...messageEntries].sort((a, b) => a.createdAt - b.createdAt);
   }, [activeVisitSummary, visitStreams]);
 
@@ -1031,6 +1120,32 @@ const App: React.FC = () => {
     activeVisitStream.length,
     activeVisitSummary ? streamingVisitResponses[activeVisitSummary.id] : '',
   ]);
+
+  // Reset scroll and hydrate conversation from DB when switching sessions
+  useEffect(() => {
+    if (visitStreamScrollRef.current) visitStreamScrollRef.current.scrollTop = 0;
+    if (!activeVisitSummary?.id) return;
+    const sessionId = activeVisitSummary.id;
+    fetchSessionMessages(sessionId).then(dbMessages => {
+      if (!dbMessages.length) return;
+      setVisitStreams(prev => {
+        const existing = prev[sessionId] || [];
+        const existingIds = new Set(existing.map(m => m.id));
+        const newMsgs: VisitStreamMessage[] = dbMessages
+          .filter(m => !existingIds.has(m.id || ''))
+          .map(m => ({
+            id: m.id || `db-${Date.now()}-${Math.random()}`,
+            role: m.role as 'user' | 'model',
+            text: m.content || '',
+            type: (m.type || 'text') as VisitStreamMessage['type'],
+            artworkId: m.artwork_id || undefined,
+            createdAt: m.created_at ? new Date(m.created_at as unknown as string).getTime() : Date.now(),
+          }));
+        if (!newMsgs.length) return prev;
+        return { ...prev, [sessionId]: [...existing, ...newMsgs].sort((a, b) => a.createdAt - b.createdAt) };
+      });
+    }).catch(() => {});
+  }, [activeVisitSummary?.id]);
 
   useEffect(() => {
     if (isComposingNewSession) return;
@@ -1183,6 +1298,52 @@ const App: React.FC = () => {
     setVisitDrafts(prev => prev.map(draft =>
       draft.id === visitId ? { ...draft, updatedAt: newMessages[newMessages.length - 1]?.createdAt || draft.updatedAt } : draft
     ));
+    // Fire-and-forget persist to DB
+    appendSessionMessages(visitId, newMessages.map(m => ({
+      id: m.id,
+      role: m.role as 'user' | 'model',
+      type: m.type || 'text',
+      content: m.role === 'user' || m.type === 'text' ? m.text : undefined,
+      artwork_id: m.artworkId,
+      created_at: m.createdAt,
+    })));
+  };
+
+  const triggerUploadCommentary = (
+    visitId: string,
+    newArtwork: { artistName?: string; artworkName?: string; description?: string; keywords?: string[] },
+    sessionItems: GalleryItem[],
+    conversationHistory: VisitStreamMessage[],
+  ) => {
+    const sessionGoal = sessionGoals[visitId];
+    const goalClause = sessionGoal
+      ? ` Connect your observation to the visitor's stated goal for this visit: "${sessionGoal}".`
+      : ' Add a brief personal observation or connection to other works seen today.';
+    const trigger = `I just captured "${newArtwork.artworkName || 'an artwork'}" by ${newArtwork.artistName || 'the artist'}. Write a short response (3–4 sentences): (1) introduce the artist and title naturally, (2) give a one-sentence interpretation of the work, (3)${goalClause} Warm, conversational tone — assume the user may not have opened the artwork card.`;
+    setStreamingVisitResponses(prev => ({ ...prev, [visitId]: '' }));
+    exhibitionChatStream(
+      sessionItems.map(i => ({
+        id: i.id, url: i.url, keywords: i.keywords,
+        artistName: i.artistName, artworkName: i.artworkName,
+        description: i.description, date: i.date, medium: i.medium,
+      })),
+      conversationHistory.map(m => ({ role: m.role, text: m.text })),
+      trigger,
+      (chunk) => setStreamingVisitResponses(prev => ({ ...prev, [visitId]: (prev[visitId] || '') + chunk })),
+      (fullResponse) => {
+        const msg: VisitStreamMessage = {
+          id: `commentary-${Date.now()}`,
+          role: 'model',
+          text: fullResponse,
+          createdAt: Date.now(),
+        };
+        appendVisitMessages(visitId, [msg]);
+        setStreamingVisitResponses(prev => { const n = { ...prev }; delete n[visitId]; return n; });
+      },
+      () => {
+        setStreamingVisitResponses(prev => { const n = { ...prev }; delete n[visitId]; return n; });
+      },
+    );
   };
 
   const handleVisitInquiry = async (text: string) => {
@@ -1220,6 +1381,11 @@ const App: React.FC = () => {
         id: i.id,
         url: i.url,
         keywords: i.keywords,
+        artistName: i.artistName,
+        artworkName: i.artworkName,
+        description: i.description,
+        date: i.date,
+        medium: i.medium,
       })),
       existingMessages.map(({ role, text: messageText }) => ({ role, text: messageText })),
       text,
@@ -1554,6 +1720,26 @@ const App: React.FC = () => {
             setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
             setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...updates } : prev);
             setIsAnalyzing(false);
+            if (visitId && analysis.artwork_id) {
+              const now = Date.now();
+              appendVisitMessages(visitId, [
+                { id: `capture-${newItemId}`, role: 'user', text: '', type: 'artwork_capture', artworkId: analysis.artwork_id, createdAt: now },
+                { id: `card-${newItemId}`, role: 'model', text: '', type: 'artwork_card', artworkId: analysis.artwork_id, createdAt: now + 1 },
+              ]);
+            }
+            if (analysis.artwork_id && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+              fetchAndPersistInsights(analysis.artwork_id).then(insights => {
+                if (insights.length > 0) {
+                  setItems(prev => prev.map(i => i.id === newItemId ? { ...i, insights } : i));
+                  setInterpretingItem(prev => (prev?.id === newItemId) ? { ...prev, insights } : prev);
+                }
+              }).catch(() => {});
+            }
+            if (visitId && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+              const sessionItems = items.filter(i => i.visitId === visitId);
+              const history = visitStreams[visitId] || [];
+              triggerUploadCommentary(visitId, updates, sessionItems, history);
+            }
           },
           (error) => {
             const msg = error?.message || 'Analysis failed.';
@@ -1671,6 +1857,24 @@ const App: React.FC = () => {
             artistEntityId: analysis.artist_entity_id || undefined,
           };
           setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
+          if (analysis.artwork_id) {
+            const now = Date.now();
+            appendVisitMessages(batchVisitId, [
+              { id: `capture-${newItemId}`, role: 'user', text: '', type: 'artwork_capture', artworkId: analysis.artwork_id, createdAt: now },
+              { id: `card-${newItemId}`, role: 'model', text: '', type: 'artwork_card', artworkId: analysis.artwork_id, createdAt: now + 1 },
+            ]);
+          }
+          if (analysis.artwork_id && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+            fetchAndPersistInsights(analysis.artwork_id).then(insights => {
+              if (insights.length > 0)
+                setItems(prev => prev.map(i => i.id === newItemId ? { ...i, insights } : i));
+            }).catch(() => {});
+          }
+          if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+            const sessionItems = items.filter(i => i.visitId === batchVisitId);
+            const history = visitStreams[batchVisitId] || [];
+            triggerUploadCommentary(batchVisitId, updates, sessionItems, history);
+          }
         } catch (e) {
           const errMsg = (e as Error)?.message || '';
           if (errMsg.includes('402') || errMsg.includes('quota_exceeded')) {
@@ -1769,6 +1973,12 @@ const App: React.FC = () => {
             artistEntityId: analysis.artist_entity_id || undefined,
           } : i));
           setIsAnalyzing(false);
+          if (analysis.artwork_id && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+            fetchAndPersistInsights(analysis.artwork_id).then(insights => {
+              if (insights.length > 0)
+                setItems(prev => prev.map(i => i.id === itemId ? { ...i, insights } : i));
+            }).catch(() => {});
+          }
         },
         (error) => {
           const msg = error?.message || 'Analysis failed.';
@@ -2554,86 +2764,287 @@ const App: React.FC = () => {
                       isInline={true}
                     />
 
-                    <div ref={visitStreamScrollRef} className={`flex-1 overflow-y-auto px-4 pb-56 pt-6 sm:px-10 flex flex-col ${activeVisitStream.length === 0 ? 'justify-center' : ''}`}>
-                      <div className={`mx-auto w-full max-w-[640px] ${activeVisitStream.length === 0 ? 'flex-1 flex flex-col items-center justify-center pb-20' : 'space-y-6'}`}>
-                        {activeVisitStream.length === 0 && (
-                          <div className="text-center animate-in fade-in zoom-in-95 duration-500">
-                            <h2 className="text-[32px] sm:text-[40px] font-semibold tracking-tight text-neutral-800 font-sans mb-3">
-                              What's on your mind today?
-                            </h2>
-                            <p className="text-[16px] text-neutral-400 font-medium font-sans">
-                              Capture an artwork or type a reflection to start your session.
-                            </p>
-                          </div>
-                        )}
+                    {/* Pinned session goal — tappable to edit */}
+                    {sessionGoals[activeVisitSummary.id] && (
+                      <GoalBanner
+                        goal={sessionGoals[activeVisitSummary.id]}
+                        onSave={(newGoal) => {
+                          const sid = activeVisitSummary.id;
+                          setSessionGoals(prev => ({ ...prev, [sid]: newGoal }));
+                          ensureSessionRecord(sid)
+                            .then(res => setSessionGoal(res?.session?.id || sid, newGoal))
+                            .catch(() => {});
+                        }}
+                      />
+                    )}
 
-                        {activeVisitStream.map((entry) =>
-                          entry.type === 'artwork' ? (
-                            <button
-                              key={entry.id}
-                              onClick={() =>
-                                openArtworkDetail(
-                                  entry.item,
-                                  {
-                                    parentLabel: activeVisitSummary.title,
-                                    basePath: stateToPath(activeTab, collectTab),
-                                  },
-                                  activeVisitSummary.items
-                                )
-                              }
-                              className="w-full overflow-hidden rounded-[36px] border border-neutral-200 bg-white text-left shadow-[0_10px_40px_rgba(0,0,0,0.05)] hover:shadow-md transition-shadow"
-                            >
-                              <div className="bg-[#f3ede2]">
-                                <img
-                                  src={entry.item.url}
-                                  alt={entry.item.artworkName || 'Artwork'}
-                                  className="max-h-[620px] w-full object-cover"
-                                />
-                              </div>
-                              <div className="px-6 py-7 sm:px-10">
-                                <div className="flex items-center justify-between gap-4">
-                                  <div>
-                                    <h3 className="text-[24px] font-semibold tracking-tight text-neutral-900 sm:text-[32px]">
-                                      {entry.item.artworkName || 'Untitled'}
-                                    </h3>
-                                    <p className="mt-2 text-[16px] text-neutral-500">
-                                      {entry.item.artistName || 'Visit artifact during visit'}
-                                    </p>
-                                  </div>
-                                </div>
-                                {entry.item.description && (
-                                  <p className="mt-8 text-[16px] leading-[1.8] text-neutral-600">
-                                    {parseAnalysis(entry.item.description)}
-                                  </p>
-                                )}
-                              </div>
-                            </button>
-                          ) : (
-                            <div key={entry.id} className={`flex ${entry.message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                              <div
-                                className={`max-w-full rounded-[28px] px-6 py-5 ${
-                                  entry.message.role === 'user'
-                                    ? 'bg-neutral-900 text-white'
-                                    : 'bg-[#efe8dc] text-neutral-800'
-                                }`}
-                              >
-                                <p className="whitespace-pre-wrap text-[16px] leading-[1.8]">{entry.message.text}</p>
-                              </div>
-                            </div>
-                          )
-                        )}
-
-                        {activeVisitSummary && streamingVisitResponses[activeVisitSummary.id] && (
-                          <div className="flex justify-start">
-                            <div className="max-w-full rounded-[28px] bg-[#efe8dc] px-6 py-5 text-neutral-800">
-                              <p className="whitespace-pre-wrap text-[16px] leading-[1.8]">
-                                {streamingVisitResponses[activeVisitSummary.id]}
+                    <div className="flex-1 min-h-0 flex flex-col bg-[#f7f4ee]" style={{ overflow: 'clip' }}>
+                      {activeVisitStream.length === 0 ? (
+                        sessionGoalDismissed.has(activeVisitSummary.id) ? (
+                          /* Plain empty state after skip */
+                          <div className="flex-1 flex flex-col items-center justify-center pb-20 px-6">
+                            <div className="text-center animate-in fade-in zoom-in-95 duration-500">
+                              <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-tight text-neutral-800 font-sans mb-2">
+                                Start capturing
+                              </h2>
+                              <p className="text-[15px] text-neutral-400 font-medium font-sans">
+                                Photograph an artwork to begin your session.
                               </p>
                             </div>
                           </div>
-                        )}
-                        <div ref={visitStreamEndRef} className="h-24 shrink-0" />
-                      </div>
+                        ) : (
+                          /* Goal-setting prompt */
+                          <div className="flex-1 flex flex-col items-center justify-center px-6 pb-24">
+                            <div className="w-full max-w-sm animate-in fade-in zoom-in-95 duration-500">
+                              <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-neutral-800 font-sans mb-2 text-center">
+                                What's your focus today?
+                              </h2>
+                              <p className="text-[14px] text-neutral-400 text-center mb-7">
+                                Share your goal for this visit — or skip and start capturing.
+                              </p>
+                              <div className="relative">
+                                <textarea
+                                  placeholder="e.g. I want to learn about medieval art, find inspiration for my interior design…"
+                                  className="w-full bg-white rounded-[20px] px-5 py-4 pr-14 text-[14px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none shadow-sm border border-neutral-100 focus:border-neutral-300 transition-colors leading-relaxed"
+                                  rows={3}
+                                  value={sessionGoalInput}
+                                  onChange={e => setSessionGoalInput(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault();
+                                      const goal = sessionGoalInput.trim();
+                                      if (!goal) return;
+                                      const sid = activeVisitSummary.id || createVisitDraft();
+                                      setSessionGoalInput('');
+                                      setSessionGoals(prev => ({ ...prev, [sid]: goal }));
+                                      setSessionGoalDismissed(prev => new Set([...prev, sid]));
+                                      ensureSessionRecord(sid)
+                                        .then(res => setSessionGoal(res?.session?.id || sid, goal))
+                                        .catch(() => {});
+                                    }
+                                  }}
+                                />
+                                <button
+                                  onClick={() => {
+                                    const goal = sessionGoalInput.trim();
+                                    if (!goal) return;
+                                    const sid = activeVisitSummary.id || createVisitDraft();
+                                    setSessionGoalInput('');
+                                    setSessionGoals(prev => ({ ...prev, [sid]: goal }));
+                                    setSessionGoalDismissed(prev => new Set([...prev, sid]));
+                                    ensureSessionRecord(sid)
+                                      .then(res => setSessionGoal(res?.session?.id || sid, goal))
+                                      .catch(() => {});
+                                  }}
+                                  disabled={!sessionGoalInput.trim()}
+                                  className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-20 transition-opacity"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                                  </svg>
+                                </button>
+                              </div>
+                              {/* Hidden file inputs */}
+                              <input ref={goalGalleryInputRef} type="file" accept="image/*" multiple className="hidden"
+                                onChange={(e) => handleFileUpload(e, 'gallery')} />
+                              <input ref={goalCameraInputRef} type="file" accept="image/*"
+                                capture={/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'environment' : undefined}
+                                className="hidden" onChange={(e) => handleFileUpload(e, 'camera')} />
+                              {/* Upload buttons */}
+                              <div className="mt-5 flex gap-3">
+                                <button
+                                  onClick={() => goalGalleryInputRef.current?.click()}
+                                  className="flex-1 flex items-center justify-center gap-2 bg-neutral-900 text-white rounded-full px-5 py-3 text-[13px] font-medium"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                                  </svg>
+                                  Capture artwork
+                                </button>
+                                <button
+                                  onClick={() => goalCameraInputRef.current?.click()}
+                                  className="flex items-center justify-center gap-2 bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[13px] font-medium"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+                                  </svg>
+                                  Camera
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        <>
+                          {/* Artwork gallery strip — gesture-triggered collapse */}
+                          {activeVisitStream.some(e => e.type === 'artwork') && (() => {
+                            const collapsed = true;
+                            const ease = '0.5s cubic-bezier(0.68, -0.25, 0.27, 1.25)';
+                            const vh = window.innerHeight / 100;
+                            return (
+                              <div
+                                className="relative shrink-0"
+                                style={{ height: collapsed ? '88px' : `${45 * vh}px`, overflow: 'clip', transition: `height ${ease}` }}
+                              >
+                                <div
+                                  className="h-full flex items-center gap-2 overflow-x-auto px-4 sm:px-6"
+                                  style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}
+                                >
+                                  {activeVisitStream.filter(e => e.type === 'artwork').map((entry) => (
+                                    <button
+                                      key={entry.id}
+                                      onClick={() =>
+                                        openArtworkDetail(
+                                          entry.item,
+                                          { parentLabel: activeVisitSummary.title, basePath: stateToPath(activeTab, collectTab) },
+                                          activeVisitSummary.items
+                                        )
+                                      }
+                                      className="relative shrink-0 group overflow-hidden"
+                                      style={{
+                                        height: collapsed ? '68px' : '38vh',
+                                        width: collapsed ? '68px' : '420px',
+                                        maxWidth: collapsed ? '68px' : '420px',
+                                        borderRadius: collapsed ? '10px' : '16px',
+                                        boxShadow: collapsed ? '0 1px 6px rgba(0,0,0,0.12)' : '0 4px 24px rgba(0,0,0,0.14)',
+                                        flexShrink: 0,
+                                        transition: `all ${ease}`,
+                                      }}
+                                    >
+                                      <img
+                                        src={entry.item.url}
+                                        alt={entry.item.artworkName || 'Artwork'}
+                                        className="w-full h-full object-cover"
+                                      />
+                                      <div
+                                        className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                                        style={{ opacity: collapsed ? 0 : undefined }}
+                                      >
+                                        <p className="text-white text-[12px] font-medium truncate">
+                                          {entry.item.artworkName || 'Untitled'}
+                                        </p>
+                                        {entry.item.artistName && (
+                                          <p className="text-white/70 text-[11px] truncate">{entry.item.artistName}</p>
+                                        )}
+                                      </div>
+                                      {entry.item.isAnalyzing && (
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70">
+                                          <div className="relative mb-2">
+                                            <div className="w-7 h-7 border-2 border-neutral-100 rounded-full" />
+                                            <div className="absolute inset-0 w-7 h-7 border-t-2 border-neutral-700 rounded-full animate-spin" />
+                                          </div>
+                                          {!collapsed && (
+                                            <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-500">Analyzing</p>
+                                          )}
+                                        </div>
+                                      )}
+                                    </button>
+                                  ))}
+                                  <div className="shrink-0 w-2 sm:w-4" />
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Chat messages */}
+                          <div
+                            ref={visitStreamScrollRef}
+                            className="flex-1 overflow-y-auto px-4 sm:px-10 pb-56 pt-3 sm:pt-4"
+                            onScroll={() => {}}
+                            style={{ overscrollBehaviorY: 'contain', touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+                          >
+                            <div className="mx-auto w-full max-w-[640px] space-y-3 sm:space-y-4">
+                              {activeVisitStream.map((entry) =>
+                                entry.type === 'artwork' ? (
+                                  <div key={entry.id} className="space-y-2">
+                                    {/* User side: upload indicator */}
+                                    <div className="flex justify-end">
+                                      <div className="flex items-center gap-2 bg-neutral-900 text-white rounded-[20px] px-4 py-2.5">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
+                                          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                                        </svg>
+                                        <span className="text-[13px]">Captured an artwork</span>
+                                      </div>
+                                    </div>
+                                    {/* Assistant side: artwork card (fixed width) */}
+                                    <div className="flex justify-start">
+                                      <button
+                                        onClick={() => openArtworkDetail(
+                                          entry.item,
+                                          { parentLabel: activeVisitSummary.title, basePath: stateToPath(activeTab, collectTab) },
+                                          activeVisitSummary.items
+                                        )}
+                                        className="relative overflow-hidden rounded-[20px] bg-white text-left shadow-sm hover:shadow-md transition-shadow"
+                                        style={{ maxWidth: '260px', width: '260px' }}
+                                      >
+                                        <div className="relative">
+                                          <img
+                                            src={entry.item.url}
+                                            alt={entry.item.artworkName || 'Artwork'}
+                                            className="w-full object-cover"
+                                            style={{ height: '160px' }}
+                                          />
+                                          {entry.item.isAnalyzing && (
+                                            <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-2">
+                                              <div className="relative">
+                                                <div className="w-6 h-6 border-2 border-neutral-100 rounded-full" />
+                                                <div className="absolute inset-0 w-6 h-6 border-t-2 border-neutral-600 rounded-full animate-spin" />
+                                              </div>
+                                              <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400">Analyzing</p>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="px-4 py-3">
+                                          <p className="text-[13px] font-semibold text-neutral-900 truncate">
+                                            {entry.item.isAnalyzing ? 'Analyzing…' : (entry.item.artworkName || 'Untitled')}
+                                          </p>
+                                          {entry.item.artistName && (
+                                            <p className="text-[11px] text-neutral-500 truncate mt-0.5">{entry.item.artistName}</p>
+                                          )}
+                                          {!entry.item.isAnalyzing && (
+                                            <p className="text-[11px] text-neutral-400 mt-2">Tap to explore →</p>
+                                          )}
+                                        </div>
+                                      </button>
+                                    </div>
+                                    {/* Fun facts — full width, outside the 260px card constraint */}
+                                    {entry.item.insights && entry.item.insights.length > 0 && (
+                                      <div className="space-y-1.5">
+                                        <p className="text-[9px] tracking-[0.35em] uppercase text-neutral-400 font-bold px-1">Fun Facts</p>
+                                        {entry.item.insights.map((insight, idx) => (
+                                          <InsightPill key={idx} title={insight.title} text={insight.text} />
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <React.Fragment key={entry.id}>
+                                    {entry.message.role === 'user' ? (
+                                      <div className="flex justify-end">
+                                        <div className="max-w-[85%] rounded-[20px] sm:rounded-[28px] px-5 py-3.5 sm:px-6 sm:py-5 bg-neutral-900 text-white">
+                                          <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">{entry.message.text}</p>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="text-neutral-700">
+                                        <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">{entry.message.text}</p>
+                                      </div>
+                                    )}
+                                  </React.Fragment>
+                                )
+                              )}
+                              {activeVisitSummary && streamingVisitResponses[activeVisitSummary.id] && (
+                                <div className="text-neutral-700">
+                                  <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
+                                    {streamingVisitResponses[activeVisitSummary.id]}
+                                  </p>
+                                </div>
+                              )}
+                              <div ref={visitStreamEndRef} className="h-24 shrink-0" />
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </>
                 )
@@ -2814,7 +3225,11 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'explore' && !interpretingItem && (
+        {activeTab === 'explore' && !interpretingItem && !(
+          activeVisitSummary &&
+          activeVisitStream.length === 0 &&
+          !sessionGoalDismissed.has(activeVisitSummary.id)
+        ) && (
           <ContextualActionBar
             mode="session"
             onUpload={handleFileUpload}

@@ -67,7 +67,7 @@ export async function exhibitionChat(
 
 /** Exhibition chat streaming: same as exhibitionChat but streams response to UI. */
 export async function exhibitionChatStream(
-  items: { id: string; url: string; keywords: string[] }[],
+  items: { id: string; url: string; keywords: string[]; artistName?: string; artworkName?: string; description?: string; date?: string; medium?: string }[],
   conversationHistory: Message[],
   newMessage: string,
   onChunk: (text: string) => void,
@@ -83,7 +83,16 @@ export async function exhibitionChatStream(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        items: items.map(i => ({ id: i.id, url: i.url, keywords: i.keywords })),
+        items: items.map(i => ({
+          id: i.id,
+          url: i.url,
+          keywords: i.keywords,
+          artist_name: i.artistName,
+          artwork_name: i.artworkName,
+          description: i.description,
+          date: i.date,
+          medium: i.medium,
+        })),
         conversation_history: history,
         new_message: newMessage,
       }),
@@ -1057,6 +1066,41 @@ export async function fetchAndPersistInsights(
   if (!response.ok) return [];
   const data = await response.json();
   return data.insights ?? [];
+}
+
+export interface SessionMessagePayload {
+  id?: string;
+  role: 'user' | 'model';
+  type?: 'text' | 'artwork_capture' | 'artwork_card';
+  content?: string;
+  artwork_id?: string;
+  created_at?: number;
+}
+
+export async function fetchSessionMessages(sessionId: string): Promise<SessionMessagePayload[]> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/messages`, { timeout: 10000 });
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function setSessionGoal(sessionId: string, goal: string): Promise<void> {
+  if (!sessionId) return;
+  await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/goal`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ goal }),
+    timeout: 5000,
+  }).catch(() => {});
+}
+
+export async function appendSessionMessages(sessionId: string, messages: SessionMessagePayload[]): Promise<void> {
+  if (!messages.length) return;
+  await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(messages),
+    timeout: 10000,
+  }).catch(() => {});
 }
 
 /**

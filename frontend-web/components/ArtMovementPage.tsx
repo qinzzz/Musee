@@ -43,7 +43,7 @@ export default function ArtMovementPage({ collection, items, onClose, onOpenArtw
     >
       {/* Header */}
       <CanvasHeader
-        parentLabel="Art Movements"
+        parentLabel="Smart Collections"
         parentClick={onClose}
         childLabel={collection.name}
         isInline={isInline}

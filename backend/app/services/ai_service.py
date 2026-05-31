@@ -144,11 +144,16 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         previous_artworks = session_context.get("previous_artworks", [])
         narrative_summary = session_context.get("narrative_summary")
 
+        user_goal = session_context.get("user_goal")
+
         context_block = "\n\n### SESSION CONTEXT (THE CURATOR'S MEMORY)\n"
-        
+
+        if user_goal:
+            context_block += f"VISITOR'S GOAL FOR THIS SESSION: {user_goal}\n\n"
+
         if narrative_summary:
             context_block += f"ONGOING NARRATIVE: {narrative_summary}\n\n"
-        
+
         if previous_artworks:
             context_block += "PREVIOUS ARTWORKS SEEN IN THIS SESSION:\n"
             for i, art in enumerate(previous_artworks):
@@ -158,7 +163,7 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
                     context_block += f"   TAGS: {', '.join(art.get('tags'))}\n"
                 context_block += "\n"
         
-        context_block += "When analyzing the NEW artwork, incorporate these connections or contrasts naturally where relevant. Don't be too repetitive, but show that you remember the visitor's journey.\n"
+        context_block += "Use this context ONLY to help identify the artist and artwork title — they may be from the same exhibition or the same artist.\n"
         
         # Append context to the prompt
         return prompt + context_block
@@ -171,8 +176,21 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         else:
             lines = []
             for idx, item in enumerate(items, start=1):
-                keywords = ", ".join(item.get("keywords", [])) or "mood unspecified"
-                lines.append(f"{idx}. Keywords: {keywords}")
+                parts = []
+                if item.get("artwork_name"):
+                    parts.append(f'"{item["artwork_name"]}"')
+                if item.get("artist_name"):
+                    parts.append(f'by {item["artist_name"]}')
+                if item.get("date"):
+                    parts.append(f'({item["date"]})')
+                if item.get("medium"):
+                    parts.append(f'— {item["medium"]}')
+                keywords = ", ".join(item.get("keywords", []))
+                if keywords:
+                    parts.append(f'Keywords: {keywords}')
+                if item.get("description"):
+                    parts.append(f'Description: {item["description"]}')
+                lines.append(f"{idx}. " + (" ".join(parts) if parts else "Artwork details unavailable"))
             collection_summary = "\n".join(lines)
 
         return get_exhibition_chat_prompt(collection_summary)
@@ -265,7 +283,6 @@ Return ONLY the updated narrative text.{language_instruction}"""
         # Load prompt
         prompt = get_artist_identification_prompt_v2(identity, language=language)
 
-        # Inject session context if provided
         if session_context:
             prompt = self.inject_session_context(prompt, session_context)
 
@@ -295,27 +312,15 @@ Return ONLY the updated narrative text.{language_instruction}"""
         vision_hint: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """
-        Stream identify the artist and artwork details
-
-        Args:
-            image_bytes: Raw image data
-            identity: AI identity/persona to use
-            language: Language code for response
-            session_context: Optional context from previous session artworks
-            vision_hint: Optional hint from Google Vision Web Detection
-
-        Yields:
-            str: Text chunks as they arrive
+        Stream identify the artist and artwork details.
+        session_context param retained for signature compatibility but no longer injected —
+        contextual commentary belongs in the exhibition chat, not the artwork card.
         """
         # Prepare image in provider-specific format
         image_data = self.ai_client.prepare_image(image_bytes)
 
         # Load prompt
         prompt = get_artist_identification_prompt_v2(identity, language=language)
-
-        # Inject session context if provided
-        if session_context:
-            prompt = self.inject_session_context(prompt, session_context)
 
         # Prepend Vision hint when available
         if vision_hint:

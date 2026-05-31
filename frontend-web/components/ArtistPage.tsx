@@ -120,10 +120,18 @@ export default function ArtistPage({ artistEntityId, artworkId, artistName, user
 
           {/* Artist identity */}
           <div className="flex items-center gap-4 mb-5">
-            <div
-              className="w-16 h-16 rounded-full flex items-center justify-center shrink-0 text-2xl font-semibold text-neutral-600 bg-[#efe8dc]"
-            >
-              {displayName[0]?.toUpperCase() ?? '?'}
+            <div className="w-16 h-16 rounded-full shrink-0 overflow-hidden bg-[#efe8dc] flex items-center justify-center">
+              {artist?.profile_image_url ? (
+                <img
+                  src={artist.profile_image_url}
+                  alt={displayName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-2xl font-semibold text-neutral-600">
+                  {displayName[0]?.toUpperCase() ?? '?'}
+                </span>
+              )}
             </div>
             <div>
               <h1 className="text-neutral-900 text-2xl font-bold tracking-tight leading-tight">
