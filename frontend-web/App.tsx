@@ -291,6 +291,7 @@ type VisitSummary = {
   title: string;
   location: string | null;
   artworkCount: number;
+  createdAt: number;
   updatedAt: number;
   dateLabel: string | null;
   items: GalleryItem[];
@@ -910,6 +911,7 @@ const App: React.FC = () => {
               date: item.date,
               medium: item.medium,
               timestamp: item.photo_time ? new Date(item.photo_time).getTime() : (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
+              savedAt: item.created_at ? new Date(item.created_at).getTime() : undefined,
               visitId: item.session_id,
               location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
               photoTime: item.photo_time,
@@ -1061,12 +1063,21 @@ const App: React.FC = () => {
       const latestItem = sortedItems[sortedItems.length - 1];
       const firstItem = sortedItems[0];
       const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
-      const title = latestItem?.sessionTitle || location || visitDrafts.find(v => v.id === id)?.title || DEFAULT_VISIT_TITLE;
+      const draft = visitDrafts.find(v => v.id === id);
+      const title = latestItem?.sessionTitle || location || draft?.title || DEFAULT_VISIT_TITLE;
+      // Visit creation time: prefer the client draft's createdAt; otherwise the
+      // earliest artwork *save* time (savedAt) — NOT EXIF photo time, which can be years old.
+      const earliestSavedAt = sortedItems.reduce<number | undefined>((min, it) => {
+        if (it.savedAt === undefined) return min;
+        return min === undefined ? it.savedAt : Math.min(min, it.savedAt);
+      }, undefined);
+      const createdAt = draft?.createdAt ?? earliestSavedAt ?? (firstItem?.timestamp || Date.now());
       summaries.push({
         id,
         title,
         location,
         artworkCount: sortedItems.length,
+        createdAt,
         updatedAt: latestItem?.timestamp || Date.now(),
         dateLabel: latestItem?.photoTime ? parseDisplayDate(latestItem.photoTime) : null,
         items: sortedItems,
@@ -1080,8 +1091,9 @@ const App: React.FC = () => {
         title: draft.title || DEFAULT_VISIT_TITLE,
         location: null,
         artworkCount: 0,
+        createdAt: draft.createdAt,
         updatedAt: draft.updatedAt,
-        dateLabel: new Date(draft.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        dateLabel: new Date(draft.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         items: [],
       });
     });
@@ -1092,7 +1104,7 @@ const App: React.FC = () => {
         if (!search) return true;
         return summary.title.toLowerCase().includes(search) || (summary.location || '').toLowerCase().includes(search);
       })
-      .sort((a, b) => b.updatedAt - a.updatedAt);
+      .sort((a, b) => b.createdAt - a.createdAt);
   }, [items, visitDrafts, visitSearch]);
 
   const activeVisitSummary = useMemo(() => {
@@ -1102,6 +1114,7 @@ const App: React.FC = () => {
         title: DEFAULT_VISIT_TITLE,
         location: null,
         artworkCount: 0,
+        createdAt: Date.now(),
         updatedAt: Date.now(),
         dateLabel: null,
         items: [],
@@ -1713,6 +1726,7 @@ const App: React.FC = () => {
           keywords: [],
           vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
           timestamp: photoTimestamp,
+          savedAt: Date.now(),
           conversation: [],
           visitId: visitId,
           isAnalyzing: true,
@@ -1859,7 +1873,7 @@ const App: React.FC = () => {
         return {
           id: id, url: memFile.base64, keywords: [], conversation: [], visitId: batchVisitId,
           vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
-          timestamp: itemTime, isAnalyzing: true, streamingText: '', photoTime: itemTimeLabel,
+          timestamp: itemTime, savedAt: Date.now(), isAnalyzing: true, streamingText: '', photoTime: itemTimeLabel,
           location: memFile.metadata.latitude ? JSON.stringify({ 
             latitude: memFile.metadata.latitude, 
             longitude: memFile.metadata.longitude, 

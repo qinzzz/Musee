@@ -41,7 +41,8 @@ export interface GalleryItem {
   url: string;
   keywords: string[];
   vibe: AestheticVibe;
-  timestamp: number;
+  timestamp: number;       // EXIF photo-taken time (or save time if no EXIF)
+  savedAt?: number;        // when the artwork was saved/uploaded (independent of EXIF)
   conversation: Message[];
   visitId?: string;
   // Artwork analysis fields from backend
