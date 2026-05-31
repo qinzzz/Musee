@@ -1351,15 +1351,29 @@ const App: React.FC = () => {
 
   const triggerUploadCommentary = (
     visitId: string,
-    newArtwork: { artistName?: string; artworkName?: string; description?: string; keywords?: string[] },
+    newArtworks: { artistName?: string; artworkName?: string; description?: string; keywords?: string[] }[],
     sessionItems: GalleryItem[],
     conversationHistory: VisitStreamMessage[],
   ) => {
+    if (newArtworks.length === 0) return;
     const sessionGoal = sessionGoals[visitId];
-    const goalClause = sessionGoal
-      ? ` Connect your observation to the visitor's stated goal for this visit: "${sessionGoal}".`
-      : ' Add a brief personal observation or connection to other works seen today.';
-    const trigger = `I just captured "${newArtwork.artworkName || 'an artwork'}" by ${newArtwork.artistName || 'the artist'}. Write a short response (3–4 sentences): (1) introduce the artist and title naturally, (2) give a one-sentence interpretation of the work, (3)${goalClause} Warm, conversational tone — assume the user may not have opened the artwork card.`;
+
+    let trigger: string;
+    if (newArtworks.length === 1) {
+      const a = newArtworks[0];
+      const goalClause = sessionGoal
+        ? ` Connect your observation to the visitor's stated goal for this visit: "${sessionGoal}".`
+        : ' Add a brief personal observation or connection to other works seen today.';
+      trigger = `I just captured "${a.artworkName || 'an artwork'}" by ${a.artistName || 'the artist'}. Write a short response (3–4 sentences): (1) introduce the artist and title naturally, (2) give a one-sentence interpretation of the work, (3)${goalClause} Warm, conversational tone — assume the user may not have opened the artwork card.`;
+    } else {
+      const list = newArtworks
+        .map(a => `"${a.artworkName || 'an artwork'}" by ${a.artistName || 'an unknown artist'}`)
+        .join(', ');
+      const goalClause = sessionGoal
+        ? ` Tie it to the visitor's stated goal for this visit: "${sessionGoal}".`
+        : '';
+      trigger = `I just captured ${newArtworks.length} artworks at once: ${list}. Write ONE short, warm response (3–5 sentences) reacting to this group as a whole — point out a shared thread, an interesting contrast, or what they suggest together. Don't walk through them one by one or repeat the card details.${goalClause} Assume the user may not have opened the artwork cards.`;
+    }
     setStreamingVisitResponses(prev => ({ ...prev, [visitId]: '' }));
     visitChatStream(
       sessionItems.map(i => ({
@@ -1782,7 +1796,7 @@ const App: React.FC = () => {
             if (visitId && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
               const sessionItems = items.filter(i => i.visitId === visitId);
               const history = visitStreams[visitId] || [];
-              triggerUploadCommentary(visitId, updates, sessionItems, history);
+              triggerUploadCommentary(visitId, [updates], sessionItems, history);
             }
           },
           (error) => {
@@ -1805,6 +1819,10 @@ const App: React.FC = () => {
     else {
       setIsAnalyzing(true);
       let finishedCount = 0;
+      // Collect successfully-analyzed artworks so we can post ONE batch commentary
+      // at the end (rather than one per artwork). Cards are still rendered per artwork.
+      const analyzedArtworks: { artistName?: string; artworkName?: string; description?: string; keywords?: string[] }[] = [];
+      const analyzedItems: GalleryItem[] = [];
 
       const memoryFiles = await Promise.all(files.map(async (file) => {
         const metadata = await readExifMetadata(file);
@@ -1914,10 +1932,11 @@ const App: React.FC = () => {
                 setItems(prev => prev.map(i => i.id === newItemId ? { ...i, insights } : i));
             }).catch(() => {});
           }
+          // Accumulate for a single batch commentary after the loop
           if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-            const sessionItems = items.filter(i => i.visitId === batchVisitId);
-            const history = visitStreams[batchVisitId] || [];
-            triggerUploadCommentary(batchVisitId, updates, sessionItems, history);
+            analyzedArtworks.push(updates);
+            const placeholder = batchPlaceholders.find(p => p.id === newItemId);
+            if (placeholder) analyzedItems.push({ ...placeholder, ...updates });
           }
         } catch (e) {
           const errMsg = (e as Error)?.message || '';
@@ -1931,6 +1950,11 @@ const App: React.FC = () => {
           finishedCount++;
           if (finishedCount === memoryFiles.length) setIsAnalyzing(false);
         }
+      }
+      // One conversation commentary for the whole batch (cards already rendered per artwork)
+      if (analyzedArtworks.length > 0) {
+        const history = visitStreams[batchVisitId] || [];
+        triggerUploadCommentary(batchVisitId, analyzedArtworks, analyzedItems, history);
       }
       if (batchPlaceholders.length >= 2) setFilteredVisitId(batchVisitId);
     }
