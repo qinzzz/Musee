@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Message, GalleryItem } from '../types';
-import { exhibitionChatStream } from '../apiService';
+import { visitChatStream } from '../apiService';
 
 const markdownComponents = {
   p: ({ children }: { children?: React.ReactNode }) => <span className="block [&+&]:mt-2">{children}</span>,
@@ -57,7 +57,7 @@ const CuratorRoom: React.FC<Props> = ({ items, conversation, onClose, onUpdateCo
     setStreamingText('');
     setIsTyping(true);
 
-    exhibitionChatStream(
+    visitChatStream(
       items,
       messages,
       text,

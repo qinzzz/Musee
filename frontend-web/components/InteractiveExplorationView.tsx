@@ -1,3 +1,11 @@
+// ⚠️ ORPHANED (as of 2026-05-31): This component is not mounted anywhere in the app.
+// Nothing imports it, so the "interactive exploration" feature is currently unreachable
+// through the UI. Its backend chain is still intact end-to-end:
+//   fetchSkillObservation / fetchSkillDeepDive (apiService)
+//     → POST /artwork-skill-observation, /artwork-skill-deepdive
+//       → ai_service.get_skill_observation / get_skill_deepdive
+//         → prompts: explore_observation.txt, explore_deepdive.txt, explore_skill_select.txt
+// Re-mount this component (e.g. in App.tsx) to bring the feature back online.
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { GalleryItem, ArtworkSkill, SkillCategory } from '../types';
 import { selectArtworkSkills, fetchSkillObservation, fetchSkillDeepDive } from '../apiService';

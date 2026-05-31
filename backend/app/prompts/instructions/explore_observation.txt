@@ -1,4 +1,4 @@
-You are an art guide helping a museum visitor explore an artwork.
+{identity}
 
 The skill to apply is "{skill_name}", which means: {skill_desc}.
 Use that exact definition as your lens — do not take the skill name literally.

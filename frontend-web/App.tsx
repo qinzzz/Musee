@@ -22,7 +22,7 @@ import {
   deleteArtwork,
   prefetchExploreDataWithContext,
   reanalyzeArtwork,
-  exhibitionChatStream,
+  visitChatStream,
   fetchAndPersistInsights,
   fetchSessionMessages,
   appendSessionMessages,
@@ -237,6 +237,46 @@ type VisitStreamMessage = Message & {
   createdAt: number;
   type?: 'text' | 'artwork_capture' | 'artwork_card';
   artworkId?: string;
+};
+
+/**
+ * Convert a visit stream into chat-ready {role, text} messages, expanding
+ * artwork_capture / artwork_card entries with real artwork metadata so the
+ * model sees the artworks inline in the conversation (rather than restated
+ * in the system prompt). Empty/unresolved entries are dropped.
+ */
+const serializeVisitHistory = (
+  messages: VisitStreamMessage[],
+  items: GalleryItem[],
+): { role: 'user' | 'model'; text: string }[] => {
+  const byId = new Map<string, GalleryItem>();
+  items.forEach((i) => {
+    if (i.artworkId) byId.set(i.artworkId, i);
+    byId.set(i.id, i);
+  });
+
+  const out: { role: 'user' | 'model'; text: string }[] = [];
+  for (const m of messages) {
+    if (m.type === 'artwork_capture') {
+      const art = m.artworkId ? byId.get(m.artworkId) : undefined;
+      const label = art
+        ? `"${art.artworkName || 'an artwork'}" by ${art.artistName || 'an unknown artist'}`
+        : 'an artwork';
+      out.push({ role: 'user', text: `I captured ${label}.` });
+    } else if (m.type === 'artwork_card') {
+      const art = m.artworkId ? byId.get(m.artworkId) : undefined;
+      if (!art) continue;
+      const bits: string[] = [`${art.artworkName || 'Untitled'} by ${art.artistName || 'Unknown Artist'}`];
+      if (art.date) bits.push(`(${art.date})`);
+      if (art.medium) bits.push(art.medium);
+      let line = bits.join(' — ');
+      if (art.description) line += `. ${art.description}`;
+      out.push({ role: 'model', text: line });
+    } else if (m.text) {
+      out.push({ role: m.role as 'user' | 'model', text: m.text });
+    }
+  }
+  return out;
 };
 
 type VisitDraft = {
@@ -1321,13 +1361,13 @@ const App: React.FC = () => {
       : ' Add a brief personal observation or connection to other works seen today.';
     const trigger = `I just captured "${newArtwork.artworkName || 'an artwork'}" by ${newArtwork.artistName || 'the artist'}. Write a short response (3–4 sentences): (1) introduce the artist and title naturally, (2) give a one-sentence interpretation of the work, (3)${goalClause} Warm, conversational tone — assume the user may not have opened the artwork card.`;
     setStreamingVisitResponses(prev => ({ ...prev, [visitId]: '' }));
-    exhibitionChatStream(
+    visitChatStream(
       sessionItems.map(i => ({
         id: i.id, url: i.url, keywords: i.keywords,
         artistName: i.artistName, artworkName: i.artworkName,
         description: i.description, date: i.date, medium: i.medium,
       })),
-      conversationHistory.map(m => ({ role: m.role, text: m.text })),
+      serializeVisitHistory(conversationHistory, sessionItems),
       trigger,
       (chunk) => setStreamingVisitResponses(prev => ({ ...prev, [visitId]: (prev[visitId] || '') + chunk })),
       (fullResponse) => {
@@ -1376,8 +1416,12 @@ const App: React.FC = () => {
     appendVisitMessages(targetVisitId, [userMsg]);
     setStreamingVisitResponses(prev => ({ ...prev, [targetVisitId]: '' }));
 
-    exhibitionChatStream(
-      (activeVisitSummary?.id === targetVisitId ? activeVisitSummary.items : items.filter(item => item.visitId === targetVisitId)).map(i => ({
+    const visitItems = activeVisitSummary?.id === targetVisitId
+      ? activeVisitSummary.items
+      : items.filter(item => item.visitId === targetVisitId);
+
+    visitChatStream(
+      visitItems.map(i => ({
         id: i.id,
         url: i.url,
         keywords: i.keywords,
@@ -1387,7 +1431,7 @@ const App: React.FC = () => {
         date: i.date,
         medium: i.medium,
       })),
-      existingMessages.map(({ role, text: messageText }) => ({ role, text: messageText })),
+      serializeVisitHistory(existingMessages, visitItems),
       text,
       (chunk) => {
         setStreamingVisitResponses(prev => ({
@@ -3033,12 +3077,21 @@ const App: React.FC = () => {
                                   </React.Fragment>
                                 )
                               )}
-                              {activeVisitSummary && streamingVisitResponses[activeVisitSummary.id] && (
-                                <div className="text-neutral-700">
-                                  <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
-                                    {streamingVisitResponses[activeVisitSummary.id]}
-                                  </p>
-                                </div>
+                              {activeVisitSummary && activeVisitSummary.id in streamingVisitResponses && (
+                                streamingVisitResponses[activeVisitSummary.id] === '' ? (
+                                  /* Loading dots — waiting for first chunk */
+                                  <div className="flex items-center gap-1.5 py-1">
+                                    <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+                                    <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '160ms' }} />
+                                    <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '320ms' }} />
+                                  </div>
+                                ) : (
+                                  <div className="text-neutral-700">
+                                    <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
+                                      {streamingVisitResponses[activeVisitSummary.id]}
+                                    </p>
+                                  </div>
+                                )
                               )}
                               <div ref={visitStreamEndRef} className="h-24 shrink-0" />
                             </div>

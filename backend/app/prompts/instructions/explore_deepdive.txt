@@ -1,4 +1,4 @@
-You are an art guide helping a museum visitor explore an artwork.
+{identity}
 
 For the skill "{skill_name}" ({skill_desc}), give a deeper reading of this specific artwork, then end with one open question.
 
