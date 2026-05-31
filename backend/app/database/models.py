@@ -72,6 +72,8 @@ class SavedArtwork(Base):
     artwork_entity_id = Column(String, ForeignKey('artwork_entities.id', ondelete='SET NULL'), nullable=True, index=True)
     artist_entity_id = Column(String, ForeignKey('artist_entities.id', ondelete='SET NULL'), nullable=True, index=True)
     insights = Column(JSON, nullable=True)  # Cached "Behind the Frame" insights [{title, text}, ...]
+    classification = Column(String(20), nullable=False, server_default='unsorted')
+    classification_updated_at = Column(DateTime, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="artworks")
@@ -110,6 +112,7 @@ class SavedArtwork(Base):
             "reference_urls": self.reference_urls or [],
             "insights": self.insights or [],
             "artist_entity_id": self.artist_entity_id,
+            "classification": self.classification or "unsorted",
         }
 
         result["conversation_history"] = []  # deprecated; conversations now live in session_messages
@@ -430,3 +433,50 @@ class SkillEvent(Base):
     skill_cat = Column(String, nullable=False)   # PERCEPTION | HISTORY | INTENT | STRUCTURE | RESONANCE
     event_type = Column(String(20), nullable=False)  # "observation" | "deepdive"
     created_at = Column(DateTime, server_default=func.now())
+
+
+class TasteProfile(Base):
+    """Persisted taste profile snapshot for a user."""
+
+    __tablename__ = "taste_profiles"
+
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), primary_key=True)
+    status = Column(String(20), nullable=False, server_default='not_ready')
+    eligible_count = Column(Integer, nullable=False, server_default='0')
+    required_count = Column(Integer, nullable=False, server_default='5')
+    love_count = Column(Integer, nullable=False, server_default='0')
+    reject_count = Column(Integer, nullable=False, server_default='0')
+    respect_count = Column(Integer, nullable=False, server_default='0')
+    is_outdated = Column(Integer, nullable=False, server_default='0')
+    generated_at = Column(DateTime, nullable=True)
+    outdated_at = Column(DateTime, nullable=True)
+    love_vector = Column(JSON, nullable=True)
+    reject_vector = Column(JSON, nullable=True)
+    taste_vector = Column(JSON, nullable=True)
+    source_artwork_ids = Column(JSON, nullable=True)
+    narrative_summary = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User")
+
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "status": self.status,
+            "eligible_count": self.eligible_count,
+            "required_count": self.required_count,
+            "love_count": self.love_count,
+            "reject_count": self.reject_count,
+            "respect_count": self.respect_count,
+            "is_outdated": bool(self.is_outdated),
+            "generated_at": self.generated_at.isoformat() if self.generated_at else None,
+            "outdated_at": self.outdated_at.isoformat() if self.outdated_at else None,
+            "love_vector": self.love_vector or {},
+            "reject_vector": self.reject_vector or {},
+            "taste_vector": self.taste_vector or {},
+            "source_artwork_ids": self.source_artwork_ids or [],
+            "narrative_summary": self.narrative_summary,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

@@ -41,8 +41,9 @@ interface Props {
   onAddItemsToBoard: (boardId: string, itemIds: string[]) => Promise<void>;
   onOpenArtist: (artistEntityId: string, artistName: string) => void;
   onOpenMovement: (collection: SmartCollection) => void;
-  onInterpret: (item: GalleryItem) => void;
+  onInterpret: (item: GalleryItem, context?: { items: GalleryItem[]; label: string }) => void;
   onDelete: (id: string) => void;
+  onStartUnsortedFlow: () => void;
 }
 
 const OrganizeView: React.FC<Props> = ({
@@ -55,6 +56,7 @@ const OrganizeView: React.FC<Props> = ({
   onAddItemsToBoard,
   onOpenArtist, onOpenMovement,
   onInterpret, onDelete,
+  onStartUnsortedFlow,
 }) => {
   const [savedLayout, setSavedLayout] = useState<SavedLayout>('grid');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
@@ -120,6 +122,15 @@ const OrganizeView: React.FC<Props> = ({
     if (selectedBoard === 'liked') return 'Liked';
     return boards.find(a => a.id === selectedBoard)?.name ?? '';
   }, [selectedBoard, boards]);
+  const unsortedCount = useMemo(
+    () => items.filter(item => (item.classification || 'unsorted') === 'unsorted').length,
+    [items],
+  );
+  const savedContextLabel = useMemo(() => {
+    if (activeFilter === 'liked') return 'Liked';
+    if (activeFilter === 'all') return 'All Artworks';
+    return boards.find(a => a.id === activeFilter)?.name || 'All Artworks';
+  }, [activeFilter, boards]);
 
   const getCoverImages = (itemIds: string[]) =>
     itemIds.slice(0, 4).map(id => items.find(i => i.id === id)?.url).filter(Boolean) as string[];
@@ -241,7 +252,7 @@ const OrganizeView: React.FC<Props> = ({
         {collectTab === 'saved' && (
           <div className="flex flex-col h-full">
             <div className="shrink-0 flex items-center justify-between gap-3 px-5 sm:px-8 pt-3 pb-2">
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+              <div className="flex min-w-0 items-center gap-2 overflow-x-auto no-scrollbar">
                 {showFilterBar && (
                   <>
                     <button
@@ -273,6 +284,14 @@ const OrganizeView: React.FC<Props> = ({
                       >{album.name}</button>
                     ))}
                   </>
+                )}
+                {unsortedCount > 0 && (
+                  <button
+                    onClick={onStartUnsortedFlow}
+                    className="shrink-0 rounded-full border border-neutral-200 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-neutral-700 transition-colors hover:border-neutral-400"
+                  >
+                    Sort Unsorted Works
+                  </button>
                 )}
               </div>
               <div className="shrink-0 flex items-center gap-0.5 bg-neutral-100 rounded-full p-0.5">
@@ -307,7 +326,7 @@ const OrganizeView: React.FC<Props> = ({
                   filteredVisitId={filteredVisitId}
                   isAnalyzing={isAnalyzing}
                   boards={boards}
-                  onInterpret={onInterpret}
+                  onInterpret={(item, contextItems) => onInterpret(item, { items: contextItems || filteredItems, label: savedContextLabel })}
                   onDelete={onDelete}
                   onRequestCreateBoard={openCreateBoardModal}
                   onAddToBoard={onAddItemsToBoard}
@@ -327,8 +346,8 @@ const OrganizeView: React.FC<Props> = ({
                             {group.items.map(item => (
                               <div
                                 key={item.id}
-                                className="aspect-square cursor-pointer overflow-hidden bg-neutral-100 hover:opacity-90 transition-opacity"
-                                onClick={() => onInterpret(item)}
+                                className="group relative aspect-square cursor-pointer overflow-hidden rounded bg-neutral-100 hover:opacity-90 transition-opacity"
+                                onClick={() => onInterpret(item, { items: group.items, label: group.label })}
                               >
                                 <img src={item.url} alt="" className="w-full h-full object-cover" />
                               </div>
@@ -497,7 +516,7 @@ const OrganizeView: React.FC<Props> = ({
                         <div
                           key={item.id}
                           className="aspect-square cursor-pointer overflow-hidden rounded bg-neutral-100 hover:opacity-90 transition-opacity"
-                          onClick={() => onInterpret(item)}
+                          onClick={() => onInterpret(item, { items: boardDetailItems, label: boardDetailName })}
                         >
                           <img src={item.url} alt="" className="w-full h-full object-cover" />
                         </div>

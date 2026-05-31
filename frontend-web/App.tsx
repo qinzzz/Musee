@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import ExifReader from 'exifreader';
-import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, CuratorConversation, Album, AestheticVibe } from './types';
+import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, CuratorConversation, Album, AestheticVibe, ArtworkClassification } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import GoogleLogin from './components/GoogleLogin';
 import {
@@ -31,6 +31,7 @@ import {
   createCollection,
   updateCollection,
   deleteCollection,
+  updateArtworkClassification,
 } from './apiService';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
@@ -39,6 +40,7 @@ import EmptyWall from './components/EmptyWall';
 import OrganizeView from './components/OrganizeView';
 import TopographyView from './components/TopographyView';
 import TasteProfileView from './components/TasteProfileView';
+import UnsortedClassificationModal from './components/UnsortedClassificationModal';
 import ArtistPage from './components/ArtistPage';
 import ArtMovementPage from './components/ArtMovementPage';
 import LearningHubPage from './components/LearningHubPage';
@@ -181,6 +183,14 @@ export const formatDisplayDate = (dateStr: string | null | undefined): string | 
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const buildUploadRequestKey = (files: File[], mode: 'gallery' | 'camera'): string => {
+  const fileParts = files
+    .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+    .sort()
+    .join('|');
+  return `${mode}:${fileParts}`;
+};
 
 const MOCK_NEIGHBORS: NeighborItem[] = [
   {
@@ -390,7 +400,10 @@ const App: React.FC = () => {
   const renameInputRef = useRef<HTMLInputElement>(null);
   const visitStreamScrollRef = useRef<HTMLDivElement>(null);
   const visitStreamEndRef = useRef<HTMLDivElement>(null);
+  const inFlightUploadKeysRef = useRef<Set<string>>(new Set());
   const [items, setItems] = useState<GalleryItem[]>([]);
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
+  const [isUnsortedFlowOpen, setIsUnsortedFlowOpen] = useState(false);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
   const [activeTab, setActiveTab] = useState<'explore' | 'collect' | 'profile' | 'learn'>(() => {
     const p = window.location.pathname;
@@ -433,6 +446,7 @@ const App: React.FC = () => {
     timestamp: number,
     photoTime?: string,
     location?: string,
+    classification?: ArtworkClassification,
   } | null>(null);
 
   // Curator conversation history — persisted to localStorage
@@ -830,6 +844,26 @@ const App: React.FC = () => {
     showToast(`Deleted board "${targetBoard?.name || 'Untitled'}"`, 'success');
   };
 
+  const handleUpdateClassification = async (itemId: string, classification: ArtworkClassification) => {
+    const previous = items.find(item => item.id === itemId)?.classification || 'unsorted';
+    if (previous === classification) return;
+
+    setItems(prev => prev.map(item => item.id === itemId ? { ...item, classification } : item));
+    setInterpretingItem(prev => prev?.id === itemId ? { ...prev, classification } : prev);
+    setProfileRefreshKey(prev => prev + 1);
+
+    try {
+      await updateArtworkClassification(itemId, classification);
+    } catch (error) {
+      console.error('Failed to update artwork classification:', error);
+      setItems(prev => prev.map(item => item.id === itemId ? { ...item, classification: previous } : item));
+      setInterpretingItem(prev => prev?.id === itemId ? { ...prev, classification: previous } : prev);
+      setProfileRefreshKey(prev => prev + 1);
+      showToast('Could not update artwork classification', 'info');
+      throw error;
+    }
+  };
+
   const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'community'>('metadata');
   const [interpretingMode, setInterpretingMode] = useState<'professional' | 'interactive'>(
     () => (localStorage.getItem('musee_analysis_mode') as 'professional' | 'interactive') ?? 'professional'
@@ -919,6 +953,7 @@ const App: React.FC = () => {
               referenceUrls: item.reference_urls || [],
               insights: item.insights || [],
               artistEntityId: item.artist_entity_id || undefined,
+              classification: item.classification || 'unsorted',
               conversation: (item.conversation_history || []).map((msg: any) => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 text: msg.content
@@ -1667,120 +1702,302 @@ const App: React.FC = () => {
     const target = event.target as HTMLInputElement;
     const files = Array.from(target.files || []);
     if (files.length === 0) return;
+    const uploadKey = buildUploadRequestKey(files, mode);
 
-    // Single file upload: Open modal immediately and stream analysis
-    if (files.length === 1) {
-      const file = files[0];
-      const metadata = mode === 'gallery' ? await readExifMetadata(file) : { latitude: undefined, longitude: undefined, timestamp: undefined };
-      
-      // Fallback to active GPS if camera mode and no EXIF
-      let coords = { latitude: metadata.latitude, longitude: metadata.longitude };
-      if (mode === 'camera' && coords.latitude === undefined) {
-        const current = await getCurrentLocation().catch(() => undefined);
-        if (current) coords = current;
-      }
+    if (inFlightUploadKeysRef.current.has(uploadKey)) {
+      console.warn('Ignoring duplicate upload request while analysis is already in progress:', uploadKey);
+      if (target) target.value = '';
+      return;
+    }
 
-      const photoTimestamp = metadata.timestamp || Date.now();
-      const photoTime = new Date(photoTimestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      
-      setIsAnalyzing(true);
+    inFlightUploadKeysRef.current.add(uploadKey);
 
-      try {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+    try {
+      if (files.length === 1) {
+        const file = files[0];
+        const metadata = mode === 'gallery'
+          ? await readExifMetadata(file)
+          : { latitude: undefined, longitude: undefined, timestamp: undefined };
 
-        const { visitId, isNew } = resolveUploadSession();
+        let coords = { latitude: metadata.latitude, longitude: metadata.longitude };
+        if (mode === 'camera' && coords.latitude === undefined) {
+          const current = await getCurrentLocation().catch(() => undefined);
+          if (current) coords = current;
+        }
+
+        const photoTimestamp = metadata.timestamp || Date.now();
+        const photoTime = new Date(photoTimestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+        setIsAnalyzing(true);
+
+        try {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+
+          const { visitId, isNew } = resolveUploadSession();
+
+          if (isNew) {
+            const now = Date.now();
+            const newVisit: VisitDraft = {
+              id: visitId,
+              title: DEFAULT_VISIT_TITLE,
+              createdAt: now,
+              updatedAt: now,
+            };
+            setVisitDrafts(prev => [newVisit, ...prev.filter(v => v.id !== visitId)]);
+          }
+
+          const newItemId = Math.random().toString(36).substring(2, 11);
+          const placeholderItem: GalleryItem = {
+            id: newItemId,
+            url: base64,
+            keywords: [],
+            vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
+            timestamp: photoTimestamp,
+            conversation: [],
+            visitId,
+            isAnalyzing: true,
+            streamingText: '',
+            location: coords ? JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city: '', country: '', museum: '' }) : undefined,
+            photoTime,
+          };
+
+          setItems(prev => [placeholderItem, ...prev]);
+          setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+
+          if (coords.latitude !== undefined && coords.longitude !== undefined) {
+            resolveMuseum(coords.latitude, coords.longitude)
+              .then(({ city, country, museum }) => {
+                const resolved = JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city, country, museum });
+                setItems(prev => prev.map(item => item.id === newItemId ? { ...item, location: resolved } : item));
+                const contextName = museum || city || 'your collection';
+                if (isNew) showToast(`Created a new session for ${contextName}`, 'success');
+                else showToast(`Added to ${contextName} collection`, 'info');
+              })
+              .catch(() => showToast(isNew ? 'Created a new session' : 'Added to collection'));
+          } else {
+            showToast(isNew ? 'Created a new session' : 'Added to collection');
+          }
+
+          const exploreContextFired = { current: false };
+          const safeFile = base64ToFile(base64, file.name);
+
+          await analyzeArtworkStream(
+            safeFile, USER_ID,
+            (chunk) => setInterpretingItem(prev => {
+              if (!prev || prev.id !== newItemId) return prev;
+              const newText = (prev.streamingText || '') + chunk;
+              if (!exploreContextFired.current) {
+                const jsonStart = newText.indexOf('{');
+                if (jsonStart !== -1) {
+                  const json = newText.substring(jsonStart);
+                  const artistMatch = json.match(/"artist"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                  const titleMatch = json.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                  if (artistMatch) {
+                    exploreContextFired.current = true;
+                    prefetchExploreDataWithContext(base64, artistMatch[1], titleMatch?.[1]);
+                  }
+                }
+              }
+              return { ...prev, streamingText: newText };
+            }),
+            (analysis) => {
+              const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
+              setTagPositions(prev => {
+                const updated = { ...prev };
+                keywords.forEach((tag: string) => {
+                  if (!updated[tag]) updated[tag] = { x: (Math.random() * 2 - 1), y: (Math.random() * 2 - 1) };
+                });
+                return updated;
+              });
+              const updates = {
+                keywords,
+                artistName: analysis.artist_name,
+                artworkName: analysis.artwork_name,
+                description: parseAnalysis(analysis.description),
+                date: analysis.date,
+                medium: analysis.medium,
+                artworkId: analysis.artwork_id,
+                isAnalyzing: false,
+                streamingText: undefined,
+                location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
+                photoTime: analysis.photo_time,
+                referenceUrls: analysis.reference_urls || [],
+                artistEntityId: analysis.artist_entity_id || undefined,
+              };
+              setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
+              setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...updates } : prev);
+              setIsAnalyzing(false);
+              if (visitId && analysis.artwork_id) {
+                const now = Date.now();
+                appendVisitMessages(visitId, [
+                  { id: `capture-${newItemId}`, role: 'user', text: '', type: 'artwork_capture', artworkId: analysis.artwork_id, createdAt: now },
+                  { id: `card-${newItemId}`, role: 'model', text: '', type: 'artwork_card', artworkId: analysis.artwork_id, createdAt: now + 1 },
+                ]);
+              }
+              if (analysis.artwork_id && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+                fetchAndPersistInsights(analysis.artwork_id).then(insights => {
+                  if (insights.length > 0) {
+                    setItems(prev => prev.map(i => i.id === newItemId ? { ...i, insights } : i));
+                    setInterpretingItem(prev => (prev?.id === newItemId) ? { ...prev, insights } : prev);
+                  }
+                }).catch(() => {});
+              }
+              if (visitId && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+                const sessionItems = items.filter(i => i.visitId === visitId);
+                const history = visitStreams[visitId] || [];
+                triggerUploadCommentary(visitId, [updates], sessionItems, history);
+              }
+            },
+            (error) => {
+              const msg = error?.message || 'Analysis failed.';
+              if (msg.includes('402') || msg.includes('quota_exceeded')) {
+                setItems(prev => prev.filter(item => item.id !== newItemId));
+                setInterpretingItem(prev => (prev?.id === newItemId) ? null : prev);
+                setToast({ message: "You've reached your artwork limit. Upgrade to save more.", type: 'info' });
+              } else {
+                setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, streamingText: msg } : item));
+                setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, isAnalyzing: false, streamingText: msg } : prev);
+              }
+              setIsAnalyzing(false);
+            },
+            visitId, undefined, undefined, photoTime, coords?.latitude, coords?.longitude
+          );
+        } catch (error) {
+          console.error('Upload failed:', error);
+        }
+      } else {
+        setIsAnalyzing(true);
+        let finishedCount = 0;
+        const analyzedArtworks: { artistName?: string; artworkName?: string; description?: string; keywords?: string[] }[] = [];
+        const analyzedItems: GalleryItem[] = [];
+
+        const memoryFiles = await Promise.all(files.map(async (file) => {
+          const metadata = await readExifMetadata(file);
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target?.result as string);
+            reader.readAsDataURL(file);
+          });
+          return { name: file.name, base64, metadata };
+        }));
+
+        const anchorMeta = memoryFiles[0].metadata;
+        const { visitId: batchVisitId, isNew } = resolveUploadSession();
 
         if (isNew) {
           const now = Date.now();
           const newVisit: VisitDraft = {
-            id: visitId,
+            id: batchVisitId,
             title: DEFAULT_VISIT_TITLE,
             createdAt: now,
             updatedAt: now,
           };
-          setVisitDrafts(prev => [newVisit, ...prev.filter(v => v.id !== visitId)]);
+          setVisitDrafts(prev => [newVisit, ...prev.filter(v => v.id !== batchVisitId)]);
         }
 
-        const newItemId = Math.random().toString(36).substring(2, 11);
-        const placeholderItem: GalleryItem = {
-          id: newItemId,
-          url: base64,
-          keywords: [],
-          vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
-          timestamp: photoTimestamp,
-          conversation: [],
-          visitId: visitId,
-          isAnalyzing: true,
-          streamingText: '',
-          location: coords ? JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city: '', country: '', museum: '' }) : undefined,
-          photoTime: photoTime
-        };
+        setVisit(prev => ({ ...prev, id: batchVisitId, itemIds: [], globalConversation: [] }));
 
-        setItems(prev => [placeholderItem, ...prev]);
-        setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+        const batchPlaceholders: GalleryItem[] = memoryFiles.map((memFile) => {
+          const id = Math.random().toString(36).substring(2, 11);
+          (memFile as any).generatedId = id;
+          const itemTime = memFile.metadata.timestamp || Date.now();
+          const itemTimeLabel = new Date(itemTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-        if (coords.latitude !== undefined && coords.longitude !== undefined) {
-          resolveMuseum(coords.latitude, coords.longitude).then(({ city, country, museum }) => {
-            const resolved = JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city, country, museum });
-            setItems(prev => prev.map(item => item.id === newItemId ? { ...item, location: resolved } : item));
-            const contextName = museum || city || 'your collection';
-            if (isNew) showToast(`Created a new session for ${contextName}`, 'success');
-            else showToast(`Added to ${contextName} collection`, 'info');
-          }).catch(() => showToast(isNew ? 'Created a new session' : 'Added to collection'));
+          return {
+            id,
+            url: memFile.base64,
+            keywords: [],
+            conversation: [],
+            visitId: batchVisitId,
+            vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
+            timestamp: itemTime,
+            isAnalyzing: true,
+            streamingText: '',
+            photoTime: itemTimeLabel,
+            location: memFile.metadata.latitude
+              ? JSON.stringify({
+                  latitude: memFile.metadata.latitude,
+                  longitude: memFile.metadata.longitude,
+                  city: '',
+                  country: '',
+                  museum: '',
+                })
+              : undefined,
+          };
+        });
+
+        setItems(prev => [...batchPlaceholders, ...prev]);
+        setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, ...batchPlaceholders.map(p => p.id)] }));
+
+        if (anchorMeta.latitude !== undefined && anchorMeta.longitude !== undefined) {
+          resolveMuseum(anchorMeta.latitude, anchorMeta.longitude)
+            .then(({ city, country, museum }) => {
+              const resolved = JSON.stringify({ latitude: anchorMeta.latitude, longitude: anchorMeta.longitude, city, country, museum });
+              resolvedLocation.current = resolved;
+              setItems(prev => prev.map(item => batchPlaceholders.some(p => p.id === item.id) ? { ...item, location: resolved } : item));
+              showToast(
+                isNew
+                  ? `Started a new session at ${museum || city || 'museum'} with ${batchPlaceholders.length} works`
+                  : `Added ${batchPlaceholders.length} works to ${museum || city || 'session'}`,
+                isNew ? 'success' : 'info'
+              );
+            })
+            .catch(() => showToast(
+              isNew
+                ? `Started a new session with ${batchPlaceholders.length} works`
+                : `Added ${batchPlaceholders.length} works to the session`,
+              isNew ? 'success' : 'info'
+            ));
         } else {
-          showToast(isNew ? 'Created a new session' : 'Added to collection');
+          showToast(
+            isNew
+              ? `Started a new session with ${batchPlaceholders.length} works`
+              : `Added ${batchPlaceholders.length} works to the session`,
+            isNew ? 'success' : 'info'
+          );
         }
 
-        // Prefetch skills with artist context as soon as it appears in the stream (~2-5s in)
-        const exploreContextFired = { current: false };
+        for (const memFile of memoryFiles) {
+          const newItemId = (memFile as any).generatedId;
+          const itemTimeLabel = new Date(memFile.metadata.timestamp || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-        const safeFile = base64ToFile(base64, file.name);
-        await analyzeArtworkStream(
-          safeFile, USER_ID,
-          (chunk) => setInterpretingItem(prev => {
-            if (!prev || prev.id !== newItemId) return prev;
-            const newText = (prev.streamingText || '') + chunk;
-            if (!exploreContextFired.current) {
-              const jsonStart = newText.indexOf('{');
-              if (jsonStart !== -1) {
-                const json = newText.substring(jsonStart);
-                const artistMatch = json.match(/"artist"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-                const titleMatch  = json.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-                if (artistMatch) {
-                  exploreContextFired.current = true;
-                  prefetchExploreDataWithContext(base64, artistMatch[1], titleMatch?.[1]);
-                }
-              }
-            }
-            return { ...prev, streamingText: newText };
-          }),
-          (analysis) => {
+          try {
+            const safeFile = base64ToFile(memFile.base64, memFile.name);
+            const analysis = await analyzeArtwork(
+              safeFile,
+              USER_ID,
+              undefined,
+              batchVisitId,
+              resolvedLocation.current,
+              itemTimeLabel,
+              memFile.metadata?.latitude,
+              memFile.metadata?.longitude
+            );
             const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
-            setTagPositions(prev => {
-              const updated = { ...prev };
-              keywords.forEach((tag: string) => { if (!updated[tag]) updated[tag] = { x: (Math.random() * 2 - 1), y: (Math.random() * 2 - 1) }; });
-              return updated;
-            });
             const updates = {
-              keywords, artistName: analysis.artist_name, artworkName: analysis.artwork_name,
-              description: parseAnalysis(analysis.description), date: analysis.date, medium: analysis.medium,
-              artworkId: analysis.artwork_id, isAnalyzing: false, streamingText: undefined,
+              keywords,
+              artistName: analysis.artist_name,
+              artworkName: analysis.artwork_name,
+              description: parseAnalysis(analysis.description),
+              date: analysis.date,
+              medium: analysis.medium,
+              sessionTitle: analysis.session_title,
+              artworkId: analysis.artwork_id,
+              isAnalyzing: false,
               location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
               photoTime: analysis.photo_time,
               referenceUrls: analysis.reference_urls || [],
               artistEntityId: analysis.artist_entity_id || undefined,
             };
             setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
-            setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...updates } : prev);
-            setIsAnalyzing(false);
-            if (visitId && analysis.artwork_id) {
+            if (analysis.artwork_id) {
               const now = Date.now();
-              appendVisitMessages(visitId, [
+              appendVisitMessages(batchVisitId, [
                 { id: `capture-${newItemId}`, role: 'user', text: '', type: 'artwork_capture', artworkId: analysis.artwork_id, createdAt: now },
                 { id: `card-${newItemId}`, role: 'model', text: '', type: 'artwork_card', artworkId: analysis.artwork_id, createdAt: now + 1 },
               ]);
@@ -1789,176 +2006,38 @@ const App: React.FC = () => {
               fetchAndPersistInsights(analysis.artwork_id).then(insights => {
                 if (insights.length > 0) {
                   setItems(prev => prev.map(i => i.id === newItemId ? { ...i, insights } : i));
-                  setInterpretingItem(prev => (prev?.id === newItemId) ? { ...prev, insights } : prev);
                 }
               }).catch(() => {});
             }
-            if (visitId && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-              const sessionItems = items.filter(i => i.visitId === visitId);
-              const history = visitStreams[visitId] || [];
-              triggerUploadCommentary(visitId, [updates], sessionItems, history);
+            if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+              analyzedArtworks.push(updates);
+              const placeholder = batchPlaceholders.find(p => p.id === newItemId);
+              if (placeholder) analyzedItems.push({ ...placeholder, ...updates });
             }
-          },
-          (error) => {
-            const msg = error?.message || 'Analysis failed.';
-            if (msg.includes('402') || msg.includes('quota_exceeded')) {
+          } catch (e) {
+            const errMsg = (e as Error)?.message || '';
+            if (errMsg.includes('402') || errMsg.includes('quota_exceeded')) {
               setItems(prev => prev.filter(item => item.id !== newItemId));
-              setInterpretingItem(prev => (prev?.id === newItemId) ? null : prev);
               setToast({ message: "You've reached your artwork limit. Upgrade to save more.", type: 'info' });
             } else {
-              setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, streamingText: msg } : item));
-              setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, isAnalyzing: false, streamingText: msg } : prev);
+              setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, description: 'Analysis failed.' } : item));
             }
-            setIsAnalyzing(false);
-          },
-          visitId, undefined, undefined, photoTime, coords?.latitude, coords?.longitude
-        );
-      } catch (error) { console.error('Upload failed:', error); }
-    } 
-    // Batch Upload
-    else {
-      setIsAnalyzing(true);
-      let finishedCount = 0;
-      // Collect successfully-analyzed artworks so we can post ONE batch commentary
-      // at the end (rather than one per artwork). Cards are still rendered per artwork.
-      const analyzedArtworks: { artistName?: string; artworkName?: string; description?: string; keywords?: string[] }[] = [];
-      const analyzedItems: GalleryItem[] = [];
-
-      const memoryFiles = await Promise.all(files.map(async (file) => {
-        const metadata = await readExifMetadata(file);
-        const base64 = await new Promise<string>(r => { const reader = new FileReader(); reader.onload = e => r(e.target?.result as string); reader.readAsDataURL(file); });
-        return { name: file.name, base64, metadata };
-      }));
-
-      // Determine the session anchor (first file's metadata)
-      const anchorMeta = memoryFiles[0].metadata;
-      const anchorTime = anchorMeta.timestamp || Date.now();
-      const anchorTimeLabel = new Date(anchorTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-      const { visitId: batchVisitId, isNew } = resolveUploadSession();
-
-      if (isNew) {
-        const now = Date.now();
-        const newVisit: VisitDraft = {
-          id: batchVisitId,
-          title: DEFAULT_VISIT_TITLE,
-          createdAt: now,
-          updatedAt: now,
-        };
-        setVisitDrafts(prev => [newVisit, ...prev.filter(v => v.id !== batchVisitId)]);
-      }
-      
-      setVisit(prev => ({ ...prev, id: batchVisitId, itemIds: [], globalConversation: [] }));
-
-      const batchPlaceholders: GalleryItem[] = memoryFiles.map((memFile) => {
-        const id = Math.random().toString(36).substring(2, 11);
-        (memFile as any).generatedId = id;
-        const itemTime = memFile.metadata.timestamp || Date.now();
-        const itemTimeLabel = new Date(itemTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-        return {
-          id: id, url: memFile.base64, keywords: [], conversation: [], visitId: batchVisitId,
-          vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
-          timestamp: itemTime, isAnalyzing: true, streamingText: '', photoTime: itemTimeLabel,
-          location: memFile.metadata.latitude ? JSON.stringify({ 
-            latitude: memFile.metadata.latitude, 
-            longitude: memFile.metadata.longitude, 
-            city: '', country: '', museum: '' 
-          }) : undefined
-        };
-      });
-
-      setItems(prev => [...batchPlaceholders, ...prev]);
-      setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, ...batchPlaceholders.map(p => p.id)] }));
-
-      if (anchorMeta.latitude !== undefined && anchorMeta.longitude !== undefined) {
-        resolveMuseum(anchorMeta.latitude, anchorMeta.longitude).then(({ city, country, museum }) => {
-          const resolved = JSON.stringify({ latitude: anchorMeta.latitude, longitude: anchorMeta.longitude, city, country, museum });
-          resolvedLocation.current = resolved;
-          setItems(prev => prev.map(item => batchPlaceholders.some(p => p.id === item.id) ? { ...item, location: resolved } : item));
-          showToast(
-            isNew
-              ? `Started a new session at ${museum || city || 'museum'} with ${batchPlaceholders.length} works`
-              : `Added ${batchPlaceholders.length} works to ${museum || city || 'session'}`,
-            isNew ? 'success' : 'info'
-          );
-        }).catch(() => showToast(
-          isNew
-            ? `Started a new session with ${batchPlaceholders.length} works`
-            : `Added ${batchPlaceholders.length} works to the session`,
-          isNew ? 'success' : 'info'
-        ));
-      } else {
-        showToast(
-          isNew
-            ? `Started a new session with ${batchPlaceholders.length} works`
-            : `Added ${batchPlaceholders.length} works to the session`,
-          isNew ? 'success' : 'info'
-        );
-      }
-
-      for (const memFile of memoryFiles) {
-        const newItemId = (memFile as any).generatedId;
-        const itemTimeLabel = new Date(memFile.metadata.timestamp || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-        try {
-          const safeFile = base64ToFile(memFile.base64, memFile.name);
-          const analysis = await analyzeArtwork(
-            safeFile, USER_ID, undefined, batchVisitId, 
-            resolvedLocation.current, itemTimeLabel, 
-            memFile.metadata?.latitude, memFile.metadata?.longitude
-          );
-          const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
-          const updates = {
-            keywords, artistName: analysis.artist_name, artworkName: analysis.artwork_name,
-            description: parseAnalysis(analysis.description), date: analysis.date, medium: analysis.medium,
-            sessionTitle: analysis.session_title, artworkId: analysis.artwork_id, isAnalyzing: false,
-            location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
-            photoTime: analysis.photo_time,
-            referenceUrls: analysis.reference_urls || [],
-            artistEntityId: analysis.artist_entity_id || undefined,
-          };
-          setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
-          if (analysis.artwork_id) {
-            const now = Date.now();
-            appendVisitMessages(batchVisitId, [
-              { id: `capture-${newItemId}`, role: 'user', text: '', type: 'artwork_capture', artworkId: analysis.artwork_id, createdAt: now },
-              { id: `card-${newItemId}`, role: 'model', text: '', type: 'artwork_card', artworkId: analysis.artwork_id, createdAt: now + 1 },
-            ]);
+          } finally {
+            finishedCount++;
+            if (finishedCount === memoryFiles.length) setIsAnalyzing(false);
           }
-          if (analysis.artwork_id && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-            fetchAndPersistInsights(analysis.artwork_id).then(insights => {
-              if (insights.length > 0)
-                setItems(prev => prev.map(i => i.id === newItemId ? { ...i, insights } : i));
-            }).catch(() => {});
-          }
-          // Accumulate for a single batch commentary after the loop
-          if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-            analyzedArtworks.push(updates);
-            const placeholder = batchPlaceholders.find(p => p.id === newItemId);
-            if (placeholder) analyzedItems.push({ ...placeholder, ...updates });
-          }
-        } catch (e) {
-          const errMsg = (e as Error)?.message || '';
-          if (errMsg.includes('402') || errMsg.includes('quota_exceeded')) {
-            setItems(prev => prev.filter(item => item.id !== newItemId));
-            setToast({ message: "You've reached your artwork limit. Upgrade to save more.", type: 'info' });
-          } else {
-            setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, description: 'Analysis failed.' } : item));
-          }
-        } finally {
-          finishedCount++;
-          if (finishedCount === memoryFiles.length) setIsAnalyzing(false);
         }
+
+        if (analyzedArtworks.length > 0) {
+          const history = visitStreams[batchVisitId] || [];
+          triggerUploadCommentary(batchVisitId, analyzedArtworks, analyzedItems, history);
+        }
+        if (batchPlaceholders.length >= 2) setFilteredVisitId(batchVisitId);
       }
-      // One conversation commentary for the whole batch (cards already rendered per artwork)
-      if (analyzedArtworks.length > 0) {
-        const history = visitStreams[batchVisitId] || [];
-        triggerUploadCommentary(batchVisitId, analyzedArtworks, analyzedItems, history);
-      }
-      if (batchPlaceholders.length >= 2) setFilteredVisitId(batchVisitId);
+    } finally {
+      inFlightUploadKeysRef.current.delete(uploadKey);
+      if (target) target.value = '';
     }
-    if (target) target.value = '';
   };
 
   // Reset interpretation panel state when opening a new artwork
@@ -2215,6 +2294,13 @@ const App: React.FC = () => {
             onClose={() => setToast(null)}
           />
         )}
+
+        <UnsortedClassificationModal
+          open={isUnsortedFlowOpen}
+          items={items}
+          onClose={() => setIsUnsortedFlowOpen(false)}
+          onClassify={handleUpdateClassification}
+        />
 
         {showLoginModal && !currentUser && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
@@ -2793,6 +2879,7 @@ const App: React.FC = () => {
                         item={interpretingItem}
                         onClose={closeArtworkDetail}
                         onUpdateMetadata={updateItemMetadata}
+                        onUpdateClassification={handleUpdateClassification}
                         onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
                         allVisitItems={interpretingItem.allVisitItems}
                         onNavigate={handleNavigateInterpretation}
@@ -2819,6 +2906,7 @@ const App: React.FC = () => {
                             },
                           });
                         }}
+                        navigationContextLabel={artworkDetailContext?.parentLabel || activeVisitSummary.title}
                         isInline={true}
                       />
                     </div>
@@ -3144,6 +3232,7 @@ const App: React.FC = () => {
                       item={interpretingItem}
                       onClose={closeArtworkDetail}
                       onUpdateMetadata={updateItemMetadata}
+                      onUpdateClassification={handleUpdateClassification}
                       onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
                       allVisitItems={interpretingItem.allVisitItems}
                       onNavigate={handleNavigateInterpretation}
@@ -3170,6 +3259,7 @@ const App: React.FC = () => {
                           },
                         });
                       }}
+                      navigationContextLabel={artworkDetailContext?.parentLabel || 'All Artworks'}
                       isInline={true}
                     />
                   </div>
@@ -3201,14 +3291,15 @@ const App: React.FC = () => {
                     onOpenMovement={(collection) => {
                       setMovementPageContext(collection);
                     }}
-                    onInterpret={(item) => {
+                    onInterpret={(item, context) => {
                       const basePath = stateToPath(activeTab, collectTab);
                       openArtworkDetail(item, {
-                        parentLabel: 'All Artworks',
+                        parentLabel: context?.label || 'All Artworks',
                         basePath,
-                      });
+                      }, context?.items);
                     }}
                     onDelete={handleDeleteItem}
+                    onStartUnsortedFlow={() => setIsUnsortedFlowOpen(true)}
                   />
                 </div>
               )
@@ -3220,7 +3311,11 @@ const App: React.FC = () => {
                   isInline={true}
                 />
                 <div className="flex-1 overflow-y-auto">
-                  <TasteProfileView userId={currentUser?.user_id || USER_ID} />
+                  <TasteProfileView
+                    userId={currentUser?.user_id || USER_ID}
+                    refreshKey={profileRefreshKey}
+                    onStartUnsortedFlow={() => setIsUnsortedFlowOpen(true)}
+                  />
                 </div>
               </div>
             ) : activeTab === 'learn' ? (
@@ -3235,6 +3330,7 @@ const App: React.FC = () => {
             item={interpretingItem}
             onClose={closeArtworkDetail}
             onUpdateMetadata={updateItemMetadata}
+            onUpdateClassification={handleUpdateClassification}
             onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
             allVisitItems={interpretingItem.allVisitItems}
             onNavigate={handleNavigateInterpretation}
@@ -3261,6 +3357,7 @@ const App: React.FC = () => {
                 },
               });
             }}
+            navigationContextLabel={artworkDetailContext?.parentLabel || 'Artwork Set'}
           />
         )}
 
