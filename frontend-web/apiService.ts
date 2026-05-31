@@ -202,7 +202,7 @@ function decodePcmToAudioBuffer(
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-const API_TIMEOUT = 120000; // 120 seconds
+const API_TIMEOUT = 185000; // 185 seconds (slightly above backend's 180s AI timeout)
 const AUTH_TOKEN_KEY = 'musee_auth_token';
 const USER_INFO_KEY = 'musee_user_info';
 const DEV_FIXED_USER_ID = import.meta.env.VITE_DEV_USER_ID || 'musee-dev-user';
