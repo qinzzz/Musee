@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
-import { Message, Album, NeighborItem, Visit, GalleryItem } from '../types';
-import { chatWithArtworkStream, getTagExplanation, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../apiService';
+import { Message, Album, NeighborItem, Visit, GalleryItem, ArtworkClassification } from '../types';
+import { chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../apiService';
+import ArtworkClassificationChip from './ArtworkClassificationChip';
 interface Props {
   item: {
     url: string;
@@ -24,6 +25,7 @@ interface Props {
     referenceUrls?: import('../types').ReferenceItem[];
     insights?: Array<{ title: string; text: string }>;
     artistEntityId?: string;
+    classification?: ArtworkClassification;
   };
   onClose: () => void;
   onUpdateConversation?: (id: string, newMessages: Message[]) => void;
@@ -39,6 +41,8 @@ interface Props {
   userId?: string;
   onNavigateToArtist?: (artistEntityId: string | undefined, artworkId: string | undefined, artistName: string | undefined) => void;
   isInline?: boolean;
+  onUpdateClassification?: (itemId: string, classification: ArtworkClassification) => Promise<void>;
+  navigationContextLabel?: string;
 }
 
 // Tag component with explanation tooltip on hover
@@ -135,7 +139,7 @@ const Insight: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onReanalyze, onDelete, userId, onNavigateToArtist, isInline }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onReanalyze, onDelete, userId, onNavigateToArtist, isInline, onUpdateClassification, navigationContextLabel }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
@@ -366,6 +370,15 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const displayDate = streamingFields?.date || item.date;
   const displayMedium = streamingFields?.medium || item.medium;
   const displayDescription = streamingFields?.description || item.description;
+  const navigationIndex = allVisitItems?.findIndex(i => i.id === item.id) ?? -1;
+  const currentClassification = item.classification || 'unsorted';
+  const hasNavigationFooter = Boolean(allVisitItems && allVisitItems.length > 1 && onNavigate && navigationIndex >= 0);
+  const previousArtwork = navigationIndex >= 0 && allVisitItems && allVisitItems.length > 1
+    ? allVisitItems[(navigationIndex - 1 + allVisitItems.length) % allVisitItems.length]
+    : null;
+  const nextArtwork = navigationIndex >= 0 && allVisitItems && allVisitItems.length > 1
+    ? allVisitItems[(navigationIndex + 1) % allVisitItems.length]
+    : null;
 
   // Focus first input when entering edit mode
   useEffect(() => {
@@ -602,18 +615,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
         {/* ── MOBILE HEADER BAR (mobile only): prev/next + close ── */}
         {!isInline && (
           <div className="sm:hidden flex items-center justify-between px-2 shrink-0 bg-white border-b border-neutral-100" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0.5rem)', paddingBottom: '0.25rem' }}>
-            {/* Left: Prev or spacer */}
-            {allVisitItems && allVisitItems.length > 1 && onNavigate ? (
-              <button
-                onClick={() => onNavigate('prev')}
-                className="flex items-center gap-1 text-neutral-500 active:text-neutral-900 transition-colors px-2 py-1.5"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Prev</span>
-              </button>
-            ) : (
-              <div className="w-16" />
-            )}
+            <div className="w-16" />
 
             {/* Center: Back button (replaces ✕) */}
             <button
@@ -622,25 +624,15 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="19 12 5 12"/><polyline points="12 19 5 12 12 5"/></svg>
               <span className="text-[9px] tracking-[0.2em] uppercase font-bold">Back</span>
-              {allVisitItems && allVisitItems.length > 1 && (
+              {allVisitItems && allVisitItems.length > 1 && navigationIndex >= 0 && (
                 <span className="text-[8px] font-mono text-neutral-400 tracking-wider">
-                  {allVisitItems.findIndex(i => i.id === item.id) + 1}/{allVisitItems.length}
+                  {navigationIndex + 1}/{allVisitItems.length}
                 </span>
               )}
             </button>
 
-            {/* Right: Next (if multi-item) + overflow "..." menu */}
+            {/* Right: overflow "..." menu */}
             <div className="flex items-center gap-1 min-w-[4rem] justify-end">
-              {allVisitItems && allVisitItems.length > 1 && onNavigate && (
-                <button
-                  onClick={() => onNavigate('next')}
-                  className="flex items-center gap-0.5 text-neutral-500 active:text-neutral-900 transition-colors px-1 py-1.5"
-                >
-                  <span className="text-[10px] tracking-[0.2em] uppercase font-bold">Next</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-              )}
-              {/* Overflow menu — edit, refresh, retry, delete */}
               {overflowMenu}
             </div>
           </div>
@@ -772,7 +764,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
             {/* Right panel scrollable content */}
             {rightMode === 'community' ? (
-              <div className="sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-5 sm:p-7 pb-20 sm:pb-7 animate-in fade-in duration-200">
+              <div className={`sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-5 sm:p-7 animate-in fade-in duration-200 ${hasNavigationFooter ? 'pb-28 sm:pb-32' : 'pb-20 sm:pb-7'}`}>
                 <div className="flex items-center justify-between mb-5">
                   <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">Community</p>
                   {community?.entity && community.entity.instance_count > 0 && (
@@ -863,7 +855,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 )}
               </div>
             ) : rightMode === 'metadata' ? (
-              <div className="sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-5 sm:p-7 space-y-5 sm:space-y-7 pb-20 sm:pb-7">
+              <div className={`sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-5 sm:p-7 space-y-5 sm:space-y-7 ${hasNavigationFooter ? 'pb-28 sm:pb-32' : 'pb-20 sm:pb-7'}`}>
 
                 {/* Error state */}
                 {!item.isAnalyzing && item.streamingText && !item.artistName && (
@@ -927,44 +919,46 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                     </div>
                   </div>
                 ) : (displayArtist || displayTitle || displayDate || displayMedium) ? (
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="overflow-x-auto min-w-0 flex-1" style={{ scrollbarWidth: 'none' }}>
-                      <div className="flex items-baseline gap-0 whitespace-nowrap">
+                  <div className="space-y-3 min-w-0">
+                    <div className="min-w-0">
+                      {displayTitle && (
+                        <div className="text-[20px] sm:text-[24px] font-serif italic text-neutral-700 leading-tight break-words">
+                          {editValues.title || displayTitle}
+                        </div>
+                      )}
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-neutral-400">
                         {displayArtist && (
                           <span
-                            className="text-[16px] sm:text-[19px] font-medium text-neutral-900 tracking-tight"
+                            className="text-[15px] sm:text-[17px] font-medium text-neutral-900 tracking-tight"
                             style={(item.artistEntityId || item.artworkId) ? { cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 } : undefined}
                             onClick={(item.artistEntityId || item.artworkId) ? (e) => { e.stopPropagation(); onNavigateToArtist?.(item.artistEntityId, item.artworkId, item.artistName); } : undefined}
                           >
                             {editValues.artist || displayArtist}
                           </span>
                         )}
-                        {displayTitle && (
-                          <>
-                            {displayArtist && <span className="text-neutral-300 mx-2 text-[14px]">·</span>}
-                            <span className="text-[14px] sm:text-[16px] font-serif italic text-neutral-500">
-                              {editValues.title || displayTitle}
-                            </span>
-                          </>
-                        )}
                         {displayDate && (
                           <>
-                            <span className="text-neutral-300 mx-2 text-[13px]">·</span>
-                            <span className="text-[12px] text-neutral-400">
+                            {displayArtist && <span className="text-neutral-300">·</span>}
+                            <span>
                               {editValues.date ? formatDisplayDate(editValues.date) : formatDisplayDate(displayDate)}
                             </span>
                           </>
                         )}
                         {displayMedium && (
                           <>
-                            <span className="text-neutral-300 mx-2 text-[13px]">·</span>
-                            <span className="text-[12px] text-neutral-400">
-                              {editValues.medium || displayMedium}
-                            </span>
+                            {(displayArtist || displayDate) && <span className="text-neutral-300">·</span>}
+                            <span>{editValues.medium || displayMedium}</span>
                           </>
                         )}
                       </div>
                     </div>
+                    {item.artworkId && onUpdateClassification && !item.isAnalyzing && (
+                      <ArtworkClassificationChip
+                        classification={currentClassification}
+                        onChange={(classification) => onUpdateClassification(item.id, classification)}
+                        className="px-3 py-1.5 text-[11px] font-semibold shadow-none"
+                      />
+                    )}
                   </div>
                 ) : null}
 
@@ -1092,7 +1086,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
               </div>
             ) : (
               /* ── CHAT MODE ── */
-              <div ref={scrollRef} className="sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth pb-20 sm:pb-6">
+              <div ref={scrollRef} className={`sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth ${hasNavigationFooter ? 'pb-28 sm:pb-32' : 'pb-20 sm:pb-6'}`}>
                 {messages.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
                     <div className="w-12 h-px bg-neutral-200 mb-6"></div>
@@ -1140,31 +1134,31 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
           </div>
         </div>
 
-
-        {/* Navigation Arrows (visit sessions) — desktop only */}
-        {allVisitItems && allVisitItems.length > 1 && onNavigate && (
-          <div className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 flex-col items-center space-y-2 z-50 pointer-events-none">
-            <button
-              onClick={() => onNavigate('prev')}
-              className="w-12 h-12 rounded-full bg-neutral-900/80 backdrop-blur-md border border-white/20 text-white flex flex-col items-center justify-center hover:bg-neutral-900 transition-all hover:scale-110 group pointer-events-auto shadow-2xl"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
-              <span className="absolute right-16 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[8px] uppercase tracking-[0.3em] font-bold bg-neutral-900 text-white px-3 py-1.5 rounded-full shadow-2xl">Previous Piece</span>
-            </button>
-
-            <div className="bg-emerald-50/90 backdrop-blur-sm px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm pointer-events-auto">
-              <span className="text-[9px] font-mono text-emerald-600 tracking-[0.2em] font-bold whitespace-nowrap">
-                PIECE {allVisitItems.findIndex(i => i.id === item.id) + 1}/{allVisitItems.length}
-              </span>
+        {allVisitItems && allVisitItems.length > 1 && onNavigate && navigationIndex >= 0 && (
+          <div className="absolute inset-x-0 bottom-0 z-40 hidden sm:block px-6 pb-5">
+            <div className="mx-auto flex w-full max-w-[760px] items-center gap-3 rounded-[24px] border border-neutral-200 bg-white/96 px-4 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)] backdrop-blur">
+              <button
+                onClick={() => onNavigate('prev')}
+                className="min-w-0 flex-1 text-left text-[13px] text-neutral-600 transition-colors hover:text-neutral-900"
+              >
+                <span className="mr-1 text-neutral-400">Prev:</span>
+                <span className="truncate align-bottom inline-block max-w-full font-medium text-neutral-900">
+                  {previousArtwork?.artworkName || previousArtwork?.artistName || 'Previous artwork'}
+                </span>
+              </button>
+              <div className="shrink-0 text-[11px] font-mono tracking-[0.2em] text-neutral-400">
+                {navigationIndex + 1}/{allVisitItems.length}
+              </div>
+              <button
+                onClick={() => onNavigate('next')}
+                className="min-w-0 flex-1 text-right text-[13px] text-neutral-600 transition-colors hover:text-neutral-900"
+              >
+                <span className="mr-1 text-neutral-400">Next:</span>
+                <span className="truncate align-bottom inline-block max-w-full font-medium text-neutral-900">
+                  {nextArtwork?.artworkName || nextArtwork?.artistName || 'Next artwork'}
+                </span>
+              </button>
             </div>
-
-            <button
-              onClick={() => onNavigate('next')}
-              className="w-12 h-12 rounded-full bg-neutral-900/80 backdrop-blur-md border border-white/20 text-white flex flex-col items-center justify-center hover:bg-neutral-900 transition-all hover:scale-110 group pointer-events-auto shadow-2xl"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-              <span className="absolute right-16 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[8px] uppercase tracking-[0.3em] font-bold bg-neutral-900 text-white px-3 py-1.5 rounded-full shadow-2xl">Next Piece</span>
-            </button>
           </div>
         )}
     </div>

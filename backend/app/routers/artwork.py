@@ -12,8 +12,8 @@ from datetime import datetime
 import anyio
 
 from app.database.connection import get_db, SessionLocal
-from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SkillEvent, ArtworkEntity, ArtistEntity, PublicComment, SessionMessage
-from app.models.artwork import AIProvider, UpdateArtworkRequest
+from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SkillEvent, ArtworkEntity, ArtistEntity, PublicComment, SessionMessage, TasteProfile
+from app.models.artwork import AIProvider, UpdateArtworkRequest, UpdateArtworkClassificationRequest
 from pydantic import BaseModel
 import base64
 import httpx
@@ -31,6 +31,15 @@ from app.utils.conversation_storage import ConversationMessage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+CLASSIFICATION_VALUES = {"unsorted", "love", "respect", "not_for_me"}
+TASTE_DIMENSIONS = [
+    ("figurative_abstract", "dim_figurative_abstract", "具象", "抽象"),
+    ("emotive_conceptual", "dim_emotive_conceptual", "感性", "理性"),
+    ("serene_intense", "dim_serene_intense", "宁静", "张力"),
+    ("classical_avantgarde", "dim_classical_avantgarde", "经典", "先锋"),
+    ("playful_serious", "dim_playful_serious", "玩味", "严肃"),
+]
+PROFILE_MIN_SAMPLE = 5
 
 
 def _normalize(s: str) -> str:
@@ -75,6 +84,194 @@ def upsert_artist_entity(db, artist_name: str) -> "ArtistEntity":
         )
         db.add(entity)
     return entity
+
+
+def _blank_vector() -> Dict[str, float]:
+    return {key: 0.0 for key, *_ in TASTE_DIMENSIONS}
+
+
+def _vector_from_rows(rows: List[SavedArtwork]) -> Dict[str, float]:
+    vector: Dict[str, float] = {}
+    for dim_key, dim_attr, *_ in TASTE_DIMENSIONS:
+        vals: List[float] = []
+        for artwork in rows:
+            entity = artwork.artwork_entity
+            if not entity or entity.dim_status != "done":
+                continue
+            val = getattr(entity, dim_attr)
+            if val is not None:
+                vals.append(float(val))
+        vector[dim_key] = round(sum(vals) / len(vals), 3) if vals else 0.0
+    return vector
+
+
+def _derive_taste_vector(love_vector: Dict[str, float], reject_vector: Dict[str, float]) -> Dict[str, float]:
+    taste_vector: Dict[str, float] = {}
+    for dim_key, *_ in TASTE_DIMENSIONS:
+        raw = float(love_vector.get(dim_key, 0.0)) - float(reject_vector.get(dim_key, 0.0))
+        normalized = max(-1.0, min(1.0, raw / 2.0))
+        taste_vector[dim_key] = round(normalized, 3)
+    return taste_vector
+
+
+def _build_taste_examples(artworks: List[SavedArtwork], taste_vector: Dict[str, float]) -> Dict[str, Any]:
+    examples: Dict[str, Any] = {}
+    for dim_key, dim_attr, left_label, right_label in TASTE_DIMENSIONS:
+        score = taste_vector.get(dim_key, 0.0)
+        if abs(score) < 0.15:
+            continue
+        dominant_sign = 1 if score >= 0 else -1
+        candidates: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        sorted_rows = sorted(
+            artworks,
+            key=lambda art: -((getattr(art.artwork_entity, dim_attr, 0) or 0) * dominant_sign) if art.artwork_entity else 0
+        )
+        for artwork in sorted_rows:
+            entity = artwork.artwork_entity
+            if not entity or entity.dim_status != "done":
+                continue
+            dim_score = getattr(entity, dim_attr)
+            if dim_score is None or dim_score * dominant_sign <= 0:
+                continue
+            name_key = (artwork.artwork_name or "").lower()
+            if name_key in seen:
+                continue
+            seen.add(name_key)
+            candidates.append({
+                "artwork_id": artwork.id,
+                "photo_url": artwork.photo_uri,
+                "artist_name": artwork.artist_name,
+                "artwork_name": artwork.artwork_name,
+                "dim_score": dim_score,
+                "classification": artwork.classification or "unsorted",
+            })
+            if len(candidates) >= 3:
+                break
+        if candidates:
+            examples[dim_key] = {
+                "dominant_pole": right_label if dominant_sign > 0 else left_label,
+                "other_pole": left_label if dominant_sign > 0 else right_label,
+                "examples": candidates,
+            }
+    return examples
+
+
+def _get_profile_counts(user_id: str, db: Session) -> Dict[str, int]:
+    counts = {key: 0 for key in CLASSIFICATION_VALUES}
+    rows = (
+        db.query(SavedArtwork.classification, func.count(SavedArtwork.id))
+        .filter(SavedArtwork.user_id == user_id)
+        .group_by(SavedArtwork.classification)
+        .all()
+    )
+    for classification, count in rows:
+        counts[classification or "unsorted"] = count
+    return counts
+
+
+async def _generate_taste_narrative(
+    taste_vector: Dict[str, float],
+    loved_artworks: List[SavedArtwork],
+    rejected_artworks: List[SavedArtwork],
+    respected_artworks: List[SavedArtwork],
+) -> str:
+    loved = [f"{art.artwork_name} by {art.artist_name}" for art in loved_artworks[:6]]
+    rejected = [f"{art.artwork_name} by {art.artist_name}" for art in rejected_artworks[:6]]
+    respected = [f"{art.artwork_name} by {art.artist_name}" for art in respected_artworks[:6]]
+    vector_text = ", ".join(f"{k}: {v}" for k, v in taste_vector.items())
+    prompt = f"""
+You are writing a concise personal taste profile for an art exploration app.
+
+Taste vector:
+{vector_text}
+
+Loved artworks:
+{json.dumps(loved, ensure_ascii=False)}
+
+Rejected artworks:
+{json.dumps(rejected, ensure_ascii=False)}
+
+Respected artworks (context only, not preference evidence):
+{json.dumps(respected, ensure_ascii=False)}
+
+Write 2 short paragraphs in a warm but analytical tone explaining the user's taste. Distinguish clearly between what they love and what they merely respect. Do not mention vectors or numeric scores.
+""".strip()
+    try:
+        ai_provider = determine_ai_provider(None)
+        ai_service = AIServiceFactory.get_service(ai_provider)
+        response = await ai_service.ai_client.call_text_only(prompt, max_tokens=500, temperature=0.7)
+        return response.strip()
+    except Exception as exc:
+        logger.warning("Taste profile narrative generation failed: %s", exc)
+        loved_phrase = "、".join(loved[:3]) if loved else "目前还没有明确喜欢的作品"
+        rejected_phrase = "、".join(rejected[:3]) if rejected else "目前还没有明确排斥的作品"
+        respected_phrase = "、".join(respected[:2]) if respected else "暂无"
+        return (
+            f"你偏爱的作品集中在：{loved_phrase}。这些选择共同勾勒出你当前的审美倾向。"
+            f"\n\n你明确不太投入的作品包括：{rejected_phrase}。你也会认可某些作品的重要性，例如：{respected_phrase}，但这种尊重并不等于个人偏爱。"
+        )
+
+
+def _mark_taste_profile_outdated(user_id: Optional[str], db: Session) -> bool:
+    if not user_id:
+        return False
+    profile = db.query(TasteProfile).filter(TasteProfile.user_id == user_id).first()
+    if not profile or profile.status != "generated":
+        return False
+    profile.status = "outdated"
+    profile.is_outdated = 1
+    profile.outdated_at = datetime.utcnow()
+    return True
+
+
+def _get_or_create_taste_profile(user_id: str, db: Session) -> TasteProfile:
+    profile = db.query(TasteProfile).filter(TasteProfile.user_id == user_id).first()
+    if profile:
+        return profile
+    profile = TasteProfile(user_id=user_id)
+    db.add(profile)
+    db.flush()
+    return profile
+
+
+def _build_taste_profile_response(user_id: str, db: Session) -> Dict[str, Any]:
+    counts = _get_profile_counts(user_id, db)
+    eligible_count = counts.get("love", 0) + counts.get("not_for_me", 0)
+    unsorted_count = counts.get("unsorted", 0)
+    can_generate = eligible_count >= PROFILE_MIN_SAMPLE
+    profile = db.query(TasteProfile).filter(TasteProfile.user_id == user_id).first()
+
+    response: Dict[str, Any] = {
+        "user_id": user_id,
+        "status": "ready" if can_generate else "not_ready",
+        "eligible_count": eligible_count,
+        "required_count": PROFILE_MIN_SAMPLE,
+        "unsorted_count": unsorted_count,
+        "love_count": counts.get("love", 0),
+        "reject_count": counts.get("not_for_me", 0),
+        "respect_count": counts.get("respect", 0),
+        "is_generated": bool(profile and profile.generated_at),
+        "is_outdated": bool(profile and profile.is_outdated),
+        "can_generate": can_generate,
+    }
+
+    if profile and profile.generated_at:
+        persisted = profile.to_dict()
+        for key in [
+            "generated_at",
+            "outdated_at",
+            "love_vector",
+            "reject_vector",
+            "taste_vector",
+            "source_artwork_ids",
+            "narrative_summary",
+            "created_at",
+            "updated_at",
+        ]:
+            response[key] = persisted.get(key)
+        response["status"] = profile.status or response["status"]
+    return response
 
 
 # Tasks that survive client disconnect — prevents garbage collection until done
@@ -1957,6 +2154,10 @@ def _match_archetype(scores: dict) -> dict | None:
     return best
 
 
+class GenerateTasteProfileRequest(BaseModel):
+    user_id: str
+
+
 @router.post("/entities/{entity_id}/analyze-dimensions")
 async def analyze_entity_dimensions(entity_id: str, db: Session = Depends(get_db)):
     """Score an ArtworkEntity on 5 taste dimensions via LLM. Idempotent."""
@@ -1988,141 +2189,83 @@ async def analyze_entity_dimensions(entity_id: str, db: Session = Depends(get_db
 
 @router.get("/taste-profile")
 async def get_taste_profile(user_id: str, db: Session = Depends(get_db)):
-    """Return taste archetype profile derived from dimension scores of user's saved artworks."""
-    from sqlalchemy import func as sqlfunc
+    """Return the persisted taste profile snapshot and current eligibility state."""
+    response = _build_taste_profile_response(user_id, db)
+    response["total_artworks"] = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).count()
 
-    total_artworks = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).count()
+    if response.get("is_generated"):
+        classified_rows = (
+            db.query(SavedArtwork)
+            .filter(
+                SavedArtwork.user_id == user_id,
+                SavedArtwork.classification.in_(["love", "not_for_me", "respect"]),
+            )
+            .all()
+        )
+        response["dimension_examples"] = _build_taste_examples(
+            classified_rows,
+            response.get("taste_vector") or {},
+        )
 
-    # Join saved artworks → entities with completed dimension analysis
-    rows = (
-        db.query(
-            ArtworkEntity.dim_figurative_abstract,
-            ArtworkEntity.dim_emotive_conceptual,
-            ArtworkEntity.dim_serene_intense,
-            ArtworkEntity.dim_classical_avantgarde,
-            ArtworkEntity.dim_playful_serious,
-            SavedArtwork.id,
-            SavedArtwork.photo_uri,
-            SavedArtwork.artist_name,
-            SavedArtwork.artwork_name,
+    return response
+
+
+@router.post("/taste-profile/generate")
+async def generate_taste_profile(
+    request: GenerateTasteProfileRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Generate or regenerate a persisted taste profile snapshot for a user."""
+    user_id = request.user_id
+    rows = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="No artworks found for this user")
+
+    loved_artworks = [art for art in rows if (art.classification or "unsorted") == "love"]
+    rejected_artworks = [art for art in rows if (art.classification or "unsorted") == "not_for_me"]
+    respected_artworks = [art for art in rows if (art.classification or "unsorted") == "respect"]
+
+    eligible_count = len(loved_artworks) + len(rejected_artworks)
+    if eligible_count < PROFILE_MIN_SAMPLE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"At least {PROFILE_MIN_SAMPLE} love or not-for-me classifications are required",
         )
-        .join(SavedArtwork, SavedArtwork.artwork_entity_id == ArtworkEntity.id)
-        .filter(
-            SavedArtwork.user_id == user_id,
-            ArtworkEntity.dim_status == "done",
-        )
-        .all()
+
+    love_vector = _vector_from_rows(loved_artworks)
+    reject_vector = _vector_from_rows(rejected_artworks)
+    taste_vector = _derive_taste_vector(love_vector, reject_vector)
+    narrative_summary = await _generate_taste_narrative(
+        taste_vector,
+        loved_artworks,
+        rejected_artworks,
+        respected_artworks,
     )
 
-    analyzed_count = len(rows)
-    MIN_SAMPLE = 5
+    profile = _get_or_create_taste_profile(user_id, db)
+    profile.status = "generated"
+    profile.eligible_count = eligible_count
+    profile.required_count = PROFILE_MIN_SAMPLE
+    profile.love_count = len(loved_artworks)
+    profile.reject_count = len(rejected_artworks)
+    profile.respect_count = len(respected_artworks)
+    profile.is_outdated = 0
+    profile.generated_at = datetime.utcnow()
+    profile.outdated_at = None
+    profile.love_vector = love_vector
+    profile.reject_vector = reject_vector
+    profile.taste_vector = taste_vector
+    profile.source_artwork_ids = [art.id for art in (loved_artworks + rejected_artworks + respected_artworks)]
+    profile.narrative_summary = narrative_summary
+    db.commit()
 
-    if analyzed_count < MIN_SAMPLE:
-        return {
-            "user_id": user_id,
-            "total_artworks": total_artworks,
-            "analyzed_count": analyzed_count,
-            "min_sample": MIN_SAMPLE,
-            "status": "insufficient_data",
-            "archetype": None,
-            "dimension_scores": None,
-        }
-
-    # Compute per-dimension averages (exclude None)
-    def avg_dim(vals):
-        clean = [v for v in vals if v is not None]
-        return round(sum(clean) / len(clean), 3) if clean else None
-
-    dim_scores = {
-        "figurative_abstract":  avg_dim([r[0] for r in rows]),
-        "emotive_conceptual":   avg_dim([r[1] for r in rows]),
-        "serene_intense":       avg_dim([r[2] for r in rows]),
-        "classical_avantgarde": avg_dim([r[3] for r in rows]),
-        "playful_serious":      avg_dim([r[4] for r in rows]),
-    }
-
-    archetype = _match_archetype(dim_scores)
-
-    # Per-dimension: pick up to 3 artworks that most strongly represent the dominant pole
-    _DIM_COL_IDX = {
-        "figurative_abstract": 0,
-        "emotive_conceptual": 1,
-        "serene_intense": 2,
-        "classical_avantgarde": 3,
-        "playful_serious": 4,
-    }
-    _DIM_POLES = [
-        ("figurative_abstract",  "具象", "抽象"),
-        ("emotive_conceptual",   "感性", "理性"),
-        ("serene_intense",       "宁静", "张力"),
-        ("classical_avantgarde", "经典", "先锋"),
-        ("playful_serious",      "玩味", "严肃"),
-    ]
-
-    THRESHOLD = 0.3
-    dimension_examples: dict = {}
-    for dim_key, left_label, right_label in _DIM_POLES:
-        avg = dim_scores.get(dim_key)
-        if avg is None:
-            continue
-        col_idx = _DIM_COL_IDX[dim_key]
-        # Dominant direction: positive = right pole, negative = left pole
-        dominant_sign = 1 if avg >= 0 else -1
-        if abs(avg) < THRESHOLD:
-            continue  # neutral — no clear pole to illustrate
-        # Sort by alignment with dominant pole (most extreme first), dedupe by artwork_name
-        seen_names: set = set()
-        candidates = []
-        for r in sorted(rows, key=lambda r: -(r[col_idx] or 0) * dominant_sign):
-            score = r[col_idx]
-            if score is None or score * dominant_sign <= 0:
-                continue
-            name_key = (r[8] or "").lower()  # artwork_name
-            if name_key in seen_names:
-                continue
-            seen_names.add(name_key)
-            candidates.append(r)
-
-        pole_label = right_label if dominant_sign > 0 else left_label
-        other_label = left_label if dominant_sign > 0 else right_label
-        examples = []
-        for r in candidates:
-            examples.append({
-                "artwork_id": r[5],
-                "photo_url": r[6],  # already a public URL in prod
-                "artist_name": r[7],
-                "artwork_name": r[8],
-                "dim_score": r[col_idx],
-            })
-        dimension_examples[dim_key] = {
-            "dominant_pole": pole_label,
-            "other_pole": other_label,
-            "examples": examples,
-        }
-
-    # Pending entities (not yet analyzed) belonging to this user
-    pending_count = (
-        db.query(ArtworkEntity)
-        .join(SavedArtwork, SavedArtwork.artwork_entity_id == ArtworkEntity.id)
-        .filter(
-            SavedArtwork.user_id == user_id,
-            ArtworkEntity.dim_status.in_(["pending", "processing", "failed"]),
-        )
-        .count()
+    response = _build_taste_profile_response(user_id, db)
+    response["dimension_examples"] = _build_taste_examples(
+        loved_artworks + rejected_artworks + respected_artworks,
+        taste_vector,
     )
-
-    return {
-        "user_id": user_id,
-        "total_artworks": total_artworks,
-        "analyzed_count": analyzed_count,
-        "pending_count": pending_count,
-        "min_sample": MIN_SAMPLE,
-        "status": "ready" if analyzed_count >= MIN_SAMPLE else "insufficient_data",
-        "dimension_scores": dim_scores,
-        "dimension_examples": dimension_examples,
-        "archetype": archetype,
-        "low_sample_warning": analyzed_count < 10,
-    }
+    response["total_artworks"] = len(rows)
+    return response
 
 
 @router.post("/exhibition-chat")
@@ -2220,6 +2363,7 @@ class InsightsRequest(BaseModel):
     artwork_name: str
     language: Optional[str] = None
 
+
 @router.post("/artwork-insights")
 async def artwork_insights(
     request: InsightsRequest = Body(...),
@@ -2244,6 +2388,7 @@ async def artwork_insights(
 
 class GenerateSpeechRequest(BaseModel):
     text: str
+
 
 @router.post("/generate-speech")
 async def generate_speech(
@@ -2616,6 +2761,34 @@ async def update_artwork(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update artwork: {str(e)}")
+
+
+@router.patch("/artworks/{artwork_id}/classification")
+async def update_artwork_classification(
+    artwork_id: str,
+    request: UpdateArtworkClassificationRequest,
+    db: Session = Depends(get_db)
+):
+    """Update the user's classification for a saved artwork."""
+    classification = (request.classification or "").strip().lower()
+    if classification not in CLASSIFICATION_VALUES:
+        raise HTTPException(status_code=400, detail="Invalid classification")
+
+    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+    previous = artwork.classification or "unsorted"
+    artwork.classification = classification
+    artwork.classification_updated_at = datetime.utcnow()
+    invalidated = previous != classification and _mark_taste_profile_outdated(artwork.user_id, db)
+    db.commit()
+
+    return {
+        "artwork_id": artwork.id,
+        "classification": artwork.classification,
+        "profile_invalidated": invalidated,
+    }
 
 
 @router.post("/artworks/{artwork_id}/reanalyze")

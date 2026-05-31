@@ -83,6 +83,8 @@ async def lifespan(app: FastAPI):
                 _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS artwork_entity_id VARCHAR"))
                 _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS artist_entity_id VARCHAR"))
                 _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS insights JSONB"))
+                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS classification VARCHAR(20) NOT NULL DEFAULT 'unsorted'"))
+                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS classification_updated_at TIMESTAMP"))
                 _conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS skill_events (
                         id SERIAL PRIMARY KEY,
@@ -91,6 +93,27 @@ async def lifespan(app: FastAPI):
                         skill_name VARCHAR NOT NULL,
                         event_type VARCHAR NOT NULL,
                         created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """))
+                _conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS taste_profiles (
+                        user_id VARCHAR PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+                        status VARCHAR(20) NOT NULL DEFAULT 'not_ready',
+                        eligible_count INTEGER NOT NULL DEFAULT 0,
+                        required_count INTEGER NOT NULL DEFAULT 5,
+                        love_count INTEGER NOT NULL DEFAULT 0,
+                        reject_count INTEGER NOT NULL DEFAULT 0,
+                        respect_count INTEGER NOT NULL DEFAULT 0,
+                        is_outdated INTEGER NOT NULL DEFAULT 0,
+                        generated_at TIMESTAMP NULL,
+                        outdated_at TIMESTAMP NULL,
+                        love_vector JSONB NULL,
+                        reject_vector JSONB NULL,
+                        taste_vector JSONB NULL,
+                        source_artwork_ids JSONB NULL,
+                        narrative_summary TEXT NULL,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        updated_at TIMESTAMP DEFAULT NOW()
                     )
                 """))
                 _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_user_id ON saved_artworks(user_id)"))

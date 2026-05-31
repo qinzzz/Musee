@@ -19,7 +19,7 @@ interface Props {
   filteredVisitId: string | null;
   isAnalyzing: boolean;
   boards?: Album[];
-  onInterpret: (item: GalleryItem) => void;
+  onInterpret: (item: GalleryItem, contextItems?: GalleryItem[]) => void;
   onDelete: (id: string) => void;
   onRequestCreateBoard: (options?: { itemIds?: string[]; onCreated?: (board: Album) => void }) => void;
   onAddToBoard: (boardId: string, itemIds: string[]) => Promise<void>;
@@ -77,7 +77,7 @@ const GridView: React.FC<Props> = ({
                   toggleSelection(item.id);
                   return;
                 }
-                onInterpret(item);
+                onInterpret(item, displayItems);
               }}
             >
               <div className="absolute inset-0 overflow-hidden rounded">

@@ -1,4 +1,4 @@
-import { Message, ArtworkSkill, ReferenceItem, Album } from './types';
+import { Message, ArtworkSkill, ReferenceItem, Album, ArtworkClassification, TasteProfileSnapshot } from './types';
 
 /**
  * Suggested topic API endpoint
@@ -1030,9 +1030,25 @@ export async function deleteCollection(collectionId: string): Promise<void> {
   }
 }
 
-export async function getTasteProfile(userId: string): Promise<any> {
+export async function getTasteProfile(userId: string): Promise<TasteProfileSnapshot> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/taste-profile?user_id=${encodeURIComponent(userId)}`, {});
   if (!response.ok) throw new Error('Failed to load taste profile');
+  return response.json();
+}
+
+export async function generateTasteProfile(userId: string): Promise<TasteProfileSnapshot> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/taste-profile/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId }),
+    timeout: 120000,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Failed to generate taste profile');
+  }
+
   return response.json();
 }
 
@@ -1176,6 +1192,24 @@ export async function updateArtwork(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}
+
+export async function updateArtworkClassification(
+  artworkId: string,
+  classification: ArtworkClassification
+): Promise<{ artwork_id: string; classification: ArtworkClassification; profile_invalidated: boolean }> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}/classification`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ classification }),
   });
 
   if (!response.ok) {

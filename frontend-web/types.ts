@@ -36,6 +36,8 @@ export interface ArtistEntity {
   bio_status: string;
 }
 
+export type ArtworkClassification = 'unsorted' | 'love' | 'respect' | 'not_for_me';
+
 export interface GalleryItem {
   id: string;
   url: string;
@@ -61,6 +63,7 @@ export interface GalleryItem {
   referenceUrls?: ReferenceItem[];
   insights?: Array<{ title: string; text: string }>;
   artistEntityId?: string;
+  classification?: ArtworkClassification;
 }
 
 export interface Visit {
@@ -100,6 +103,36 @@ export interface Album {
   name: string;
   description?: string | null;
   itemIds: string[];
+}
+
+export interface TasteProfileSnapshot {
+  status: string;
+  eligible_count: number;
+  required_count: number;
+  unsorted_count: number;
+  is_generated: boolean;
+  is_outdated: boolean;
+  can_generate: boolean;
+  generated_at?: string | null;
+  love_count: number;
+  reject_count: number;
+  respect_count: number;
+  love_vector?: Record<string, number>;
+  reject_vector?: Record<string, number>;
+  taste_vector?: Record<string, number>;
+  narrative_summary?: string | null;
+  dimension_examples?: Record<string, {
+    dominant_pole: string;
+    other_pole: string;
+    examples: Array<{
+      artwork_id: string;
+      photo_url: string | null;
+      artist_name: string;
+      artwork_name: string;
+      dim_score: number;
+      classification?: ArtworkClassification;
+    }>;
+  }>;
 }
 
 export enum ViewMode {

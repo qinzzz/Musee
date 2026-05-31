@@ -20,3 +20,7 @@ class UpdateArtworkRequest(BaseModel):
     # Convenience fields — merged into params on the backend
     date: Optional[str] = None
     medium: Optional[str] = None
+
+
+class UpdateArtworkClassificationRequest(BaseModel):
+    classification: str
