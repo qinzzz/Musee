@@ -12,7 +12,7 @@ from datetime import datetime
 import anyio
 
 from app.database.connection import get_db, SessionLocal
-from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SkillEvent, ArtworkEntity, ArtistEntity, PublicComment
+from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SkillEvent, ArtworkEntity, ArtistEntity, PublicComment, SessionMessage
 from app.models.artwork import AIProvider, UpdateArtworkRequest
 from pydantic import BaseModel
 import base64
@@ -327,8 +327,7 @@ async def analyze_artist(
 
         ai_service = AIServiceFactory.get_service(ai_provider)
 
-        # Run Vision API and session context fetch in parallel
-        session_context = None
+        # Vision hint + session context (used for identification only, not description)
         (vision_hint, vision_ref_urls), session_context = await asyncio.gather(
             get_vision_hint(image_bytes),
             get_session_context(session_id) if session_id else asyncio.sleep(0, result=None),
@@ -519,8 +518,10 @@ async def analyze_artist(
                 background_tasks.add_task(_run_dimension_analysis_bg, _entity_id_fast)
             if _artist_entity_id_fast and background_tasks:
                 background_tasks.add_task(_run_artist_bio_bg, _artist_entity_id_fast)
-            if artwork_id and artist_name and artist_name != "Unknown Artist" and background_tasks:
-                background_tasks.add_task(_run_insights_bg, artwork_id, artist_name, artwork_name, language)
+            if artwork_id and artist_name and artist_name != "Unknown Artist":
+                _ui = asyncio.create_task(_do_insights(artwork_id, artist_name, artwork_name, language))
+                _active_tasks.add(_ui)
+                _ui.add_done_callback(_active_tasks.discard)
 
             # Update session narrative in background
             if session_id and background_tasks:
@@ -659,6 +660,7 @@ async def analyze_artist_stream(
         try:
             t_ai_call = time.time()
 
+            # Vision hint + session context (used for identification only, not description)
             (vision_hint, vision_ref_urls), session_context = await asyncio.gather(
                 get_vision_hint(image_bytes),
                 get_session_context(session_id) if session_id else asyncio.sleep(0, result=None),
@@ -1510,11 +1512,18 @@ class ExhibitionItem(BaseModel):
     id: str
     url: str
     keywords: List[str] = []
+    artist_name: Optional[str] = None
+    artwork_name: Optional[str] = None
+    description: Optional[str] = None
+    date: Optional[str] = None
+    medium: Optional[str] = None
 
 class ExhibitionChatRequest(BaseModel):
     items: List[ExhibitionItem]
     conversation_history: List[Dict[str, str]]  # [{role, content}]
     new_message: str
+
+
 
 
 class UpdateSessionRequest(BaseModel):
@@ -1827,11 +1836,6 @@ async def _do_insights(artwork_id: str, artist_name: str, artwork_name: str, lan
         logger.warning("Insights bg task failed for %s: %s", artwork_id, _e)
 
 
-def _run_insights_bg(artwork_id: str, artist_name: str, artwork_name: str, language: Optional[str]) -> None:
-    """Sync wrapper for use as a FastAPI background task (runs in threadpool)."""
-    import asyncio as _asyncio
-    _asyncio.run(_do_insights(artwork_id, artist_name, artwork_name, language))
-
 
 async def _do_artist_bio(artist_entity_id: str) -> None:
     """Fetch and persist bio for one ArtistEntity from Wikidata/Wikipedia."""
@@ -1858,6 +1862,7 @@ async def _do_artist_bio(artist_entity_id: str) -> None:
                 entity.birth_year = bio_data.get("birth_year")
                 entity.death_year = bio_data.get("death_year")
                 entity.movements = bio_data.get("movements") or []
+                entity.profile_image_url = bio_data.get("profile_image_url")
                 entity.bio_status = "done"
                 db.commit()
         logger.info("Artist bio done for %s (%s)", artist_entity_id, artist_name)
@@ -2823,6 +2828,70 @@ async def batch_delete_artworks(
         raise HTTPException(status_code=500, detail=f"Batch delete failed: {str(e)}")
 
 
+class SessionMessageIn(BaseModel):
+    id: Optional[str] = None
+    role: str                          # 'user' | 'model'
+    type: str = 'text'                 # 'text' | 'artwork_capture' | 'artwork_card'
+    content: Optional[str] = None
+    artwork_id: Optional[str] = None
+    created_at: Optional[int] = None   # ms epoch from frontend
+
+
+@router.get("/sessions/{session_id}/messages")
+async def get_session_messages(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Return all messages for a session in sequence order."""
+    msgs = (
+        db.query(SessionMessage)
+        .filter(SessionMessage.session_id == session_id)
+        .order_by(SessionMessage.sequence_number)
+        .all()
+    )
+    return [m.to_dict() for m in msgs]
+
+
+@router.post("/sessions/{session_id}/messages")
+async def append_session_messages(
+    session_id: str,
+    messages: List[SessionMessageIn],
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Append a batch of messages to a session. Skips any id already present."""
+    if not messages:
+        return {"inserted": 0}
+
+    existing_ids = {
+        row[0] for row in db.query(SessionMessage.id)
+        .filter(SessionMessage.session_id == session_id)
+        .all()
+    }
+    max_seq = db.query(func.max(SessionMessage.sequence_number)).filter(
+        SessionMessage.session_id == session_id
+    ).scalar() or 0
+
+    inserted = 0
+    for i, msg in enumerate(messages):
+        msg_id = msg.id or str(uuid.uuid4())
+        if msg_id in existing_ids:
+            continue
+        db.add(SessionMessage(
+            id=msg_id,
+            session_id=session_id,
+            role=msg.role,
+            type=msg.type,
+            content=msg.content,
+            artwork_id=msg.artwork_id,
+            sequence_number=max_seq + i + 1,
+        ))
+        inserted += 1
+    db.commit()
+    return {"inserted": inserted}
+
+
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str, user_id: str = Query(...), db: Session = Depends(get_db)):
     """Delete a session and all its associated artworks — caller must supply their user_id."""
@@ -2858,7 +2927,8 @@ async def create_session(
         db.add(user)
         db.flush()
 
-    session_id = request.session_id or f"sess_{uuid.uuid4().hex[:8]}"
+    import uuid as uuid_mod
+    session_id = request.session_id or f"sess_{uuid_mod.uuid4().hex[:8]}"
     session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
 
     if session_record:
@@ -2914,6 +2984,25 @@ async def update_session(
     }
 
 
+@router.patch("/sessions/{session_id}/goal")
+async def set_session_goal(
+    session_id: str,
+    body: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Store the user's stated goal/intent for a session in metadata_json."""
+    goal = (body.get("goal") or "").strip()
+    session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_record:
+        raise HTTPException(status_code=404, detail="Session not found")
+    meta = dict(session_record.metadata_json or {})
+    meta["user_goal"] = goal
+    session_record.metadata_json = meta
+    db.commit()
+    return {"ok": True}
+
+
 # =============================================================================
 # Session Memory Helpers
 # =============================================================================
@@ -2936,8 +3025,10 @@ async def get_session_context(session_id: str) -> Optional[Dict[str, Any]]:
             if not artworks and not session_record.narrative_summary:
                 return None
 
+            user_goal = (session_record.metadata_json or {}).get("user_goal")
             return {
                 "narrative_summary": session_record.narrative_summary,
+                "user_goal": user_goal,
                 "previous_artworks": [
                     {
                         "artist": art.artist_name,

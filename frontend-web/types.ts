@@ -31,6 +31,7 @@ export interface ArtistEntity {
   birth_year?: number | null;
   death_year?: number | null;
   movements?: string[];
+  profile_image_url?: string | null;
   instance_count: number;
   bio_status: string;
 }

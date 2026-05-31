@@ -20,6 +20,40 @@ _P_BIRTH_DATE = "P569"
 _P_DEATH_DATE = "P570"
 _P_CITIZENSHIP = "P27"
 _P_MOVEMENT = "P135"
+_P_IMAGE = "P18"
+
+
+def _extract_commons_filename(claims: Dict, prop: str) -> Optional[str]:
+    """Extract a Wikimedia Commons filename from a Wikidata media claim."""
+    snaks = claims.get(prop, [])
+    if not snaks:
+        return None
+    return snaks[0].get("mainsnak", {}).get("datavalue", {}).get("value")
+
+
+async def _resolve_commons_image_url(filename: str, width: int = 400) -> Optional[str]:
+    """Fetch the canonical thumbnail URL from the Wikimedia Commons API."""
+    try:
+        async with httpx.AsyncClient(timeout=8.0, headers=_HEADERS) as client:
+            resp = await client.get(
+                "https://en.wikipedia.org/w/api.php",
+                params={
+                    "action": "query",
+                    "titles": f"File:{filename}",
+                    "prop": "imageinfo",
+                    "iiprop": "url|thumburl",
+                    "iiurlwidth": width,
+                    "format": "json",
+                },
+            )
+            resp.raise_for_status()
+        pages = resp.json().get("query", {}).get("pages", {})
+        for page in pages.values():
+            info = (page.get("imageinfo") or [{}])[0]
+            return info.get("thumburl") or info.get("url")
+    except Exception:
+        pass
+    return None
 
 
 async def _search_wikidata(name: str) -> Optional[str]:
@@ -143,6 +177,9 @@ async def get_artist_info_from_wiki(name: str) -> Optional[Dict[str, Any]]:
     birth_year = _extract_year(claims, _P_BIRTH_DATE)
     death_year = _extract_year(claims, _P_DEATH_DATE)
 
+    image_filename = _extract_commons_filename(claims, _P_IMAGE)
+    profile_image_url = await _resolve_commons_image_url(image_filename) if image_filename else None
+
     citizenship_qids = _extract_item_qids(claims, _P_CITIZENSHIP)[:1]
     movement_qids = _extract_item_qids(claims, _P_MOVEMENT)[:3]
     all_qids = citizenship_qids + movement_qids
@@ -166,4 +203,5 @@ async def get_artist_info_from_wiki(name: str) -> Optional[Dict[str, Any]]:
         "birth_year": birth_year,
         "death_year": death_year,
         "movements": movements,
+        "profile_image_url": profile_image_url,
     }
