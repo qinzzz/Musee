@@ -39,7 +39,7 @@ export async function suggestTopics(
 }
 
 /** Exhibition chat: curator conversation about a collection of works (backend LLM). */
-export async function exhibitionChat(
+export async function visitChat(
   items: { id: string; url: string; keywords: string[] }[],
   conversationHistory: Message[],
   newMessage: string
@@ -48,7 +48,7 @@ export async function exhibitionChat(
     role: m.role === 'model' ? 'assistant' : m.role,
     content: m.text,
   }));
-  const response = await fetchWithTimeout(`${API_BASE_URL}/exhibition-chat`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/visit/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -59,14 +59,14 @@ export async function exhibitionChat(
   });
   if (!response.ok) {
     const t = await response.text();
-    throw new Error(t || `exhibition-chat failed: ${response.status}`);
+    throw new Error(t || `visit/chat failed: ${response.status}`);
   }
   const data = await response.json();
   return data.response ?? '';
 }
 
-/** Exhibition chat streaming: same as exhibitionChat but streams response to UI. */
-export async function exhibitionChatStream(
+/** Visit chat streaming: streams curator response to UI. */
+export async function visitChatStream(
   items: { id: string; url: string; keywords: string[]; artistName?: string; artworkName?: string; description?: string; date?: string; medium?: string }[],
   conversationHistory: Message[],
   newMessage: string,
@@ -79,7 +79,7 @@ export async function exhibitionChatStream(
     content: m.text,
   }));
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/exhibition-chat-stream`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/visit/chat-stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -100,7 +100,7 @@ export async function exhibitionChatStream(
     });
     if (!response.ok) {
       const t = await response.text();
-      throw new Error(t || `exhibition-chat-stream failed: ${response.status}`);
+      throw new Error(t || `visit/chat-stream failed: ${response.status}`);
     }
     const reader = response.body?.getReader();
     if (!reader) {

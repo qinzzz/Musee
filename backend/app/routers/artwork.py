@@ -1505,7 +1505,7 @@ async def remove_background(image: UploadFile = File(...)):
 
 
 # =============================================================================
-# Web-client AI endpoints (exhibition chat works with all providers; define term & TTS are Gemini-only)
+# Web-client AI endpoints (visit chat works with all providers; define term & TTS are Gemini-only)
 # =============================================================================
 
 class ExhibitionItem(BaseModel):
@@ -1518,7 +1518,7 @@ class ExhibitionItem(BaseModel):
     date: Optional[str] = None
     medium: Optional[str] = None
 
-class ExhibitionChatRequest(BaseModel):
+class VisitChatRequest(BaseModel):
     items: List[ExhibitionItem]
     conversation_history: List[Dict[str, str]]  # [{role, content}]
     new_message: str
@@ -2125,9 +2125,9 @@ async def get_taste_profile(user_id: str, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/exhibition-chat")
-async def exhibition_chat(
-    request: ExhibitionChatRequest = Body(...),
+@router.post("/visit/chat")
+async def visit_chat(
+    request: VisitChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
 ):
     """Chat with the curator about the current exhibition (collection of works). Supports OpenAI, Claude, Gemini."""
@@ -2140,7 +2140,7 @@ async def exhibition_chat(
             if b:
                 image_bytes_list.append(b)
     try:
-        response_text = await ai_service.exhibition_chat(
+        response_text = await ai_service.visit_chat(
             items=[{"keywords": i.keywords} for i in request.items],
             history=request.conversation_history,
             new_message=request.new_message,
@@ -2152,9 +2152,9 @@ async def exhibition_chat(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/exhibition-chat-stream")
-async def exhibition_chat_stream(
-    request: ExhibitionChatRequest = Body(...),
+@router.post("/visit/chat-stream")
+async def visit_chat_stream(
+    request: VisitChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
 ):
     """Stream exhibition curator response as SSE (event: chunk, then event: complete). Supports OpenAI, Claude, Gemini."""
@@ -2170,7 +2170,7 @@ async def exhibition_chat_stream(
     async def event_generator():
         full_text = ""
         try:
-            async for chunk in ai_service.exhibition_chat_stream(
+            async for chunk in ai_service.visit_chat_stream(
                 items=[{"keywords": i.keywords} for i in request.items],
                 history=request.conversation_history,
                 new_message=request.new_message,

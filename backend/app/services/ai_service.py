@@ -11,7 +11,7 @@ from app.utils.prompt_loader import (
     get_artist_identification_prompt_v2,
     get_artwork_bite_prompt_v2,
     get_suggest_topics_prompt_v2,
-    get_exhibition_chat_prompt,
+    get_visit_chat_prompt,
     get_explore_skill_select_prompt,
     get_explore_observation_prompt,
     get_explore_deepdive_prompt,
@@ -169,31 +169,15 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         return prompt + context_block
 
     @staticmethod
-    def build_exhibition_prompt(items: List[Dict[str, Any]]) -> str:
-        """Construct the system instructions for exhibition chat."""
-        if not items:
-            collection_summary = "- No specific works were provided. Focus on asking the visitor which pieces interest them."
-        else:
-            lines = []
-            for idx, item in enumerate(items, start=1):
-                parts = []
-                if item.get("artwork_name"):
-                    parts.append(f'"{item["artwork_name"]}"')
-                if item.get("artist_name"):
-                    parts.append(f'by {item["artist_name"]}')
-                if item.get("date"):
-                    parts.append(f'({item["date"]})')
-                if item.get("medium"):
-                    parts.append(f'— {item["medium"]}')
-                keywords = ", ".join(item.get("keywords", []))
-                if keywords:
-                    parts.append(f'Keywords: {keywords}')
-                if item.get("description"):
-                    parts.append(f'Description: {item["description"]}')
-                lines.append(f"{idx}. " + (" ".join(parts) if parts else "Artwork details unavailable"))
-            collection_summary = "\n".join(lines)
+    def build_visit_prompt(items: List[Dict[str, Any]]) -> str:
+        """System instructions for visit chat.
 
-        return get_exhibition_chat_prompt(collection_summary)
+        Artwork details are no longer restated here — they flow through the
+        conversation history (each capture/card is an inline turn), so listing
+        them in the system prompt would be redundant. The `items` arg is kept
+        for signature compatibility but intentionally unused.
+        """
+        return get_visit_chat_prompt("")
 
     @staticmethod
     def build_conversation_history(history: Optional[List[Dict[str, str]]]) -> List[ConversationMessage]:
@@ -536,7 +520,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         # Clean and return
         return self.clean_summary_response(response)
 
-    async def exhibition_chat(
+    async def visit_chat(
         self,
         items: list,
         history: list,
@@ -547,7 +531,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         Exhibition curator chat: discuss a collection of works with the user.
         Implements provider-agnostic orchestration similar to other service methods.
         """
-        prompt = self.build_exhibition_prompt(items)
+        prompt = self.build_visit_prompt(items)
         conversation_history = self.build_conversation_history(history)
         image_data = None if history else self.prepare_image_batch(image_bytes_list)
 
@@ -565,7 +549,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 temperature=0.7,
             )
 
-    async def exhibition_chat_stream(
+    async def visit_chat_stream(
         self,
         items: list,
         history: list,
@@ -576,7 +560,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         Stream exhibition curator response token by token.
         Mirrors the non-streaming version but yields incremental chunks.
         """
-        prompt = self.build_exhibition_prompt(items)
+        prompt = self.build_visit_prompt(items)
         conversation_history = self.build_conversation_history(history)
         image_data = None if history else self.prepare_image_batch(image_bytes_list)
 

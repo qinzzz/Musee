@@ -15,7 +15,19 @@ ARTIST_IDENTIFICATION_PROMPT_PATH = PROMPTS_DIR / "artist_identification.txt"
 ARTWORK_ANALYSIS_PROMPT_PATH = PROMPTS_DIR / "artwork_analysis.txt"
 ARTWORK_BITE_PROMPT_PATH = PROMPTS_DIR / "artwork_bite.txt"
 
-DEFAULT_IDENTITY="museum_narrator"
+DEFAULT_IDENTITY = "museum_narrator"   # professional tone — used for artwork cards
+COMPANION_IDENTITY = "companion"        # friendly/casual tone — used for chat-like interfaces
+
+
+def _inject_identity(template: str, identity_name: str) -> str:
+    """Replace a {identity} placeholder in a template with the named identity's text.
+
+    No-op if the template has no {identity} placeholder.
+    """
+    if "{identity}" not in template:
+        return template
+    return template.replace("{identity}", load_identity(identity_name).strip())
+
 
 def _load_prompt_file(file_path: Path) -> str:
     """
@@ -223,28 +235,18 @@ def compose_prompt(identity_name: str, instruction_name: str, language: str = No
 
 
 @lru_cache(maxsize=1)
-def load_exhibition_chat_prompt() -> str:
-    """
-    Load the exhibition chat system prompt template from file.
-
-    Returns:
-        str: The prompt template text (contains {collection_summary} placeholder)
-    """
-    return _load_prompt_file(INSTRUCTIONS_DIR / "exhibition_chat.txt")
+def load_visit_chat_prompt() -> str:
+    return _load_prompt_file(INSTRUCTIONS_DIR / "visit_chat.txt")
 
 
-def get_exhibition_chat_prompt(collection_summary: str) -> str:
-    """
-    Get the exhibition chat system prompt with collection summary injected.
-
-    Args:
-        collection_summary: Formatted string of the user's collection keywords
-
-    Returns:
-        str: The complete system prompt for exhibition chat
-    """
-    template = load_exhibition_chat_prompt()
+def get_visit_chat_prompt(collection_summary: str) -> str:
+    template = _inject_identity(load_visit_chat_prompt(), COMPANION_IDENTITY)
     return template.replace("{collection_summary}", collection_summary)
+
+
+# Backward-compat aliases
+load_exhibition_chat_prompt = load_visit_chat_prompt
+get_exhibition_chat_prompt = get_visit_chat_prompt
 
 
 def get_artist_identification_prompt_v2(identity: str = "default", language: str = None) -> str:
@@ -381,7 +383,7 @@ def get_explore_observation_prompt(
     prev_observations=None,
     language=None
 ) -> str:
-    template = _load_explore_observation_template()
+    template = _inject_identity(_load_explore_observation_template(), COMPANION_IDENTITY)
     lang_instr = _build_language_instruction(language)
     if prev_observations:
         prev_text = "Already shared with the visitor (do not repeat or rephrase):\n" + "\n".join(f"- {o}" for o in prev_observations)
@@ -401,7 +403,7 @@ def get_explore_deepdive_prompt(
     skill_desc: str,
     language=None
 ) -> str:
-    template = _load_explore_deepdive_template()
+    template = _inject_identity(_load_explore_deepdive_template(), COMPANION_IDENTITY)
     lang_instr = _build_language_instruction(language)
     return (
         template
@@ -417,7 +419,7 @@ def _load_insights_template() -> str:
 
 
 def get_insights_prompt(artist_name: str, artwork_name: str, language: str = None) -> str:
-    template = _load_insights_template()
+    template = _inject_identity(_load_insights_template(), COMPANION_IDENTITY)
     lang_instr = _build_language_instruction(language)
     return (template
         .replace("{artist_name}", artist_name)
