@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 # Default model
 DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
 
+# Gemini 3 runs reasoning by default, which can blow past the request timeout on
+# complex inputs. Cap thinking to keep latency bounded:
+#   MINIMAL — vision / structured-JSON identification (fast, no deep reasoning needed)
+#   LOW     — text + conversation (a little reasoning, still bounded)
+_THINKING_MINIMAL = types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL)
+_THINKING_LOW = types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+
 class GeminiAPIClient(AIClientInterface):
     """Gemini-specific API client - only handles API calls"""
 
@@ -56,7 +63,8 @@ class GeminiAPIClient(AIClientInterface):
                 config=types.GenerateContentConfig(
                     temperature=temperature,
                     response_mime_type="application/json",
-                    response_schema=response_schema
+                    response_schema=response_schema,
+                    thinking_config=_THINKING_MINIMAL,
                 )
             )
 
@@ -98,7 +106,8 @@ class GeminiAPIClient(AIClientInterface):
                 config=types.GenerateContentConfig(
                     temperature=temperature,
                     response_mime_type="application/json" if response_schema else None,
-                    response_schema=response_schema
+                    response_schema=response_schema,
+                    thinking_config=_THINKING_LOW,
                 )
             )
 
@@ -131,7 +140,8 @@ class GeminiAPIClient(AIClientInterface):
                 config=types.GenerateContentConfig(
                     temperature=temperature,
                     response_mime_type="application/json",
-                    response_schema=response_schema
+                    response_schema=response_schema,
+                    thinking_config=_THINKING_LOW,
                 )
             )
 
@@ -221,10 +231,11 @@ class GeminiAPIClient(AIClientInterface):
                 config=types.GenerateContentConfig(
                     temperature=temperature,
                     response_mime_type="application/json",
-                    response_schema=response_schema
+                    response_schema=response_schema,
+                    thinking_config=_THINKING_MINIMAL,
                 )
             )
-            
+
             full_text_so_far = ""
             async for chunk in response:
                 if chunk.text:
@@ -259,10 +270,11 @@ class GeminiAPIClient(AIClientInterface):
                 config=types.GenerateContentConfig(
                     temperature=temperature,
                     response_mime_type="application/json" if response_schema else None,
-                    response_schema=response_schema
+                    response_schema=response_schema,
+                    thinking_config=_THINKING_LOW,
                 )
             )
-            
+
             full_text_so_far = ""
             async for chunk in response:
                 if chunk.text:
