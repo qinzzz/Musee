@@ -382,7 +382,12 @@ export async function analyzeArtwork(
   location?: string,
   photoTime?: string,
   latitude?: number,
-  longitude?: number
+  longitude?: number,
+  context?: {
+    artworkId?: string;
+    artistName?: string;
+    artworkName?: string;
+  }
 ): Promise<ArtworkAnalysisResult> {
   const formData = new FormData();
   formData.append('image', imageSource);
@@ -404,13 +409,22 @@ export async function analyzeArtwork(
   if (longitude !== undefined) {
     formData.append('longitude', longitude.toString());
   }
+  if (context?.artworkId) {
+    formData.append('artwork_id', context.artworkId);
+  }
+  if (context?.artistName) {
+    formData.append('artist_name', context.artistName);
+  }
+  if (context?.artworkName) {
+    formData.append('artwork_name', context.artworkName);
+  }
 
   const lang = getLanguage();
   if (lang) formData.append('language', lang);
 
-  console.log('Sending request to:', `${API_BASE_URL}/artwork-analyze`);
+  console.log('Sending request to:', `${API_BASE_URL}/artworks/analyze`);
 
-  const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-analyze`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/analyze`, {
     method: 'POST',
     body: formData,
   });
@@ -442,6 +456,65 @@ export async function analyzeArtwork(
     artwork_name: data.artwork_name || 'Untitled',
     description: data.analysis || '',
     tags: tags,
+    date: data.date,
+    medium: data.medium,
+    model_used: data.model_used || 'unknown',
+    artwork_id: data.artwork_id,
+    photo_uri: data.photo_uri,
+    location: data.location,
+    photo_time: data.photo_time,
+    session_title: data.session_title,
+    reference_urls: data.reference_urls || [],
+    artist_entity_id: data.artist_entity_id,
+  };
+}
+
+export async function analyzeArtworkFromExisting(
+  artworkId: string,
+  context?: {
+    artistName?: string;
+    artworkName?: string;
+  }
+): Promise<ArtworkAnalysisResult> {
+  const formData = new FormData();
+  formData.append('artwork_id', artworkId);
+  if (context?.artistName) {
+    formData.append('artist_name', context.artistName);
+  }
+  if (context?.artworkName) {
+    formData.append('artwork_name', context.artworkName);
+  }
+
+  const lang = getLanguage();
+  if (lang) formData.append('language', lang);
+
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/analyze`, {
+    method: 'POST',
+    body: formData,
+    timeout: 120000,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  let tags: string[] = [];
+  if (Array.isArray(data.tags)) {
+    tags = data.tags;
+  } else if (typeof data.tags === 'string') {
+    tags = data.tags.split(/[,\s]+/).filter((t: string) => t).map((t: string) =>
+      t.startsWith('#') ? t.toLowerCase() : `#${t.toLowerCase().replace(/\s+/g, '-')}`
+    );
+  }
+
+  return {
+    artist_name: data.artist_name || 'Unknown Artist',
+    artwork_name: data.artwork_name || 'Untitled',
+    description: data.analysis || '',
+    tags,
     date: data.date,
     medium: data.medium,
     model_used: data.model_used || 'unknown',
@@ -1163,15 +1236,7 @@ export async function backfillArtworkArtist(artworkId: string): Promise<import('
  * Re-run AI identification on a saved artwork using its stored image.
  */
 export async function reanalyzeArtwork(artworkId: string): Promise<any> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}/reanalyze`, {
-    method: 'POST',
-    timeout: 120000,
-  });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.detail || 'Reanalysis failed');
-  }
-  return response.json();
+  return analyzeArtworkFromExisting(artworkId);
 }
 
 /**

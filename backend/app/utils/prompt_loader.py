@@ -271,6 +271,27 @@ def get_artist_identification_prompt_v2(identity: str = "default", language: str
     )
 
 
+def get_known_artwork_analysis_prompt_v2(
+    artist_name: str,
+    artwork_name: str,
+    identity: str = "default",
+    language: str = None,
+) -> str:
+    """
+    Get the known-artwork analysis prompt using authoritative artist/title inputs.
+    """
+    if identity == "default":
+        identity = DEFAULT_IDENTITY
+    return compose_prompt(
+        identity,
+        "known_artwork_analysis",
+        language=language,
+        artist_name=artist_name,
+        artwork_name=artwork_name,
+        movement_list=get_movement_names(),
+    )
+
+
 def get_artwork_bite_prompt_v2(
     artist_name: str,
     artwork_name: str = "Unknown",

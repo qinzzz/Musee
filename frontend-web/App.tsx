@@ -21,7 +21,7 @@ import {
   logout,
   deleteArtwork,
   prefetchExploreDataWithContext,
-  reanalyzeArtwork,
+  analyzeArtworkFromExisting,
   visitChatStream,
   fetchAndPersistInsights,
   fetchSessionMessages,
@@ -47,6 +47,7 @@ import LearningHubPage from './components/LearningHubPage';
 import Toast, { ToastAction } from './components/Toast';
 import ContextualActionBar from './components/ContextualActionBar';
 import CanvasHeader from './components/CanvasHeader';
+import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 
 // Helper to report metrics (can integrate with @vercel/speed-insights or custom analytics)
 const reportStreamingMetrics = (metrics: StreamingMetrics) => {
@@ -865,6 +866,7 @@ const App: React.FC = () => {
   };
 
   const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'community'>('metadata');
+  const [artworkHeaderEditToken, setArtworkHeaderEditToken] = useState(0);
   const [interpretingMode, setInterpretingMode] = useState<'professional' | 'interactive'>(
     () => (localStorage.getItem('musee_analysis_mode') as 'professional' | 'interactive') ?? 'professional'
   );
@@ -2145,22 +2147,41 @@ const App: React.FC = () => {
     }
   };
 
-  const handleReanalyze = async () => {
+  const handleRefreshAnalysis = async (overrides?: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => {
     if (!interpretingItem?.artworkId) return;
     const targetItem = interpretingItem;
-    const result = await reanalyzeArtwork(targetItem.artworkId);
-    const keywords = (result.tags || []).map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
-    const updates = {
-      artistName: result.artist_name,
-      artworkName: result.artwork_name,
-      description: parseAnalysis(result.analysis),
-      date: result.date,
-      medium: result.medium,
-      keywords,
-      referenceUrls: result.reference_urls || [],
-    };
-    setItems(prev => prev.map(item => item.id === targetItem.id ? { ...item, ...updates } : item));
-    setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, ...updates } : prev);
+    setItems(prev => prev.map(item => item.id === targetItem.id ? { ...item, isAnalyzing: true } : item));
+    setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, isAnalyzing: true } : prev);
+    try {
+      const result = await analyzeArtworkFromExisting(targetItem.artworkId, {
+        artistName: overrides?.artistName,
+        artworkName: overrides?.artworkName,
+      });
+      const keywords = (result.tags || []).map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
+      const updates = {
+        artistName: result.artist_name,
+        artworkName: result.artwork_name,
+        description: parseAnalysis(result.description),
+        date: result.date,
+        medium: result.medium,
+        keywords,
+        referenceUrls: result.reference_urls || [],
+        isAnalyzing: false,
+      };
+      setItems(prev => prev.map(item => item.id === targetItem.id ? { ...item, ...updates } : item));
+      setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, ...updates } : prev);
+      fetchAndPersistInsights(targetItem.artworkId).then(insights => {
+        if (insights.length > 0) {
+          setItems(prev => prev.map(i => i.id === targetItem.id ? { ...i, insights } : i));
+          setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, insights } : prev);
+        }
+      }).catch(() => {});
+    } catch (error) {
+      console.error('Failed to refresh analysis:', error);
+      setItems(prev => prev.map(item => item.id === targetItem.id ? { ...item, isAnalyzing: false } : item));
+      setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, isAnalyzing: false } : prev);
+      throw error;
+    }
   };
 
   const confirmDeleteItem = async (id: string) => {
@@ -2271,6 +2292,16 @@ const App: React.FC = () => {
       setDeleteConfirmation(null);
     }
   };
+
+  const artworkHeaderActions = interpretingItem?.artworkId ? (
+    <ArtworkActionsMenu
+      disabled={Boolean(interpretingItem.isAnalyzing)}
+      onEdit={!interpretingItem.isAnalyzing ? () => setArtworkHeaderEditToken(token => token + 1) : undefined}
+      onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
+      buttonClassName="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-200/50 hover:text-neutral-900 active:text-neutral-900"
+      iconClassName="h-[18px] w-[18px]"
+    />
+  ) : null;
 
 
 
@@ -2872,6 +2903,7 @@ const App: React.FC = () => {
                       parentLabel={activeVisitSummary.title}
                       parentClick={closeArtworkDetail}
                       childLabel={interpretingItem.artworkName || 'Untitled'}
+                      rightSlot={artworkHeaderActions}
                       isInline={true}
                     />
                     <div className="flex-1 overflow-hidden animate-in fade-in zoom-in-98 duration-300">
@@ -2891,7 +2923,7 @@ const App: React.FC = () => {
                           setInterpretingMode(nextMode);
                           localStorage.setItem('musee_analysis_mode', nextMode);
                         }}
-                        onReanalyze={handleReanalyze}
+                        onRefreshAnalysis={handleRefreshAnalysis}
                         userId={currentUser?.user_id || USER_ID}
                         onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
                           openArtistDetail({
@@ -2907,6 +2939,7 @@ const App: React.FC = () => {
                           });
                         }}
                         navigationContextLabel={artworkDetailContext?.parentLabel || activeVisitSummary.title}
+                        editRequestToken={artworkHeaderEditToken}
                         isInline={true}
                       />
                     </div>
@@ -3225,6 +3258,7 @@ const App: React.FC = () => {
                     parentLabel={artworkDetailContext?.parentLabel || 'All Artworks'}
                     parentClick={closeArtworkDetail}
                     childLabel={interpretingItem.artworkName || 'Untitled'}
+                    rightSlot={artworkHeaderActions}
                     isInline={true}
                   />
                   <div className="flex-1 overflow-hidden animate-in fade-in zoom-in-98 duration-300">
@@ -3244,7 +3278,7 @@ const App: React.FC = () => {
                         setInterpretingMode(nextMode);
                         localStorage.setItem('musee_analysis_mode', nextMode);
                       }}
-                      onReanalyze={handleReanalyze}
+                      onRefreshAnalysis={handleRefreshAnalysis}
                       userId={currentUser?.user_id || USER_ID}
                       onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
                         openArtistDetail({
@@ -3260,6 +3294,7 @@ const App: React.FC = () => {
                         });
                       }}
                       navigationContextLabel={artworkDetailContext?.parentLabel || 'All Artworks'}
+                      editRequestToken={artworkHeaderEditToken}
                       isInline={true}
                     />
                   </div>
@@ -3342,7 +3377,7 @@ const App: React.FC = () => {
               setInterpretingMode(nextMode);
               localStorage.setItem('musee_analysis_mode', nextMode);
             }}
-            onReanalyze={handleReanalyze}
+            onRefreshAnalysis={handleRefreshAnalysis}
             userId={currentUser?.user_id || USER_ID}
             onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
               openArtistDetail({

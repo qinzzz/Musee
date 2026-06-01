@@ -6,9 +6,10 @@ interface Props {
   childLabel: string;
   isInline?: boolean;
   subtitle?: string;
+  rightSlot?: React.ReactNode;
 }
 
-export default function CanvasHeader({ parentLabel, parentClick, childLabel, isInline, subtitle }: Props) {
+export default function CanvasHeader({ parentLabel, parentClick, childLabel, isInline, subtitle, rightSlot }: Props) {
   return (
     <div
       className={`flex items-center gap-2.5 pb-3.5 border-b border-neutral-200/80 bg-[#faf9f7]/95 backdrop-blur shrink-0 z-10 sticky top-0 ${
@@ -28,7 +29,7 @@ export default function CanvasHeader({ parentLabel, parentClick, childLabel, isI
         </button>
       )}
       
-      <div className="flex flex-col min-w-0 justify-center">
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
         <div className="flex items-center gap-2 text-[13px] sm:text-[14px] min-w-0 font-medium tracking-wide">
           {parentLabel && (
             <>
@@ -46,6 +47,11 @@ export default function CanvasHeader({ parentLabel, parentClick, childLabel, isI
           </p>
         )}
       </div>
+      {rightSlot && (
+        <div className="ml-auto flex shrink-0 items-center">
+          {rightSlot}
+        </div>
+      )}
     </div>
   );
 }

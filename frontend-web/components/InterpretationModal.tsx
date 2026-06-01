@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import { Message, Album, NeighborItem, Visit, GalleryItem, ArtworkClassification } from '../types';
 import { chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../apiService';
 import ArtworkClassificationChip from './ArtworkClassificationChip';
+import ArtworkActionsMenu from './ArtworkActionsMenu';
 interface Props {
   item: {
     url: string;
@@ -36,13 +37,14 @@ interface Props {
   onRightModeChange: (mode: 'metadata' | 'community') => void;
   onSwitchMode?: () => void;
   interpretingMode?: 'professional' | 'interactive';
-  onReanalyze?: () => Promise<void>;
+  onRefreshAnalysis?: (overrides?: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => Promise<void>;
   onDelete?: () => void;
   userId?: string;
   onNavigateToArtist?: (artistEntityId: string | undefined, artworkId: string | undefined, artistName: string | undefined) => void;
   isInline?: boolean;
   onUpdateClassification?: (itemId: string, classification: ArtworkClassification) => Promise<void>;
   navigationContextLabel?: string;
+  editRequestToken?: number;
 }
 
 // Tag component with explanation tooltip on hover
@@ -139,12 +141,11 @@ const Insight: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onReanalyze, onDelete, userId, onNavigateToArtist, isInline, onUpdateClassification, navigationContextLabel }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onRefreshAnalysis, onDelete, userId, onNavigateToArtist, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
   const [messages, setMessages] = useState<Message[]>(item.conversation);
   const [isTyping, setIsTyping] = useState(false);
-  const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false);
   const [insights, setInsights] = useState<Array<{ title: string; text: string }>>([]);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [community, setCommunity] = useState<CommunityData | null>(null);
   const [commentInput, setCommentInput] = useState('');
@@ -307,7 +308,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     originalTagsRef.current = tags;
   }, [item.id]);
 
-  // Use persisted insights from DB; backfill on first open if missing
+  // Sync persisted insights from parent updates; backfill on first open if missing
   useEffect(() => {
     if ((item.insights ?? []).length > 0) {
       setInsights(item.insights!);
@@ -317,7 +318,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     fetchAndPersistInsights(item.artworkId)
       .then(pts => setInsights(pts))
       .catch(() => {});
-  }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [item.id, item.insights, item.artworkId, item.artistName]);
 
   // Fetch community comments when artwork is identified and saved
   useEffect(() => {
@@ -372,6 +373,10 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const displayDescription = streamingFields?.description || item.description;
   const navigationIndex = allVisitItems?.findIndex(i => i.id === item.id) ?? -1;
   const currentClassification = item.classification || 'unsorted';
+  const hasResolvedIdentity = Boolean(displayArtist || displayTitle || displayDate || displayMedium);
+  const hasExistingDerivedContent = Boolean(item.description || (item.insights ?? []).length > 0);
+  const isInitialPanelLoading = Boolean(item.isAnalyzing && !hasResolvedIdentity && !hasExistingDerivedContent);
+  const isRefreshingDerivedContent = Boolean(item.isAnalyzing && (hasResolvedIdentity || hasExistingDerivedContent));
   const hasNavigationFooter = Boolean(allVisitItems && allVisitItems.length > 1 && onNavigate && navigationIndex >= 0);
   const previousArtwork = navigationIndex >= 0 && allVisitItems && allVisitItems.length > 1
     ? allVisitItems[(navigationIndex - 1 + allVisitItems.length) % allVisitItems.length]
@@ -399,8 +404,13 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     setIsEditing(false);
   };
 
-  const saveAllFields = async () => {
-    if (!item.artworkId || isSavingField) return;
+  useEffect(() => {
+    if (!editRequestToken) return;
+    startEditing();
+  }, [editRequestToken]);
+
+  const saveAllFields = async (refreshAfterSave = false) => {
+    if (!item.artworkId || isSavingField || (refreshAfterSave && isRefreshingAnalysis)) return;
     const finalTags = tagInput.trim()
       ? [...editTags, tagInput.trim().startsWith('#') ? tagInput.trim() : `#${tagInput.trim()}`]
       : editTags;
@@ -419,14 +429,25 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     if (Object.keys(apiUpdates).length === 0) return;
     try {
       setIsSavingField(true);
+      if (refreshAfterSave) setIsRefreshingAnalysis(true);
       await updateArtwork(item.artworkId, apiUpdates);
       const metaUpdate: any = { ...apiUpdates };
       if (tagsChanged) metaUpdate.keywords = finalTags;
       onUpdateMetadata?.(item.id, metaUpdate);
+      if (refreshAfterSave && onRefreshAnalysis) {
+        await onRefreshAnalysis({
+          artistName: editValues.artist.trim(),
+          artworkName: editValues.title.trim(),
+          date: editValues.date.trim(),
+          medium: editValues.medium.trim(),
+          keywords: finalTags,
+        });
+      }
     } catch (e) {
       console.error('Failed to save metadata:', e);
     } finally {
       setIsSavingField(false);
+      setIsRefreshingAnalysis(false);
     }
   };
 
@@ -550,53 +571,12 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     };
   };
 
-  const overflowMenu = item.artworkId ? (
-    <div className="relative">
-      <button
-        onClick={() => setMoreMenuOpen(o => !o)}
-        className="w-9 h-9 flex items-center justify-center text-neutral-500 hover:text-neutral-900 active:text-neutral-900 transition-colors"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
-      </button>
-      {moreMenuOpen && (
-        <>
-          <div className="fixed inset-0 z-[90]" onClick={() => setMoreMenuOpen(false)} />
-          <div className="absolute top-full right-0 mt-1 z-[91] bg-white border border-neutral-100 rounded-2xl shadow-2xl overflow-hidden min-w-[180px] animate-in fade-in zoom-in-95 duration-150">
-            {!item.isAnalyzing && (
-              <button
-                onClick={() => { setMoreMenuOpen(false); startEditing(); }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
-                Edit info
-              </button>
-            )}
-            {onReanalyze && !item.isAnalyzing && (
-              <button
-                onClick={async () => { setMoreMenuOpen(false); setIsReanalyzing(true); try { await onReanalyze(); } catch {} finally { setIsReanalyzing(false); } }}
-                disabled={isReanalyzing}
-                className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors text-left disabled:opacity-40"
-              >
-                <svg width="15" height="15" className={isReanalyzing ? 'animate-spin' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-                {isReanalyzing ? 'Retrying…' : 'Retry'}
-              </button>
-            )}
-            {onDelete && (
-              <>
-                <div className="h-px bg-neutral-100 mx-3" />
-                <button
-                  onClick={() => { setMoreMenuOpen(false); onDelete(); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-[13px] text-red-500 hover:bg-red-50 transition-colors text-left"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                  Delete
-                </button>
-              </>
-            )}
-          </div>
-        </>
-      )}
-    </div>
+  const overflowMenu = !isInline && item.artworkId ? (
+    <ArtworkActionsMenu
+      disabled={item.isAnalyzing}
+      onEdit={!item.isAnalyzing ? () => startEditing() : undefined}
+      onDelete={onDelete}
+    />
   ) : null;
 
   const mainDiv = (
@@ -712,9 +692,9 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
           <div className="flex flex-col sm:flex-1 sm:min-h-0 min-w-0 bg-white">
 
             {/* Right panel header — hidden on mobile when not editing (toolbar merged into metadata strip) */}
-            <div className={`px-2 py-2 border-b border-neutral-100 items-center justify-between shrink-0 relative ${isEditing ? 'flex' : 'hidden sm:flex'}`} onClick={handleToolbarClick}>
+            <div className={`px-2 py-2 border-b border-neutral-100 items-center justify-between shrink-0 relative ${isInline ? (isEditing ? 'flex' : 'hidden') : (isEditing ? 'flex' : 'hidden sm:flex')}`} onClick={handleToolbarClick}>
               {/* LEFT: action icons */}
-              <div className="flex items-center gap-1">
+              <div className={`flex items-center gap-1 ${isEditing ? 'flex-1 justify-start' : ''}`}>
                 {false && rightMode === 'metadata' && messages.length > 0 && (
                   <button
                     onClick={() => onRightModeChange('metadata')}
@@ -729,22 +709,19 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 )}
 
                 {isEditing && (
-                    <div className="flex items-center gap-2 px-2">
-                      <button
-                        onClick={cancelEditing}
-                        className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors"
-                      >Cancel</button>
-                      <button
-                        onClick={saveAllFields}
-                        disabled={isSavingField}
-                        className="text-[9px] tracking-[0.3em] uppercase text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
-                      >{isSavingField ? 'Saving…' : 'Save'}</button>
-                    </div>
+                  <div className="flex items-center px-2">
+                    <button
+                      onClick={cancelEditing}
+                      className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 )}
               </div>
 
               {/* RIGHT: mode label + close */}
-              <div className="flex items-center gap-1">
+              <div className={`flex items-center gap-1 ${isEditing ? 'flex-1 justify-end' : ''}`}>
                 {false && rightMode === 'community' && (
                   <>
                     <button
@@ -756,6 +733,24 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                     </button>
                     <div className="w-px h-3 bg-neutral-200" />
                   </>
+                )}
+                {isEditing && (
+                  <button
+                    onClick={() => saveAllFields(true)}
+                    disabled={isSavingField || isRefreshingAnalysis}
+                    className="text-[9px] tracking-[0.3em] uppercase text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
+                  >
+                    {isRefreshingAnalysis ? 'Refreshing…' : 'Save and Refresh Analysis'}
+                  </button>
+                )}
+                {isEditing && (
+                  <button
+                    onClick={() => saveAllFields(false)}
+                    disabled={isSavingField || isRefreshingAnalysis}
+                    className="text-[9px] tracking-[0.3em] uppercase text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
+                  >
+                    {isSavingField && !isRefreshingAnalysis ? 'Saving…' : 'Save'}
+                  </button>
                 )}
                 {overflowMenu}
                 {!isInline && <button onClick={onClose} className="hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-neutral-300 hover:text-neutral-900 transition-colors text-lg leading-none">✕</button>}
@@ -865,8 +860,18 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 )}
 
+                {isInitialPanelLoading && (
+                  <div className="min-h-[16rem] flex flex-col items-center justify-center text-center gap-4">
+                    <div className="w-10 h-10 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-500 font-bold">Analyzing artwork</p>
+                      <p className="text-[13px] text-neutral-400">Generating title, artist, and interpretation.</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Metadata — compact horizontal strip in view mode, vertical inputs in edit mode */}
-                {isEditing ? (
+                {!isInitialPanelLoading && isEditing ? (
                   <div className="space-y-4">
                     {displayArtist && (
                       <div>
@@ -918,7 +923,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                       )}
                     </div>
                   </div>
-                ) : (displayArtist || displayTitle || displayDate || displayMedium) ? (
+                ) : !isInitialPanelLoading && (displayArtist || displayTitle || displayDate || displayMedium) ? (
                   <div className="space-y-3 min-w-0">
                     <div className="min-w-0">
                       {displayTitle && (
@@ -963,7 +968,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 ) : null}
 
                 {/* Tags — scrollable row between metadata and description */}
-                {!item.isAnalyzing && (editTags.length > 0 || isEditing) && (
+                {!isInitialPanelLoading && !item.isAnalyzing && (editTags.length > 0 || isEditing) && (
                   <div>
                     {isEditing ? (
                       <div className="flex flex-wrap gap-2 items-center">
@@ -1004,6 +1009,13 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {isRefreshingDerivedContent && !isEditing && (
+                  <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50/80 px-3 py-2">
+                    <div className="w-3.5 h-3.5 border-t-[1.5px] border-neutral-700 rounded-full animate-spin shrink-0"></div>
+                    <span className="text-[10px] tracking-[0.24em] uppercase text-neutral-500 font-bold">Refreshing analysis…</span>
                   </div>
                 )}
 
