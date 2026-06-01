@@ -8,6 +8,7 @@ import json
 import logging
 import re
 import time
+import uuid
 from datetime import datetime
 import anyio
 
@@ -1752,6 +1753,66 @@ async def _image_url_to_bytes(url: str) -> Optional[bytes]:
     except Exception:
         return None
 
+
+def _parse_identify_result(
+    analysis_text: str,
+    fallback_artist: str = "Unknown Artist",
+    fallback_title: str = "Untitled",
+) -> Dict[str, Any]:
+    artist_name = fallback_artist
+    artwork_name = fallback_title
+    extracted_tags: List[str] = []
+    extracted_analysis: Optional[str] = None
+    date_val = None
+    medium_val = None
+    movement_val = None
+    period_bucket_val = None
+
+    try:
+        json_str = analysis_text
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', analysis_text)
+        if json_match:
+            json_str = json_match.group(1).strip()
+        parsed = json.loads(json_str)
+        if isinstance(parsed, dict):
+            artist_name = parsed.get("artist", artist_name)
+            artwork_name = parsed.get("title", artwork_name)
+            extracted_tags = parsed.get("tags", [])
+            extracted_analysis = parsed.get("description", "")
+            date_val = parsed.get("date")
+            medium_val = parsed.get("medium")
+            movement_val = parsed.get("movement")
+            period_bucket_val = parsed.get("period_bucket")
+    except Exception as e:
+        logger.warning(f"Failed to parse analysis payload: {e}")
+
+    if not extracted_analysis:
+        extracted_analysis = analysis_text
+
+    return {
+        "artist_name": artist_name,
+        "artwork_name": artwork_name,
+        "tags": extracted_tags,
+        "analysis": extracted_analysis,
+        "date": date_val,
+        "medium": medium_val,
+        "movement": movement_val,
+        "period_bucket": period_bucket_val,
+    }
+
+
+def _apply_authoritative_identity(
+    parsed_result: Dict[str, Any],
+    explicit_artist_name: Optional[str],
+    explicit_artwork_name: Optional[str],
+) -> Dict[str, Any]:
+    result = dict(parsed_result)
+    if explicit_artist_name and explicit_artist_name.strip():
+        result["artist_name"] = explicit_artist_name.strip()
+    if explicit_artwork_name and explicit_artwork_name.strip():
+        result["artwork_name"] = explicit_artwork_name.strip()
+    return result
+
 async def _resolve_image_bytes(image: Optional[UploadFile], photo_uri: Optional[str]) -> bytes:
     """Load image bytes from an uploaded file or URI, raising 400 if neither works."""
     image_bytes = None
@@ -2789,6 +2850,317 @@ async def update_artwork_classification(
         "classification": artwork.classification,
         "profile_invalidated": invalidated,
     }
+
+
+@router.post("/artworks/analyze")
+async def analyze_artwork_unified(
+    image: Optional[UploadFile] = File(None),
+    artwork_id: Optional[str] = Form(None),
+    artist_name: Optional[str] = Form(None),
+    artwork_name: Optional[str] = Form(None),
+    model: Optional[AIProvider] = Form(None),
+    identity: Optional[str] = Form("default"),
+    language: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    photo_uri: Optional[str] = Form(None),
+    client_type: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    photo_time: Optional[str] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Analyze a new upload or refresh an existing artwork using either image or artwork_id."""
+    if not image and not artwork_id:
+        raise HTTPException(status_code=400, detail="Must provide either image or artwork_id")
+
+    require_same_user(current_user, user_id)
+    existing_artwork: Optional[SavedArtwork] = None
+    parsed_location = None
+    image_bytes: Optional[bytes] = None
+
+    if artwork_id:
+        existing_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+        if not existing_artwork:
+            raise HTTPException(status_code=404, detail="Artwork not found")
+        if not user_id:
+            user_id = existing_artwork.user_id or existing_artwork.device_id
+        if not session_id:
+            session_id = existing_artwork.session_id
+        if location is None:
+            location = existing_artwork.location
+        if photo_time is None:
+            photo_time = existing_artwork.photo_time
+        if photo_uri is None:
+            photo_uri = existing_artwork.photo_uri
+
+    if user_id and settings.use_database and not existing_artwork:
+        check_artwork_quota(user_id, db)
+
+    if image:
+        image_bytes, image_metadata = await process_image(image)
+        if location:
+            logger.info(f"Metadata Source [Location]: FRONTEND (Value: {location})")
+        elif image_metadata.get("location_data"):
+            location = json.dumps(image_metadata["location_data"])
+            logger.info(f"Metadata Source [Location]: PHOTO EXIF (Resolved: {location})")
+        elif latitude is not None and longitude is not None:
+            location_data = await reverse_geocode(latitude, longitude)
+            location = json.dumps(location_data)
+            logger.info(f"Metadata Source [Location]: FRONTEND COORDS (Resolved: {location})")
+        if image_metadata.get("exif_timestamp"):
+            photo_time = image_metadata["exif_timestamp"]
+    else:
+        assert existing_artwork is not None
+        image_bytes = await _image_url_to_bytes(existing_artwork.photo_uri)
+        if not image_bytes:
+            try:
+                storage = StorageFactory.get_service_for_uri(existing_artwork.photo_uri)
+                if storage:
+                    image_bytes = await storage.load(existing_artwork.photo_uri)
+            except Exception as e:
+                logger.warning(f"Could not load image for analysis refresh: {e}")
+        if not image_bytes:
+            raise HTTPException(status_code=422, detail="Could not load stored image for analysis")
+        image_bytes = compress_for_ai(image_bytes)
+
+    if location and isinstance(location, str):
+        try:
+            parsed_location = json.loads(location) if location.strip().startswith('{') else {"raw": location}
+        except Exception:
+            parsed_location = {"raw": location}
+    elif location:
+        parsed_location = location
+
+    ai_provider = determine_ai_provider(model)
+    ai_service = AIServiceFactory.get_service(ai_provider)
+    vision_hint, vision_ref_urls = await get_vision_hint(image_bytes)
+    session_context = await get_session_context(session_id) if session_id else None
+
+    analysis_text = await ai_service.identify_artist(
+        image_bytes,
+        identity=identity,
+        language=language,
+        session_context=session_context,
+        vision_hint=vision_hint,
+        artist_name=artist_name,
+        artwork_name=artwork_name,
+    )
+
+    fallback_artist = existing_artwork.artist_name if existing_artwork and existing_artwork.artist_name else "Unknown Artist"
+    fallback_title = existing_artwork.artwork_name if existing_artwork and existing_artwork.artwork_name else "Untitled"
+    parsed_result = _parse_identify_result(analysis_text, fallback_artist=fallback_artist, fallback_title=fallback_title)
+    parsed_result = _apply_authoritative_identity(parsed_result, artist_name, artwork_name)
+
+    linked_artist_entity_id = existing_artwork.artist_entity_id if existing_artwork else None
+
+    if existing_artwork:
+        existing_artwork.artist_name = parsed_result["artist_name"]
+        existing_artwork.artwork_name = parsed_result["artwork_name"]
+        existing_artwork.analysis = parsed_result["analysis"]
+        existing_artwork.movement = parsed_result["movement"]
+        existing_artwork.period_bucket = parsed_result["period_bucket"]
+        existing_artwork.is_recognized = 1 if (
+            parsed_result["artist_name"].lower() != "unknown artist" and
+            parsed_result["artwork_name"].lower() != "unknown"
+        ) else 0
+        if vision_ref_urls:
+            existing_artwork.reference_urls = vision_ref_urls
+        current_params = dict(existing_artwork.params) if isinstance(existing_artwork.params, dict) else {}
+        if parsed_result["date"] is not None:
+            current_params["date"] = parsed_result["date"]
+        if parsed_result["medium"] is not None:
+            current_params["medium"] = parsed_result["medium"]
+        existing_artwork.params = current_params
+        if parsed_result["tags"]:
+            batch_link_tags(db, existing_artwork, parsed_result["tags"])
+        entity_id_fast = None
+        artist_entity_id_fast = None
+        if existing_artwork.artist_name and existing_artwork.artist_name != "Unknown Artist" and existing_artwork.artwork_name:
+            try:
+                entity = upsert_artwork_entity(db, existing_artwork.artist_name, existing_artwork.artwork_name)
+                artist_ent = upsert_artist_entity(db, existing_artwork.artist_name)
+                db.flush()
+                existing_artwork.artwork_entity_id = entity.id
+                existing_artwork.artist_entity_id = artist_ent.id
+                linked_artist_entity_id = artist_ent.id
+                if entity.dim_status in (None, "pending"):
+                    entity_id_fast = entity.id
+                if artist_ent.bio_status in (None, "pending"):
+                    artist_entity_id_fast = artist_ent.id
+            except Exception as e:
+                logger.warning("Entity upsert failed in unified refresh: %s", e)
+        db.commit()
+        db.refresh(existing_artwork)
+
+        if entity_id_fast and background_tasks:
+            background_tasks.add_task(_run_dimension_analysis_bg, entity_id_fast)
+        if artist_entity_id_fast and background_tasks:
+            background_tasks.add_task(_run_artist_bio_bg, artist_entity_id_fast)
+        if existing_artwork.artist_name and existing_artwork.artist_name != "Unknown Artist":
+            if background_tasks:
+                background_tasks.add_task(_do_insights, str(existing_artwork.id), existing_artwork.artist_name, existing_artwork.artwork_name or "Untitled", language)
+            else:
+                _task = asyncio.create_task(_do_insights(str(existing_artwork.id), existing_artwork.artist_name, existing_artwork.artwork_name or "Untitled", language))
+                _active_tasks.add(_task)
+                _task.add_done_callback(_active_tasks.discard)
+
+        return {
+            "artist_name": parsed_result["artist_name"],
+            "artwork_name": parsed_result["artwork_name"],
+            "analysis": parsed_result["analysis"],
+            "date": parsed_result["date"],
+            "medium": parsed_result["medium"],
+            "movement": parsed_result["movement"],
+            "period_bucket": parsed_result["period_bucket"],
+            "tags": parsed_result["tags"],
+            "artwork_id": str(existing_artwork.id),
+            "reference_urls": vision_ref_urls,
+            "artist_entity_id": linked_artist_entity_id,
+            "model_used": ai_provider.value,
+        }
+
+    response = {"analysis": parsed_result["analysis"], "model_used": ai_provider.value}
+    if user_id:
+        generated_photo_uri = photo_uri
+        if not generated_photo_uri:
+            if client_type == "web" or image is not None:
+                storage = get_storage_service()
+                generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
+            else:
+                import uuid as uuid_mod
+                generated_photo_uri = f"artwork_{uuid_mod.uuid4().hex[:12]}"
+
+        def _save_artwork_sync(
+            u_id, s_id, p_uri, a_name, w_name, e_analysis, d_val, m_val, loc, p_time, mv_val, pb_val, ref_urls
+        ):
+            with SessionLocal() as local_db:
+                usr = local_db.query(User).filter(User.user_id == u_id).first()
+                if not usr:
+                    usr = User(user_id=u_id, device_id=u_id)
+                    local_db.add(usr)
+                    local_db.flush()
+
+                s_id = s_id or f"sess_{uuid.uuid4().hex[:8]}"
+                sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
+                if not sess_record:
+                    initial_title = "Personal Visit"
+                    if loc:
+                        try:
+                            loc_data = json.loads(loc) if isinstance(loc, str) else loc
+                            initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
+                        except Exception:
+                            pass
+                    sess_record = SessionModel(id=s_id, user_id=u_id or "anonymous", title=initial_title)
+                    local_db.add(sess_record)
+                    local_db.flush()
+
+                art = SavedArtwork(
+                    photo_uri=p_uri,
+                    artist_name=a_name,
+                    artwork_name=w_name,
+                    user_id=u_id,
+                    is_recognized=1 if a_name != "Unknown Artist" else 0,
+                    analysis=e_analysis,
+                    params={"date": d_val, "medium": m_val},
+                    session_id=s_id,
+                    location=loc,
+                    photo_time=p_time,
+                    movement=mv_val,
+                    period_bucket=pb_val,
+                    reference_urls=ref_urls or [],
+                )
+                local_db.add(art)
+                local_db.commit()
+                local_db.refresh(art)
+
+                entity_id_for_analysis = None
+                artist_entity_id_for_bio = None
+                linked_artist_entity_id_local = None
+                if a_name and a_name != "Unknown Artist" and w_name:
+                    try:
+                        with local_db.begin_nested():
+                            entity = upsert_artwork_entity(local_db, a_name, w_name)
+                            artist_ent = upsert_artist_entity(local_db, a_name)
+                            local_db.flush()
+                            art.artwork_entity_id = entity.id
+                            art.artist_entity_id = artist_ent.id
+                        local_db.commit()
+                        linked_artist_entity_id_local = artist_ent.id
+                        if entity.dim_status in (None, "pending"):
+                            entity_id_for_analysis = entity.id
+                        if artist_ent.bio_status in (None, "pending"):
+                            artist_entity_id_for_bio = artist_ent.id
+                    except Exception as _e:
+                        logger.warning("Entity upsert failed in unified save: %s", _e)
+
+                return str(art.id), entity_id_for_analysis, artist_entity_id_for_bio, linked_artist_entity_id_local
+
+        artwork_id_result, entity_id_fast, artist_entity_id_fast, linked_artist_entity_id = await anyio.to_thread.run_sync(
+            _save_artwork_sync,
+            user_id,
+            session_id,
+            generated_photo_uri,
+            parsed_result["artist_name"],
+            parsed_result["artwork_name"],
+            parsed_result["analysis"],
+            parsed_result["date"],
+            parsed_result["medium"],
+            parsed_location,
+            photo_time,
+            parsed_result["movement"],
+            parsed_result["period_bucket"],
+            vision_ref_urls,
+        )
+
+        if entity_id_fast and background_tasks:
+            background_tasks.add_task(_run_dimension_analysis_bg, entity_id_fast)
+        if artist_entity_id_fast and background_tasks:
+            background_tasks.add_task(_run_artist_bio_bg, artist_entity_id_fast)
+        if artwork_id_result and parsed_result["artist_name"] and parsed_result["artist_name"] != "Unknown Artist":
+            _ui = asyncio.create_task(_do_insights(artwork_id_result, parsed_result["artist_name"], parsed_result["artwork_name"], language))
+            _active_tasks.add(_ui)
+            _ui.add_done_callback(_active_tasks.discard)
+        if session_id and background_tasks:
+            background_tasks.add_task(
+                update_session_narrative_task,
+                session_id=session_id,
+                new_artwork_data={
+                    "artist": parsed_result["artist_name"],
+                    "title": parsed_result["artwork_name"],
+                    "description": parsed_result["analysis"],
+                },
+                identity=identity,
+                language=language,
+            )
+
+        response.update({
+            "artwork_id": artwork_id_result,
+            "artist_name": parsed_result["artist_name"],
+            "artwork_name": parsed_result["artwork_name"],
+            "photo_uri": generated_photo_uri,
+            "date": parsed_result["date"],
+            "medium": parsed_result["medium"],
+            "location": location,
+            "photo_time": photo_time,
+            "tags": parsed_result["tags"],
+            "artist_entity_id": linked_artist_entity_id,
+            "reference_urls": vision_ref_urls,
+        })
+        return response
+
+    response.update({
+        "artist_name": parsed_result["artist_name"],
+        "artwork_name": parsed_result["artwork_name"],
+        "date": parsed_result["date"],
+        "medium": parsed_result["medium"],
+        "tags": parsed_result["tags"],
+        "reference_urls": vision_ref_urls,
+    })
+    return response
 
 
 @router.post("/artworks/{artwork_id}/reanalyze")

@@ -9,6 +9,7 @@ import json
 from app.models.artwork import AIProvider
 from app.utils.prompt_loader import (
     get_artist_identification_prompt_v2,
+    get_known_artwork_analysis_prompt_v2,
     get_artwork_bite_prompt_v2,
     get_suggest_topics_prompt_v2,
     get_visit_chat_prompt,
@@ -247,6 +248,8 @@ Return ONLY the updated narrative text.{language_instruction}"""
         language: Optional[str] = None,
         session_context: Optional[Dict[str, Any]] = None,
         vision_hint: Optional[str] = None,
+        artist_name: Optional[str] = None,
+        artwork_name: Optional[str] = None,
     ) -> str:
         """
         Identify the artist and artwork details (non-streaming)
@@ -269,6 +272,14 @@ Return ONLY the updated narrative text.{language_instruction}"""
 
         if session_context:
             prompt = self.inject_session_context(prompt, session_context)
+
+        if artist_name or artwork_name:
+            prompt = get_known_artwork_analysis_prompt_v2(
+                artist_name=artist_name or "Unknown Artist",
+                artwork_name=artwork_name or "Untitled",
+                identity=identity,
+                language=language,
+            )
 
         # Prepend Vision hint when available
         if vision_hint:
@@ -294,6 +305,8 @@ Return ONLY the updated narrative text.{language_instruction}"""
         session_context: Optional[Dict[str, Any]] = None,
         reasoning_effort: Optional[str] = None,
         vision_hint: Optional[str] = None,
+        artist_name: Optional[str] = None,
+        artwork_name: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """
         Stream identify the artist and artwork details.
@@ -305,6 +318,14 @@ Return ONLY the updated narrative text.{language_instruction}"""
 
         # Load prompt
         prompt = get_artist_identification_prompt_v2(identity, language=language)
+
+        if artist_name or artwork_name:
+            prompt = get_known_artwork_analysis_prompt_v2(
+                artist_name=artist_name or "Unknown Artist",
+                artwork_name=artwork_name or "Untitled",
+                identity=identity,
+                language=language,
+            )
 
         # Prepend Vision hint when available
         if vision_hint:
