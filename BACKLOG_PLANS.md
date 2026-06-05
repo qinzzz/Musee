@@ -1,0 +1,151 @@
+# Backlog Plans
+
+## 1. Automated Testing Plan
+
+Status: deferred for now
+
+### Goal
+
+Add automated coverage for frequently used core flows and recent fragile behaviors, while keeping manual testing for higher-level UX judgment.
+
+### Why
+
+Recent bugs showed that the app is vulnerable to regressions in async state coordination, session history, upload lifecycle, and cross-view UI state. These are good candidates for automation because they are repeatable and easy to break during refactors.
+
+### First test scope
+
+- upload artwork
+- analyze artwork
+- session history behavior
+- open/edit/switch artwork
+- delete artwork/session
+- quota behavior
+
+### Prioritization rule
+
+Start with flows that are:
+
+- core
+- frequently used
+- already known to be fragile
+
+### Proposed rollout
+
+1. Add stable test selectors to core UI elements.
+2. Choose the frontend/browser/backend testing toolchain.
+3. Implement only a small first suite of high-value tests.
+4. Run targeted tests locally during development.
+5. Run the core suite automatically before merge / in CI.
+
+### Candidate first tests
+
+1. Upload placeholder persists during analysis and server refresh.
+2. Session ordering uses capture time, not photo/EXIF time.
+3. Switching from one artwork to another resets edit mode.
+4. Deleted artwork behavior in session history is correct.
+5. Quota exceeded blocks upload cleanly.
+
+### What a good test should define
+
+- scope
+- setup / initial state
+- user action
+- expected result
+- assertions against the rendered UI or API response
+
+### Notes
+
+- For frontend flow tests, trigger behavior through the real FE.
+- Mock the backend/network response rather than relying on a live backend for every test.
+- Use selectors such as `data-testid` so tests can reliably find important UI elements.
+
+
+## 2. Session / Artwork Bootstrap Cache Idea
+
+Status: deferred until current bugs are stabilized
+
+### Problem
+
+Session/reflection history restores immediately from local storage, while artworks and images restore later from the backend. This creates an inconsistent user experience where the memory appears before the visual context.
+
+### Goal
+
+Make session rehydration feel coherent by restoring lightweight artwork/session context immediately, while still treating the backend as source of truth.
+
+### Recommended direction
+
+- yes to lightweight local bootstrap cache
+- no to caching full image binaries in local storage
+- no to making local cache the canonical state
+
+### Proposed model
+
+1. Store a compact boot payload per user.
+2. Hydrate that payload immediately on app start.
+3. Fetch fresh backend data in the background.
+4. Replace or reconcile local boot data with server truth.
+
+### Suggested cached fields
+
+- artwork id
+- resolved image URL
+- artist name
+- artwork title
+- session/visit id
+- session title
+- timestamp
+- classification
+- photo time if needed for display
+
+Do not store raw image blobs or large binary data in `localStorage`.
+
+### Suggested implementation shape
+
+Create a small persistence layer, for example:
+
+- `frontend-web/lib/bootstrapCache.ts`
+
+Use it from:
+
+- `frontend-web/hooks/useArtworkLibrary.ts`
+- `frontend-web/hooks/useVisits.ts`
+
+### Reconciliation rules
+
+Server wins when:
+
+- artwork is deleted
+- metadata changed
+- session relationships changed
+
+The local cache is only a warm-start layer.
+
+### Guardrails
+
+Include:
+
+- cache version
+- `userId`
+- `updatedAt`
+- TTL / freshness rule
+- safe fallback on parse failure
+
+### Recommended rollout
+
+1. Stabilize current upload/session/history bugs first.
+2. Add artwork metadata bootstrap only.
+3. Hydrate immediately from cache.
+4. Refetch from backend and replace/merge.
+5. Later unify visit drafts/streams/goals into the same boot model.
+
+### Important design principle
+
+The app should not restore only one half of the session experience. Either:
+
+- restore both artwork context and visit/reflection context together
+
+or
+
+- intentionally wait and show a clear loading state
+
+The long-term preferred direction is coherent, lightweight bootstrap hydration with backend revalidation.

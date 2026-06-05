@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { GalleryItem, CuratorConversation, Message } from '../types';
-import { visitChatStream } from '../apiService';
+import { visitChatStream } from '../api/chat';
 
 interface Props {
   items: GalleryItem[];

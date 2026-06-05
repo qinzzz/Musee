@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArtistEntity } from '../types';
-import { fetchUserArtists } from '../apiService';
+import { fetchUserArtists } from '../api/artworks';
 
 interface ArtistRow extends ArtistEntity {
   artwork_count: number;

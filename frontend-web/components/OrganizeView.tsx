@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { GalleryItem, Visit, Album, ArtistEntity } from '../types';
-import { fetchUserArtists, SmartCollection } from '../apiService';
+import { fetchUserArtists, type SmartCollection } from '../api/artworks';
 import GridView from './GridView';
 import SmartCollectionsView from './SmartCollectionsView';
 import CreateBoardModal from './CreateBoardModal';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { GoogleLogin as GoogleOAuthButton, CredentialResponse } from '@react-oauth/google';
-import { loginWithGoogle, getOrCreateUserId } from '../apiService';
+import { loginWithGoogle, getOrCreateUserId } from '../api/auth';
 
 interface GoogleLoginProps {
     onLoginSuccess: (user: any) => void;

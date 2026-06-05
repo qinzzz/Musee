@@ -44,6 +44,7 @@ export interface GalleryItem {
   keywords: string[];
   vibe: AestheticVibe;
   timestamp: number;
+  sessionCapturedAt?: number;
   conversation: Message[];
   visitId?: string;
   // Artwork analysis fields from backend
@@ -64,6 +65,8 @@ export interface GalleryItem {
   insights?: Array<{ title: string; text: string }>;
   artistEntityId?: string;
   classification?: ArtworkClassification;
+  syncStatus?: 'pending' | 'synced' | 'failed';
+  isDeletedPlaceholder?: boolean;
 }
 
 export interface Visit {

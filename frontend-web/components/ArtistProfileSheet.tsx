@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArtistEntity } from '../types';
-import { fetchArtistProfile, backfillArtworkArtist } from '../apiService';
+import { fetchArtistProfile, backfillArtworkArtist } from '../api/artworks';
 
 interface Props {
   artistEntityId?: string;

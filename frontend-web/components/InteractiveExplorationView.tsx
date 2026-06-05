@@ -8,7 +8,7 @@
 // Re-mount this component (e.g. in App.tsx) to bring the feature back online.
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { GalleryItem, ArtworkSkill, SkillCategory } from '../types';
-import { selectArtworkSkills, fetchSkillObservation, fetchSkillDeepDive } from '../apiService';
+import { selectArtworkSkills, fetchSkillObservation, fetchSkillDeepDive } from '../api/explore';
 
 // ── Category colors ────────────────────────────────────────────────────────────
 

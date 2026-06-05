@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Message, GalleryItem } from '../types';
-import { visitChatStream } from '../apiService';
+import { visitChatStream } from '../api/chat';
 
 const markdownComponents = {
   p: ({ children }: { children?: React.ReactNode }) => <span className="block [&+&]:mt-2">{children}</span>,
