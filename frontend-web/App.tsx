@@ -1,53 +1,69 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useRef, useMemo, useEffect } from 'react';
 import ExifReader from 'exifreader';
 import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, CuratorConversation, Album, AestheticVibe, ArtworkClassification } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import { toast as sonnerToast } from 'sonner';
 import GoogleLogin from './components/GoogleLogin';
 import {
   analyzeArtworkStream,
   analyzeArtwork,
-  ArtworkAnalysisResult,
-  StreamingMetrics,
-  UserQuota,
-  getUserQuota,
-  getOrCreateUserId,
-  createSession,
-  fetchUserArtworks,
-  resolveImageUrl,
-  deleteSession,
-  updateSession,
-  base64ToFile,
-  getCurrentUser,
-  logout,
-  deleteArtwork,
-  prefetchExploreDataWithContext,
   analyzeArtworkFromExisting,
-  visitChatStream,
+  base64ToFile,
+  prefetchExploreDataWithContext,
+  type ArtworkAnalysisResult,
+  type StreamingMetrics,
+} from './api/analysis';
+import { getCurrentUser, getOrCreateUserId, getUserQuota, logout, type UserQuota } from './api/auth';
+import { visitChatStream } from './api/chat';
+import {
+  deleteArtwork,
   fetchAndPersistInsights,
+  type SmartCollection,
+} from './api/artworks';
+import {
   fetchSessionMessages,
   appendSessionMessages,
   setSessionGoal,
+  createSession,
+  deleteSession,
+  updateSession,
+} from './api/sessions';
+import {
   fetchCollections,
   createCollection,
   updateCollection,
   deleteCollection,
-  updateArtworkClassification,
-} from './apiService';
+} from './api/collections';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
 import InterpretationModal from './components/InterpretationModal';
 import EmptyWall from './components/EmptyWall';
-import OrganizeView from './components/OrganizeView';
 import TopographyView from './components/TopographyView';
-import TasteProfileView from './components/TasteProfileView';
-import UnsortedClassificationModal from './components/UnsortedClassificationModal';
-import ArtistPage from './components/ArtistPage';
-import ArtMovementPage from './components/ArtMovementPage';
-import LearningHubPage from './components/LearningHubPage';
-import Toast, { ToastAction } from './components/Toast';
 import ContextualActionBar from './components/ContextualActionBar';
 import CanvasHeader from './components/CanvasHeader';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
+import ExploreSessionView from './components/ExploreSessionView';
+import { Toaster } from './components/ui/sonner';
+import { useAppNavigationSync } from './hooks/useAppNavigationSync';
+import { useArtworkLibrary } from './hooks/useArtworkLibrary';
+import { useVisits, type VisitStreamMessage, type VisitDraft, type VisitSummary } from './hooks/useVisits';
+import {
+  buildRootHistoryState,
+  getInitialNavigationState,
+  slugifyName,
+  stateToPath,
+  type ArtistPageContext,
+  type ArtworkDetailContext,
+  type CollectTab,
+  type NavigationHistoryState,
+} from './lib/appNavigation';
+
+const CollectView = lazy(() => import('./components/CollectView'));
+const TasteProfileView = lazy(() => import('./components/TasteProfileView'));
+const UnsortedClassificationModal = lazy(() => import('./components/UnsortedClassificationModal'));
+const ArtistPage = lazy(() => import('./components/ArtistPage'));
+const ArtMovementPage = lazy(() => import('./components/ArtMovementPage'));
+const LearningHubPage = lazy(() => import('./components/LearningHubPage'));
 
 // Helper to report metrics (can integrate with @vercel/speed-insights or custom analytics)
 const reportStreamingMetrics = (metrics: StreamingMetrics) => {
@@ -79,6 +95,17 @@ const reportStreamingMetrics = (metrics: StreamingMetrics) => {
       model: metrics.model
     });
   }
+};
+
+const ScreenLoader: React.FC<{ label?: string }> = ({ label = 'Loading' }) => (
+  <div className="flex h-full w-full items-center justify-center bg-[#faf9f7]">
+    <p className="text-[11px] tracking-[0.3em] uppercase text-neutral-300">{label}…</p>
+  </div>
+);
+
+type ToastAction = {
+  label: string;
+  onClick: () => void;
 };
 
 const downscaleImage = (dataUrl: string, maxWidth = 1600): Promise<string> => {
@@ -241,14 +268,6 @@ const USER_ID = getOrCreateUserId();
 const VISIT_DRAFTS_STORAGE_KEY = 'musee_visit_drafts';
 const VISIT_STREAMS_STORAGE_KEY = 'musee_visit_streams';
 const DEFAULT_VISIT_TITLE = 'Untitled Session';
-type CollectTab = 'saved' | 'boards' | 'movements' | 'artists';
-
-type VisitStreamMessage = Message & {
-  id: string;
-  createdAt: number;
-  type?: 'text' | 'artwork_capture' | 'artwork_card';
-  artworkId?: string;
-};
 
 /**
  * Convert a visit stream into chat-ready {role, text} messages, expanding
@@ -276,7 +295,10 @@ const serializeVisitHistory = (
       out.push({ role: 'user', text: `I captured ${label}.` });
     } else if (m.type === 'artwork_card') {
       const art = m.artworkId ? byId.get(m.artworkId) : undefined;
-      if (!art) continue;
+      if (!art) {
+        out.push({ role: 'model', text: '[Deleted artwork]' });
+        continue;
+      }
       const bits: string[] = [`${art.artworkName || 'Untitled'} by ${art.artistName || 'Unknown Artist'}`];
       if (art.date) bits.push(`(${art.date})`);
       if (art.medium) bits.push(art.medium);
@@ -290,111 +312,8 @@ const serializeVisitHistory = (
   return out;
 };
 
-type VisitDraft = {
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-};
-
-type VisitSummary = {
-  id: string;
-  title: string;
-  location: string | null;
-  artworkCount: number;
-  updatedAt: number;
-  dateLabel: string | null;
-  items: GalleryItem[];
-};
-
-type ArtistPageContext = {
-  artistEntityId?: string;
-  artworkId?: string;
-  artistName?: string;
-  parentLabel?: string;
-  returnToArtworkId?: string;
-  returnToArtworkContext?: ArtworkDetailContext;
-};
-
-type ArtworkDetailContext = {
-  parentLabel: string;
-  basePath: string;
-  returnToArtistContext?: ArtistPageContext;
-};
-
-type NavigationHistoryState =
-  | {
-      view: 'root';
-      activeTab: 'explore' | 'collect' | 'profile' | 'learn';
-      collectTab: CollectTab;
-    }
-  | {
-      view: 'artwork';
-      artworkId: string;
-      artworkContext: ArtworkDetailContext;
-      activeTab: 'explore' | 'collect' | 'profile' | 'learn';
-      collectTab: CollectTab;
-    }
-  | {
-      view: 'artist';
-      artistContext: ArtistPageContext;
-      activeTab: 'explore' | 'collect' | 'profile' | 'learn';
-      collectTab: CollectTab;
-    };
-
-const GoalBanner: React.FC<{ goal: string; onSave: (g: string) => void }> = ({ goal, onSave }) => {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(goal);
-  const inputRef = React.useRef<HTMLInputElement>(null);
-
-  const commit = () => {
-    const trimmed = draft.trim();
-    if (trimmed && trimmed !== goal) onSave(trimmed);
-    setEditing(false);
-  };
-
-  React.useEffect(() => {
-    if (editing) { setDraft(goal); inputRef.current?.focus(); }
-  }, [editing]);
-
-  return (
-    <div className="flex items-center gap-2 px-5 sm:px-10 py-2.5 bg-[#f7f4ee] border-b border-neutral-200/60">
-      <span className="text-[13px] shrink-0">🎯</span>
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') setEditing(false); }}
-          className="flex-1 text-[14px] text-neutral-700 bg-transparent outline-none border-b border-neutral-400 leading-snug py-0.5"
-        />
-      ) : (
-        <button
-          onClick={() => setEditing(true)}
-          className="flex-1 text-left text-[14px] text-neutral-500 leading-snug hover:text-neutral-700 transition-colors"
-        >
-          {goal}
-        </button>
-      )}
-    </div>
-  );
-};
-
-const InsightPill: React.FC<{ title: string; text: string }> = ({ title, text }) => {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <button
-      onClick={() => setExpanded(e => !e)}
-      className="w-full text-left rounded-[14px] bg-white px-3 py-2.5 shadow-sm hover:shadow-md transition-shadow"
-    >
-      <p className="text-[11px] font-semibold text-neutral-800 leading-snug">{title}</p>
-      {expanded && <p className="text-[11px] text-neutral-600 leading-relaxed mt-1.5">{text}</p>}
-    </button>
-  );
-};
-
 const App: React.FC = () => {
+  const initialNavigationState = getInitialNavigationState(window.location.pathname);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const goalGalleryInputRef = useRef<HTMLInputElement>(null);
   const goalCameraInputRef = useRef<HTMLInputElement>(null);
@@ -402,53 +321,13 @@ const App: React.FC = () => {
   const visitStreamScrollRef = useRef<HTMLDivElement>(null);
   const visitStreamEndRef = useRef<HTMLDivElement>(null);
   const inFlightUploadKeysRef = useRef<Set<string>>(new Set());
-  const [items, setItems] = useState<GalleryItem[]>([]);
-  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [isUnsortedFlowOpen, setIsUnsortedFlowOpen] = useState(false);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
-  const [activeTab, setActiveTab] = useState<'explore' | 'collect' | 'profile' | 'learn'>(() => {
-    const p = window.location.pathname;
-    if (p === '/profile') return 'profile';
-    if (p === '/saved' || p === '/boards' || p === '/art-movements' || p === '/artists' || p.startsWith('/art-movements/') || p.startsWith('/artists/')) return 'collect';
-    if (p.startsWith('/learning')) return 'learn';
-    return 'explore';
-  });
-  const [learningInitialGuide] = useState<string | null>(() => {
-    const p = window.location.pathname;
-    if (p.startsWith('/learning/')) return p.slice('/learning/'.length) || null;
-    return null;
-  });
-  const [collectTab, setCollectTab] = useState<CollectTab>(() => {
-    const p = window.location.pathname;
-    if (p === '/boards') return 'boards';
-    if (p === '/art-movements') return 'movements';
-    if (p === '/artists' || p.startsWith('/artists/')) return 'artists';
-    return 'saved';
-  });
+  const [activeTab, setActiveTab] = useState<'explore' | 'collect' | 'profile' | 'learn'>(initialNavigationState.activeTab);
+  const [learningInitialGuide] = useState<string | null>(initialNavigationState.learningInitialGuide);
+  const [collectTab, setCollectTab] = useState<CollectTab>(initialNavigationState.collectTab);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showEntrance, setShowEntrance] = useState(false);
-  const [interpretingItem, setInterpretingItem] = useState<{
-    url: string,
-    id: string,
-    conversation: Message[],
-    artistName?: string,
-    artworkName?: string,
-    description?: string,
-    keywords: string[],
-    date?: string,
-    medium?: string,
-    artworkId?: string,
-    isAnalyzing?: boolean,
-    streamingText?: string,
-    visitId?: string,
-    allVisitItems?: GalleryItem[],
-    is_liked?: boolean,
-    vibe: AestheticVibe,
-    timestamp: number,
-    photoTime?: string,
-    location?: string,
-    classification?: ArtworkClassification,
-  } | null>(null);
 
   // Curator conversation history — persisted to localStorage
   const [curatorConversations, setCuratorConversations] = useState<CuratorConversation[]>(() => {
@@ -460,76 +339,51 @@ const App: React.FC = () => {
   const thumbStripRef = useRef<HTMLDivElement>(null);
   const galleryEntryRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(getCurrentUser());
-  const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
-  const [isComposingNewSession, setIsComposingNewSession] = useState(false);
   const locationCache = useRef<Map<string, { city: string, country: string, museum: string }>>(new Map());
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
-  const [toast, setToast] = useState<{ message: string, type: 'info' | 'success', action?: ToastAction } | null>(null);
-  const [openVisitMenuId, setOpenVisitMenuId] = useState<string | null>(null);
-  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
-  const [editingVisitTitle, setEditingVisitTitle] = useState('');
-  const [artistPageContext, setArtistPageContext] = useState<ArtistPageContext | null>(() => {
-    // Support deep-linking: /artists/ian_cheng opens the artist detail page on load
-    const path = window.location.pathname;
-    if (path.startsWith('/artists/')) {
-      const slug = path.slice('/artists/'.length);
-      if (slug) return { artistEntityId: slug, parentLabel: 'Artists' }; // backend accepts slug as identifier
-    }
-    return null;
-  });
-  const [movementPageContext, setMovementPageContext] = useState<import('./apiService').SmartCollection | null>(null);
+  const [artistPageContext, setArtistPageContext] = useState<ArtistPageContext | null>(initialNavigationState.artistPageContext);
+  const [movementPageContext, setMovementPageContext] = useState<SmartCollection | null>(null);
   const [artworkDetailContext, setArtworkDetailContext] = useState<ArtworkDetailContext | null>(null);
 
   const showToast = (message: string, type: 'info' | 'success' = 'info', action?: ToastAction) => {
-    setToast({ message, type, action });
-  };
+    const options = action
+      ? {
+          action: {
+            label: action.label,
+            onClick: action.onClick,
+          },
+        }
+      : undefined;
 
-  // ── Centralised URL ↔ state helpers ──────────────────────────────────────
-  function stateToPath(tab: string, collectSub: string): string {
-    if (tab === 'profile') return '/profile';
-    if (tab === 'learn') return '/learning';
-    if (tab === 'collect') {
-      if (collectSub === 'boards') return '/boards';
-      if (collectSub === 'movements') return '/art-movements';
-      if (collectSub === 'artists') return '/artists';
-      return '/saved';
-    }
-    return '/';
-  }
-
-  function slugifyName(name: string): string {
-    return name.toLowerCase().replace(/\s+/g, '_');
-  }
-
-  function buildInterpretingItem(item: GalleryItem, allItems?: GalleryItem[]) {
-    const resolvedItems = allItems ?? (item.visitId ? items.filter(entry => entry.visitId === item.visitId) : [item]);
-    return {
-      ...item,
-      visitId: item.visitId,
-      allVisitItems: resolvedItems,
-    };
-  }
-
-  function buildRootHistoryState(nextActiveTab = activeTab, nextCollectTab = collectTab): NavigationHistoryState {
-    return {
-      view: 'root',
-      activeTab: nextActiveTab,
-      collectTab: nextCollectTab,
-    };
-  }
-
-  function restoreArtworkFromHistory(artworkId: string, context: ArtworkDetailContext) {
-    const sourceItem = items.find(item => item.id === artworkId || item.artworkId === artworkId);
-    if (!sourceItem) {
-      setInterpretingItem(null);
-      setArtworkDetailContext(null);
+    if (type === 'success') {
+      sonnerToast.success(message, options);
       return;
     }
-    setArtworkDetailContext(context);
-    setInterpretingItem(buildInterpretingItem(sourceItem));
-  }
+
+    sonnerToast.info(message, options);
+  };
+
+  const {
+    items,
+    setItems,
+    artworksLoaded,
+    profileRefreshKey,
+    interpretingItem,
+    setInterpretingItem,
+    buildInterpretingItem,
+    restoreArtworkFromHistory,
+    handleUpdateClassification,
+    updateItemMetadata,
+  } = useArtworkLibrary({
+    userId: USER_ID,
+    showToast,
+    onMissingArtworkFromHistory: () => setArtworkDetailContext(null),
+    onArtworkDetailContextChange: setArtworkDetailContext,
+    onTagPositionsLoaded: (updater) => setTagPositions(updater),
+  });
 
   function openArtworkDetail(item: GalleryItem, context: ArtworkDetailContext, allItems?: GalleryItem[]) {
+    setArtworkHeaderEditToken(0);
     setMovementPageContext(null);
     setArtistPageContext(null);
     setArtworkDetailContext(context);
@@ -564,6 +418,7 @@ const App: React.FC = () => {
   }
 
   function closeArtworkDetail() {
+    setArtworkHeaderEditToken(0);
     if (window.history.state?.view === 'artwork') {
       window.history.back();
       return;
@@ -583,7 +438,11 @@ const App: React.FC = () => {
         artworkDetailContext.basePath
       );
     } else {
-      window.history.pushState(buildRootHistoryState(), '', artworkDetailContext?.basePath || stateToPath(activeTab, collectTab));
+      window.history.pushState(
+        buildRootHistoryState(activeTab, collectTab),
+        '',
+        artworkDetailContext?.basePath || stateToPath(activeTab, collectTab),
+      );
     }
   }
 
@@ -607,73 +466,21 @@ const App: React.FC = () => {
     );
   }
 
-  // Sync URL → state when user hits browser Back/Forward
-  useEffect(() => {
-    const handlePop = () => {
-      const historyState = window.history.state as NavigationHistoryState | null;
-      if (historyState?.view === 'artwork') {
-        setArtistPageContext(null);
-        setMovementPageContext(null);
-        restoreArtworkFromHistory(historyState.artworkId, historyState.artworkContext);
-        return;
-      }
-      if (historyState?.view === 'artist') {
-        setInterpretingItem(null);
-        setArtworkDetailContext(null);
-        setMovementPageContext(null);
-        setArtistPageContext(historyState.artistContext);
-        return;
-      }
-
-      setInterpretingItem(null);
-      setArtworkDetailContext(null);
-      const path = window.location.pathname;
-      if (path.startsWith('/artists/')) {
-        const slug = path.slice('/artists/'.length);
-        setArtistPageContext(slug ? { artistEntityId: slug, parentLabel: 'Artists' } : null);
-        setMovementPageContext(null);
-        return;
-      }
-      if (path.startsWith('/art-movements/')) {
-        // Deep-link to a movement page — just land on the movements list
-        setMovementPageContext(null);
-        setArtistPageContext(null);
-        setActiveTab('collect');
-        setCollectTab('movements');
-        return;
-      }
-      setArtistPageContext(null);
-      setMovementPageContext(null);
-      if (path.startsWith('/learning')) {
-        setActiveTab('learn');
-        return;
-      }
-      if (path === '/profile') {
-        setActiveTab('profile');
-      } else if (path === '/saved' || path === '/boards' || path === '/art-movements' || path === '/artists') {
-        setActiveTab('collect');
-        if (path === '/boards') setCollectTab('boards');
-        else if (path === '/art-movements') setCollectTab('movements');
-        else if (path === '/artists') setCollectTab('artists');
-        else setCollectTab('saved');
-      } else {
-        setActiveTab('explore');
-      }
-    };
-    window.addEventListener('popstate', handlePop);
-    return () => window.removeEventListener('popstate', handlePop);
-  }, [items]);
-
-  // Sync state → URL whenever a tab changes (skip when overlay pages own the URL)
-  useEffect(() => {
-    if (artistPageContext || movementPageContext || interpretingItem) return;
-    const path = stateToPath(activeTab, collectTab);
-    if (window.location.pathname !== path) {
-      window.history.pushState(buildRootHistoryState(), '', path);
-    } else {
-      window.history.replaceState(buildRootHistoryState(), '', path);
-    }
-  }, [activeTab, collectTab, artistPageContext, movementPageContext, interpretingItem]);
+  useAppNavigationSync({
+    activeTab,
+    collectTab,
+    artistPageContext,
+    movementPageContext,
+    artworkDetailContext,
+    interpretingItem,
+    onRestoreArtworkFromHistory: restoreArtworkFromHistory,
+    onSetArtistPageContext: setArtistPageContext,
+    onSetMovementPageContext: setMovementPageContext,
+    onSetArtworkDetailContext: setArtworkDetailContext,
+    onSetActiveTab: setActiveTab,
+    onSetCollectTab: setCollectTab,
+    onSetInterpretingItem: setInterpretingItem,
+  });
 
   /** 
    * Algorithmic Session Determination (Phase 7)
@@ -762,26 +569,43 @@ const App: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
-  const [visitSearch, setVisitSearch] = useState('');
-  const [visitDrafts, setVisitDrafts] = useState<VisitDraft[]>(() => {
-    try { return JSON.parse(localStorage.getItem(VISIT_DRAFTS_STORAGE_KEY) || '[]'); }
-    catch { return []; }
-  });
-  const [visitStreams, setVisitStreams] = useState<Record<string, VisitStreamMessage[]>>(() => {
-    try { return JSON.parse(localStorage.getItem(VISIT_STREAMS_STORAGE_KEY) || '{}'); }
-    catch { return {}; }
-  });
-  const [streamingVisitResponses, setStreamingVisitResponses] = useState<Record<string, string>>({});
-  const [sessionGoalDismissed, setSessionGoalDismissed] = useState<Set<string>>(new Set());
-  const [sessionGoalInput, setSessionGoalInput] = useState('');
-  // Per-session goals persisted to localStorage
-  const [sessionGoals, setSessionGoals] = useState<Record<string, string>>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem('musee_session_goals') || '{}');
-      // Strip any entry stored under an empty key (from a prior bug)
-      const { '': _dropped, ...clean } = raw;
-      return clean;
-    } catch { return {}; }
+  const {
+    visitSearch,
+    setVisitSearch,
+    filteredVisitId,
+    setFilteredVisitId,
+    isComposingNewSession,
+    setIsComposingNewSession,
+    openVisitMenuId,
+    setOpenVisitMenuId,
+    editingVisitId,
+    setEditingVisitId,
+    editingVisitTitle,
+    setEditingVisitTitle,
+    visitDrafts,
+    setVisitDrafts,
+    visitStreams,
+    setVisitStreams,
+    streamingVisitResponses,
+    setStreamingVisitResponses,
+    sessionGoalDismissed,
+    setSessionGoalDismissed,
+    sessionGoalInput,
+    setSessionGoalInput,
+    sessionGoals,
+    setSessionGoals,
+    visitSummaries,
+    activeVisitSummary,
+    pendingDeleteVisitSummary,
+    activeVisitStream,
+  } = useVisits({
+    items,
+    artworksLoaded,
+    deleteConfirmation,
+    defaultVisitTitle: DEFAULT_VISIT_TITLE,
+    visitDraftsStorageKey: VISIT_DRAFTS_STORAGE_KEY,
+    visitStreamsStorageKey: VISIT_STREAMS_STORAGE_KEY,
+    sessionGoalsStorageKey: 'musee_session_goals',
   });
 
   const [likedIds, setLikedIds] = useState<Set<string>>(() => {
@@ -834,7 +658,6 @@ const App: React.FC = () => {
   const handleRenameAlbum = async (boardId: string, name: string) => {
     const updated = await updateCollection(boardId, { name });
     setAlbums(prev => prev.map(album => album.id === boardId ? updated : album));
-    showToast(`Renamed board to "${updated.name}"`, 'success');
     return updated;
   };
 
@@ -843,26 +666,6 @@ const App: React.FC = () => {
     await deleteCollection(boardId);
     setAlbums(prev => prev.filter(album => album.id !== boardId));
     showToast(`Deleted board "${targetBoard?.name || 'Untitled'}"`, 'success');
-  };
-
-  const handleUpdateClassification = async (itemId: string, classification: ArtworkClassification) => {
-    const previous = items.find(item => item.id === itemId)?.classification || 'unsorted';
-    if (previous === classification) return;
-
-    setItems(prev => prev.map(item => item.id === itemId ? { ...item, classification } : item));
-    setInterpretingItem(prev => prev?.id === itemId ? { ...prev, classification } : prev);
-    setProfileRefreshKey(prev => prev + 1);
-
-    try {
-      await updateArtworkClassification(itemId, classification);
-    } catch (error) {
-      console.error('Failed to update artwork classification:', error);
-      setItems(prev => prev.map(item => item.id === itemId ? { ...item, classification: previous } : item));
-      setInterpretingItem(prev => prev?.id === itemId ? { ...prev, classification: previous } : prev);
-      setProfileRefreshKey(prev => prev + 1);
-      showToast('Could not update artwork classification', 'info');
-      throw error;
-    }
   };
 
   const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'community'>('metadata');
@@ -876,18 +679,6 @@ const App: React.FC = () => {
     itemIds: [],
     globalConversation: []
   });
-
-  useEffect(() => {
-    localStorage.setItem(VISIT_DRAFTS_STORAGE_KEY, JSON.stringify(visitDrafts));
-  }, [visitDrafts]);
-
-  useEffect(() => {
-    localStorage.setItem(VISIT_STREAMS_STORAGE_KEY, JSON.stringify(visitStreams));
-  }, [visitStreams]);
-
-  useEffect(() => {
-    localStorage.setItem('musee_session_goals', JSON.stringify(sessionGoals));
-  }, [sessionGoals]);
 
   useEffect(() => {
     const userId = currentUser?.user_id || USER_ID;
@@ -916,86 +707,6 @@ const App: React.FC = () => {
       cancelled = true;
     };
   }, [currentUser?.user_id]);
-
-  // Fetch previous artworks on mount
-  useEffect(() => {
-    const loadArtworks = async () => {
-      try {
-        console.log('Fetching previous artworks for user:', USER_ID);
-        const data = await fetchUserArtworks(USER_ID);
-
-        if (data && data.items) {
-          // Map each artwork to the frontend GalleryItem type
-          const mappedItems: GalleryItem[] = data.items.map((item: any) => {
-            // Resolve image URL
-            const imageUrl = resolveImageUrl(item.photo_uri);
-
-            // Map keywords from tags
-            const keywords = (item.artwork_tags || []).map((t: any) =>
-              t.name.startsWith('#') ? t.name.toLowerCase() : `#${t.name.toLowerCase()}`
-            );
-
-            return {
-              id: item.id,
-              artworkId: item.id,
-              url: imageUrl,
-              artistName: item.artist_name,
-              artworkName: item.artwork_name,
-              description: parseAnalysis(item.analysis),
-              keywords: keywords,
-              date: item.date,
-              medium: item.medium,
-              timestamp: item.photo_time ? new Date(item.photo_time).getTime() : (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
-              visitId: item.session_id,
-              location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
-              photoTime: item.photo_time,
-              sessionTitle: item.session_title,
-              movement: item.movement,
-              periodBucket: item.period_bucket,
-              referenceUrls: item.reference_urls || [],
-              insights: item.insights || [],
-              artistEntityId: item.artist_entity_id || undefined,
-              classification: item.classification || 'unsorted',
-              conversation: (item.conversation_history || []).map((msg: any) => ({
-                role: msg.role === 'assistant' ? 'model' : 'user',
-                text: msg.content
-              })),
-              vibe: {
-                backgroundColor: '#ffffff',
-                padding: 4,
-                borderRadius: '12px',
-                borderType: 'solid',
-                accentColor: '#000000'
-              }
-            };
-          });
-
-          console.log(`Loaded ${mappedItems.length} artworks from history`);
-          setItems(mappedItems);
-
-          // Update tag positions for topography view
-          const newTagPositions = { ...tagPositions };
-          let changed = false;
-          mappedItems.forEach(item => {
-            item.keywords.forEach(tag => {
-              if (!newTagPositions[tag]) {
-                newTagPositions[tag] = {
-                  x: (Math.random() * 2 - 1),
-                  y: (Math.random() * 2 - 1)
-                };
-                changed = true;
-              }
-            });
-          });
-          if (changed) setTagPositions(newTagPositions);
-        }
-      } catch (error) {
-        console.error('Failed to load previous artworks:', error);
-      }
-    };
-
-    loadArtworks();
-  }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const resolvedLocation = useRef<string | undefined>(undefined);
@@ -1058,132 +769,6 @@ const App: React.FC = () => {
     return entry.type === 'item' ? entry.item : entry.items[entry.items.length - 1] ?? null;
   }, [corridorEntries, thumbEntries, activeThumbIndex]);
 
-  const parseDisplayLocation = (loc: any): string | null => {
-    if (!loc) return null;
-    try {
-      const data = typeof loc === 'object' ? loc : (typeof loc === 'string' && loc.startsWith('{') ? JSON.parse(loc) : null);
-      if (data) {
-        const parts: string[] = [];
-        if (data.museum) parts.push(data.museum);
-        if (data.city) parts.push(data.city);
-        else if (data.country) parts.push(data.country);
-        return parts.join(', ') || null;
-      }
-      return typeof loc === 'string' ? loc : null;
-    } catch { return typeof loc === 'string' ? loc : null; }
-  };
-
-  const parseDisplayDate = (dateStr: string): string => {
-    try {
-      const dt = new Date(dateStr);
-      if (!isNaN(dt.getTime())) return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      return dateStr;
-    } catch { return dateStr; }
-  };
-
-  const visitSummaries = useMemo(() => {
-    const grouped = new Map<string, GalleryItem[]>();
-    items.forEach(item => {
-      if (!item.visitId) return;
-      if (!grouped.has(item.visitId)) grouped.set(item.visitId, []);
-      grouped.get(item.visitId)!.push(item);
-    });
-
-    const summaries: VisitSummary[] = [];
-    const knownIds = new Set<string>();
-
-    grouped.forEach((visitItems, id) => {
-      knownIds.add(id);
-      const sortedItems = [...visitItems].sort((a, b) => a.timestamp - b.timestamp);
-      const latestItem = sortedItems[sortedItems.length - 1];
-      const firstItem = sortedItems[0];
-      const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
-      const title = latestItem?.sessionTitle || location || visitDrafts.find(v => v.id === id)?.title || DEFAULT_VISIT_TITLE;
-      summaries.push({
-        id,
-        title,
-        location,
-        artworkCount: sortedItems.length,
-        updatedAt: latestItem?.timestamp || Date.now(),
-        dateLabel: latestItem?.photoTime ? parseDisplayDate(latestItem.photoTime) : null,
-        items: sortedItems,
-      });
-    });
-
-    visitDrafts.forEach(draft => {
-      if (knownIds.has(draft.id)) return;
-      summaries.push({
-        id: draft.id,
-        title: draft.title || DEFAULT_VISIT_TITLE,
-        location: null,
-        artworkCount: 0,
-        updatedAt: draft.updatedAt,
-        dateLabel: new Date(draft.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        items: [],
-      });
-    });
-
-    const search = visitSearch.trim().toLowerCase();
-    return summaries
-      .filter(summary => {
-        if (!search) return true;
-        return summary.title.toLowerCase().includes(search) || (summary.location || '').toLowerCase().includes(search);
-      })
-      .sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [items, visitDrafts, visitSearch]);
-
-  const activeVisitSummary = useMemo(() => {
-    if (isComposingNewSession) {
-      return {
-        id: '',
-        title: DEFAULT_VISIT_TITLE,
-        location: null,
-        artworkCount: 0,
-        updatedAt: Date.now(),
-        dateLabel: null,
-        items: [],
-      };
-    }
-    return visitSummaries.find(summary => summary.id === filteredVisitId) || visitSummaries[0] || null;
-  }, [visitSummaries, filteredVisitId, isComposingNewSession]);
-
-  const pendingDeleteVisitSummary = useMemo(() => {
-    if (!deleteConfirmation || deleteConfirmation.type !== 'session') return null;
-    return visitSummaries.find(summary => summary.id === deleteConfirmation.id) || null;
-  }, [deleteConfirmation, visitSummaries]);
-
-  const activeVisitStream = useMemo(() => {
-    if (!activeVisitSummary) return [];
-    const messages = visitStreams[activeVisitSummary.id] || [];
-
-    // Build a map from artworkId → upload timestamp using artwork_capture events
-    const captureTimeByArtworkId = new Map<string, number>();
-    for (const m of messages) {
-      if (m.type === 'artwork_capture' && m.artworkId) {
-        captureTimeByArtworkId.set(m.artworkId, m.createdAt);
-      }
-    }
-
-    const artworkEntries = activeVisitSummary.items.map(item => ({
-      id: `artwork-${item.id}`,
-      // Use upload time from capture event; fall back to item.timestamp (EXIF) only if unavailable
-      createdAt: (item.artworkId && captureTimeByArtworkId.get(item.artworkId)) || item.timestamp,
-      type: 'artwork' as const,
-      item,
-    }));
-
-    // Exclude artwork_capture / artwork_card entries — those are represented by artworkEntries above
-    const messageEntries = messages
-      .filter(m => m.type !== 'artwork_capture' && m.type !== 'artwork_card')
-      .map(entry => ({
-        id: entry.id,
-        createdAt: entry.createdAt,
-        type: 'message' as const,
-        message: entry,
-      }));
-    return [...artworkEntries, ...messageEntries].sort((a, b) => a.createdAt - b.createdAt);
-  }, [activeVisitSummary, visitStreams]);
-
   useEffect(() => {
     if (activeTab !== 'explore' || interpretingItem || !visitStreamEndRef.current || !activeVisitSummary) return;
 
@@ -1223,12 +808,6 @@ const App: React.FC = () => {
       });
     }).catch(() => {});
   }, [activeVisitSummary?.id]);
-
-  useEffect(() => {
-    if (isComposingNewSession) return;
-    if (filteredVisitId && visitSummaries.some(summary => summary.id === filteredVisitId)) return;
-    setFilteredVisitId(visitSummaries[0]?.id || null);
-  }, [visitSummaries, filteredVisitId, isComposingNewSession]);
 
   useEffect(() => {
     if (!openVisitMenuId) return;
@@ -1759,15 +1338,18 @@ const App: React.FC = () => {
           }
 
           const newItemId = Math.random().toString(36).substring(2, 11);
+          const capturedAt = Date.now();
           const placeholderItem: GalleryItem = {
             id: newItemId,
             url: base64,
             keywords: [],
             vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
             timestamp: photoTimestamp,
+            sessionCapturedAt: capturedAt,
             conversation: [],
             visitId,
             isAnalyzing: true,
+            syncStatus: 'pending',
             streamingText: '',
             location: coords ? JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city: '', country: '', museum: '' }) : undefined,
             photoTime,
@@ -1781,13 +1363,8 @@ const App: React.FC = () => {
               .then(({ city, country, museum }) => {
                 const resolved = JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city, country, museum });
                 setItems(prev => prev.map(item => item.id === newItemId ? { ...item, location: resolved } : item));
-                const contextName = museum || city || 'your collection';
-                if (isNew) showToast(`Created a new session for ${contextName}`, 'success');
-                else showToast(`Added to ${contextName} collection`, 'info');
               })
-              .catch(() => showToast(isNew ? 'Created a new session' : 'Added to collection'));
-          } else {
-            showToast(isNew ? 'Created a new session' : 'Added to collection');
+              .catch(() => {});
           }
 
           const exploreContextFired = { current: false };
@@ -1865,10 +1442,10 @@ const App: React.FC = () => {
               if (msg.includes('402') || msg.includes('quota_exceeded')) {
                 setItems(prev => prev.filter(item => item.id !== newItemId));
                 setInterpretingItem(prev => (prev?.id === newItemId) ? null : prev);
-                setToast({ message: "You've reached your artwork limit. Upgrade to save more.", type: 'info' });
+                showToast("You've reached your artwork limit. Upgrade to save more.", 'info');
               } else {
-                setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, streamingText: msg } : item));
-                setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, isAnalyzing: false, streamingText: msg } : prev);
+                setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, streamingText: msg, syncStatus: 'failed' } : item));
+                setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, isAnalyzing: false, streamingText: msg, syncStatus: 'failed' } : prev);
               }
               setIsAnalyzing(false);
             },
@@ -1909,7 +1486,8 @@ const App: React.FC = () => {
 
         setVisit(prev => ({ ...prev, id: batchVisitId, itemIds: [], globalConversation: [] }));
 
-        const batchPlaceholders: GalleryItem[] = memoryFiles.map((memFile) => {
+        const batchCapturedAtBase = Date.now();
+        const batchPlaceholders: GalleryItem[] = memoryFiles.map((memFile, index) => {
           const id = Math.random().toString(36).substring(2, 11);
           (memFile as any).generatedId = id;
           const itemTime = memFile.metadata.timestamp || Date.now();
@@ -1923,7 +1501,9 @@ const App: React.FC = () => {
             visitId: batchVisitId,
             vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
             timestamp: itemTime,
+            sessionCapturedAt: batchCapturedAtBase + index,
             isAnalyzing: true,
+            syncStatus: 'pending',
             streamingText: '',
             photoTime: itemTimeLabel,
             location: memFile.metadata.latitude
@@ -1947,26 +1527,8 @@ const App: React.FC = () => {
               const resolved = JSON.stringify({ latitude: anchorMeta.latitude, longitude: anchorMeta.longitude, city, country, museum });
               resolvedLocation.current = resolved;
               setItems(prev => prev.map(item => batchPlaceholders.some(p => p.id === item.id) ? { ...item, location: resolved } : item));
-              showToast(
-                isNew
-                  ? `Started a new session at ${museum || city || 'museum'} with ${batchPlaceholders.length} works`
-                  : `Added ${batchPlaceholders.length} works to ${museum || city || 'session'}`,
-                isNew ? 'success' : 'info'
-              );
             })
-            .catch(() => showToast(
-              isNew
-                ? `Started a new session with ${batchPlaceholders.length} works`
-                : `Added ${batchPlaceholders.length} works to the session`,
-              isNew ? 'success' : 'info'
-            ));
-        } else {
-          showToast(
-            isNew
-              ? `Started a new session with ${batchPlaceholders.length} works`
-              : `Added ${batchPlaceholders.length} works to the session`,
-            isNew ? 'success' : 'info'
-          );
+            .catch(() => {});
         }
 
         for (const memFile of memoryFiles) {
@@ -2025,9 +1587,9 @@ const App: React.FC = () => {
             const errMsg = (e as Error)?.message || '';
             if (errMsg.includes('402') || errMsg.includes('quota_exceeded')) {
               setItems(prev => prev.filter(item => item.id !== newItemId));
-              setToast({ message: "You've reached your artwork limit. Upgrade to save more.", type: 'info' });
+              showToast("You've reached your artwork limit. Upgrade to save more.", 'info');
             } else {
-              setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, description: 'Analysis failed.' } : item));
+              setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, description: 'Analysis failed.', syncStatus: 'failed' } : item));
             }
           } finally {
             finishedCount++;
@@ -2097,18 +1659,13 @@ const App: React.FC = () => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, conversation: [...item.conversation, ...newMessages] } : item));
   };
 
-  const updateItemMetadata = (id: string, updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
-    setInterpretingItem(prev => prev?.id === id ? { ...prev, ...updates } : prev);
-  };
-
   const handleDeleteItem = (id: string) => {
     setDeleteConfirmation({ id, type: 'item' });
   };
 
   const handleRetryAnalysis = async (item: GalleryItem) => {
     const itemId = item.id;
-    setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: true, streamingText: undefined } : i));
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: true, streamingText: undefined, syncStatus: i.syncStatus === 'failed' ? 'pending' : i.syncStatus } : i));
     try {
       const safeFile = base64ToFile(item.url, 'artwork.jpg');
       await analyzeArtworkStream(
@@ -2138,16 +1695,16 @@ const App: React.FC = () => {
           const msg = error?.message || 'Analysis failed.';
           if (msg.includes('402') || msg.includes('quota_exceeded')) {
             setItems(prev => prev.filter(i => i.id !== itemId));
-            setToast({ message: "You've reached your artwork limit. Upgrade to save more.", type: 'info' });
+            showToast("You've reached your artwork limit. Upgrade to save more.", 'info');
           } else {
-            setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: false, streamingText: msg } : i));
+            setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: false, streamingText: msg, syncStatus: i.syncStatus === 'pending' ? 'failed' : i.syncStatus } : i));
           }
           setIsAnalyzing(false);
         },
         item.visitId, undefined, item.location, item.photoTime,
       );
     } catch {
-      setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: false, streamingText: 'Retry failed.' } : i));
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: false, streamingText: 'Retry failed.', syncStatus: i.syncStatus === 'pending' ? 'failed' : i.syncStatus } : i));
       setIsAnalyzing(false);
     }
   };
@@ -2197,6 +1754,7 @@ const App: React.FC = () => {
       }
       setItems(prev => prev.filter(item => item.id !== id));
       if (interpretingItem?.id === id) setInterpretingItem(null);
+      showToast('Artwork deleted', 'success');
       console.log(`Successfully deleted artwork: ${id}`);
     } catch (error) {
       console.error("Failed to delete artwork:", error);
@@ -2251,7 +1809,6 @@ const App: React.FC = () => {
         return [{ id: visitId, title: trimmedTitle, createdAt: now, updatedAt: now }, ...prev];
       });
 
-      showToast('Session renamed', 'success');
     } catch (error) {
       console.error('Failed to rename visit:', error);
       showToast('Could not rename session', 'info');
@@ -2322,21 +1879,16 @@ const App: React.FC = () => {
       <div
         className="relative flex h-dvh w-screen flex-row overflow-hidden bg-[#faf9f7] text-neutral-900"
       >
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            action={toast.action}
-            onClose={() => setToast(null)}
-          />
-        )}
+        <Toaster />
 
-        <UnsortedClassificationModal
-          open={isUnsortedFlowOpen}
-          items={items}
-          onClose={() => setIsUnsortedFlowOpen(false)}
-          onClassify={handleUpdateClassification}
-        />
+        <Suspense fallback={null}>
+          <UnsortedClassificationModal
+            open={isUnsortedFlowOpen}
+            items={items}
+            onClose={() => setIsUnsortedFlowOpen(false)}
+            onClassify={handleUpdateClassification}
+          />
+        </Suspense>
 
         {showLoginModal && !currentUser && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
@@ -2851,498 +2403,208 @@ const App: React.FC = () => {
           <div className="flex-1 min-h-0 relative flex flex-col">
             {artistPageContext ? (
               <div className="flex h-full min-w-0 flex-1 flex-col bg-[#faf9f7] animate-in fade-in duration-300">
-                <ArtistPage
-                  artistEntityId={artistPageContext.artistEntityId}
-                  artworkId={artistPageContext.artworkId}
-                  artistName={artistPageContext.artistName}
-                  parentLabel={artistPageContext.parentLabel}
-                  userId={currentUser?.user_id || USER_ID}
-                  onClose={closeArtistDetail}
-                  onOpenArtwork={(item) => {
-                    openArtworkDetail(item, {
-                      parentLabel: artistPageContext.artistName || artistPageContext.artistEntityId || 'Artist',
-                      basePath: window.location.pathname,
-                      returnToArtistContext: artistPageContext,
-                    });
-                  }}
-                  onNavigateToIndex={artistPageContext.returnToArtworkId ? undefined : () => {
-                    setArtistPageContext(null);
-                    setActiveTab('collect');
-                    setCollectTab('artists');
-                    window.history.pushState(
-                      {
-                        view: 'root',
-                        activeTab: 'collect',
-                        collectTab: 'artists',
-                      } satisfies NavigationHistoryState,
-                      '',
-                      '/artists'
-                    );
-                  }}
-                  isInline={true}
-                />
+                <Suspense fallback={<ScreenLoader label="Loading artist" />}>
+                  <ArtistPage
+                    artistEntityId={artistPageContext.artistEntityId}
+                    artworkId={artistPageContext.artworkId}
+                    artistName={artistPageContext.artistName}
+                    parentLabel={artistPageContext.parentLabel}
+                    userId={currentUser?.user_id || USER_ID}
+                    onClose={closeArtistDetail}
+                    onOpenArtwork={(item) => {
+                      openArtworkDetail(item, {
+                        parentLabel: artistPageContext.artistName || artistPageContext.artistEntityId || 'Artist',
+                        basePath: window.location.pathname,
+                        returnToArtistContext: artistPageContext,
+                      });
+                    }}
+                    onNavigateToIndex={artistPageContext.returnToArtworkId ? undefined : () => {
+                      setArtistPageContext(null);
+                      setActiveTab('collect');
+                      setCollectTab('artists');
+                      window.history.pushState(
+                        {
+                          view: 'root',
+                          activeTab: 'collect',
+                          collectTab: 'artists',
+                        } satisfies NavigationHistoryState,
+                        '',
+                        '/artists'
+                      );
+                    }}
+                    isInline={true}
+                  />
+                </Suspense>
               </div>
             ) : movementPageContext ? (
               <div className="flex h-full min-w-0 flex-1 flex-col bg-[#faf9f7] animate-in fade-in duration-300">
-                <ArtMovementPage
-                  collection={movementPageContext}
-                  items={items}
-                  onClose={() => {
-                    setMovementPageContext(null);
-                    window.history.pushState(buildRootHistoryState(), '', stateToPath(activeTab, collectTab));
-                  }}
-                  onOpenArtwork={(item) => {
-                    openArtworkDetail(item, {
-                      parentLabel: movementPageContext.name,
-                      basePath: window.location.pathname,
-                    });
-                  }}
-                  isInline={true}
-                />
+                <Suspense fallback={<ScreenLoader label="Loading collection" />}>
+                  <ArtMovementPage
+                    collection={movementPageContext}
+                    items={items}
+                    onClose={() => {
+                      setMovementPageContext(null);
+                      window.history.pushState(
+                        buildRootHistoryState(activeTab, collectTab),
+                        '',
+                        stateToPath(activeTab, collectTab),
+                      );
+                    }}
+                    onOpenArtwork={(item) => {
+                      openArtworkDetail(item, {
+                        parentLabel: movementPageContext.name,
+                        basePath: window.location.pathname,
+                      });
+                    }}
+                    isInline={true}
+                  />
+                </Suspense>
               </div>
             ) : activeTab === 'explore' ? (
               activeVisitSummary ? (
-                interpretingItem ? (
-                  <>
-                    <CanvasHeader
-                      parentLabel={activeVisitSummary.title}
-                      parentClick={closeArtworkDetail}
-                      childLabel={interpretingItem.artworkName || 'Untitled'}
-                      rightSlot={artworkHeaderActions}
-                      isInline={true}
-                    />
-                    <div className="flex-1 overflow-hidden animate-in fade-in zoom-in-98 duration-300">
-                      <InterpretationModal
-                        item={interpretingItem}
-                        onClose={closeArtworkDetail}
-                        onUpdateMetadata={updateItemMetadata}
-                        onUpdateClassification={handleUpdateClassification}
-                        onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
-                        allVisitItems={interpretingItem.allVisitItems}
-                        onNavigate={handleNavigateInterpretation}
-                        rightMode={interpretationRightMode}
-                        onRightModeChange={setInterpretationRightMode}
-                        interpretingMode={interpretingMode}
-                        onSwitchMode={() => {
-                          const nextMode = interpretingMode === 'professional' ? 'interactive' : 'professional';
-                          setInterpretingMode(nextMode);
-                          localStorage.setItem('musee_analysis_mode', nextMode);
-                        }}
-                        onRefreshAnalysis={handleRefreshAnalysis}
-                        userId={currentUser?.user_id || USER_ID}
-                        onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
-                          openArtistDetail({
-                            artistEntityId,
-                            artworkId,
-                            artistName,
-                            parentLabel: interpretingItem.artworkName || 'Untitled',
-                            returnToArtworkId: interpretingItem.id,
-                            returnToArtworkContext: artworkDetailContext || {
-                              parentLabel: activeVisitSummary.title,
-                              basePath: stateToPath(activeTab, collectTab),
-                            },
-                          });
-                        }}
-                        navigationContextLabel={artworkDetailContext?.parentLabel || activeVisitSummary.title}
-                        editRequestToken={artworkHeaderEditToken}
-                        isInline={true}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <CanvasHeader
-                      parentLabel=""
-                      childLabel={activeVisitSummary.title}
-                      subtitle={activeVisitSummary.location || undefined}
-                      isInline={true}
-                    />
-
-                    {/* Pinned session goal — tappable to edit */}
-                    {sessionGoals[activeVisitSummary.id] && (
-                      <GoalBanner
-                        goal={sessionGoals[activeVisitSummary.id]}
-                        onSave={(newGoal) => {
-                          const sid = activeVisitSummary.id;
-                          setSessionGoals(prev => ({ ...prev, [sid]: newGoal }));
-                          ensureSessionRecord(sid)
-                            .then(res => setSessionGoal(res?.session?.id || sid, newGoal))
-                            .catch(() => {});
-                        }}
-                      />
-                    )}
-
-                    <div className="flex-1 min-h-0 flex flex-col bg-[#f7f4ee]" style={{ overflow: 'clip' }}>
-                      {activeVisitStream.length === 0 ? (
-                        sessionGoalDismissed.has(activeVisitSummary.id) ? (
-                          /* Plain empty state after skip */
-                          <div className="flex-1 flex flex-col items-center justify-center pb-20 px-6">
-                            <div className="text-center animate-in fade-in zoom-in-95 duration-500">
-                              <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-tight text-neutral-800 font-sans mb-2">
-                                Start capturing
-                              </h2>
-                              <p className="text-[15px] text-neutral-400 font-medium font-sans">
-                                Photograph an artwork to begin your session.
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          /* Goal-setting prompt */
-                          <div className="flex-1 flex flex-col items-center justify-center px-6 pb-24">
-                            <div className="w-full max-w-sm animate-in fade-in zoom-in-95 duration-500">
-                              <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-neutral-800 font-sans mb-2 text-center">
-                                What's your focus today?
-                              </h2>
-                              <p className="text-[14px] text-neutral-400 text-center mb-7">
-                                Share your goal for this visit — or skip and start capturing.
-                              </p>
-                              <div className="relative">
-                                <textarea
-                                  placeholder="e.g. I want to learn about medieval art, find inspiration for my interior design…"
-                                  className="w-full bg-white rounded-[20px] px-5 py-4 pr-14 text-[14px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none shadow-sm border border-neutral-100 focus:border-neutral-300 transition-colors leading-relaxed"
-                                  rows={3}
-                                  value={sessionGoalInput}
-                                  onChange={e => setSessionGoalInput(e.target.value)}
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                      e.preventDefault();
-                                      const goal = sessionGoalInput.trim();
-                                      if (!goal) return;
-                                      const sid = activeVisitSummary.id || createVisitDraft();
-                                      setSessionGoalInput('');
-                                      setSessionGoals(prev => ({ ...prev, [sid]: goal }));
-                                      setSessionGoalDismissed(prev => new Set([...prev, sid]));
-                                      ensureSessionRecord(sid)
-                                        .then(res => setSessionGoal(res?.session?.id || sid, goal))
-                                        .catch(() => {});
-                                    }
-                                  }}
-                                />
-                                <button
-                                  onClick={() => {
-                                    const goal = sessionGoalInput.trim();
-                                    if (!goal) return;
-                                    const sid = activeVisitSummary.id || createVisitDraft();
-                                    setSessionGoalInput('');
-                                    setSessionGoals(prev => ({ ...prev, [sid]: goal }));
-                                    setSessionGoalDismissed(prev => new Set([...prev, sid]));
-                                    ensureSessionRecord(sid)
-                                      .then(res => setSessionGoal(res?.session?.id || sid, goal))
-                                      .catch(() => {});
-                                  }}
-                                  disabled={!sessionGoalInput.trim()}
-                                  className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-20 transition-opacity"
-                                >
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                                  </svg>
-                                </button>
-                              </div>
-                              {/* Hidden file inputs */}
-                              <input ref={goalGalleryInputRef} type="file" accept="image/*" multiple className="hidden"
-                                onChange={(e) => handleFileUpload(e, 'gallery')} />
-                              <input ref={goalCameraInputRef} type="file" accept="image/*"
-                                capture={/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'environment' : undefined}
-                                className="hidden" onChange={(e) => handleFileUpload(e, 'camera')} />
-                              {/* Upload buttons */}
-                              <div className="mt-5 flex gap-3">
-                                <button
-                                  onClick={() => goalGalleryInputRef.current?.click()}
-                                  className="flex-1 flex items-center justify-center gap-2 bg-neutral-900 text-white rounded-full px-5 py-3 text-[13px] font-medium"
-                                >
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                                  </svg>
-                                  Capture artwork
-                                </button>
-                                <button
-                                  onClick={() => goalCameraInputRef.current?.click()}
-                                  className="flex items-center justify-center gap-2 bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[13px] font-medium"
-                                >
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
-                                  </svg>
-                                  Camera
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      ) : (
-                        <>
-                          {/* Artwork gallery strip — gesture-triggered collapse */}
-                          {activeVisitStream.some(e => e.type === 'artwork') && (() => {
-                            const collapsed = true;
-                            const ease = '0.5s cubic-bezier(0.68, -0.25, 0.27, 1.25)';
-                            const vh = window.innerHeight / 100;
-                            return (
-                              <div
-                                className="relative shrink-0"
-                                style={{ height: collapsed ? '88px' : `${45 * vh}px`, overflow: 'clip', transition: `height ${ease}` }}
-                              >
-                                <div
-                                  className="h-full flex items-center gap-2 overflow-x-auto px-4 sm:px-6"
-                                  style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}
-                                >
-                                  {activeVisitStream.filter(e => e.type === 'artwork').map((entry) => (
-                                    <button
-                                      key={entry.id}
-                                      onClick={() =>
-                                        openArtworkDetail(
-                                          entry.item,
-                                          { parentLabel: activeVisitSummary.title, basePath: stateToPath(activeTab, collectTab) },
-                                          activeVisitSummary.items
-                                        )
-                                      }
-                                      className="relative shrink-0 group overflow-hidden"
-                                      style={{
-                                        height: collapsed ? '68px' : '38vh',
-                                        width: collapsed ? '68px' : '420px',
-                                        maxWidth: collapsed ? '68px' : '420px',
-                                        borderRadius: collapsed ? '10px' : '16px',
-                                        boxShadow: collapsed ? '0 1px 6px rgba(0,0,0,0.12)' : '0 4px 24px rgba(0,0,0,0.14)',
-                                        flexShrink: 0,
-                                        transition: `all ${ease}`,
-                                      }}
-                                    >
-                                      <img
-                                        src={entry.item.url}
-                                        alt={entry.item.artworkName || 'Artwork'}
-                                        className="w-full h-full object-cover"
-                                      />
-                                      <div
-                                        className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                                        style={{ opacity: collapsed ? 0 : undefined }}
-                                      >
-                                        <p className="text-white text-[12px] font-medium truncate">
-                                          {entry.item.artworkName || 'Untitled'}
-                                        </p>
-                                        {entry.item.artistName && (
-                                          <p className="text-white/70 text-[11px] truncate">{entry.item.artistName}</p>
-                                        )}
-                                      </div>
-                                      {entry.item.isAnalyzing && (
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70">
-                                          <div className="relative mb-2">
-                                            <div className="w-7 h-7 border-2 border-neutral-100 rounded-full" />
-                                            <div className="absolute inset-0 w-7 h-7 border-t-2 border-neutral-700 rounded-full animate-spin" />
-                                          </div>
-                                          {!collapsed && (
-                                            <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-500">Analyzing</p>
-                                          )}
-                                        </div>
-                                      )}
-                                    </button>
-                                  ))}
-                                  <div className="shrink-0 w-2 sm:w-4" />
-                                </div>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Chat messages */}
-                          <div
-                            ref={visitStreamScrollRef}
-                            className="flex-1 overflow-y-auto px-4 sm:px-10 pb-56 pt-3 sm:pt-4"
-                            onScroll={() => {}}
-                            style={{ overscrollBehaviorY: 'contain', touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-                          >
-                            <div className="mx-auto w-full max-w-[640px] space-y-3 sm:space-y-4">
-                              {activeVisitStream.map((entry) =>
-                                entry.type === 'artwork' ? (
-                                  <div key={entry.id} className="space-y-2">
-                                    {/* User side: upload indicator */}
-                                    <div className="flex justify-end">
-                                      <div className="flex items-center gap-2 bg-neutral-900 text-white rounded-[20px] px-4 py-2.5">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
-                                          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                                        </svg>
-                                        <span className="text-[13px]">Captured an artwork</span>
-                                      </div>
-                                    </div>
-                                    {/* Assistant side: artwork card (fixed width) */}
-                                    <div className="flex justify-start">
-                                      <button
-                                        onClick={() => openArtworkDetail(
-                                          entry.item,
-                                          { parentLabel: activeVisitSummary.title, basePath: stateToPath(activeTab, collectTab) },
-                                          activeVisitSummary.items
-                                        )}
-                                        className="relative overflow-hidden rounded-[20px] bg-white text-left shadow-sm hover:shadow-md transition-shadow"
-                                        style={{ maxWidth: '260px', width: '260px' }}
-                                      >
-                                        <div className="relative">
-                                          <img
-                                            src={entry.item.url}
-                                            alt={entry.item.artworkName || 'Artwork'}
-                                            className="w-full object-cover"
-                                            style={{ height: '160px' }}
-                                          />
-                                          {entry.item.isAnalyzing && (
-                                            <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-2">
-                                              <div className="relative">
-                                                <div className="w-6 h-6 border-2 border-neutral-100 rounded-full" />
-                                                <div className="absolute inset-0 w-6 h-6 border-t-2 border-neutral-600 rounded-full animate-spin" />
-                                              </div>
-                                              <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400">Analyzing</p>
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="px-4 py-3">
-                                          <p className="text-[13px] font-semibold text-neutral-900 truncate">
-                                            {entry.item.isAnalyzing ? 'Analyzing…' : (entry.item.artworkName || 'Untitled')}
-                                          </p>
-                                          {entry.item.artistName && (
-                                            <p className="text-[11px] text-neutral-500 truncate mt-0.5">{entry.item.artistName}</p>
-                                          )}
-                                          {!entry.item.isAnalyzing && (
-                                            <p className="text-[11px] text-neutral-400 mt-2">Tap to explore →</p>
-                                          )}
-                                        </div>
-                                      </button>
-                                    </div>
-                                    {/* Fun facts — full width, outside the 260px card constraint */}
-                                    {entry.item.insights && entry.item.insights.length > 0 && (
-                                      <div className="space-y-1.5">
-                                        <p className="text-[9px] tracking-[0.35em] uppercase text-neutral-400 font-bold px-1">Fun Facts</p>
-                                        {entry.item.insights.map((insight, idx) => (
-                                          <InsightPill key={idx} title={insight.title} text={insight.text} />
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <React.Fragment key={entry.id}>
-                                    {entry.message.role === 'user' ? (
-                                      <div className="flex justify-end">
-                                        <div className="max-w-[85%] rounded-[20px] sm:rounded-[28px] px-5 py-3.5 sm:px-6 sm:py-5 bg-neutral-900 text-white">
-                                          <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">{entry.message.text}</p>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="text-neutral-700">
-                                        <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">{entry.message.text}</p>
-                                      </div>
-                                    )}
-                                  </React.Fragment>
-                                )
-                              )}
-                              {activeVisitSummary && activeVisitSummary.id in streamingVisitResponses && (
-                                streamingVisitResponses[activeVisitSummary.id] === '' ? (
-                                  /* Loading dots — waiting for first chunk */
-                                  <div className="flex items-center gap-1.5 py-1">
-                                    <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '0ms' }} />
-                                    <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '160ms' }} />
-                                    <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '320ms' }} />
-                                  </div>
-                                ) : (
-                                  <div className="text-neutral-700">
-                                    <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
-                                      {streamingVisitResponses[activeVisitSummary.id]}
-                                    </p>
-                                  </div>
-                                )
-                              )}
-                              <div ref={visitStreamEndRef} className="h-24 shrink-0" />
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </>
-                )
+                <ExploreSessionView
+                  activeVisitSummary={activeVisitSummary}
+                  activeVisitStream={activeVisitStream}
+                  interpretingItem={interpretingItem}
+                  artworkHeaderActions={artworkHeaderActions}
+                  artworkHeaderEditToken={artworkHeaderEditToken}
+                  artworkDetailContext={artworkDetailContext}
+                  interpretationRightMode={interpretationRightMode}
+                  interpretingMode={interpretingMode}
+                  sessionGoalInput={sessionGoalInput}
+                  sessionGoals={sessionGoals}
+                  sessionGoalDismissed={sessionGoalDismissed}
+                  streamingVisitResponse={streamingVisitResponses[activeVisitSummary.id]}
+                  userId={currentUser?.user_id || USER_ID}
+                  goalGalleryInputRef={goalGalleryInputRef}
+                  goalCameraInputRef={goalCameraInputRef}
+                  visitStreamScrollRef={visitStreamScrollRef}
+                  visitStreamEndRef={visitStreamEndRef}
+                  onCloseArtworkDetail={closeArtworkDetail}
+                  onUpdateMetadata={updateItemMetadata}
+                  onUpdateClassification={handleUpdateClassification}
+                  onDeleteArtwork={(itemId) => setDeleteConfirmation({ type: 'item', id: itemId })}
+                  onNavigateInterpretation={handleNavigateInterpretation}
+                  onInterpretationRightModeChange={setInterpretationRightMode}
+                  onSwitchInterpretingMode={() => {
+                    const nextMode = interpretingMode === 'professional' ? 'interactive' : 'professional';
+                    setInterpretingMode(nextMode);
+                    localStorage.setItem('musee_analysis_mode', nextMode);
+                  }}
+                  onRefreshAnalysis={handleRefreshAnalysis}
+                  onOpenArtistFromInterpretation={(artistEntityId, artworkId, artistName) => {
+                    if (!interpretingItem) return;
+                    openArtistDetail({
+                      artistEntityId,
+                      artworkId,
+                      artistName,
+                      parentLabel: interpretingItem.artworkName || 'Untitled',
+                      returnToArtworkId: interpretingItem.id,
+                      returnToArtworkContext: artworkDetailContext || {
+                        parentLabel: activeVisitSummary.title,
+                        basePath: stateToPath(activeTab, collectTab),
+                      },
+                    });
+                  }}
+                  onSaveExistingGoal={(newGoal) => {
+                    const sid = activeVisitSummary.id;
+                    setSessionGoals(prev => ({ ...prev, [sid]: newGoal }));
+                    ensureSessionRecord(sid)
+                      .then(res => setSessionGoal(res?.session?.id || sid, newGoal))
+                      .catch(() => {});
+                  }}
+                  onSessionGoalInputChange={setSessionGoalInput}
+                  onSubmitGoal={(goal) => {
+                    const sid = activeVisitSummary.id || createVisitDraft();
+                    setSessionGoalInput('');
+                    setSessionGoals(prev => ({ ...prev, [sid]: goal }));
+                    setSessionGoalDismissed(prev => new Set([...prev, sid]));
+                    ensureSessionRecord(sid)
+                      .then(res => setSessionGoal(res?.session?.id || sid, goal))
+                      .catch(() => {});
+                  }}
+                  onFileUpload={handleFileUpload}
+                  onOpenSessionArtwork={(item) =>
+                    openArtworkDetail(
+                      item,
+                      { parentLabel: activeVisitSummary.title, basePath: stateToPath(activeTab, collectTab) },
+                      activeVisitSummary.items,
+                    )
+                  }
+                />
               ) : (
                 <div className="flex flex-1 items-center justify-center px-6 bg-[#f7f4ee]">
                   <EmptyWall isVisitMode={false} />
                 </div>
               )
             ) : activeTab === 'collect' ? (
-              interpretingItem ? (
-                <div className="flex h-full min-w-0 flex-1 flex-col bg-[#f7f4ee]">
-                  <CanvasHeader
-                    parentLabel={artworkDetailContext?.parentLabel || 'All Artworks'}
-                    parentClick={closeArtworkDetail}
-                    childLabel={interpretingItem.artworkName || 'Untitled'}
-                    rightSlot={artworkHeaderActions}
-                    isInline={true}
-                  />
-                  <div className="flex-1 overflow-hidden animate-in fade-in zoom-in-98 duration-300">
-                    <InterpretationModal
-                      item={interpretingItem}
-                      onClose={closeArtworkDetail}
-                      onUpdateMetadata={updateItemMetadata}
-                      onUpdateClassification={handleUpdateClassification}
-                      onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
-                      allVisitItems={interpretingItem.allVisitItems}
-                      onNavigate={handleNavigateInterpretation}
-                      rightMode={interpretationRightMode}
-                      onRightModeChange={setInterpretationRightMode}
-                      interpretingMode={interpretingMode}
-                      onSwitchMode={() => {
-                        const nextMode = interpretingMode === 'professional' ? 'interactive' : 'professional';
-                        setInterpretingMode(nextMode);
-                        localStorage.setItem('musee_analysis_mode', nextMode);
-                      }}
-                      onRefreshAnalysis={handleRefreshAnalysis}
-                      userId={currentUser?.user_id || USER_ID}
-                      onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
-                        openArtistDetail({
-                          artistEntityId,
-                          artworkId,
-                          artistName,
-                          parentLabel: interpretingItem.artworkName || 'Untitled',
-                          returnToArtworkId: interpretingItem.id,
-                          returnToArtworkContext: artworkDetailContext || {
-                            parentLabel: 'All Artworks',
-                            basePath: stateToPath(activeTab, collectTab),
-                          },
-                        });
-                      }}
-                      navigationContextLabel={artworkDetailContext?.parentLabel || 'All Artworks'}
-                      editRequestToken={artworkHeaderEditToken}
-                      isInline={true}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1 overflow-hidden pl-0 pt-16 md:pt-4">
-                  <OrganizeView
-                    items={items}
-                    visit={visit}
-                    filteredVisitId={filteredVisitId}
-                    isAnalyzing={isAnalyzing}
-                    likedIds={likedIds}
-                    albums={albums}
-                    boardsLoading={boardsLoading}
-                    userId={currentUser?.user_id || USER_ID}
-                    collectTab={collectTab}
-                    onCollectTabChange={setCollectTab}
-                    onCreateBoard={handleCreateAlbum}
-                    onRenameBoard={handleRenameAlbum}
-                    onDeleteBoard={handleDeleteAlbum}
-                    onAddItemsToBoard={handleAddItemsToBoard}
-                    onOpenArtist={(artistEntityId, artistName) => {
-                      openArtistDetail({
-                        artistEntityId,
-                        artistName,
-                        parentLabel: 'Artists',
-                      });
-                    }}
-                    onOpenMovement={(collection) => {
-                      setMovementPageContext(collection);
-                    }}
-                    onInterpret={(item, context) => {
-                      const basePath = stateToPath(activeTab, collectTab);
-                      openArtworkDetail(item, {
-                        parentLabel: context?.label || 'All Artworks',
-                        basePath,
-                      }, context?.items);
-                    }}
-                    onDelete={handleDeleteItem}
-                    onStartUnsortedFlow={() => setIsUnsortedFlowOpen(true)}
-                  />
-                </div>
-              )
+              <Suspense fallback={<ScreenLoader label="Loading collection" />}>
+                <CollectView
+                  items={items}
+                  visit={visit}
+                  filteredVisitId={filteredVisitId}
+                  isAnalyzing={isAnalyzing}
+                  likedIds={likedIds}
+                  albums={albums}
+                  boardsLoading={boardsLoading}
+                  userId={currentUser?.user_id || USER_ID}
+                  collectTab={collectTab}
+                  interpretingItem={interpretingItem}
+                  artworkDetailContext={artworkDetailContext}
+                  artworkHeaderActions={artworkHeaderActions}
+                  artworkHeaderEditToken={artworkHeaderEditToken}
+                  interpretationRightMode={interpretationRightMode}
+                  interpretingMode={interpretingMode}
+                  onCloseArtworkDetail={closeArtworkDetail}
+                  onUpdateMetadata={updateItemMetadata}
+                  onUpdateClassification={handleUpdateClassification}
+                  onDeleteArtwork={(itemId) => setDeleteConfirmation({ type: 'item', id: itemId })}
+                  onNavigateInterpretation={handleNavigateInterpretation}
+                  onInterpretationRightModeChange={setInterpretationRightMode}
+                  onSwitchInterpretingMode={() => {
+                    const nextMode = interpretingMode === 'professional' ? 'interactive' : 'professional';
+                    setInterpretingMode(nextMode);
+                    localStorage.setItem('musee_analysis_mode', nextMode);
+                  }}
+                  onRefreshAnalysis={handleRefreshAnalysis}
+                  onNavigateToArtistFromInterpretation={(artistEntityId, artworkId, artistName) => {
+                    if (!interpretingItem) return;
+                    openArtistDetail({
+                      artistEntityId,
+                      artworkId,
+                      artistName,
+                      parentLabel: interpretingItem.artworkName || 'Untitled',
+                      returnToArtworkId: interpretingItem.id,
+                      returnToArtworkContext: artworkDetailContext || {
+                        parentLabel: 'All Artworks',
+                        basePath: stateToPath(activeTab, collectTab),
+                      },
+                    });
+                  }}
+                  onCollectTabChange={setCollectTab}
+                  onCreateBoard={handleCreateAlbum}
+                  onRenameBoard={handleRenameAlbum}
+                  onDeleteBoard={handleDeleteAlbum}
+                  onAddItemsToBoard={handleAddItemsToBoard}
+                  onOpenArtist={(artistEntityId, artistName) => {
+                    openArtistDetail({
+                      artistEntityId,
+                      artistName,
+                      parentLabel: 'Artists',
+                    });
+                  }}
+                  onOpenMovement={setMovementPageContext}
+                  onInterpretArtwork={(item, context) => {
+                    const basePath = stateToPath(activeTab, collectTab);
+                    openArtworkDetail(item, {
+                      parentLabel: context?.label || 'All Artworks',
+                      basePath,
+                    }, context?.items);
+                  }}
+                  onDeleteItem={handleDeleteItem}
+                  onStartUnsortedFlow={() => setIsUnsortedFlowOpen(true)}
+                />
+              </Suspense>
             ) : activeTab === 'profile' ? (
               <div className="flex h-full min-w-0 flex-1 flex-col bg-[#faf9f7] overflow-hidden animate-in fade-in duration-300">
                 <CanvasHeader
@@ -3351,16 +2613,20 @@ const App: React.FC = () => {
                   isInline={true}
                 />
                 <div className="flex-1 overflow-y-auto">
-                  <TasteProfileView
-                    userId={currentUser?.user_id || USER_ID}
-                    refreshKey={profileRefreshKey}
-                    onStartUnsortedFlow={() => setIsUnsortedFlowOpen(true)}
-                  />
+                  <Suspense fallback={<ScreenLoader label="Loading profile" />}>
+                    <TasteProfileView
+                      userId={currentUser?.user_id || USER_ID}
+                      refreshKey={profileRefreshKey}
+                      onStartUnsortedFlow={() => setIsUnsortedFlowOpen(true)}
+                    />
+                  </Suspense>
                 </div>
               </div>
             ) : activeTab === 'learn' ? (
               <div className="flex-1 overflow-hidden bg-[#faf9f7] pt-16 md:pt-0">
-                <LearningHubPage inline={true} initialGuide={learningInitialGuide} />
+                <Suspense fallback={<ScreenLoader label="Loading library" />}>
+                  <LearningHubPage inline={true} initialGuide={learningInitialGuide} />
+                </Suspense>
               </div>
             ) : null}
           </div>
@@ -3452,7 +2718,7 @@ const App: React.FC = () => {
             onLike={() => interpretingItem && handleToggleLike(interpretingItem.id)}
             isLiked={Boolean(interpretingItem && likedIds.has(interpretingItem.id))}
             onDelete={() => interpretingItem && setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
-            onCollect={() => interpretingItem && showToast('Collection feature coming soon')}
+            onCollect={() => {}}
             onCommunity={() => setInterpretationRightMode((mode) => (mode === 'community' ? 'metadata' : 'community'))}
             isCommunityActive={interpretationRightMode === 'community'}
             activeItem={interpretingItem as unknown as GalleryItem || undefined}

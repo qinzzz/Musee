@@ -1,5 +1,5 @@
 import React from 'react';
-import { generateTasteProfile, getTasteProfile } from '../apiService';
+import { generateTasteProfile, getTasteProfile } from '../api/artworks';
 import { TasteProfileSnapshot } from '../types';
 import { Button } from './ui/button';
 

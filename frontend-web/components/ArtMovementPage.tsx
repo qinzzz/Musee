@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { GalleryItem } from '../types';
-import { SmartCollection } from '../apiService';
+import type { SmartCollection } from '../api/artworks';
 import CanvasHeader from './CanvasHeader';
 
 const RARITY_STYLE: Record<string, { label: string; color: string }> = {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArtistEntity, GalleryItem } from '../types';
-import { fetchArtistProfile, fetchArtistArtworks, resolveImageUrl, backfillArtworkArtist } from '../apiService';
+import { fetchArtistProfile, fetchArtistArtworks, resolveImageUrl, backfillArtworkArtist } from '../api/artworks';
 import CanvasHeader from './CanvasHeader';
 
 interface Props {

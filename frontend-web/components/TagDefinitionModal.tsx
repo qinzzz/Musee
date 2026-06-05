@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { defineAestheticTerm } from '../apiService';
+import { defineAestheticTerm } from '../api/misc';
 
 interface Props {
   tag: string;

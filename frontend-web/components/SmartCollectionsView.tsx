@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { fetchSmartCollections, SmartCollection, resolveImageUrl } from '../apiService';
+import { fetchSmartCollections, type SmartCollection, resolveImageUrl } from '../api/artworks';
 
 const RARITY_STYLE: Record<string, { label: string; classes: string }> = {
   common:    { label: 'Common',    classes: 'bg-neutral-100 text-neutral-500' },

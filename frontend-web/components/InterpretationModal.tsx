@@ -3,7 +3,9 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, NeighborItem, Visit, GalleryItem, ArtworkClassification } from '../types';
-import { chatWithArtworkStream, getTagExplanation, suggestTopics, updateArtwork, base64ToFile, fetchAndPersistInsights, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../apiService';
+import { updateArtwork, fetchAndPersistInsights } from '../api/artworks';
+import { chatWithArtworkStream, getTagExplanation, suggestTopics, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../api/chat';
+import { base64ToFile } from '../api/misc';
 import ArtworkClassificationChip from './ArtworkClassificationChip';
 import ArtworkActionsMenu from './ArtworkActionsMenu';
 interface Props {
