@@ -955,14 +955,19 @@ const App: React.FC = () => {
       draft.id === visitId ? { ...draft, updatedAt: newMessages[newMessages.length - 1]?.createdAt || draft.updatedAt } : draft
     ));
     // Fire-and-forget persist to DB
-    appendSessionMessages(visitId, newMessages.map(m => ({
-      id: m.id,
-      role: m.role as 'user' | 'model',
-      type: m.type || 'text',
-      content: m.role === 'user' || m.type === 'text' ? m.text : undefined,
-      artwork_id: m.artworkId,
-      created_at: m.createdAt,
-    })));
+    appendSessionMessages(visitId, newMessages.map(m => {
+      // artwork_capture / artwork_card are placeholders rendered from the card UI —
+      // they carry no text. Everything else (user + model text) persists its content.
+      const isPlaceholder = m.type === 'artwork_capture' || m.type === 'artwork_card';
+      return {
+        id: m.id,
+        role: m.role as 'user' | 'model',
+        type: m.type || 'text',
+        content: isPlaceholder ? undefined : m.text,
+        artwork_id: m.artworkId,
+        created_at: m.createdAt,
+      };
+    }));
   };
 
   const triggerUploadCommentary = (
