@@ -4,14 +4,16 @@
 
 /* ── 1. Global Resets & Typography ───────────────────────────────────────── */
 :root {
-  /* Core Aesthetic Color Tokens (curated warm & premium palette) */
-  --color-bg-primary: #faf9f7;
-  --color-bg-secondary: #fbf8f2;
-  --color-bg-tertiary: #f7f4ee;
-  --color-text-primary: #171717;
-  --color-text-secondary: #737373;
-  --color-border: #e5e5e5;
-  --color-accent: #171717;
+  /* Core brand tokens: clean black and white baseline */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #f6f6f3;
+  --color-surface-muted: #f3f3ef;
+  --color-text-primary: #111111;
+  --color-text-secondary: #616161;
+  --color-text-muted: #8a8a8a;
+  --color-border: #e8e8e1;
+  --color-accent: #111111;
 }
 
 body {

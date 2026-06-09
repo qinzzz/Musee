@@ -82,7 +82,7 @@ export default function ArtistProfileSheet({ artistEntityId, artworkId, artistNa
     >
       <div
         style={{
-          background: '#faf9f7', borderRadius: '24px 24px 0 0',
+          background: 'var(--color-bg-primary)', borderRadius: '24px 24px 0 0',
           padding: '24px 20px 40px', width: '100%', maxWidth: 520,
           maxHeight: '80vh', overflowY: 'auto',
           boxShadow: '0 -10px 40px rgba(0,0,0,0.06)',
@@ -90,7 +90,7 @@ export default function ArtistProfileSheet({ artistEntityId, artworkId, artistNa
         }}
         onClick={e => e.stopPropagation()}
       >
-        <div style={{ width: 40, height: 4, background: '#d4cfc5', borderRadius: 2, margin: '0 auto 20px' }} />
+        <div style={{ width: 40, height: 4, background: 'var(--color-border)', borderRadius: 2, margin: '0 auto 20px' }} />
 
         {isLoading ? (
           <div style={{ color: '#737373', textAlign: 'center', padding: '24px 0', fontSize: 13, fontStyle: 'italic' }}>Loading…</div>
@@ -99,7 +99,7 @@ export default function ArtistProfileSheet({ artistEntityId, artworkId, artistNa
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div style={{
                 width: 48, height: 48, borderRadius: '50%',
-                background: '#efe8dc', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'var(--color-surface-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#737373', fontSize: 20, flexShrink: 0,
                 fontWeight: 600,
               }}>
@@ -119,7 +119,7 @@ export default function ArtistProfileSheet({ artistEntityId, artworkId, artistNa
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
                 {artist.movements.map(m => (
                   <span key={m} style={{
-                    background: '#f1ece1', color: '#525252',
+                    background: 'var(--color-bg-tertiary)', color: '#525252',
                     borderRadius: 12, padding: '3px 10px', fontSize: 11,
                     fontWeight: 500, border: '1px solid rgba(23,23,23,0.03)',
                   }}>{m}</span>

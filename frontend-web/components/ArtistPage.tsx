@@ -8,6 +8,7 @@ interface Props {
   artworkId?: string;       // used only when entity not yet linked (backfill path)
   artistName?: string;      // fallback display name
   userId: string;
+  leftSlot?: React.ReactNode;
   onClose: () => void;
   onOpenArtwork: (item: GalleryItem) => void;
   onNavigateToIndex?: () => void; // navigate to /artists index
@@ -39,7 +40,7 @@ function rawToGalleryItem(raw: any): GalleryItem {
   };
 }
 
-export default function ArtistPage({ artistEntityId, artworkId, artistName, userId, onClose, onOpenArtwork, onNavigateToIndex, parentLabel, isInline }: Props) {
+export default function ArtistPage({ artistEntityId, artworkId, artistName, userId, leftSlot, onClose, onOpenArtwork, onNavigateToIndex, parentLabel, isInline }: Props) {
   const [artist, setArtist] = useState<ArtistEntity | null>(null);
   const [artworks, setArtworks] = useState<GalleryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,7 +104,7 @@ export default function ArtistPage({ artistEntityId, artworkId, artistName, user
 
   return (
     <div
-      className={isInline ? "w-full h-full relative z-10 flex flex-col bg-[#faf9f7] overflow-hidden" : "fixed inset-0 z-[1200] bg-[#faf9f7] flex flex-col overflow-hidden"}
+      className={isInline ? "w-full h-full relative z-10 flex flex-col bg-[var(--color-bg-primary)] overflow-hidden" : "fixed inset-0 z-[1200] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"}
       style={{ fontFamily: 'system-ui, sans-serif' }}
     >
       {/* Header */}
@@ -111,6 +112,7 @@ export default function ArtistPage({ artistEntityId, artworkId, artistName, user
         parentLabel={parentLabel || 'Artists'}
         parentClick={onNavigateToIndex || onClose}
         childLabel={artist?.display_name || artistName || '…'}
+        leftSlot={leftSlot}
         isInline={isInline}
       />
 
@@ -120,7 +122,7 @@ export default function ArtistPage({ artistEntityId, artworkId, artistName, user
 
           {/* Artist identity */}
           <div className="flex items-center gap-4 mb-5">
-            <div className="w-16 h-16 rounded-full shrink-0 overflow-hidden bg-[#efe8dc] flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full shrink-0 overflow-hidden bg-[var(--color-surface-muted)] flex items-center justify-center">
               {artist?.profile_image_url ? (
                 <img
                   src={artist.profile_image_url}
@@ -151,7 +153,7 @@ export default function ArtistPage({ artistEntityId, artworkId, artistName, user
               {artist.movements.map(m => (
                 <span
                   key={m}
-                  className="text-xs text-neutral-600 px-3 py-1 rounded-full bg-[#f1ece1] border border-neutral-200/40"
+                  className="text-xs text-neutral-600 px-3 py-1 rounded-full bg-[var(--color-bg-tertiary)] border border-neutral-200/40"
                 >
                   {m}
                 </span>
@@ -191,7 +193,7 @@ export default function ArtistPage({ artistEntityId, artworkId, artistName, user
                 <button
                   key={item.id}
                   onClick={() => onOpenArtwork(item)}
-                  className="relative aspect-square rounded-xl overflow-hidden bg-[#f4efe4] group focus:outline-none border border-neutral-200/60"
+                  className="relative aspect-square rounded-xl overflow-hidden bg-[var(--color-surface-muted)] group focus:outline-none border border-neutral-200/60"
                 >
                   <img
                     src={item.url}

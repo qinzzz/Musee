@@ -71,7 +71,7 @@ const UnsortedClassificationModal: React.FC<Props> = ({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-4 py-8 backdrop-blur-sm">
-      <div className="w-full max-w-3xl rounded-[34px] bg-[#faf9f7] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:p-7">
+      <div className="w-full max-w-3xl rounded-[34px] bg-[var(--color-bg-primary)] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:p-7">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-neutral-400">Calibrate Taste</p>

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { GalleryItem, Visit, Album, ArtistEntity } from '../types';
+import { GalleryItem, Visit, Album, ArtistEntity, ArtworkClassification } from '../types';
 import { fetchUserArtists, type SmartCollection } from '../api/artworks';
 import GridView from './GridView';
 import SmartCollectionsView from './SmartCollectionsView';
@@ -16,15 +16,46 @@ const OverflowDotsIcon: React.FC<{ className?: string }> = ({ className = 'h-3.5
   </svg>
 );
 
+const BoardCoverMosaic: React.FC<{ covers: string[] }> = ({ covers }) => {
+  const slots = [covers[0] ?? null, covers[1] ?? null, covers[2] ?? null] as const;
+
+  return (
+    <div className="grid aspect-square grid-cols-[1.35fr_1fr] grid-rows-2 gap-0.5 overflow-hidden rounded-xl bg-[var(--color-border)] mb-2.5">
+      {slots.map((cover, index) => {
+        const slotClassName =
+          index === 0
+            ? 'row-span-2 h-full'
+            : 'h-full';
+
+        return cover ? (
+          <img
+            key={index}
+            src={cover}
+            alt=""
+            className={`${slotClassName} w-full object-cover`}
+          />
+        ) : (
+          <div
+            key={index}
+            className={`${slotClassName} bg-[var(--color-bg-tertiary)]`}
+            aria-hidden="true"
+          />
+        );
+      })}
+    </div>
+  );
+};
+
 export type CollectTab = 'saved' | 'boards' | 'movements' | 'artists';
 type SavedLayout = 'grid' | 'grouped';
-type ActiveFilter = 'all' | 'liked' | string;
+type ActiveFilter = 'all' | ArtworkClassification;
 
 interface ArtistRow extends ArtistEntity {
   artwork_count: number;
 }
 
 interface Props {
+  topBarLeftSlot?: React.ReactNode;
   items: GalleryItem[];
   visit: Visit;
   filteredVisitId: string | null;
@@ -47,6 +78,7 @@ interface Props {
 }
 
 const OrganizeView: React.FC<Props> = ({
+  topBarLeftSlot,
   items, visit, filteredVisitId, isAnalyzing,
   likedIds, albums, boardsLoading, userId,
   collectTab, onCollectTabChange,
@@ -86,18 +118,27 @@ const OrganizeView: React.FC<Props> = ({
   }, [collectTab, userId]);
 
   const likedItems = useMemo(() => items.filter(i => likedIds?.has(i.id)), [items, likedIds]);
-  const activeAlbums = useMemo(() =>
-    boards.filter(a => a.itemIds.some(id => items.find(i => i.id === id))),
-    [boards, items]
-  );
-  const showFilterBar = likedItems.length > 0 || activeAlbums.length > 0;
+  const classificationCounts = useMemo(() => {
+    return items.reduce<Record<ArtworkClassification, number>>(
+      (counts, item) => {
+        const classification = item.classification || 'unsorted';
+        counts[classification] += 1;
+        return counts;
+      },
+      {
+        unsorted: 0,
+        love: 0,
+        respect: 0,
+        not_for_me: 0,
+      },
+    );
+  }, [items]);
+  const showFilterBar = items.length > 0;
 
   const filteredItems = useMemo(() => {
     if (activeFilter === 'all') return items;
-    if (activeFilter === 'liked') return likedItems;
-    const album = boards.find(a => a.id === activeFilter);
-    return album ? items.filter(i => album.itemIds.includes(i.id)) : items;
-  }, [items, activeFilter, likedItems, boards]);
+    return items.filter((item) => (item.classification || 'unsorted') === activeFilter);
+  }, [items, activeFilter]);
 
   const groupedItems = useMemo(() => {
     const groups = new Map<string, GalleryItem[]>();
@@ -127,10 +168,12 @@ const OrganizeView: React.FC<Props> = ({
     [items],
   );
   const savedContextLabel = useMemo(() => {
-    if (activeFilter === 'liked') return 'Liked';
     if (activeFilter === 'all') return 'All Artworks';
-    return boards.find(a => a.id === activeFilter)?.name || 'All Artworks';
-  }, [activeFilter, boards]);
+    if (activeFilter === 'love') return 'Loved';
+    if (activeFilter === 'respect') return 'Respect';
+    if (activeFilter === 'not_for_me') return 'Not for Me';
+    return 'Unsorted';
+  }, [activeFilter]);
 
   const getCoverImages = (itemIds: string[]) =>
     itemIds.slice(0, 4).map(id => items.find(i => i.id === id)?.url).filter(Boolean) as string[];
@@ -141,6 +184,14 @@ const OrganizeView: React.FC<Props> = ({
 
   const boardOverflowButtonClassName =
     'flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-400 transition-colors hover:border-neutral-300 hover:text-neutral-700';
+
+  const savedFilters: Array<{ id: ActiveFilter; label: string; count?: number; icon?: React.ReactNode }> = [
+    { id: 'all', label: 'All', count: items.length },
+    { id: 'love', label: 'Loved', count: classificationCounts.love },
+    { id: 'respect', label: 'Respect', count: classificationCounts.respect },
+    { id: 'not_for_me', label: 'Not for Me', count: classificationCounts.not_for_me },
+    { id: 'unsorted', label: 'Unsorted', count: classificationCounts.unsorted },
+  ];
 
   const TABS: { id: CollectTab; label: string }[] = [
     { id: 'saved',     label: 'All Artworks' },
@@ -228,7 +279,12 @@ const OrganizeView: React.FC<Props> = ({
     <div className="flex flex-col w-full h-full overflow-hidden">
 
       {/* ── Top tab bar ── */}
-      <div className="shrink-0 flex items-end gap-7 px-5 sm:px-8 border-b border-neutral-100 overflow-x-auto no-scrollbar">
+      <div className="shrink-0 flex h-[52px] items-center gap-4 px-4 sm:px-8 border-b border-neutral-100 overflow-x-auto no-scrollbar">
+        {topBarLeftSlot ? (
+          <div className="shrink-0 md:hidden">
+            {topBarLeftSlot}
+          </div>
+        ) : null}
         {TABS.map(tab => (
           <button
             key={tab.id}
@@ -236,7 +292,7 @@ const OrganizeView: React.FC<Props> = ({
               onCollectTabChange(tab.id);
               setSelectedBoard(null);
             }}
-            className={`shrink-0 pt-3 pb-3 text-[11px] sm:text-[12px] tracking-[0.14em] uppercase font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
+            className={`shrink-0 h-full text-[13px] sm:text-[14px] font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
               collectTab === tab.id
                 ? 'border-neutral-900 text-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-700'
@@ -255,33 +311,25 @@ const OrganizeView: React.FC<Props> = ({
               <div className="flex min-w-0 items-center gap-2 overflow-x-auto no-scrollbar">
                 {showFilterBar && (
                   <>
-                    <button
-                      onClick={() => setActiveFilter('all')}
-                      className={`shrink-0 text-[9px] tracking-[0.2em] uppercase px-3 py-1 rounded-full border transition-all ${
-                        activeFilter === 'all' ? 'bg-neutral-900 text-white border-neutral-900' : 'border-neutral-200 text-neutral-500 hover:border-neutral-400'
-                      }`}
-                    >All</button>
-                    {likedItems.length > 0 && (
+                    {savedFilters.filter((filter) => filter.id === 'all' || (filter.count ?? 0) > 0).map((filter) => (
                       <button
-                        onClick={() => setActiveFilter('liked')}
-                        className={`shrink-0 flex items-center gap-1.5 text-[9px] tracking-[0.2em] uppercase px-3 py-1 rounded-full border transition-all ${
-                          activeFilter === 'liked' ? 'bg-neutral-900 text-white border-neutral-900' : 'border-neutral-200 text-neutral-500 hover:border-neutral-400'
+                        key={filter.id}
+                        onClick={() => setActiveFilter(filter.id)}
+                        className={`shrink-0 inline-flex items-center gap-1.5 text-[9px] tracking-[0.2em] uppercase px-3 py-1 rounded-full border transition-all ${
+                          activeFilter === filter.id
+                            ? 'border-neutral-300 bg-neutral-100 text-neutral-900'
+                            : 'border-neutral-200 text-neutral-500 hover:border-neutral-400'
                         }`}
                       >
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                        </svg>
-                        Liked
+                        {filter.label}
+                        <span className={`rounded-full px-1.5 py-0.5 text-[8px] tracking-normal ${
+                          activeFilter === filter.id
+                            ? 'bg-white text-neutral-700'
+                            : 'bg-neutral-100 text-neutral-500'
+                        }`}>
+                          {filter.count}
+                        </span>
                       </button>
-                    )}
-                    {activeAlbums.map(album => (
-                      <button
-                        key={album.id}
-                        onClick={() => setActiveFilter(album.id)}
-                        className={`shrink-0 text-[9px] tracking-[0.2em] uppercase px-3 py-1 rounded-full border transition-all ${
-                          activeFilter === album.id ? 'bg-neutral-900 text-white border-neutral-900' : 'border-neutral-200 text-neutral-500 hover:border-neutral-400'
-                        }`}
-                      >{album.name}</button>
                     ))}
                   </>
                 )}
@@ -363,7 +411,15 @@ const OrganizeView: React.FC<Props> = ({
               {filteredItems.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">
-                    {activeFilter === 'liked' ? 'No liked pieces yet' : activeFilter !== 'all' ? 'No pieces in this album' : 'No pieces yet'}
+                    {activeFilter === 'love'
+                      ? 'No loved works yet'
+                      : activeFilter === 'respect'
+                        ? 'No respected works yet'
+                        : activeFilter === 'not_for_me'
+                          ? 'No works marked not for me'
+                          : activeFilter === 'unsorted'
+                            ? 'No unsorted works'
+                            : 'No pieces yet'}
                   </p>
                 </div>
               )}
@@ -412,14 +468,7 @@ const OrganizeView: React.FC<Props> = ({
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
                     {likedItems.length > 0 && (
                       <button onClick={() => setSelectedBoard('liked')} className="text-left group">
-                        <div className="grid grid-cols-2 gap-0.5 bg-neutral-100 overflow-hidden rounded-xl aspect-square mb-2.5">
-                          {likedItems.slice(0, 4).map((item, i) => (
-                            <img key={i} src={item.url} alt="" className="w-full h-full object-cover aspect-square" />
-                          ))}
-                          {Array(Math.max(0, 4 - Math.min(likedItems.length, 4))).fill(null).map((_, i) => (
-                            <div key={`e${i}`} className="bg-neutral-100 aspect-square" />
-                          ))}
-                        </div>
+                        <BoardCoverMosaic covers={likedItems.slice(0, 3).map((item) => item.url)} />
                         <p className="text-[12px] font-semibold text-neutral-900 leading-tight truncate">Liked</p>
                         <p className="text-[11px] text-neutral-400 mt-0.5">{likedItems.length} {likedItems.length === 1 ? 'piece' : 'pieces'}</p>
                       </button>
@@ -434,14 +483,7 @@ const OrganizeView: React.FC<Props> = ({
                             onClick={() => setSelectedBoard(album.id)}
                             className="block w-full"
                           >
-                            <div className="grid grid-cols-2 gap-0.5 bg-neutral-100 overflow-hidden rounded-xl aspect-square mb-2.5">
-                              {covers.slice(0, 4).map((url, i) => (
-                                <img key={i} src={url} alt="" className="w-full h-full object-cover aspect-square" />
-                              ))}
-                              {Array(Math.max(0, 4 - covers.length)).fill(null).map((_, i) => (
-                                <div key={`e${i}`} className="bg-neutral-50 aspect-square" />
-                              ))}
-                            </div>
+                            <BoardCoverMosaic covers={covers.slice(0, 3)} />
                           </button>
                           <div className="flex items-start justify-between gap-2">
                             <button

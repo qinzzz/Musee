@@ -149,7 +149,7 @@ const GridView: React.FC<Props> = ({
       </div>
       {isSelectionMode && (
         <div className="absolute bottom-4 left-4 z-40 sm:left-10">
-          <div className="inline-flex w-fit items-center gap-4 whitespace-nowrap rounded-[78px] border border-neutral-200 bg-white/96 px-6 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.12)] backdrop-blur">
+          <div className="inline-flex w-fit items-center gap-4 whitespace-nowrap rounded-[78px] border border-neutral-200 bg-white px-6 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
             <div className="whitespace-nowrap text-[13px] font-semibold text-neutral-900">
               {selectedIds.length} selected
             </div>

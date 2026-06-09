@@ -27,7 +27,7 @@ export default function ArtistsIndexPage({ userId, onSelectArtist, onClose }: Pr
 
   return (
     <div
-      className="fixed inset-0 z-[1200] bg-[#faf9f7] flex flex-col overflow-hidden"
+      className="fixed inset-0 z-[1200] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"
       style={{ fontFamily: 'system-ui, sans-serif' }}
     >
       {/* Header */}
@@ -63,11 +63,11 @@ export default function ArtistsIndexPage({ userId, onSelectArtist, onClose }: Pr
                 <li key={artist.id}>
                   <button
                     onClick={() => onSelectArtist(artist)}
-                    className="w-full flex items-center gap-4 py-4 hover:bg-[#f1ece1] rounded-xl px-2 -mx-2 transition-colors text-left"
+                    className="w-full flex items-center gap-4 py-4 hover:bg-[var(--color-bg-tertiary)] rounded-xl px-2 -mx-2 transition-colors text-left"
                   >
                     {/* Avatar */}
                     <div
-                      className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-lg font-semibold text-neutral-600 bg-[#efe8dc]"
+                      className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-lg font-semibold text-neutral-600 bg-[var(--color-surface-muted)]"
                     >
                       {artist.display_name[0]?.toUpperCase() ?? '?'}
                     </div>

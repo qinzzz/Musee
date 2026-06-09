@@ -31,9 +31,10 @@ interface Props {
   onClose?: () => void;
   initialGuide?: string | null;
   inline?: boolean;
+  leftSlot?: React.ReactNode;
 }
 
-export default function LearningHubPage({ onClose, initialGuide, inline }: Props) {
+export default function LearningHubPage({ onClose, initialGuide, inline, leftSlot }: Props) {
   const [selectedGuide, setSelectedGuide] = useState<string | null>(initialGuide ?? null);
 
   useEffect(() => {
@@ -45,16 +46,26 @@ export default function LearningHubPage({ onClose, initialGuide, inline }: Props
 
   return (
     <div
-      className={inline ? "relative w-full h-full bg-[#faf9f7] flex flex-col overflow-hidden animate-in fade-in duration-300" : "fixed inset-0 z-[1100] bg-[#faf9f7] flex flex-col overflow-hidden"}
+      className={inline ? "relative w-full h-full bg-[var(--color-bg-primary)] flex flex-col overflow-hidden animate-in fade-in duration-300" : "fixed inset-0 z-[1100] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"}
       style={{ fontFamily: 'system-ui, sans-serif' }}
     >
-      {/* Header */}
-      <CanvasHeader
-        parentLabel={selectedGuide ? "Learning Hub" : ""}
-        parentClick={selectedGuide ? () => setSelectedGuide(null) : (!inline ? onClose : undefined)}
-        childLabel={selectedGuide ? (guide?.title ?? selectedGuide) : "Learning Hub"}
-        isInline={inline}
-      />
+      {selectedGuide ? (
+        <CanvasHeader
+          parentLabel="Learning Hub"
+          parentClick={() => setSelectedGuide(null)}
+          childLabel={guide?.title ?? selectedGuide}
+          leftSlot={leftSlot}
+          isInline={inline}
+        />
+      ) : (
+        leftSlot ? (
+          <div className="pointer-events-none absolute left-4 top-3 z-20 md:hidden">
+            <div className="pointer-events-auto">
+              {leftSlot}
+            </div>
+          </div>
+        ) : null
+      )}
 
       {/* Body */}
       <div className="flex-1 min-h-0 overflow-hidden">

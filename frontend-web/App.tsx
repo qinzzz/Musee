@@ -44,6 +44,7 @@ import CanvasHeader from './components/CanvasHeader';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import ExploreSessionView from './components/ExploreSessionView';
 import { Toaster } from './components/ui/sonner';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { useAppNavigationSync } from './hooks/useAppNavigationSync';
 import { useArtworkLibrary } from './hooks/useArtworkLibrary';
 import { useVisits, type VisitStreamMessage, type VisitDraft, type VisitSummary } from './hooks/useVisits';
@@ -98,7 +99,7 @@ const reportStreamingMetrics = (metrics: StreamingMetrics) => {
 };
 
 const ScreenLoader: React.FC<{ label?: string }> = ({ label = 'Loading' }) => (
-  <div className="flex h-full w-full items-center justify-center bg-[#faf9f7]">
+  <div className="flex h-full w-full items-center justify-center bg-[var(--color-bg-primary)]">
     <p className="text-[11px] tracking-[0.3em] uppercase text-neutral-300">{label}…</p>
   </div>
 );
@@ -107,6 +108,8 @@ type ToastAction = {
   label: string;
   onClick: () => void;
 };
+
+type AppTab = 'explore' | 'collect' | 'profile' | 'learn';
 
 const downscaleImage = (dataUrl: string, maxWidth = 1600): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -567,6 +570,7 @@ const App: React.FC = () => {
   const [quotaInfo, setQuotaInfo] = useState<UserQuota | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [recentsOpen, setRecentsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
   const {
@@ -1774,41 +1778,42 @@ const App: React.FC = () => {
     setEditingVisitTitle(currentTitle);
   };
 
-  const commitVisitRename = async (visitId: string) => {
-    const trimmedTitle = editingVisitTitle.trim() || DEFAULT_VISIT_TITLE;
+  const saveVisitTitle = async (visitId: string, nextTitle: string) => {
+    const trimmedTitle = nextTitle.trim() || DEFAULT_VISIT_TITLE;
     const currentSummary = visitSummaries.find(summary => summary.id === visitId);
 
-    if (!currentSummary) {
-      setEditingVisitId(null);
-      setEditingVisitTitle('');
+    if (!currentSummary || trimmedTitle === currentSummary.title) {
       return;
     }
 
-    if (trimmedTitle === currentSummary.title) {
+    if (currentSummary.items.length > 0) {
+      await updateSession(visitId, USER_ID, trimmedTitle);
+      setItems(prev => prev.map(item =>
+        item.visitId === visitId ? { ...item, sessionTitle: trimmedTitle } : item
+      ));
+    }
+
+    setVisitDrafts(prev => {
+      const now = Date.now();
+      const existingDraft = prev.find(draft => draft.id === visitId);
+      if (existingDraft) {
+        return prev.map(draft =>
+          draft.id === visitId ? { ...draft, title: trimmedTitle, updatedAt: now } : draft
+        );
+      }
+      return [{ id: visitId, title: trimmedTitle, createdAt: now, updatedAt: now }, ...prev];
+    });
+  };
+
+  const commitVisitRename = async (visitId: string) => {
+    if (!visitSummaries.find(summary => summary.id === visitId)) {
       setEditingVisitId(null);
       setEditingVisitTitle('');
       return;
     }
 
     try {
-      if (currentSummary.items.length > 0) {
-        await updateSession(visitId, USER_ID, trimmedTitle);
-        setItems(prev => prev.map(item =>
-          item.visitId === visitId ? { ...item, sessionTitle: trimmedTitle } : item
-        ));
-      }
-
-      setVisitDrafts(prev => {
-        const now = Date.now();
-        const existingDraft = prev.find(draft => draft.id === visitId);
-        if (existingDraft) {
-          return prev.map(draft =>
-            draft.id === visitId ? { ...draft, title: trimmedTitle, updatedAt: now } : draft
-          );
-        }
-        return [{ id: visitId, title: trimmedTitle, createdAt: now, updatedAt: now }, ...prev];
-      });
-
+      await saveVisitTitle(visitId, editingVisitTitle);
     } catch (error) {
       console.error('Failed to rename visit:', error);
       showToast('Could not rename session', 'info');
@@ -1855,6 +1860,203 @@ const App: React.FC = () => {
     }
   };
 
+  const recentVisitSummaries = useMemo(() => visitSummaries.slice(0, 10), [visitSummaries]);
+
+  const topLevelNavigation: Array<{ id: AppTab; label: string; icon: React.ReactNode }> = [
+    {
+      id: 'explore',
+      label: 'New Session',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'collect',
+      label: 'Collection',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2 2H2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'profile',
+      label: 'Profile',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="8" r="4" /><path d="M20 21a8 8 0 0 0-16 0" />
+        </svg>
+      ),
+    },
+    {
+      id: 'learn',
+      label: 'Learn',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+          <path d="M22 3h-6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3h7z" />
+        </svg>
+      ),
+    },
+  ];
+
+  const handleSwitchTopLevelTab = (tabId: AppTab) => {
+    setActiveTab(tabId);
+    setRecentsOpen(false);
+    if (tabId === 'explore') {
+      setFilteredVisitId(null);
+      setIsComposingNewSession(true);
+      setVisit({
+        id: '',
+        itemIds: [],
+        globalConversation: [],
+      });
+    }
+    setArtistPageContext(null);
+    setMovementPageContext(null);
+    setInterpretingItem(null);
+    setArtworkDetailContext(null);
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  };
+
+  const handleSelectVisitSummary = (summaryId: string) => {
+    if (editingVisitId === summaryId) return;
+    setActiveTab('explore');
+    setFilteredVisitId(summaryId);
+    setIsComposingNewSession(false);
+    setArtistPageContext(null);
+    setMovementPageContext(null);
+    setInterpretingItem(null);
+    setArtworkDetailContext(null);
+    setOpenVisitMenuId(null);
+    setRecentsOpen(false);
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  };
+
+  const isTopLevelTabActive = (tabId: AppTab) =>
+    tabId === 'explore' ? isNewSessionEntryActive : activeTab === tabId;
+
+  const sidebarNavItemSharedClassName =
+    'h-11 rounded-2xl ring-1 ring-transparent transition-colors';
+  const sidebarNavItemActiveClassName =
+    'bg-[var(--color-bg-tertiary)] text-neutral-900 shadow-sm ring-neutral-200';
+  const sidebarNavItemInactiveClassName =
+    'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900';
+
+  const getExpandedNavItemClassName = (isActive: boolean) =>
+    `w-full flex items-center gap-3.5 px-3 text-[12px] font-semibold tracking-[0.1em] uppercase text-left ${sidebarNavItemSharedClassName} ${
+      isActive ? sidebarNavItemActiveClassName : sidebarNavItemInactiveClassName
+    }`;
+
+  const getCollapsedNavItemClassName = (isActive: boolean) =>
+    `flex h-11 w-11 items-center justify-center ${sidebarNavItemSharedClassName} ${
+      isActive ? sidebarNavItemActiveClassName : sidebarNavItemInactiveClassName
+    }`;
+
+  const renderVisitSummaryCard = (summary: VisitSummary) => (
+    <div
+      key={summary.id}
+      data-visit-menu-root="true"
+      className={`relative w-full rounded-[20px] p-1 ${
+        activeVisitSummary?.id === summary.id && activeTab === 'explore'
+          ? 'bg-[var(--color-bg-tertiary)] text-neutral-900 shadow-sm ring-1 ring-neutral-200'
+          : 'text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-900 font-medium'
+      }`}
+    >
+      <button
+        onClick={() => handleSelectVisitSummary(summary.id)}
+        className="w-full rounded-[16px] px-4 py-3.5 pr-12 text-left"
+      >
+        <div className="flex min-w-0 flex-col gap-0.5">
+          {editingVisitId === summary.id ? (
+            <input
+              ref={renameInputRef}
+              value={editingVisitTitle}
+              onChange={(event) => setEditingVisitTitle(event.target.value)}
+              onBlur={() => void commitVisitRename(summary.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void commitVisitRename(summary.id);
+                }
+                if (event.key === 'Escape') {
+                  setEditingVisitId(null);
+                  setEditingVisitTitle('');
+                }
+              }}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full rounded-md bg-white/90 px-2 py-1 text-[13px] leading-tight text-neutral-900 outline-none ring-1 ring-neutral-200 focus:ring-2 focus:ring-neutral-400"
+            />
+          ) : (
+            <p className="truncate text-[13px] leading-tight">{summary.title}</p>
+          )}
+          <p
+            className={`mt-1 truncate font-mono text-[10px] font-semibold leading-none tracking-wide ${
+              activeVisitSummary?.id === summary.id && activeTab === 'explore' ? 'text-neutral-500' : 'text-neutral-400/90'
+            }`}
+          >
+            {summary.artworkCount} {summary.artworkCount === 1 ? 'piece' : 'pieces'}
+          </p>
+        </div>
+      </button>
+      {editingVisitId !== summary.id && (
+        <>
+          <button
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpenVisitMenuId(prev => (prev === summary.id ? null : summary.id));
+            }}
+            className={`absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-colors ${
+              activeVisitSummary?.id === summary.id && activeTab === 'explore'
+                ? 'text-neutral-500 hover:bg-white hover:text-neutral-900'
+                : 'text-neutral-400 hover:bg-white/80 hover:text-neutral-700'
+            }`}
+            aria-label={`Open actions for ${summary.title}`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="5" cy="12" r="1.7" />
+              <circle cx="12" cy="12" r="1.7" />
+              <circle cx="19" cy="12" r="1.7" />
+            </svg>
+          </button>
+          {openVisitMenuId === summary.id && (
+            <div
+              data-visit-menu-root="true"
+              className="absolute right-2 top-[calc(50%+22px)] z-20 min-w-[170px] rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.12)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                onClick={() => handleStartRenameVisit(summary.id, summary.title)}
+                className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[12px] font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+                <span>Rename session</span>
+              </button>
+              <button
+                onClick={() => handleDeleteSession(summary.id)}
+                className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[12px] font-medium text-red-600 transition-colors hover:bg-red-50"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span>Delete session</span>
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
   const artworkHeaderActions = interpretingItem?.artworkId ? (
     <ArtworkActionsMenu
       disabled={Boolean(interpretingItem.isAnalyzing)}
@@ -1865,6 +2067,40 @@ const App: React.FC = () => {
     />
   ) : null;
 
+  const headerMenuButton = window.innerWidth < 768 && !sidebarOpen ? (
+    <button
+      onClick={() => {
+        setSidebarOpen(true);
+      }}
+      className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 shadow-sm transition-colors hover:bg-neutral-50"
+      title="Open menu"
+      aria-label="Open menu"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+        <line x1="4" y1="7" x2="20" y2="7" />
+        <line x1="4" y1="12" x2="20" y2="12" />
+        <line x1="4" y1="17" x2="20" y2="17" />
+      </svg>
+    </button>
+  ) : null;
+
+  const collectionFloatingMenuButton = window.innerWidth < 768 && !sidebarOpen ? (
+    <button
+      onClick={() => {
+        setSidebarOpen(true);
+      }}
+      className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 shadow-sm transition-colors hover:bg-neutral-50"
+      title="Open menu"
+      aria-label="Open menu"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+        <line x1="4" y1="7" x2="20" y2="7" />
+        <line x1="4" y1="12" x2="20" y2="12" />
+        <line x1="4" y1="17" x2="20" y2="17" />
+      </svg>
+    </button>
+  ) : null;
+
 
 
   const isGalleryEmpty = items.length === 0 && !isAnalyzing;
@@ -1873,11 +2109,22 @@ const App: React.FC = () => {
 
   const isVisitMode = activeTab === 'explore' && (isComposingNewSession || !!filteredVisitId);
   const isNewSessionEntryActive = activeTab === 'explore' && isComposingNewSession;
+  const userAvatar = currentUser?.profile_picture_url ? (
+    <img
+      src={currentUser.profile_picture_url}
+      alt={currentUser.username || 'User avatar'}
+      className="h-full w-full rounded-full object-cover"
+    />
+  ) : (
+    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[12px] font-bold uppercase text-neutral-900">
+      {currentUser ? currentUser.username[0] : 'U'}
+    </div>
+  );
 
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <div
-        className="relative flex h-dvh w-screen flex-row overflow-hidden bg-[#faf9f7] text-neutral-900"
+        className="relative flex h-dvh w-screen flex-row overflow-hidden bg-[var(--color-bg-primary)] text-neutral-900"
       >
         <Toaster />
 
@@ -2024,16 +2271,161 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {sidebarCollapsed && (
+          <aside className="hidden md:flex md:w-[72px] shrink-0 flex-col border-r border-neutral-200 bg-[var(--color-bg-secondary)]">
+            <div className="flex h-[52px] flex-col items-center border-b border-neutral-200 px-3">
+              <button
+                onClick={() => setSidebarCollapsed(false)}
+                className="group relative flex h-full w-full items-center justify-center overflow-hidden rounded-[16px] border border-transparent text-neutral-800 transition-colors hover:bg-neutral-50"
+                title="Expand sidebar"
+                aria-label="Expand sidebar"
+              >
+                <span className="text-[24px] font-bold tracking-[0.22em] uppercase transition-all duration-200 group-hover:translate-y-2 group-hover:opacity-0">
+                  M
+                </span>
+                <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-200 group-hover:opacity-100">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <line x1="9" y1="3" x2="9" y2="21" />
+                    <path d="M13 9l3 3-3 3" />
+                  </svg>
+                </span>
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center gap-2 px-3 py-4">
+              {topLevelNavigation.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => handleSwitchTopLevelTab(tab.id)}
+                  className={getCollapsedNavItemClassName(isTopLevelTabActive(tab.id))}
+                  title={tab.label}
+                  aria-label={tab.label}
+                >
+                  {tab.icon}
+                </button>
+              ))}
+
+              <DropdownMenu open={recentsOpen} onOpenChange={setRecentsOpen}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={getCollapsedNavItemClassName(recentsOpen)}
+                    title="Recent sessions"
+                    aria-label="Recent sessions"
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  side="right"
+                  align="start"
+                  sideOffset={12}
+                  className="w-[340px] overflow-visible rounded-[24px] p-2"
+                >
+                  <div data-visit-menu-root="true" className="px-3 py-2">
+                    <p className="text-[16px] font-semibold text-neutral-900">Recents</p>
+                  </div>
+                  <div data-visit-menu-root="true" className="max-h-[min(70vh,560px)] space-y-2 overflow-y-auto px-1 pb-1">
+                    {recentVisitSummaries.length > 0 ? (
+                      recentVisitSummaries.map((summary) => renderVisitSummaryCard(summary))
+                    ) : (
+                      <div className="px-3 py-4 text-[12px] text-neutral-400">No recent sessions yet.</div>
+                    )}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <div className="mt-auto p-3 relative">
+              <button
+                onClick={() => setUserMenuOpen(prev => !prev)}
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white text-[12px] font-bold uppercase text-neutral-900 shadow-sm transition-colors hover:bg-neutral-50"
+              >
+                {userAvatar}
+              </button>
+
+              {userMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+                  <div className="absolute bottom-3 left-full z-50 ml-3 w-[240px] rounded-2xl border border-neutral-200 bg-white p-4 shadow-xl">
+                    <div>
+                      <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400">Language</label>
+                      <select
+                        value={language}
+                        onChange={(event) => {
+                          const nextLanguage = event.target.value;
+                          setLanguage(nextLanguage);
+                          localStorage.setItem('musee_language', nextLanguage);
+                          setUserMenuOpen(false);
+                        }}
+                        className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 outline-none focus:border-neutral-400 transition-colors"
+                      >
+                        <option value="en">English</option>
+                        <option value="zh">中文</option>
+                      </select>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      {currentUser && (
+                        <button
+                          onClick={() => {
+                            setUserMenuOpen(false);
+                            setShowAccountModal('account');
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-neutral-700 transition-all hover:bg-neutral-50"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                          </svg>
+                          <span>Settings</span>
+                        </button>
+                      )}
+                      {currentUser ? (
+                        <button
+                          onClick={() => {
+                            setUserMenuOpen(false);
+                            handleLogout();
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-red-500 transition-all hover:bg-red-50"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                          </svg>
+                          <span>Sign out</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setUserMenuOpen(false);
+                            setShowLoginModal(true);
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-neutral-700 transition-all hover:bg-neutral-50"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+                          </svg>
+                          <span>Sign in</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </aside>
+        )}
+
         {/* Global unified sidebar */}
         <aside
-          className={`shrink-0 z-30 overflow-hidden border-r border-neutral-200 bg-[#fbf8f2] transition-all duration-300 flex flex-col h-full ${
+          className={`shrink-0 z-30 overflow-hidden border-r border-neutral-200 bg-[var(--color-bg-secondary)] transition-all duration-300 flex flex-col h-full ${
             sidebarOpen
               ? 'fixed inset-y-0 left-0 w-[260px] translate-x-0 shadow-[0_18px_60px_rgba(0,0,0,0.12)] md:shadow-none md:relative md:inset-auto md:translate-x-0'
               : 'fixed inset-y-0 left-0 w-[260px] -translate-x-full md:translate-x-0 md:relative md:inset-auto'
-          } ${sidebarCollapsed ? 'md:w-0 md:border-r-0 md:opacity-0 md:pointer-events-none' : 'md:w-[260px] md:opacity-100'}`}
+          } ${sidebarCollapsed ? 'md:hidden' : 'md:w-[260px] md:opacity-100'}`}
         >
           {/* Brand & Collapse Row */}
-          <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-[18px] shrink-0">
+          <div className="flex h-[52px] items-center justify-between border-b border-neutral-200 px-5 shrink-0">
             <h1 className="text-[14px] font-bold tracking-[0.2em] uppercase text-neutral-800">Musee</h1>
             <button
               onClick={() => {
@@ -2056,75 +2448,13 @@ const App: React.FC = () => {
 
           {/* Top Navigation Links */}
           <div className="flex flex-col gap-1 px-3 py-4 shrink-0">
-            {[
-              {
-                id: 'explore',
-                label: 'New Session',
-                icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                  </svg>
-                )
-              },
-              {
-                id: 'collect',
-                label: 'Collection',
-                icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2 2H2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                  </svg>
-                )
-              },
-              {
-                id: 'profile',
-                label: 'Profile',
-                icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/>
-                  </svg>
-                )
-              },
-              {
-                id: 'learn',
-                label: 'Learn',
-                icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-                    <path d="M22 3h-6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3h7z"/>
-                  </svg>
-                )
-              }
-            ].map((tab) => (
+            {topLevelNavigation.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id as any);
-                  if (tab.id === 'explore') {
-                    setFilteredVisitId(null);
-                    setIsComposingNewSession(true);
-                    setVisit({
-                      id: '',
-                      itemIds: [],
-                      globalConversation: [],
-                    });
-                  }
-                  setArtistPageContext(null);
-                  setMovementPageContext(null);
-                  setInterpretingItem(null);
-                  setArtworkDetailContext(null);
-                  if (window.innerWidth < 768) {
-                    setSidebarOpen(false);
-                  }
-                }}
-                className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-[12px] font-semibold tracking-[0.1em] uppercase text-left transition-all ${
-                  (tab.id === 'explore' ? isNewSessionEntryActive : activeTab === tab.id)
-                    ? 'bg-neutral-900 text-white shadow-md'
-                    : 'text-neutral-500 hover:text-neutral-955 hover:bg-neutral-100'
-                }`}
+                onClick={() => handleSwitchTopLevelTab(tab.id)}
+                className={getExpandedNavItemClassName(isTopLevelTabActive(tab.id))}
               >
-                <span className={(tab.id === 'explore' ? isNewSessionEntryActive : activeTab === tab.id) ? 'text-white' : 'text-neutral-400'}>
-                  {tab.icon}
-                </span>
+                <span>{tab.icon}</span>
                 <span>{tab.label}</span>
               </button>
             ))}
@@ -2139,7 +2469,7 @@ const App: React.FC = () => {
 
           {/* Search bar inside sidebar */}
           <div className="px-3 py-1.5 shrink-0">
-            <div className="flex items-center gap-2.5 rounded-[16px] border border-neutral-200 bg-[#f4efe4]/60 px-3.5 py-2 text-neutral-700 shadow-inner">
+            <div className="flex items-center gap-2.5 rounded-[16px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-3.5 py-2 text-neutral-700 shadow-inner">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-neutral-400">
                 <circle cx="11" cy="11" r="7" />
                 <path d="m20 20-3.5-3.5" />
@@ -2155,114 +2485,7 @@ const App: React.FC = () => {
 
           {/* Sessions Scroll List */}
           <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0 space-y-2 scrollbar-thin">
-            {visitSummaries.map((summary) => (
-              <div
-                key={summary.id}
-                data-visit-menu-root="true"
-                className={`relative w-full rounded-[20px] p-1 transition-all ${
-                  activeVisitSummary?.id === summary.id && activeTab === 'explore'
-                    ? 'bg-neutral-900 text-white shadow-md'
-                    : 'text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-900 font-medium'
-                }`}
-              >
-                <button
-                  onClick={() => {
-                    if (editingVisitId === summary.id) return;
-                    setActiveTab('explore');
-                    setFilteredVisitId(summary.id);
-                    setIsComposingNewSession(false);
-                    setArtistPageContext(null);
-                    setMovementPageContext(null);
-                    setInterpretingItem(null);
-                    setArtworkDetailContext(null);
-                    setOpenVisitMenuId(null);
-                    if (window.innerWidth < 768) {
-                      setSidebarOpen(false);
-                    }
-                  }}
-                  className="w-full rounded-[16px] px-4 py-3.5 pr-12 text-left"
-                >
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    {editingVisitId === summary.id ? (
-                      <input
-                        ref={renameInputRef}
-                        value={editingVisitTitle}
-                        onChange={(event) => setEditingVisitTitle(event.target.value)}
-                        onBlur={() => void commitVisitRename(summary.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            void commitVisitRename(summary.id);
-                          }
-                          if (event.key === 'Escape') {
-                            setEditingVisitId(null);
-                            setEditingVisitTitle('');
-                          }
-                        }}
-                        onClick={(event) => event.stopPropagation()}
-                        className="w-full rounded-md bg-white/90 px-2 py-1 text-[13px] leading-tight text-neutral-900 outline-none ring-1 ring-neutral-200 focus:ring-2 focus:ring-neutral-400"
-                      />
-                    ) : (
-                      <p className="truncate text-[13px] leading-tight">{summary.title}</p>
-                    )}
-                    <p className={`truncate text-[10px] tracking-wide font-semibold font-mono leading-none mt-1 ${
-                      activeVisitSummary?.id === summary.id && activeTab === 'explore' ? 'text-neutral-300' : 'text-neutral-400/90'
-                    }`}>
-                      {summary.artworkCount} {summary.artworkCount === 1 ? 'piece' : 'pieces'}
-                    </p>
-                  </div>
-                </button>
-                {editingVisitId !== summary.id && (
-                  <>
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setOpenVisitMenuId(prev => prev === summary.id ? null : summary.id);
-                      }}
-                      className={`absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-colors ${
-                        activeVisitSummary?.id === summary.id && activeTab === 'explore'
-                          ? 'text-white/70 hover:bg-white/10 hover:text-white'
-                          : 'text-neutral-400 hover:bg-white/80 hover:text-neutral-700'
-                      }`}
-                      aria-label={`Open actions for ${summary.title}`}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                        <circle cx="5" cy="12" r="1.7" />
-                        <circle cx="12" cy="12" r="1.7" />
-                        <circle cx="19" cy="12" r="1.7" />
-                      </svg>
-                    </button>
-                    {openVisitMenuId === summary.id && (
-                      <div
-                        data-visit-menu-root="true"
-                        className="absolute right-2 top-[calc(50%+22px)] z-20 min-w-[170px] rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.12)]"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <button
-                          onClick={() => handleStartRenameVisit(summary.id, summary.title)}
-                          className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[12px] font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M12 20h9" />
-                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                          </svg>
-                          <span>Rename session</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSession(summary.id)}
-                          className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[12px] font-medium text-red-600 transition-colors hover:bg-red-50"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                          <span>Delete session</span>
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
+            {visitSummaries.map((summary) => renderVisitSummaryCard(summary))}
           </div>
 
           <div className="h-px bg-neutral-200/60 my-1 mx-4" />
@@ -2275,8 +2498,8 @@ const App: React.FC = () => {
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 {/* Avatar */}
-                <div className="w-6 h-6 rounded-full bg-neutral-900 text-white font-bold flex items-center justify-center text-[10px] tracking-wider shrink-0 uppercase shadow-sm">
-                  {currentUser ? currentUser.username[0] : 'U'}
+                <div className="h-6 w-6 shrink-0 overflow-hidden rounded-full border border-neutral-200 shadow-sm">
+                  {userAvatar}
                 </div>
                 {/* Username */}
                 <span className="text-[13px] font-semibold text-neutral-800 truncate">
@@ -2374,35 +2597,10 @@ const App: React.FC = () => {
         {/* Right-hand Canvas main container */}
         <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
           
-          {/* Collapse/Expand Sidebar Trigger Button (Desktop & Mobile) */}
-          {(sidebarCollapsed || !sidebarOpen) && (
-            <button
-              onClick={() => {
-                if (window.innerWidth < 768) {
-                  setSidebarOpen(true);
-                } else {
-                  setSidebarCollapsed(false);
-                }
-              }}
-              className="absolute left-4 top-4 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white/96 text-neutral-700 shadow-md backdrop-blur transition-all hover:scale-105"
-              title="Expand sidebar"
-            >
-              {window.innerWidth < 768 ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                  <line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" />
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /><path d="M13 9l3 3-3 3" />
-                </svg>
-              )}
-            </button>
-          )}
-
           {/* Dynamic Content view wrapper */}
           <div className="flex-1 min-h-0 relative flex flex-col">
             {artistPageContext ? (
-              <div className="flex h-full min-w-0 flex-1 flex-col bg-[#faf9f7] animate-in fade-in duration-300">
+              <div className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg-primary)] animate-in fade-in duration-300">
                 <Suspense fallback={<ScreenLoader label="Loading artist" />}>
                   <ArtistPage
                     artistEntityId={artistPageContext.artistEntityId}
@@ -2410,6 +2608,7 @@ const App: React.FC = () => {
                     artistName={artistPageContext.artistName}
                     parentLabel={artistPageContext.parentLabel}
                     userId={currentUser?.user_id || USER_ID}
+                    leftSlot={headerMenuButton}
                     onClose={closeArtistDetail}
                     onOpenArtwork={(item) => {
                       openArtworkDetail(item, {
@@ -2437,11 +2636,12 @@ const App: React.FC = () => {
                 </Suspense>
               </div>
             ) : movementPageContext ? (
-              <div className="flex h-full min-w-0 flex-1 flex-col bg-[#faf9f7] animate-in fade-in duration-300">
+              <div className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg-primary)] animate-in fade-in duration-300">
                 <Suspense fallback={<ScreenLoader label="Loading collection" />}>
                   <ArtMovementPage
                     collection={movementPageContext}
                     items={items}
+                    leftSlot={headerMenuButton}
                     onClose={() => {
                       setMovementPageContext(null);
                       window.history.pushState(
@@ -2469,6 +2669,8 @@ const App: React.FC = () => {
                   artworkHeaderActions={artworkHeaderActions}
                   artworkHeaderEditToken={artworkHeaderEditToken}
                   artworkDetailContext={artworkDetailContext}
+                  headerLeftSlot={headerMenuButton}
+                  showSessionHeader={!isComposingNewSession}
                   interpretationRightMode={interpretationRightMode}
                   interpretingMode={interpretingMode}
                   sessionGoalInput={sessionGoalInput}
@@ -2513,6 +2715,14 @@ const App: React.FC = () => {
                       .then(res => setSessionGoal(res?.session?.id || sid, newGoal))
                       .catch(() => {});
                   }}
+                  onSaveSessionTitle={async (newTitle) => {
+                    try {
+                      await saveVisitTitle(activeVisitSummary.id, newTitle);
+                    } catch (error) {
+                      console.error('Failed to rename visit from session header:', error);
+                      showToast('Could not rename session', 'info');
+                    }
+                  }}
                   onSessionGoalInputChange={setSessionGoalInput}
                   onSubmitGoal={(goal) => {
                     const sid = activeVisitSummary.id || createVisitDraft();
@@ -2533,13 +2743,15 @@ const App: React.FC = () => {
                   }
                 />
               ) : (
-                <div className="flex flex-1 items-center justify-center px-6 bg-[#f7f4ee]">
+                <div className="flex flex-1 items-center justify-center px-6 bg-[var(--color-bg-primary)]">
                   <EmptyWall isVisitMode={false} />
                 </div>
               )
             ) : activeTab === 'collect' ? (
               <Suspense fallback={<ScreenLoader label="Loading collection" />}>
                 <CollectView
+                  headerLeftSlot={headerMenuButton}
+                  topLevelLeftSlot={collectionFloatingMenuButton}
                   items={items}
                   visit={visit}
                   filteredVisitId={filteredVisitId}
@@ -2606,12 +2818,14 @@ const App: React.FC = () => {
                 />
               </Suspense>
             ) : activeTab === 'profile' ? (
-              <div className="flex h-full min-w-0 flex-1 flex-col bg-[#faf9f7] overflow-hidden animate-in fade-in duration-300">
-                <CanvasHeader
-                  parentLabel=""
-                  childLabel="Taste Profile"
-                  isInline={true}
-                />
+              <div className="relative flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg-primary)] overflow-hidden animate-in fade-in duration-300">
+                {headerMenuButton ? (
+                  <div className="pointer-events-none absolute left-4 top-3 z-20 md:hidden">
+                    <div className="pointer-events-auto">
+                      {headerMenuButton}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex-1 overflow-y-auto">
                   <Suspense fallback={<ScreenLoader label="Loading profile" />}>
                     <TasteProfileView
@@ -2623,9 +2837,9 @@ const App: React.FC = () => {
                 </div>
               </div>
             ) : activeTab === 'learn' ? (
-              <div className="flex-1 overflow-hidden bg-[#faf9f7] pt-16 md:pt-0">
+              <div className="flex-1 overflow-hidden bg-[var(--color-bg-primary)] pt-16 md:pt-0">
                 <Suspense fallback={<ScreenLoader label="Loading library" />}>
-                  <LearningHubPage inline={true} initialGuide={learningInitialGuide} />
+                  <LearningHubPage inline={true} initialGuide={learningInitialGuide} leftSlot={headerMenuButton} />
                 </Suspense>
               </div>
             ) : null}

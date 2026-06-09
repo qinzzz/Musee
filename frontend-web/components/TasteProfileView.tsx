@@ -162,7 +162,7 @@ const TasteProfileView: React.FC<Props> = ({
   const narrativeParagraphs = parseNarrativeSummary(profile.narrative_summary);
 
   return (
-    <div className="h-full overflow-y-auto bg-[#faf9f7] px-7 py-10">
+    <div className="h-full overflow-y-auto bg-[var(--color-bg-primary)] px-7 py-10">
       <div className="mx-auto max-w-[620px]">
         {!canRenderProfile ? (
           <div className="rounded-[32px] border border-neutral-200 bg-white px-8 py-9 shadow-[0_12px_30px_rgba(0,0,0,0.04)]">
@@ -174,7 +174,7 @@ const TasteProfileView: React.FC<Props> = ({
               Classify the works you return to and the ones that are not for you. Your taste profile emerges from that contrast.
             </p>
 
-            <div className="mt-8 rounded-[28px] border border-neutral-200 bg-[#fcfbf8] px-6 py-6">
+            <div className="mt-8 rounded-[28px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-6 py-6">
               <div className="flex items-start justify-between gap-6">
                 <div>
                   <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-neutral-400">Progress</p>
