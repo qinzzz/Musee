@@ -44,6 +44,8 @@ type ExploreSessionViewProps = {
   artworkHeaderActions: React.ReactNode;
   artworkHeaderEditToken: number;
   artworkDetailContext: ArtworkDetailContext | null;
+  headerLeftSlot?: React.ReactNode;
+  showSessionHeader?: boolean;
   interpretationRightMode: 'metadata' | 'community';
   interpretingMode: 'professional' | 'interactive';
   sessionGoalInput: string;
@@ -69,60 +71,88 @@ type ExploreSessionViewProps = {
     artistName?: string,
   ) => void;
   onSaveExistingGoal: (goal: string) => void;
+  onSaveSessionTitle: (title: string) => Promise<void>;
   onSessionGoalInputChange: (value: string) => void;
   onSubmitGoal: (goal: string) => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   onOpenSessionArtwork: (item: GalleryItem) => void;
 };
 
-const GoalBanner: React.FC<{ goal: string; onSave: (goal: string) => void }> = ({ goal, onSave }) => {
-  const [editing, setEditing] = React.useState(false);
-  const [draft, setDraft] = React.useState(goal);
-  const inputRef = React.useRef<HTMLInputElement>(null);
-
-  const commit = () => {
-    const trimmed = draft.trim();
-    if (trimmed && trimmed !== goal) {
-      onSave(trimmed);
-    }
-    setEditing(false);
-  };
+const SessionDetailsPanel: React.FC<{
+  title: string;
+  goal: string;
+  onSaveTitle: (title: string) => Promise<void>;
+  onSaveGoal: (goal: string) => void;
+}> = ({ title, goal, onSaveTitle, onSaveGoal }) => {
+  const [titleDraft, setTitleDraft] = React.useState(title);
+  const [goalDraft, setGoalDraft] = React.useState(goal);
+  const [isSavingTitle, setIsSavingTitle] = React.useState(false);
 
   React.useEffect(() => {
-    if (editing) {
-      setDraft(goal);
-      inputRef.current?.focus();
+    setTitleDraft(title);
+  }, [title]);
+
+  React.useEffect(() => {
+    setGoalDraft(goal);
+  }, [goal]);
+
+  const commitTitle = async () => {
+    const trimmed = titleDraft.trim();
+    if (!trimmed || trimmed === title) {
+      setTitleDraft(title);
+      return;
     }
-  }, [editing, goal]);
+    try {
+      setIsSavingTitle(true);
+      await onSaveTitle(trimmed);
+    } finally {
+      setIsSavingTitle(false);
+    }
+  };
+
+  const commitGoal = () => {
+    const trimmed = goalDraft.trim();
+    if (!trimmed || trimmed === goal) {
+      setGoalDraft(goal);
+      return;
+    }
+    onSaveGoal(trimmed);
+  };
 
   return (
-    <div className="flex items-center gap-2 px-5 sm:px-10 py-2.5 bg-[#f7f4ee] border-b border-neutral-200/60">
-      <span className="text-[13px] shrink-0">🎯</span>
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={commit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              commit();
-            }
-            if (event.key === 'Escape') {
-              setEditing(false);
-            }
-          }}
-          className="flex-1 text-[14px] text-neutral-700 bg-transparent outline-none border-b border-neutral-400 leading-snug py-0.5"
-        />
-      ) : (
-        <button
-          onClick={() => setEditing(true)}
-          className="flex-1 text-left text-[14px] text-neutral-500 leading-snug hover:text-neutral-700 transition-colors"
-        >
-          {goal}
-        </button>
-      )}
+    <div className="rounded-b-[22px] border border-t-0 border-neutral-200 bg-[var(--color-bg-primary)] px-5 py-4 shadow-[0_18px_50px_rgba(0,0,0,0.08)] sm:px-8">
+      <div className="max-w-[560px] space-y-4">
+        <div>
+          <p className="mb-2 text-[11px] font-medium tracking-[0.18em] uppercase text-neutral-400">Session name</p>
+          <input
+            value={titleDraft}
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={() => void commitTitle()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void commitTitle();
+              }
+              if (event.key === 'Escape') {
+                setTitleDraft(title);
+              }
+            }}
+            disabled={isSavingTitle}
+            className="w-full rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[14px] text-neutral-800 outline-none transition-colors focus:border-neutral-300"
+          />
+        </div>
+        <div>
+          <p className="mb-2 text-[11px] font-medium tracking-[0.18em] uppercase text-neutral-400">Session goal</p>
+          <textarea
+            value={goalDraft}
+            onChange={(event) => setGoalDraft(event.target.value)}
+            onBlur={commitGoal}
+            rows={3}
+            placeholder="Add a focus for this visit…"
+            className="w-full resize-none rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[14px] leading-relaxed text-neutral-800 outline-none transition-colors focus:border-neutral-300"
+          />
+        </div>
+      </div>
     </div>
   );
 };
@@ -148,6 +178,8 @@ export default function ExploreSessionView({
   artworkHeaderActions,
   artworkHeaderEditToken,
   artworkDetailContext,
+  headerLeftSlot,
+  showSessionHeader = true,
   interpretationRightMode,
   interpretingMode,
   sessionGoalInput,
@@ -169,11 +201,18 @@ export default function ExploreSessionView({
   onRefreshAnalysis,
   onOpenArtistFromInterpretation,
   onSaveExistingGoal,
+  onSaveSessionTitle,
   onSessionGoalInputChange,
   onSubmitGoal,
   onFileUpload,
   onOpenSessionArtwork,
 }: ExploreSessionViewProps) {
+  const [sessionDetailsOpen, setSessionDetailsOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setSessionDetailsOpen(false);
+  }, [activeVisitSummary.id]);
+
   const handleSubmitGoal = () => {
     const goal = sessionGoalInput.trim();
     if (!goal) {
@@ -189,6 +228,7 @@ export default function ExploreSessionView({
           parentLabel={activeVisitSummary.title}
           parentClick={onCloseArtworkDetail}
           childLabel={interpretingItem.artworkName || 'Untitled'}
+          leftSlot={headerLeftSlot}
           rightSlot={artworkHeaderActions}
           isInline={true}
         />
@@ -219,25 +259,44 @@ export default function ExploreSessionView({
 
   return (
     <>
-      <CanvasHeader
-        parentLabel=""
-        childLabel={activeVisitSummary.title}
-        subtitle={activeVisitSummary.location || undefined}
-        isInline={true}
-      />
-
-      {sessionGoals[activeVisitSummary.id] && (
-        <GoalBanner
-          goal={sessionGoals[activeVisitSummary.id]}
-          onSave={onSaveExistingGoal}
+      {showSessionHeader ? (
+        <CanvasHeader
+          parentLabel=""
+          childLabel={activeVisitSummary.title}
+          subtitle={activeVisitSummary.location || undefined}
+          leftSlot={headerLeftSlot}
+          isInline={true}
+          onChildClick={() => setSessionDetailsOpen((value) => !value)}
+          childExpanded={sessionDetailsOpen}
         />
+      ) : (
+        headerLeftSlot ? (
+          <div className="pointer-events-none absolute left-4 top-3 z-20 md:hidden">
+            <div className="pointer-events-auto">
+              {headerLeftSlot}
+            </div>
+          </div>
+        ) : null
       )}
 
-      <div className="relative isolate flex-1 min-h-0 flex flex-col bg-[#f7f4ee]" style={{ overflow: 'clip' }}>
+      <div className="relative isolate flex-1 min-h-0 flex flex-col bg-[var(--color-bg-primary)]" style={{ overflow: 'clip' }}>
+        {showSessionHeader && sessionDetailsOpen ? (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-0">
+            <div className="pointer-events-auto w-full sm:max-w-[640px]">
+              <SessionDetailsPanel
+                title={activeVisitSummary.title}
+                goal={sessionGoals[activeVisitSummary.id] || ''}
+                onSaveTitle={onSaveSessionTitle}
+                onSaveGoal={onSaveExistingGoal}
+              />
+            </div>
+          </div>
+        ) : null}
+
         {activeVisitStream.length === 0 ? (
           sessionGoalDismissed.has(activeVisitSummary.id) ? (
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center pb-20 px-6">
-              <div className="text-center animate-in fade-in zoom-in-95 duration-500">
+              <div className="text-center">
                 <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-tight text-neutral-800 font-sans mb-2">
                   Start capturing
                 </h2>
@@ -248,7 +307,7 @@ export default function ExploreSessionView({
             </div>
           ) : (
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-24">
-              <div className="w-full max-w-sm animate-in fade-in zoom-in-95 duration-500">
+              <div className="w-full max-w-sm">
                 <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-neutral-800 font-sans mb-2 text-center">
                   What&apos;s your focus today?
                 </h2>
@@ -299,7 +358,7 @@ export default function ExploreSessionView({
                 <div className="mt-5 flex gap-3">
                   <button
                     onClick={() => goalGalleryInputRef.current?.click()}
-                    className="flex-1 flex items-center justify-center gap-2 bg-neutral-900 text-white rounded-full px-5 py-3 text-[13px] font-medium"
+                    className="flex-1 flex items-center justify-center gap-2 rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -407,8 +466,8 @@ export default function ExploreSessionView({
                   entry.type === 'artwork' ? (
                     <div key={entry.id} className="space-y-2">
                       <div className="flex justify-end">
-                        <div className="flex items-center gap-2 bg-neutral-900 text-white rounded-[20px] px-4 py-2.5">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
+                        <div className="flex items-center gap-2 rounded-[20px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-4 py-2.5 text-neutral-800">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50">
                             <rect x="3" y="3" width="18" height="18" rx="2" />
                             <circle cx="8.5" cy="8.5" r="1.5" />
                             <polyline points="21 15 16 10 5 21" />
@@ -479,7 +538,7 @@ export default function ExploreSessionView({
                     <React.Fragment key={entry.id}>
                       {entry.message.role === 'user' ? (
                         <div className="flex justify-end">
-                          <div className="max-w-[85%] rounded-[20px] sm:rounded-[28px] px-5 py-3.5 sm:px-6 sm:py-5 bg-neutral-900 text-white">
+                          <div className="max-w-[85%] rounded-[20px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3.5 text-neutral-800 shadow-sm sm:rounded-[28px] sm:px-6 sm:py-5">
                             <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">{entry.message.text}</p>
                           </div>
                         </div>

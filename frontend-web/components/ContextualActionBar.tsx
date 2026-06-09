@@ -65,10 +65,10 @@ const ContextualActionBar: React.FC<Props> = ({
         disabled={isAnalyzing}
       />
 
-      <div className="absolute bottom-0 left-0 right-0 z-[20] px-3 sm:px-6 pb-3 sm:pb-5 bg-gradient-to-t from-[#f7f4ee] via-[#f7f4ee]/95 to-transparent pt-8" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}>
+      <div className="absolute bottom-0 left-0 right-0 z-[20] px-3 sm:px-6 pb-3 sm:pb-5 bg-gradient-to-t from-[var(--color-bg-primary)] via-[color:rgba(255,255,255,0.95)] to-transparent pt-8" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}>
         <div className="mx-auto w-full max-w-[640px] space-y-3">
           {activeItem && (
-            <div className="rounded-[28px] border border-neutral-200 bg-white/96 px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.08)] backdrop-blur">
+            <div className="rounded-[28px] border border-neutral-200 bg-white px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-[11px] tracking-[0.18em] uppercase text-neutral-400">Artwork actions</p>
@@ -123,13 +123,13 @@ const ContextualActionBar: React.FC<Props> = ({
 
           <form
             onSubmit={submit}
-            className="rounded-[34px] border border-neutral-200 bg-white/96 px-4 sm:px-6 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)] backdrop-blur"
+            className="rounded-[34px] border border-neutral-200 bg-white px-4 sm:px-6 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)]"
           >
             <div className="flex items-center gap-3 mb-3">
               <button
                 type="button"
                 onClick={() => galleryInputRef.current?.click()}
-                className="rounded-[18px] bg-neutral-900 px-5 py-3 text-white text-[15px] font-medium flex items-center gap-3"
+                className="flex items-center gap-3 rounded-[18px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[15px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
@@ -139,7 +139,7 @@ const ContextualActionBar: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                className="rounded-[18px] border border-neutral-200 bg-[#f6f1e7] px-5 py-3 text-[15px] font-medium text-neutral-700 flex items-center gap-3"
+                className="rounded-[18px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[15px] font-medium text-neutral-700 flex items-center gap-3"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>

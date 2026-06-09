@@ -17,12 +17,13 @@ function toSlug(name: string): string {
 interface Props {
   collection: SmartCollection;
   items: GalleryItem[];
+  leftSlot?: React.ReactNode;
   onClose: () => void;
   onOpenArtwork: (item: GalleryItem) => void;
   isInline?: boolean;
 }
 
-export default function ArtMovementPage({ collection, items, onClose, onOpenArtwork, isInline }: Props) {
+export default function ArtMovementPage({ collection, items, leftSlot, onClose, onOpenArtwork, isInline }: Props) {
   const collectionItems = items.filter(i =>
     collection.artwork_ids.includes(i.artworkId ?? i.id)
   );
@@ -38,7 +39,7 @@ export default function ArtMovementPage({ collection, items, onClose, onOpenArtw
 
   return (
     <div
-      className={isInline ? "w-full h-full relative z-10 flex flex-col bg-[#faf9f7] overflow-hidden" : "fixed inset-0 z-[1200] bg-[#faf9f7] flex flex-col overflow-hidden"}
+      className={isInline ? "w-full h-full relative z-10 flex flex-col bg-[var(--color-bg-primary)] overflow-hidden" : "fixed inset-0 z-[1200] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"}
       style={{ fontFamily: 'system-ui, sans-serif' }}
     >
       {/* Header */}
@@ -46,6 +47,7 @@ export default function ArtMovementPage({ collection, items, onClose, onOpenArtw
         parentLabel="Smart Collections"
         parentClick={onClose}
         childLabel={collection.name}
+        leftSlot={leftSlot}
         isInline={isInline}
       />
 
@@ -92,7 +94,7 @@ export default function ArtMovementPage({ collection, items, onClose, onOpenArtw
                 <button
                   key={item.id}
                   onClick={() => onOpenArtwork(item)}
-                  className="relative aspect-square rounded-xl overflow-hidden bg-[#f4efe4] group focus:outline-none border border-neutral-200/60"
+                  className="relative aspect-square rounded-xl overflow-hidden bg-[var(--color-surface-muted)] group focus:outline-none border border-neutral-200/60"
                 >
                   <img
                     src={item.url}

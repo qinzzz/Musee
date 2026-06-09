@@ -12,6 +12,8 @@ type InterpretationItem = GalleryItem & {
 };
 
 type CollectViewProps = {
+  headerLeftSlot?: React.ReactNode;
+  topLevelLeftSlot?: React.ReactNode;
   items: GalleryItem[];
   visit: Visit;
   filteredVisitId: string | null;
@@ -53,6 +55,8 @@ type CollectViewProps = {
 };
 
 export default function CollectView({
+  headerLeftSlot,
+  topLevelLeftSlot,
   items,
   visit,
   filteredVisitId,
@@ -90,11 +94,12 @@ export default function CollectView({
 }: CollectViewProps) {
   if (interpretingItem) {
     return (
-      <div className="flex h-full min-w-0 flex-1 flex-col bg-[#f7f4ee]">
+      <div className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg-primary)]">
         <CanvasHeader
           parentLabel={artworkDetailContext?.parentLabel || 'All Artworks'}
           parentClick={onCloseArtworkDetail}
           childLabel={interpretingItem.artworkName || 'Untitled'}
+          leftSlot={headerLeftSlot}
           rightSlot={artworkHeaderActions}
           isInline={true}
         />
@@ -124,8 +129,9 @@ export default function CollectView({
   }
 
   return (
-    <div className="flex-1 overflow-hidden pl-0 pt-16 md:pt-4">
+    <div className="relative flex-1 overflow-hidden pl-0 pt-0">
       <OrganizeView
+        topBarLeftSlot={topLevelLeftSlot}
         items={items}
         visit={visit}
         filteredVisitId={filteredVisitId}
