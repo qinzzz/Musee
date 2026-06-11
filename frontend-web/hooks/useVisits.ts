@@ -55,6 +55,38 @@ function getVisitItemTimestamp(item: GalleryItem): number {
   return item.sessionCapturedAt ?? item.timestamp;
 }
 
+function getItemSessionMemberships(item: GalleryItem): Array<{
+  visitId: string;
+  title?: string;
+  sequenceNumber?: number;
+  source?: 'library' | 'upload' | 'camera';
+}> {
+  if (item.sessionLinks && item.sessionLinks.length > 0) {
+    return item.sessionLinks
+      .filter((link) => Boolean(link.sessionId))
+      .map((link) => ({
+        visitId: link.sessionId,
+        title: link.sessionTitle,
+        sequenceNumber: link.sequenceNumber,
+        source: link.source,
+      }));
+  }
+
+  if (item.visitId) {
+    return [{ visitId: item.visitId, title: item.sessionTitle }];
+  }
+
+  return [];
+}
+
+function getItemSequenceNumberForVisit(item: GalleryItem, visitId: string): number | null {
+  const link = item.sessionLinks?.find((entry) => entry.sessionId === visitId);
+  if (typeof link?.sequenceNumber === 'number') {
+    return link.sequenceNumber;
+  }
+  return null;
+}
+
 function parseDisplayLocation(loc: unknown): string | null {
   if (!loc) return null;
   try {
@@ -141,9 +173,11 @@ export function useVisits({
   const visitSummaries = useMemo(() => {
     const grouped = new Map<string, GalleryItem[]>();
     items.forEach((item) => {
-      if (!item.visitId) return;
-      if (!grouped.has(item.visitId)) grouped.set(item.visitId, []);
-      grouped.get(item.visitId)!.push(item);
+      const memberships = getItemSessionMemberships(item);
+      memberships.forEach(({ visitId }) => {
+        if (!grouped.has(visitId)) grouped.set(visitId, []);
+        grouped.get(visitId)!.push(item);
+      });
     });
 
     const summaries: VisitSummary[] = [];
@@ -151,18 +185,33 @@ export function useVisits({
 
     grouped.forEach((visitItems, id) => {
       knownIds.add(id);
-      const sortedItems = [...visitItems].sort((a, b) => getVisitItemTimestamp(a) - getVisitItemTimestamp(b));
+      const draft = visitDrafts.find((entry) => entry.id === id);
+      const sortedItems = [...visitItems].sort((a, b) => {
+        const aSequence = getItemSequenceNumberForVisit(a, id);
+        const bSequence = getItemSequenceNumberForVisit(b, id);
+        if (aSequence !== null && bSequence !== null && aSequence !== bSequence) {
+          return aSequence - bSequence;
+        }
+        if (aSequence !== null && bSequence === null) return -1;
+        if (aSequence === null && bSequence !== null) return 1;
+        return getVisitItemTimestamp(a) - getVisitItemTimestamp(b);
+      });
       const latestItem = sortedItems[sortedItems.length - 1];
       const firstItem = sortedItems[0];
       const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
-      const title = latestItem?.sessionTitle || location || visitDrafts.find((draft) => draft.id === id)?.title || defaultVisitTitle;
+      const linkedTitle = latestItem?.sessionLinks?.find((link) => link.sessionId === id)?.sessionTitle;
+      const title = linkedTitle || latestItem?.sessionTitle || location || draft?.title || defaultVisitTitle;
+      const lastArtworkTimestamp = latestItem ? getVisitItemTimestamp(latestItem) : 0;
+      const updatedAt = Math.max(draft?.updatedAt || 0, lastArtworkTimestamp);
       summaries.push({
         id,
         title,
         location,
         artworkCount: sortedItems.length,
-        updatedAt: latestItem ? getVisitItemTimestamp(latestItem) : Date.now(),
-        dateLabel: latestItem?.photoTime ? parseDisplayDate(latestItem.photoTime) : null,
+        updatedAt: updatedAt || Date.now(),
+        dateLabel: draft
+          ? new Date(draft.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : (latestItem?.photoTime ? parseDisplayDate(latestItem.photoTime) : null),
         items: sortedItems,
       });
     });

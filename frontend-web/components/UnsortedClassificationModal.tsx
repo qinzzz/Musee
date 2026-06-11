@@ -74,7 +74,7 @@ const UnsortedClassificationModal: React.FC<Props> = ({
       <div className="w-full max-w-3xl rounded-[34px] bg-[var(--color-bg-primary)] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:p-7">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-neutral-400">Calibrate Taste</p>
+            <p className="text-[11px] font-medium text-neutral-400">Calibrate taste</p>
             <p className="mt-2 text-[24px] font-semibold text-neutral-900">Sort Unsorted Works</p>
             <p className="mt-2 max-w-lg text-[13px] leading-6 text-neutral-500">
               Classify one artwork at a time. Love and Not For Me shape your taste vector. Respect stays as narrative context.
@@ -83,7 +83,7 @@ const UnsortedClassificationModal: React.FC<Props> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-neutral-200 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-neutral-500 transition-colors hover:border-neutral-400 hover:text-neutral-800"
+            className="rounded-full border border-neutral-200 px-3 py-1.5 text-[12px] font-medium text-neutral-500 transition-colors hover:border-neutral-400 hover:text-neutral-800"
           >
             Close
           </button>
@@ -101,7 +101,7 @@ const UnsortedClassificationModal: React.FC<Props> = ({
             </div>
             <div className="flex flex-col justify-between rounded-[26px] border border-neutral-200 bg-white p-6">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-400">Artwork</p>
+                <p className="text-[11px] font-medium text-neutral-400">Artwork</p>
                 <p className="mt-4 text-[29px] font-semibold leading-tight text-neutral-900">
                   {current.artworkName || 'Untitled'}
                 </p>

@@ -28,7 +28,7 @@ export default function ArtistsIndexPage({ userId, onSelectArtist, onClose }: Pr
   return (
     <div
       className="fixed inset-0 z-[1200] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"
-      style={{ fontFamily: 'system-ui, sans-serif' }}
+      style={{ fontFamily: 'var(--font-family-sans)' }}
     >
       {/* Header */}
       <div className="flex items-center gap-3 px-4 pt-safe pt-4 pb-3 border-b border-neutral-200/80 shrink-0">

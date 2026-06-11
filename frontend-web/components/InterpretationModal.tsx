@@ -134,7 +134,7 @@ const Insight: React.FC<{
         </svg>
       </button>
       {open && (
-        <p style={{ fontSize: 13, lineHeight: 1.7, color: c.text, fontFamily: 'Georgia, serif', padding: '0 14px 14px 34px', opacity: 0.85 }}>
+        <p style={{ fontSize: 13, lineHeight: 1.7, color: c.text, fontFamily: 'var(--font-family-serif)', padding: '0 14px 14px 34px', opacity: 0.85 }}>
           {pt.text}
         </p>
       )}
@@ -714,7 +714,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   <div className="flex items-center px-2">
                     <button
                       onClick={cancelEditing}
-                      className="text-[9px] tracking-[0.3em] uppercase text-neutral-400 hover:text-neutral-700 transition-colors"
+                      className="text-[11px] text-neutral-400 hover:text-neutral-700 transition-colors"
                     >
                       Cancel
                     </button>
@@ -740,7 +740,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   <button
                     onClick={() => saveAllFields(true)}
                     disabled={isSavingField || isRefreshingAnalysis}
-                    className="text-[9px] tracking-[0.3em] uppercase text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
+                    className="text-[11px] text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
                   >
                     {isRefreshingAnalysis ? 'Refreshing…' : 'Save and Refresh Analysis'}
                   </button>
@@ -749,7 +749,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   <button
                     onClick={() => saveAllFields(false)}
                     disabled={isSavingField || isRefreshingAnalysis}
-                    className="text-[9px] tracking-[0.3em] uppercase text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
+                    className="text-[11px] text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
                   >
                     {isSavingField && !isRefreshingAnalysis ? 'Saving…' : 'Save'}
                   </button>
@@ -894,7 +894,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                           value={editValues.title}
                           onChange={e => setEditValues(v => ({ ...v, title: e.target.value }))}
                           onKeyDown={handleEditKeyDown}
-                          className="text-[14px] font-serif italic text-neutral-700 bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
+                          className="text-[14px] text-neutral-700 bg-transparent border-b border-neutral-300 outline-none w-full focus:border-neutral-600"
                         />
                       </div>
                     )}
@@ -929,7 +929,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   <div className="space-y-3 min-w-0">
                     <div className="min-w-0">
                       {displayTitle && (
-                        <div className="text-[20px] sm:text-[24px] font-serif italic text-neutral-700 leading-tight break-words">
+                        <div className="text-[20px] sm:text-[24px] text-neutral-700 leading-tight break-words">
                           {editValues.title || displayTitle}
                         </div>
                       )}
@@ -1023,7 +1023,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
                 {insights.length > 0 && (
                   <div className="border-t border-neutral-50 pt-5">
-                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-3">Fun Facts</p>
+                    <p className="text-[10px] tracking-[0.08em] text-neutral-400 font-medium mb-3">Fun facts</p>
                     <div className="space-y-1.5">
                       {insights.map((pt, idx) => {
                           const colors = [

@@ -1,11 +1,12 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { GalleryItem, Visit, Album, ArtistEntity, ArtworkClassification } from '../types';
 import { fetchUserArtists, type SmartCollection } from '../api/artworks';
 import GridView from './GridView';
 import SmartCollectionsView from './SmartCollectionsView';
 import CreateBoardModal from './CreateBoardModal';
 import ConfirmBoardDeleteModal from './ConfirmBoardDeleteModal';
+import CollectionGridSkeleton from './CollectionGridSkeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 const OverflowDotsIcon: React.FC<{ className?: string }> = ({ className = 'h-3.5 w-3.5' }) => (
@@ -56,6 +57,7 @@ interface ArtistRow extends ArtistEntity {
 
 interface Props {
   topBarLeftSlot?: React.ReactNode;
+  onFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   items: GalleryItem[];
   visit: Visit;
   filteredVisitId: string | null;
@@ -79,6 +81,7 @@ interface Props {
 
 const OrganizeView: React.FC<Props> = ({
   topBarLeftSlot,
+  onFileUpload,
   items, visit, filteredVisitId, isAnalyzing,
   likedIds, albums, boardsLoading, userId,
   collectTab, onCollectTabChange,
@@ -103,6 +106,7 @@ const OrganizeView: React.FC<Props> = ({
   const [deleteBoardTarget, setDeleteBoardTarget] = useState<Album | null>(null);
   const [artists, setArtists] = useState<ArtistRow[]>([]);
   const [artistsLoading, setArtistsLoading] = useState(false);
+  const collectionUploadInputRef = useRef<HTMLInputElement>(null);
   const boards = albums || [];
 
   // Fetch artists when the tab is first activated
@@ -277,6 +281,14 @@ const OrganizeView: React.FC<Props> = ({
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden">
+      <input
+        ref={collectionUploadInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(event) => onFileUpload(event, 'gallery')}
+      />
 
       {/* ── Top tab bar ── */}
       <div className="shrink-0 flex h-[52px] items-center gap-4 px-4 sm:px-8 border-b border-neutral-100 overflow-x-auto no-scrollbar">
@@ -292,13 +304,23 @@ const OrganizeView: React.FC<Props> = ({
               onCollectTabChange(tab.id);
               setSelectedBoard(null);
             }}
-            className={`shrink-0 h-full text-[13px] sm:text-[14px] font-semibold border-b-2 transition-all -mb-px whitespace-nowrap ${
+            className={`shrink-0 h-full text-[13px] sm:text-[14px] font-medium border-b-2 transition-all -mb-px whitespace-nowrap ${
               collectTab === tab.id
                 ? 'border-neutral-900 text-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-700'
             }`}
           >{tab.label}</button>
         ))}
+        <div className="ml-auto hidden min-w-0 items-center md:flex">
+          {collectTab === 'saved' && (
+            <button
+              onClick={() => collectionUploadInputRef.current?.click()}
+              className="shrink-0 rounded-full border border-neutral-200 bg-white px-4 py-2 text-[12px] font-medium text-neutral-700 transition-colors hover:border-neutral-400 hover:bg-neutral-50"
+            >
+              Upload
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Content ── */}
@@ -315,7 +337,7 @@ const OrganizeView: React.FC<Props> = ({
                       <button
                         key={filter.id}
                         onClick={() => setActiveFilter(filter.id)}
-                        className={`shrink-0 inline-flex items-center gap-1.5 text-[9px] tracking-[0.2em] uppercase px-3 py-1 rounded-full border transition-all ${
+                        className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
                           activeFilter === filter.id
                             ? 'border-neutral-300 bg-neutral-100 text-neutral-900'
                             : 'border-neutral-200 text-neutral-500 hover:border-neutral-400'
@@ -336,7 +358,7 @@ const OrganizeView: React.FC<Props> = ({
                 {unsortedCount > 0 && (
                   <button
                     onClick={onStartUnsortedFlow}
-                    className="shrink-0 rounded-full border border-neutral-200 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-neutral-700 transition-colors hover:border-neutral-400"
+                    className="shrink-0 rounded-full border border-neutral-200 px-3 py-1 text-[11px] font-medium text-neutral-700 transition-colors hover:border-neutral-400"
                   >
                     Sort Unsorted Works
                   </button>
@@ -383,13 +405,13 @@ const OrganizeView: React.FC<Props> = ({
                 <div className="h-full overflow-y-auto">
                   {groupedItems.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
-                      <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No pieces yet</p>
+                      <p className="text-[12px] text-neutral-300">No artworks yet</p>
                     </div>
                   ) : (
                     <div className="px-5 sm:px-8 pt-4 pb-32 space-y-8">
                       {groupedItems.map(group => (
                         <div key={group.label}>
-                          <p className="text-[10px] tracking-[0.25em] uppercase text-neutral-400 font-medium mb-3">{group.label}</p>
+                          <p className="mb-3 text-[11px] font-medium text-neutral-400">{group.label}</p>
                           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5 sm:gap-2">
                             {group.items.map(item => (
                               <div
@@ -410,7 +432,7 @@ const OrganizeView: React.FC<Props> = ({
 
               {filteredItems.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">
+                  <p className="text-[12px] text-neutral-300">
                     {activeFilter === 'love'
                       ? 'No loved works yet'
                       : activeFilter === 'respect'
@@ -419,7 +441,7 @@ const OrganizeView: React.FC<Props> = ({
                           ? 'No works marked not for me'
                           : activeFilter === 'unsorted'
                             ? 'No unsorted works'
-                            : 'No pieces yet'}
+                            : 'No artworks yet'}
                   </p>
                 </div>
               )}
@@ -434,7 +456,7 @@ const OrganizeView: React.FC<Props> = ({
               <div className="px-5 sm:px-8 pt-5 pb-32">
                 <div className="mb-5 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[10px] tracking-[0.25em] uppercase text-neutral-400 font-medium">Boards</p>
+                    <p className="text-[11px] font-medium text-neutral-400">Boards</p>
                     <p className="mt-1 text-[12px] text-neutral-500">Curate your own collections of artworks.</p>
                   </div>
                   <button
@@ -443,25 +465,17 @@ const OrganizeView: React.FC<Props> = ({
                         onCreated: (createdBoard) => setSelectedBoard(createdBoard.id),
                       })
                     }
-                    className="shrink-0 rounded-full border border-neutral-200 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-700 transition-colors hover:border-neutral-400"
+                    className="shrink-0 rounded-full border border-neutral-200 px-4 py-2 text-[12px] font-medium text-neutral-700 transition-colors hover:border-neutral-400"
                   >
                     New board
                   </button>
                 </div>
 
                 {boardsLoading ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
-                    {[1, 2, 3, 4].map(i => (
-                      <div key={i} className="text-left">
-                        <div className="rounded-xl aspect-square bg-neutral-100 animate-pulse mb-2.5" />
-                        <div className="h-3 bg-neutral-100 rounded animate-pulse w-3/4 mb-1" />
-                        <div className="h-2.5 bg-neutral-100 rounded animate-pulse w-1/2" />
-                      </div>
-                    ))}
-                  </div>
+                  <CollectionGridSkeleton />
                 ) : likedItems.length === 0 && boards.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-48 gap-2">
-                    <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No boards yet</p>
+                    <p className="text-[12px] text-neutral-300">No boards yet</p>
                     <p className="text-[11px] text-neutral-400">Create a board to start curating your collection.</p>
                   </div>
                 ) : (
@@ -470,7 +484,7 @@ const OrganizeView: React.FC<Props> = ({
                       <button onClick={() => setSelectedBoard('liked')} className="text-left group">
                         <BoardCoverMosaic covers={likedItems.slice(0, 3).map((item) => item.url)} />
                         <p className="text-[12px] font-semibold text-neutral-900 leading-tight truncate">Liked</p>
-                        <p className="text-[11px] text-neutral-400 mt-0.5">{likedItems.length} {likedItems.length === 1 ? 'piece' : 'pieces'}</p>
+                        <p className="text-[11px] text-neutral-400 mt-0.5">{likedItems.length} {likedItems.length === 1 ? 'artwork' : 'artworks'}</p>
                       </button>
                     )}
                     {boards.map(album => {
@@ -492,7 +506,7 @@ const OrganizeView: React.FC<Props> = ({
                               className="min-w-0 flex-1 text-left"
                             >
                               <p className="text-[12px] font-semibold text-neutral-900 leading-tight truncate">{album.name}</p>
-                              <p className="mt-0.5 text-[11px] text-neutral-400">{count} {count === 1 ? 'piece' : 'pieces'}</p>
+                              <p className="mt-0.5 text-[11px] text-neutral-400">{count} {count === 1 ? 'artwork' : 'artworks'}</p>
                             </button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -541,16 +555,16 @@ const OrganizeView: React.FC<Props> = ({
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="15 18 9 12 15 6"/>
                     </svg>
-                    <span className="text-[10px] tracking-[0.15em] uppercase">Boards</span>
+                    <span className="text-[11px] font-medium">Boards</span>
                   </button>
                   <span className="text-neutral-200 text-xs">/</span>
                   <span className="text-[12px] font-semibold text-neutral-900">{boardDetailName}</span>
-                  <span className="text-[10px] text-neutral-400 ml-auto">{boardDetailItems.length} {boardDetailItems.length === 1 ? 'piece' : 'pieces'}</span>
+                  <span className="text-[10px] text-neutral-400 ml-auto">{boardDetailItems.length} {boardDetailItems.length === 1 ? 'artwork' : 'artworks'}</span>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto">
                   {boardDetailItems.length === 0 ? (
                     <div className="flex items-center justify-center h-32">
-                      <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">Empty board</p>
+                      <p className="text-[12px] text-neutral-300">Empty board</p>
                     </div>
                   ) : (
                     <div className="px-5 sm:px-8 pt-4 pb-32 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
@@ -584,18 +598,10 @@ const OrganizeView: React.FC<Props> = ({
           <div className="h-full overflow-y-auto">
             <div className="px-5 sm:px-8 pt-5 pb-32">
               {artistsLoading ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="text-left">
-                      <div className="rounded-xl aspect-square bg-neutral-100 animate-pulse mb-2.5" />
-                      <div className="h-3 bg-neutral-100 rounded animate-pulse w-3/4 mb-1" />
-                      <div className="h-2.5 bg-neutral-100 rounded animate-pulse w-1/2" />
-                    </div>
-                  ))}
-                </div>
+                <CollectionGridSkeleton />
               ) : artists.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 gap-2">
-                  <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No artists yet</p>
+                  <p className="text-[12px] text-neutral-300">No artists yet</p>
                   <p className="text-[11px] text-neutral-400">Explore artworks to discover artists</p>
                 </div>
               ) : (

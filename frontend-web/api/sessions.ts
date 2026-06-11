@@ -1,4 +1,5 @@
 import { API_BASE_URL, fetchWithTimeout } from './core';
+import type { GalleryItem } from '../types';
 
 export interface SessionMessagePayload {
   id?: string;
@@ -68,6 +69,40 @@ export async function createSession(userId: string, sessionId?: string, title?: 
       title,
     }),
   });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function attachArtworksToSession(
+  sessionId: string,
+  userId: string,
+  artworkIds: string[],
+): Promise<{ inserted: number; artworks: any[] }> {
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/sessions/${sessionId}/artworks?user_id=${encodeURIComponent(userId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artwork_ids: artworkIds }),
+    },
+  );
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function fetchSessionArtworks(
+  sessionId: string,
+  userId: string,
+): Promise<GalleryItem[]> {
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/sessions/${sessionId}/artworks?user_id=${encodeURIComponent(userId)}`,
+  );
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`API error (${response.status}): ${errorText}`);

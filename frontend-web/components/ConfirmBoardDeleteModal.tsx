@@ -49,14 +49,14 @@ const ConfirmBoardDeleteModal: React.FC<Props> = ({
           <button
             onClick={onClose}
             disabled={isDeleting}
-            className="flex-1 rounded-full px-6 py-3 text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+            className="flex-1 rounded-full px-6 py-3 text-[12px] font-semibold text-neutral-500 transition-colors hover:bg-neutral-50 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={() => onConfirm(board)}
             disabled={isDeleting}
-            className="flex-1 rounded-full bg-neutral-900 px-6 py-3 text-[10px] font-bold uppercase tracking-[0.3em] text-white transition-colors hover:bg-black disabled:opacity-50"
+            className="flex-1 rounded-full bg-neutral-900 px-6 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-black disabled:opacity-50"
           >
             {isDeleting ? 'Deleting…' : 'Delete'}
           </button>

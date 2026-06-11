@@ -67,10 +67,10 @@ const CreateBoardModal: React.FC<Props> = ({
             </svg>
           )}
         </div>
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">{title}</p>
+        <p className="mb-2 text-[11px] font-medium text-neutral-400">{title}</p>
         <h2 className="mb-3 text-xl font-serif text-neutral-900">{heading}</h2>
         <p className="mb-6 text-sm leading-relaxed text-neutral-500">{description}</p>
-        <label className="block text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">
+        <label className="block text-[11px] font-medium text-neutral-400">
           {inputLabel}
         </label>
         <input
@@ -91,14 +91,14 @@ const CreateBoardModal: React.FC<Props> = ({
           <button
             onClick={onClose}
             disabled={isSubmitting}
-            className="flex-1 rounded-full px-6 py-3 text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+            className="flex-1 rounded-full px-6 py-3 text-[12px] font-semibold text-neutral-500 transition-colors hover:bg-neutral-50 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={onSubmit}
             disabled={!value.trim() || isSubmitting}
-            className="flex-1 rounded-full bg-neutral-900 px-6 py-3 text-[10px] font-bold uppercase tracking-[0.3em] text-white transition-colors hover:bg-black disabled:opacity-50"
+            className="flex-1 rounded-full bg-neutral-900 px-6 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-black disabled:opacity-50"
           >
             {isSubmitting ? 'Saving…' : submitLabel}
           </button>

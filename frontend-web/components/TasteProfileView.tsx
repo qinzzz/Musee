@@ -166,7 +166,7 @@ const TasteProfileView: React.FC<Props> = ({
       <div className="mx-auto max-w-[620px]">
         {!canRenderProfile ? (
           <div className="rounded-[32px] border border-neutral-200 bg-white px-8 py-9 shadow-[0_12px_30px_rgba(0,0,0,0.04)]">
-            <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-neutral-400">Art Personality</p>
+            <p className="text-[11px] font-medium text-neutral-400">Art personality</p>
             <h1 className="mt-4 text-[28px] font-semibold leading-tight text-neutral-900 sm:text-[32px]">
               Discover Your Taste
             </h1>
@@ -177,7 +177,7 @@ const TasteProfileView: React.FC<Props> = ({
             <div className="mt-8 rounded-[28px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-6 py-6">
               <div className="flex items-start justify-between gap-6">
                 <div>
-                  <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-neutral-400">Progress</p>
+                  <p className="text-[11px] font-medium text-neutral-400">Progress</p>
                   <p className="mt-3 text-[32px] font-semibold leading-none text-neutral-900">
                     {eligibleCount} / {requiredCount}
                   </p>
@@ -234,7 +234,7 @@ const TasteProfileView: React.FC<Props> = ({
           </div>
         ) : (
           <div className="mb-8">
-            <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-neutral-400">Art Personality</p>
+            <p className="text-[11px] font-medium text-neutral-400">Art personality</p>
             <h1 className="mt-3 text-[34px] font-semibold leading-tight text-neutral-900">Taste Profile</h1>
             <p className="mt-3 max-w-[540px] text-[14px] leading-7 text-neutral-500">
               Classify works you love, respect, and reject. Your profile is generated manually from what you love and what is not for you.
@@ -271,7 +271,7 @@ const TasteProfileView: React.FC<Props> = ({
         {canRenderProfile && (
           <>
             <div className="mt-8 rounded-[28px] border border-neutral-200 bg-white px-6 py-6 shadow-[0_12px_30px_rgba(0,0,0,0.04)]">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-400">Narrative</p>
+              <p className="text-[11px] font-medium text-neutral-400">Narrative</p>
               {narrativeParagraphs.length > 0 ? (
                 <div className="mt-5 space-y-4">
                   {narrativeParagraphs.map((paragraph, index) => (
@@ -288,7 +288,7 @@ const TasteProfileView: React.FC<Props> = ({
             </div>
 
             <div className="mt-8 rounded-[28px] border border-neutral-200 bg-white px-6 py-6 shadow-[0_12px_30px_rgba(0,0,0,0.04)]">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-400">Taste Vector</p>
+              <p className="text-[11px] font-medium text-neutral-400">Taste vector</p>
               <div className="mt-5 space-y-2">
                 {DIMENSIONS.map(({ key, left, right }) => {
                   const score = tasteVector[key] ?? 0;
@@ -306,7 +306,7 @@ const TasteProfileView: React.FC<Props> = ({
                       >
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <span className={`text-[12px] ${score < -0.15 ? 'font-semibold text-neutral-900' : 'text-neutral-400'}`}>{left}</span>
-                          <span className="text-[10px] uppercase tracking-[0.16em] text-neutral-300">{hasExamples ? (expanded ? 'Hide' : 'Open') : 'Neutral'}</span>
+                          <span className="text-[10px] text-neutral-300">{hasExamples ? (expanded ? 'Hide' : 'Open') : 'Neutral'}</span>
                           <span className={`text-[12px] ${score > 0.15 ? 'font-semibold text-neutral-900' : 'text-neutral-400'}`}>{right}</span>
                         </div>
                         <div className="relative h-[3px] rounded-full bg-neutral-100">

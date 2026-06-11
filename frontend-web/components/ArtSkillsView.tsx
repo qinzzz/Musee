@@ -161,7 +161,7 @@ const ArtSkillsView: React.FC = () => {
   const [selected, setSelected] = useState<Skill | null>(null);
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '1.25rem 1.5rem 4rem', fontFamily: "'Noto Serif SC', 'Georgia', serif", background: '#faf9f7' }}>
+    <div style={{ height: '100%', overflowY: 'auto', padding: '1.25rem 1.5rem 4rem', fontFamily: 'var(--font-family-serif)', background: '#faf9f7' }}>
       <div style={{ display: 'flex', flexDirection: 'column', maxWidth: 960 }}>
         {CATEGORIES.map((cat, i) => {
           const cs = CAT_STYLE[cat];
@@ -193,7 +193,7 @@ const ArtSkillsView: React.FC = () => {
                       background: cs.bg,
                       border: `1px solid ${cs.border}`,
                       cursor: 'pointer',
-                      fontFamily: "'Noto Serif SC', 'Georgia', serif",
+                      fontFamily: 'var(--font-family-serif)',
                       fontSize: 12, fontWeight: 500, color: cs.nameColor,
                       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
                       gap: 10, textAlign: 'center', lineHeight: 1.4,
@@ -240,7 +240,7 @@ const ArtSkillsView: React.FC = () => {
             style={{
               background: '#fff', borderRadius: 8, border: '0.5px solid rgba(26,23,20,0.12)',
               padding: '1.5rem', maxWidth: 380, width: '100%', position: 'relative',
-              fontFamily: "'Noto Serif SC', 'Georgia', serif",
+              fontFamily: 'var(--font-family-serif)',
             }}
           >
             <button

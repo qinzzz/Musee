@@ -13,7 +13,7 @@ from datetime import datetime
 import anyio
 
 from app.database.connection import get_db, SessionLocal
-from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SkillEvent, ArtworkEntity, ArtistEntity, PublicComment, SessionMessage, TasteProfile
+from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SessionArtwork, SkillEvent, ArtworkEntity, ArtistEntity, PublicComment, SessionMessage, TasteProfile
 from app.models.artwork import AIProvider, UpdateArtworkRequest, UpdateArtworkClassificationRequest
 from pydantic import BaseModel
 import base64
@@ -33,6 +33,7 @@ from app.utils.conversation_storage import ConversationMessage
 router = APIRouter()
 logger = logging.getLogger(__name__)
 CLASSIFICATION_VALUES = {"unsorted", "love", "respect", "not_for_me"}
+SESSION_ARTWORK_LIMIT = 5
 TASTE_DIMENSIONS = [
     ("figurative_abstract", "dim_figurative_abstract", "具象", "抽象"),
     ("emotive_conceptual", "dim_emotive_conceptual", "感性", "理性"),
@@ -41,6 +42,42 @@ TASTE_DIMENSIONS = [
     ("playful_serious", "dim_playful_serious", "玩味", "严肃"),
 ]
 PROFILE_MIN_SAMPLE = 5
+
+
+def _ensure_session_artwork_link(
+    db: Session,
+    session_id: Optional[str],
+    artwork_id: Optional[str],
+    source: str = "library",
+    sequence_number: Optional[int] = None,
+):
+    if not session_id or not artwork_id:
+        return None
+
+    existing = db.query(SessionArtwork).filter(
+        SessionArtwork.session_id == session_id,
+        SessionArtwork.artwork_id == artwork_id,
+    ).first()
+    if existing:
+        if sequence_number is not None:
+            existing.sequence_number = sequence_number
+        if source:
+            existing.source = source
+        return existing
+
+    if sequence_number is None:
+        sequence_number = (db.query(func.max(SessionArtwork.sequence_number)).filter(
+            SessionArtwork.session_id == session_id
+        ).scalar() or 0) + 1
+
+    link = SessionArtwork(
+        session_id=session_id,
+        artwork_id=artwork_id,
+        sequence_number=sequence_number,
+        source=source,
+    )
+    db.add(link)
+    return link
 
 
 def _normalize(s: str) -> str:
@@ -486,11 +523,6 @@ async def analyze_artist(
     """
     Analyze artwork image to identify artist
     """
-    # Enforce session_id existence
-    if not session_id:
-        import uuid as uuid_mod
-        session_id = f"sess_{uuid_mod.uuid4().hex[:8]}"
-        logger.info(f"Auto-generated session_id for standalone upload: {session_id}")
     ai_provider = determine_ai_provider(model)
     logger.info(f"analyze_artist received session_id: {session_id}, user_id: {user_id}")
 
@@ -617,24 +649,25 @@ async def analyze_artist(
                         local_db.flush()
                     
                     # Ensure session exists (Mandatory in Visit-Only Architecture)
-                    s_id = s_id or f"sess_{uuid.uuid4().hex[:8]}"
-                    sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
-                    if not sess_record:
-                        # Determine initial title from location
-                        initial_title = "Personal Visit"
-                        if loc:
-                            try:
-                                loc_data = json.loads(loc) if isinstance(loc, str) else loc
-                                initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
-                            except: pass
-                        
-                        sess_record = SessionModel(
-                            id=s_id, 
-                            user_id=u_id or "anonymous",
-                            title=initial_title
-                        )
-                        local_db.add(sess_record)
-                        local_db.flush()
+                    if s_id:
+                        sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
+                        if not sess_record:
+                            # Determine initial title from location
+                            initial_title = "Personal Visit"
+                            if loc:
+                                try:
+                                    loc_data = json.loads(loc) if isinstance(loc, str) else loc
+                                    initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
+                                except:
+                                    pass
+
+                            sess_record = SessionModel(
+                                id=s_id,
+                                user_id=u_id or "anonymous",
+                                title=initial_title
+                            )
+                            local_db.add(sess_record)
+                            local_db.flush()
                     
                     # Create artwork
                     art = SavedArtwork(
@@ -664,6 +697,13 @@ async def analyze_artist(
                         else:
                             raise
                     local_db.refresh(art)
+                    _ensure_session_artwork_link(
+                        local_db,
+                        session_id=s_id,
+                        artwork_id=str(art.id),
+                        source="upload",
+                    )
+                    local_db.commit()
 
                     # Link artwork entity and artist entity (non-fatal)
                     entity_id_for_analysis = None
@@ -797,11 +837,6 @@ async def analyze_artist_stream(
     """
     Stream artwork analysis with SSE (Server-Sent Events)
     """
-    # Enforce session_id existence
-    if not session_id:
-        import uuid as uuid_mod
-        session_id = f"sess_{uuid_mod.uuid4().hex[:8]}"
-        logger.info(f"Auto-generated session_id for streaming upload: {session_id}")
     # TIMING: Request received
     t_request_received = time.time()
     request_id = f"stream_{int(t_request_received * 1000)}"
@@ -966,8 +1001,7 @@ async def analyze_artist_stream(
                         local_db.add(User(user_id=u_id, device_id=u_id))
                         local_db.flush()
 
-                    s_id = s_id or f"sess_{uuid.uuid4().hex[:8]}"
-                    if not local_db.query(SessionModel).filter(SessionModel.id == s_id).first():
+                    if s_id and not local_db.query(SessionModel).filter(SessionModel.id == s_id).first():
                         initial_title = "Personal Visit"
                         if loc:
                             try:
@@ -1002,6 +1036,13 @@ async def analyze_artist_stream(
 
                     local_db.commit()
                     local_db.refresh(art)
+                    _ensure_session_artwork_link(
+                        local_db,
+                        session_id=s_id,
+                        artwork_id=str(art.id),
+                        source="upload",
+                    )
+                    local_db.commit()
 
                     entity_id_for_analysis = None
                     artist_entity_id_for_bio = None
@@ -1731,6 +1772,10 @@ class UpdateSessionRequest(BaseModel):
 class CreateSessionRequest(BaseModel):
     session_id: Optional[str] = None
     title: Optional[str] = None
+
+
+class AttachSessionArtworksRequest(BaseModel):
+    artwork_ids: List[str]
 
 async def _image_url_to_bytes(url: str) -> Optional[bytes]:
     """Return image bytes from data URL or HTTP URL, or None on failure."""
@@ -3044,19 +3089,19 @@ async def analyze_artwork_unified(
                     local_db.add(usr)
                     local_db.flush()
 
-                s_id = s_id or f"sess_{uuid.uuid4().hex[:8]}"
-                sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
-                if not sess_record:
-                    initial_title = "Personal Visit"
-                    if loc:
-                        try:
-                            loc_data = json.loads(loc) if isinstance(loc, str) else loc
-                            initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
-                        except Exception:
-                            pass
-                    sess_record = SessionModel(id=s_id, user_id=u_id or "anonymous", title=initial_title)
-                    local_db.add(sess_record)
-                    local_db.flush()
+                if s_id:
+                    sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
+                    if not sess_record:
+                        initial_title = "Personal Visit"
+                        if loc:
+                            try:
+                                loc_data = json.loads(loc) if isinstance(loc, str) else loc
+                                initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
+                            except Exception:
+                                pass
+                        sess_record = SessionModel(id=s_id, user_id=u_id or "anonymous", title=initial_title)
+                        local_db.add(sess_record)
+                        local_db.flush()
 
                 art = SavedArtwork(
                     photo_uri=p_uri,
@@ -3076,6 +3121,13 @@ async def analyze_artwork_unified(
                 local_db.add(art)
                 local_db.commit()
                 local_db.refresh(art)
+                _ensure_session_artwork_link(
+                    local_db,
+                    session_id=s_id,
+                    artwork_id=str(art.id),
+                    source="upload",
+                )
+                local_db.commit()
 
                 entity_id_for_analysis = None
                 artist_entity_id_for_bio = None
@@ -3274,18 +3326,33 @@ async def delete_artwork(artwork_id: str, user_id: str = Query(...), db: Session
         raise HTTPException(status_code=403, detail="Not authorized to delete this artwork")
 
     session_id = artwork.session_id
+    linked_session_ids = [
+        row[0]
+        for row in db.query(SessionArtwork.session_id).filter(SessionArtwork.artwork_id == artwork_id).all()
+    ]
     db.delete(artwork)
     db.commit()
 
-    # Auto-cleanup: if session is now empty, delete it
+    # Auto-cleanup legacy empty session
     if session_id:
         remaining = db.query(SavedArtwork).filter(SavedArtwork.session_id == session_id).count()
-        if remaining == 0:
+        linked_remaining = db.query(SessionArtwork).filter(SessionArtwork.session_id == session_id).count()
+        if remaining == 0 and linked_remaining == 0:
             session_to_del = db.query(SessionModel).filter(SessionModel.id == session_id).first()
             if session_to_del:
                 db.delete(session_to_del)
                 db.commit()
                 logger.info(f"Auto-deleted empty session: {session_id}")
+
+    for linked_session_id in linked_session_ids:
+        remaining_legacy = db.query(SavedArtwork).filter(SavedArtwork.session_id == linked_session_id).count()
+        remaining_links = db.query(SessionArtwork).filter(SessionArtwork.session_id == linked_session_id).count()
+        if remaining_legacy == 0 and remaining_links == 0:
+            session_to_del = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()
+            if session_to_del:
+                db.delete(session_to_del)
+                db.commit()
+                logger.info(f"Auto-deleted empty linked session: {linked_session_id}")
 
     return {"message": "Artwork deleted successfully"}
 
@@ -3343,7 +3410,10 @@ async def batch_delete_artworks(
             SavedArtwork.id.in_(artwork_ids),
             SavedArtwork.user_id == user_id
         ).distinct().all()
-        affected_session_ids = [s[0] for s in affected_sessions if s[0]]
+        affected_session_ids = {s[0] for s in affected_sessions if s[0]}
+        affected_session_ids.update(
+            sid for (sid,) in db.query(SessionArtwork.session_id).filter(SessionArtwork.artwork_id.in_(artwork_ids)).distinct().all()
+        )
 
         deleted_count = db.query(SavedArtwork).filter(
             SavedArtwork.id.in_(artwork_ids),
@@ -3355,7 +3425,8 @@ async def batch_delete_artworks(
         # Cleanup empty sessions
         for sid in affected_session_ids:
             remaining = db.query(SavedArtwork).filter(SavedArtwork.session_id == sid).count()
-            if remaining == 0:
+            linked_remaining = db.query(SessionArtwork).filter(SessionArtwork.session_id == sid).count()
+            if remaining == 0 and linked_remaining == 0:
                 s_to_del = db.query(SessionModel).filter(SessionModel.id == sid).first()
                 if s_to_del:
                     db.delete(s_to_del)
@@ -3448,14 +3519,23 @@ async def delete_session(session_id: str, user_id: str = Query(...), db: Session
     if session_record.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this session")
 
-    # Delete all artworks in this session
-    db.query(SavedArtwork).filter(SavedArtwork.session_id == session_id).delete()
+    # Preserve artworks by detaching any legacy one-to-one links from this session
+    db.query(SavedArtwork).filter(SavedArtwork.session_id == session_id).update(
+        {SavedArtwork.session_id: None},
+        synchronize_session=False,
+    )
+
+    # Remove many-to-many session links
+    db.query(SessionArtwork).filter(SessionArtwork.session_id == session_id).delete()
+
+    # Delete any session-level messages/history
+    db.query(SessionMessage).filter(SessionMessage.session_id == session_id).delete()
     
     # Delete the session record
     db.delete(session_record)
     db.commit()
 
-    logger.info(f"Session {session_id} and all its artworks deleted successfully")
+    logger.info(f"Session {session_id} deleted and artworks detached successfully")
     return {"message": "Session deleted successfully"}
 
 
@@ -3497,6 +3577,102 @@ async def create_session(
         "message": "Session created successfully",
         "session": session_record.to_dict(),
     }
+
+
+@router.post("/sessions/{session_id}/artworks")
+async def attach_artworks_to_session(
+    session_id: str,
+    request: AttachSessionArtworksRequest,
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_record:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session_record.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this session")
+
+    artwork_ids = [artwork_id for artwork_id in request.artwork_ids if artwork_id]
+    if not artwork_ids:
+        return {"inserted": 0, "artworks": []}
+    if len(artwork_ids) > SESSION_ARTWORK_LIMIT:
+        raise HTTPException(status_code=400, detail=f"At most {SESSION_ARTWORK_LIMIT} artworks can be attached at once")
+
+    artworks = db.query(SavedArtwork).filter(
+        SavedArtwork.id.in_(artwork_ids),
+        SavedArtwork.user_id == user_id,
+    ).all()
+    artwork_by_id = {art.id: art for art in artworks}
+    missing_ids = [artwork_id for artwork_id in artwork_ids if artwork_id not in artwork_by_id]
+    if missing_ids:
+        raise HTTPException(status_code=404, detail=f"Artwork not found or not owned: {missing_ids[0]}")
+
+    current_max_seq = db.query(func.max(SessionArtwork.sequence_number)).filter(
+        SessionArtwork.session_id == session_id
+    ).scalar() or 0
+
+    inserted = 0
+    for offset, artwork_id in enumerate(artwork_ids, start=1):
+        existing = db.query(SessionArtwork).filter(
+            SessionArtwork.session_id == session_id,
+            SessionArtwork.artwork_id == artwork_id,
+        ).first()
+        if existing:
+            continue
+        _ensure_session_artwork_link(
+            db,
+            session_id=session_id,
+            artwork_id=artwork_id,
+            source="library",
+            sequence_number=current_max_seq + offset,
+        )
+        inserted += 1
+
+    db.commit()
+
+    linked_artworks = (
+        db.query(SavedArtwork)
+        .join(SessionArtwork, SessionArtwork.artwork_id == SavedArtwork.id)
+        .filter(SessionArtwork.session_id == session_id)
+        .order_by(SessionArtwork.sequence_number.asc())
+        .all()
+    )
+    return {
+        "inserted": inserted,
+        "artworks": [art.to_dict(include_conversations=False) for art in linked_artworks],
+    }
+
+
+@router.get("/sessions/{session_id}/artworks")
+async def get_session_artworks(
+    session_id: str,
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_record:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session_record.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this session")
+
+    linked_artworks = (
+        db.query(SavedArtwork)
+        .join(SessionArtwork, SessionArtwork.artwork_id == SavedArtwork.id)
+        .filter(SessionArtwork.session_id == session_id)
+        .order_by(SessionArtwork.sequence_number.asc())
+        .all()
+    )
+
+    if linked_artworks:
+        return {"items": [art.to_dict(include_conversations=False) for art in linked_artworks]}
+
+    legacy_artworks = (
+        db.query(SavedArtwork)
+        .filter(SavedArtwork.session_id == session_id, SavedArtwork.user_id == user_id)
+        .order_by(SavedArtwork.created_at.asc())
+        .all()
+    )
+    return {"items": [art.to_dict(include_conversations=False) for art in legacy_artworks]}
 
 
 @router.put("/sessions/{session_id}")
@@ -3562,8 +3738,14 @@ async def get_session_context(session_id: str) -> Optional[Dict[str, Any]]:
             if not session_record:
                 return None
             
-            # Get previous artworks in this session (ordered by creation)
-            artworks = db.query(SavedArtwork).filter(
+            linked_artworks = (
+                db.query(SavedArtwork)
+                .join(SessionArtwork, SessionArtwork.artwork_id == SavedArtwork.id)
+                .filter(SessionArtwork.session_id == session_id)
+                .order_by(SessionArtwork.sequence_number.asc())
+                .all()
+            )
+            artworks = linked_artworks or db.query(SavedArtwork).filter(
                 SavedArtwork.session_id == session_id
             ).order_by(SavedArtwork.created_at).all()
             

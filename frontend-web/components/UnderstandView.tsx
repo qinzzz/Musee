@@ -344,7 +344,7 @@ const UnderstandView: React.FC<Props> = ({
             </h2>
             <p className="text-[11px] text-neutral-400 mb-10 tracking-wide">
               {items.length > 0
-                ? `${items.length} piece${items.length !== 1 ? 's' : ''} in your gallery`
+                ? `${items.length} artwork${items.length !== 1 ? 's' : ''} in your gallery`
                 : 'Add artworks in Explore to begin'}
             </p>
 
@@ -386,7 +386,7 @@ const UnderstandView: React.FC<Props> = ({
               </>
             ) : (
               <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">
-                No pieces yet — explore first
+                No artworks yet — explore first
               </p>
             )}
           </div>

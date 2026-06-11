@@ -11,6 +11,14 @@ type ArtworkBootstrapCacheItem = {
   timestamp: number;
   sessionCapturedAt?: number;
   visitId?: string;
+  sessionLinks?: Array<{
+    id?: string;
+    sessionId: string;
+    sessionTitle?: string;
+    sequenceNumber?: number;
+    source?: 'library' | 'upload' | 'camera';
+    createdAt?: string;
+  }>;
   location?: string;
   photoTime?: string;
   sessionTitle?: string;
@@ -23,13 +31,13 @@ type ArtworkBootstrapCacheItem = {
 };
 
 type ArtworkBootstrapCachePayload = {
-  version: 1;
+  version: 2;
   userId: string;
   updatedAt: number;
   items: ArtworkBootstrapCacheItem[];
 };
 
-const ARTWORK_BOOTSTRAP_CACHE_KEY = 'musee_artwork_bootstrap_v1';
+const ARTWORK_BOOTSTRAP_CACHE_KEY = 'musee_artwork_bootstrap_v2';
 const ARTWORK_BOOTSTRAP_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function readArtworkBootstrapCache(userId: string): ArtworkBootstrapCacheItem[] | null {
@@ -38,7 +46,7 @@ function readArtworkBootstrapCache(userId: string): ArtworkBootstrapCacheItem[] 
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as ArtworkBootstrapCachePayload;
-    if (parsed.version !== 1) return null;
+    if (parsed.version !== 2) return null;
     if (parsed.userId !== userId) return null;
     if (!Array.isArray(parsed.items)) return null;
     if (Date.now() - parsed.updatedAt > ARTWORK_BOOTSTRAP_CACHE_TTL_MS) return null;
@@ -51,7 +59,7 @@ function readArtworkBootstrapCache(userId: string): ArtworkBootstrapCacheItem[] 
 
 function writeArtworkBootstrapCache(userId: string, items: ArtworkBootstrapCacheItem[]) {
   const payload: ArtworkBootstrapCachePayload = {
-    version: 1,
+    version: 2,
     userId,
     updatedAt: Date.now(),
     items,

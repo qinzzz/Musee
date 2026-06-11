@@ -1,6 +1,6 @@
-import React, { Suspense, lazy, useState, useRef, useMemo, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useRef, useMemo, useEffect, startTransition } from 'react';
 import ExifReader from 'exifreader';
-import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, CuratorConversation, Album, AestheticVibe, ArtworkClassification } from './types';
+import { GalleryItem, NeighborItem, Message, Visit, TagCoordinate, CuratorConversation, Album, AestheticVibe, ArtworkClassification, SessionLink } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
 import GoogleLogin from './components/GoogleLogin';
@@ -27,6 +27,7 @@ import {
   createSession,
   deleteSession,
   updateSession,
+  attachArtworksToSession,
 } from './api/sessions';
 import {
   fetchCollections,
@@ -43,8 +44,15 @@ import ContextualActionBar from './components/ContextualActionBar';
 import CanvasHeader from './components/CanvasHeader';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import ExploreSessionView from './components/ExploreSessionView';
+import AddFromLibraryModal from './components/AddFromLibraryModal';
 import { Toaster } from './components/ui/sonner';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from './components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from './components/ui/dropdown-menu';
 import { useAppNavigationSync } from './hooks/useAppNavigationSync';
 import { useArtworkLibrary } from './hooks/useArtworkLibrary';
 import { useVisits, type VisitStreamMessage, type VisitDraft, type VisitSummary } from './hooks/useVisits';
@@ -100,9 +108,32 @@ const reportStreamingMetrics = (metrics: StreamingMetrics) => {
 
 const ScreenLoader: React.FC<{ label?: string }> = ({ label = 'Loading' }) => (
   <div className="flex h-full w-full items-center justify-center bg-[var(--color-bg-primary)]">
-    <p className="text-[11px] tracking-[0.3em] uppercase text-neutral-300">{label}…</p>
+    <p className="text-[12px] text-neutral-300">{label}…</p>
   </div>
 );
+
+type PendingSessionArtwork =
+  | {
+      id: string;
+      kind: 'library';
+      artwork: GalleryItem;
+      previewUrl: string;
+      label: string;
+      sublabel: string;
+    }
+  | {
+      id: string;
+      kind: 'upload';
+      file: File;
+      previewUrl: string;
+      mode: 'gallery' | 'camera';
+      timestamp: number;
+      photoTime: string;
+      coords?: { latitude?: number; longitude?: number };
+      location?: string;
+      label: string;
+      sublabel: string;
+    };
 
 type ToastAction = {
   label: string;
@@ -315,6 +346,54 @@ const serializeVisitHistory = (
   return out;
 };
 
+const getItemSessionIds = (item: GalleryItem): string[] => {
+  if (item.sessionLinks && item.sessionLinks.length > 0) {
+    return item.sessionLinks.map((link) => link.sessionId);
+  }
+  return item.visitId ? [item.visitId] : [];
+};
+
+const itemBelongsToSession = (item: GalleryItem, sessionId: string | null | undefined): boolean => {
+  if (!sessionId) return false;
+  return getItemSessionIds(item).includes(sessionId);
+};
+
+const updateSessionLinkForItem = (
+  item: GalleryItem,
+  sessionId: string,
+  updater: (existing: SessionLink | undefined) => SessionLink | null,
+): GalleryItem => {
+  const existingLinks = item.sessionLinks ? [...item.sessionLinks] : [];
+  const existingIndex = existingLinks.findIndex((link) => link.sessionId === sessionId);
+  const nextLink = updater(existingIndex >= 0 ? existingLinks[existingIndex] : undefined);
+
+  if (nextLink === null) {
+    const filteredLinks = existingLinks.filter((link) => link.sessionId !== sessionId);
+    if (filteredLinks.length === 0 && item.visitId !== sessionId) {
+      return item;
+    }
+    return {
+      ...item,
+      sessionLinks: filteredLinks.length > 0 ? filteredLinks : undefined,
+      visitId: item.visitId === sessionId ? undefined : item.visitId,
+      sessionTitle: item.visitId === sessionId ? undefined : item.sessionTitle,
+    };
+  }
+
+  if (existingIndex >= 0) {
+    existingLinks[existingIndex] = nextLink;
+  } else {
+    existingLinks.push(nextLink);
+  }
+
+  return {
+    ...item,
+    sessionLinks: existingLinks,
+    visitId: item.visitId || sessionId,
+    sessionTitle: item.sessionTitle || nextLink.sessionTitle,
+  };
+};
+
 const App: React.FC = () => {
   const initialNavigationState = getInitialNavigationState(window.location.pathname);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -331,6 +410,11 @@ const App: React.FC = () => {
   const [collectTab, setCollectTab] = useState<CollectTab>(initialNavigationState.collectTab);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showEntrance, setShowEntrance] = useState(false);
+  const [pendingSessionArtworks, setPendingSessionArtworks] = useState<PendingSessionArtwork[]>([]);
+  const [newSessionDraftMessage, setNewSessionDraftMessage] = useState('');
+  const [isLibraryPickerOpen, setIsLibraryPickerOpen] = useState(false);
+  const [libraryPickerSearch, setLibraryPickerSearch] = useState('');
+  const [isSubmittingPreparedSession, setIsSubmittingPreparedSession] = useState(false);
 
   // Curator conversation history — persisted to localStorage
   const [curatorConversations, setCuratorConversations] = useState<CuratorConversation[]>(() => {
@@ -502,7 +586,7 @@ const App: React.FC = () => {
 
     // 1. Context-Aware Priority: If inside an Exhibition Hall, always use that visitId.
     if (resolvedContextVisitId) {
-      const visitItems = items.filter(i => i.visitId === resolvedContextVisitId);
+      const visitItems = items.filter(i => itemBelongsToSession(i, resolvedContextVisitId));
       return { 
         visitId: resolvedContextVisitId, 
         isNew: false, 
@@ -521,9 +605,10 @@ const App: React.FC = () => {
     const DISTANCE_THRESHOLD = 1; // 1 km (approximate)
 
     const findProximitySession = () => {
-      const candidates = items.filter(i => i.visitId);
+      const candidates = items.filter(i => getItemSessionIds(i).length > 0);
       
       for (const item of candidates) {
+        const memberships = getItemSessionIds(item);
         let currentWindow = TIME_WINDOW;
         let isMuseumMatch = false;
 
@@ -551,7 +636,7 @@ const App: React.FC = () => {
 
         // Within time window — return match regardless of whether GPS matched
         const itemLoc = (() => { try { return JSON.parse(item.location || '{}'); } catch { return {}; } })();
-        return { visitId: item.visitId!, museumName: itemLoc.museum || item.sessionTitle };
+        return { visitId: memberships[0], museumName: itemLoc.museum || item.sessionTitle };
       }
       return null;
     };
@@ -611,6 +696,31 @@ const App: React.FC = () => {
     visitStreamsStorageKey: VISIT_STREAMS_STORAGE_KEY,
     sessionGoalsStorageKey: 'musee_session_goals',
   });
+
+  const pendingLibraryArtworkIds = useMemo(
+    () =>
+      pendingSessionArtworks
+        .filter((entry): entry is Extract<PendingSessionArtwork, { kind: 'library' }> => entry.kind === 'library')
+        .map((entry) => entry.artwork.id),
+    [pendingSessionArtworks],
+  );
+
+  const availableLibraryArtworks = useMemo(
+    () =>
+      items.filter((item) =>
+        !item.isDeletedPlaceholder
+        && !item.isAnalyzing
+        && Boolean(item.url)
+      ),
+    [items],
+  );
+
+  const resetPreparedSessionState = () => {
+    setPendingSessionArtworks([]);
+    setNewSessionDraftMessage('');
+    setIsLibraryPickerOpen(false);
+    setLibraryPickerSearch('');
+  };
 
   const [likedIds, setLikedIds] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('musee_liked_ids') || '[]')); }
@@ -672,6 +782,33 @@ const App: React.FC = () => {
     showToast(`Deleted board "${targetBoard?.name || 'Untitled'}"`, 'success');
   };
 
+  const stageLibraryArtworkForSession = (item: GalleryItem) => {
+    setPendingSessionArtworks((prev) => {
+      if (prev.some((entry) => entry.kind === 'library' && entry.artwork.id === item.id)) {
+        return prev.filter((entry) => !(entry.kind === 'library' && entry.artwork.id === item.id));
+      }
+      if (prev.length >= 5) {
+        showToast('You can add up to 5 artworks to start a session.', 'info');
+        return prev;
+      }
+      return [
+        ...prev,
+        {
+          id: `library-${item.id}`,
+          kind: 'library',
+          artwork: item,
+          previewUrl: item.url,
+          label: item.artworkName || 'Untitled',
+          sublabel: item.artistName || item.photoTime || 'Saved artwork',
+        },
+      ];
+    });
+  };
+
+  const removePendingSessionArtwork = (entryId: string) => {
+    setPendingSessionArtworks((prev) => prev.filter((entry) => entry.id !== entryId));
+  };
+
   const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'community'>('metadata');
   const [artworkHeaderEditToken, setArtworkHeaderEditToken] = useState(0);
   const [interpretingMode, setInterpretingMode] = useState<'professional' | 'interactive'>(
@@ -717,7 +854,7 @@ const App: React.FC = () => {
 
   // The filtered view of artworks for "The Corridor"
   const corridorItems = useMemo(() => {
-    if (filteredVisitId) return items.filter(i => i.visitId === filteredVisitId);
+    if (filteredVisitId) return items.filter(i => itemBelongsToSession(i, filteredVisitId));
     return items;
   }, [items, filteredVisitId]);
 
@@ -730,12 +867,14 @@ const App: React.FC = () => {
     const orderOfVisits: string[] = [];
 
     corridorItems.forEach(item => {
-      if (item.visitId) {
-        if (!visitGroups.has(item.visitId)) {
-          visitGroups.set(item.visitId, []);
-          orderOfVisits.push(item.visitId);
+      const sessionIds = getItemSessionIds(item);
+      if (sessionIds.length > 0) {
+        const primarySessionId = sessionIds[0];
+        if (!visitGroups.has(primarySessionId)) {
+          visitGroups.set(primarySessionId, []);
+          orderOfVisits.push(primarySessionId);
         }
-        visitGroups.get(item.visitId)!.push(item);
+        visitGroups.get(primarySessionId)!.push(item);
       } else {
         // Individual item without visit (should be rare)
         entries.push({ type: 'item', item });
@@ -895,7 +1034,7 @@ const App: React.FC = () => {
   };
 
   const handleResumeVisit = (visitId: string) => {
-    const visitItems = items.filter(i => i.visitId === visitId);
+    const visitItems = items.filter(i => itemBelongsToSession(i, visitId));
     setVisit({
       id: visitId,
       itemIds: visitItems.map(i => i.id),
@@ -955,9 +1094,25 @@ const App: React.FC = () => {
       ...prev,
       [visitId]: [...(prev[visitId] || []), ...newMessages],
     }));
-    setVisitDrafts(prev => prev.map(draft =>
-      draft.id === visitId ? { ...draft, updatedAt: newMessages[newMessages.length - 1]?.createdAt || draft.updatedAt } : draft
-    ));
+    setVisitDrafts(prev => {
+      const nextUpdatedAt = newMessages[newMessages.length - 1]?.createdAt || Date.now();
+      const existingDraft = prev.find((draft) => draft.id === visitId);
+      if (existingDraft) {
+        return prev.map((draft) =>
+          draft.id === visitId ? { ...draft, updatedAt: nextUpdatedAt } : draft
+        );
+      }
+      const summary = visitSummaries.find((visitSummary) => visitSummary.id === visitId);
+      return [
+        {
+          id: visitId,
+          title: summary?.title || DEFAULT_VISIT_TITLE,
+          createdAt: nextUpdatedAt,
+          updatedAt: nextUpdatedAt,
+        },
+        ...prev,
+      ];
+    });
     // Fire-and-forget persist to DB
     appendSessionMessages(visitId, newMessages.map(m => {
       // artwork_capture / artwork_card are placeholders rendered from the card UI —
@@ -1025,39 +1180,29 @@ const App: React.FC = () => {
     );
   };
 
-  const handleVisitInquiry = async (text: string) => {
-    let targetVisitId = activeVisitSummary?.id;
-    if (!targetVisitId || isComposingNewSession) {
-      targetVisitId = createVisitDraft();
-    }
-
-    const targetSummary = visitSummaries.find(summary => summary.id === targetVisitId);
-    const shouldPersistSession = !targetSummary || targetSummary.items.length === 0;
-
-    if (shouldPersistSession) {
-      try {
-        await ensureSessionRecord(targetVisitId);
-      } catch (error) {
-        console.error('Failed to create session before reflection:', error);
-        showToast('Could not start session', 'info');
-        return;
-      }
-    }
-
-    const createdAt = Date.now();
-    const userMsg: VisitStreamMessage = {
-      id: `visit-msg-${createdAt}`,
-      role: 'user',
-      text,
-      createdAt,
-    };
+  const sendVisitInquiryToSession = (
+    targetVisitId: string,
+    text: string,
+    visitItemsOverride?: GalleryItem[],
+    options?: { persistUserMessage?: boolean },
+  ) => {
     const existingMessages = visitStreams[targetVisitId] || [];
-    appendVisitMessages(targetVisitId, [userMsg]);
+    if (options?.persistUserMessage !== false) {
+      const createdAt = Date.now();
+      const userMsg: VisitStreamMessage = {
+        id: `visit-msg-${createdAt}`,
+        role: 'user',
+        text,
+        createdAt,
+      };
+      appendVisitMessages(targetVisitId, [userMsg]);
+    }
     setStreamingVisitResponses(prev => ({ ...prev, [targetVisitId]: '' }));
 
-    const visitItems = activeVisitSummary?.id === targetVisitId
-      ? activeVisitSummary.items
-      : items.filter(item => item.visitId === targetVisitId);
+    const visitItems = visitItemsOverride
+      || (activeVisitSummary?.id === targetVisitId
+        ? activeVisitSummary.items
+        : items.filter(item => itemBelongsToSession(item, targetVisitId)));
 
     visitChatStream(
       visitItems.map(i => ({
@@ -1107,6 +1252,227 @@ const App: React.FC = () => {
         });
       }
     );
+  };
+
+  const buildPreparedSessionFallbackPrompt = (
+    entries: PendingSessionArtwork[],
+  ): string => {
+    const libraryTitles = entries
+      .filter((entry): entry is Extract<PendingSessionArtwork, { kind: 'library' }> => entry.kind === 'library')
+      .map((entry) => `"${entry.artwork.artworkName || 'Untitled'}" by ${entry.artwork.artistName || 'Unknown Artist'}`);
+    const uploadCount = entries.filter((entry) => entry.kind === 'upload').length;
+
+    if (uploadCount > 0 && libraryTitles.length > 0) {
+      return `I just started a session with ${uploadCount} new upload${uploadCount === 1 ? '' : 's'} and ${libraryTitles.length} saved artwork${libraryTitles.length === 1 ? '' : 's'} from my library (${libraryTitles.join(', ')}). Help me find the most interesting visual, thematic, or historical connections across them.`;
+    }
+    if (uploadCount > 0) {
+      return `I just started a session with ${uploadCount} new upload${uploadCount === 1 ? '' : 's'}. Help me understand what stands out across these works and where I should look first.`;
+    }
+    return `I just started a session with these saved artworks. Help me find the strongest thread that connects them and suggest a good first question to explore.`;
+  };
+
+  const submitPreparedSession = async () => {
+    if (pendingSessionArtworks.length === 0 || isSubmittingPreparedSession) {
+      return;
+    }
+
+    setIsSubmittingPreparedSession(true);
+
+    try {
+      const created = await createSession(USER_ID, undefined, DEFAULT_VISIT_TITLE);
+      const sessionId = created?.session?.id as string;
+      const sessionTitle = created?.session?.title || DEFAULT_VISIT_TITLE;
+      const now = Date.now();
+
+      const libraryEntries = pendingSessionArtworks.filter(
+        (entry): entry is Extract<PendingSessionArtwork, { kind: 'library' }> => entry.kind === 'library',
+      );
+      const uploadEntries = pendingSessionArtworks.filter(
+        (entry): entry is Extract<PendingSessionArtwork, { kind: 'upload' }> => entry.kind === 'upload',
+      );
+
+      if (libraryEntries.length > 0) {
+        await attachArtworksToSession(sessionId, USER_ID, libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id));
+      }
+
+      setVisitDrafts(prev => [
+        { id: sessionId, title: sessionTitle, createdAt: now, updatedAt: now },
+        ...prev.filter((draft) => draft.id !== sessionId),
+      ]);
+
+      const libraryStreamMessages: VisitStreamMessage[] = [];
+      let streamCursor = now;
+      const placeholdersForUploads: GalleryItem[] = uploadEntries.map((entry) => {
+        const placeholderId = `pending-${entry.id}`;
+        const placeholder: GalleryItem = {
+          id: placeholderId,
+          url: entry.previewUrl,
+          keywords: [],
+          vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
+          timestamp: entry.timestamp,
+          sessionCapturedAt: streamCursor++,
+          conversation: [],
+          visitId: sessionId,
+          sessionTitle,
+          sessionLinks: [{
+            sessionId,
+            sessionTitle,
+            sequenceNumber: pendingSessionArtworks.findIndex((candidate) => candidate.id === entry.id),
+            source: entry.mode === 'camera' ? 'camera' : 'upload',
+          }],
+          isAnalyzing: true,
+          syncStatus: 'pending',
+          photoTime: entry.photoTime,
+          location: entry.location,
+        };
+        return placeholder;
+      });
+
+      setItems(prev => {
+        const next = prev.map((item) => {
+          const matchingEntry = libraryEntries.find((entry) => entry.artwork.id === item.id);
+          if (!matchingEntry) return item;
+          const sequenceNumber = pendingSessionArtworks.findIndex((entry) => entry.id === matchingEntry.id);
+          return updateSessionLinkForItem(item, sessionId, () => ({
+            sessionId,
+            sessionTitle,
+            sequenceNumber,
+            source: 'library',
+          }));
+        });
+        return [...placeholdersForUploads, ...next];
+      });
+
+      libraryEntries.forEach((entry) => {
+        const artworkId = entry.artwork.artworkId || entry.artwork.id;
+        libraryStreamMessages.push(
+          { id: `capture-${sessionId}-${artworkId}`, role: 'user', text: '', type: 'artwork_capture', artworkId, createdAt: streamCursor++ },
+          { id: `card-${sessionId}-${artworkId}`, role: 'model', text: '', type: 'artwork_card', artworkId, createdAt: streamCursor++ },
+        );
+      });
+
+      if (libraryStreamMessages.length > 0) {
+        appendVisitMessages(sessionId, libraryStreamMessages);
+      }
+
+      setActiveTab('explore');
+      setFilteredVisitId(sessionId);
+      setIsComposingNewSession(false);
+      setVisit({ id: sessionId, itemIds: [], globalConversation: [] });
+      startTransition(() => {
+        resetPreparedSessionState();
+      });
+
+      const resolvedSessionItems: GalleryItem[] = libraryEntries.map((entry, index) =>
+        updateSessionLinkForItem(entry.artwork, sessionId, () => ({
+          sessionId,
+          sessionTitle,
+          sequenceNumber: index,
+          source: 'library',
+        })),
+      );
+
+      for (const uploadEntry of uploadEntries) {
+        const placeholderId = `pending-${uploadEntry.id}`;
+        try {
+          const analysis = await analyzeArtwork(
+            uploadEntry.file,
+            USER_ID,
+            undefined,
+            sessionId,
+            uploadEntry.location,
+            uploadEntry.photoTime,
+            uploadEntry.coords?.latitude,
+            uploadEntry.coords?.longitude,
+          );
+          const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
+          const updates: Partial<GalleryItem> = {
+            id: analysis.artwork_id || placeholderId,
+            artworkId: analysis.artwork_id,
+            url: analysis.photo_uri || uploadEntry.previewUrl,
+            artistName: analysis.artist_name,
+            artworkName: analysis.artwork_name,
+            description: parseAnalysis(analysis.description),
+            date: analysis.date,
+            medium: analysis.medium,
+            keywords,
+            isAnalyzing: false,
+            syncStatus: 'synced',
+            sessionTitle,
+            visitId: sessionId,
+            sessionLinks: [{
+              sessionId,
+              sessionTitle,
+              sequenceNumber: pendingSessionArtworks.findIndex((entry) => entry.id === uploadEntry.id),
+              source: uploadEntry.mode === 'camera' ? 'camera' : 'upload',
+            }],
+            photoTime: analysis.photo_time || uploadEntry.photoTime,
+            location: analysis.location && typeof analysis.location === 'object'
+              ? JSON.stringify(analysis.location)
+              : analysis.location || uploadEntry.location,
+            referenceUrls: analysis.reference_urls || [],
+            artistEntityId: analysis.artist_entity_id || undefined,
+          };
+
+          setItems(prev => prev.map((item) => item.id === placeholderId ? { ...item, ...updates } : item));
+          resolvedSessionItems.push({
+            ...(placeholdersForUploads.find((item) => item.id === placeholderId) as GalleryItem),
+            ...updates,
+          } as GalleryItem);
+          if (analysis.artwork_id) {
+            appendVisitMessages(sessionId, [
+              { id: `capture-${placeholderId}`, role: 'user', text: '', type: 'artwork_capture', artworkId: analysis.artwork_id, createdAt: Date.now() },
+              { id: `card-${placeholderId}`, role: 'model', text: '', type: 'artwork_card', artworkId: analysis.artwork_id, createdAt: Date.now() + 1 },
+            ]);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Analysis failed.';
+          setItems(prev => prev.map((item) => item.id === placeholderId ? { ...item, isAnalyzing: false, streamingText: message, syncStatus: 'failed' } : item));
+        }
+      }
+
+      if (newSessionDraftMessage.trim()) {
+        window.setTimeout(() => {
+          sendVisitInquiryToSession(sessionId, newSessionDraftMessage.trim(), resolvedSessionItems);
+        }, 0);
+      } else {
+        window.setTimeout(() => {
+          sendVisitInquiryToSession(
+            sessionId,
+            buildPreparedSessionFallbackPrompt(pendingSessionArtworks),
+            resolvedSessionItems,
+            { persistUserMessage: false },
+          );
+        }, 0);
+      }
+    } catch (error) {
+      console.error('Failed to start prepared session:', error);
+      showToast('Could not start session from selected artworks.', 'info');
+    } finally {
+      setIsSubmittingPreparedSession(false);
+    }
+  };
+
+  const handleVisitInquiry = async (text: string) => {
+    let targetVisitId = activeVisitSummary?.id;
+    if (!targetVisitId || isComposingNewSession) {
+      targetVisitId = createVisitDraft();
+    }
+
+    const targetSummary = visitSummaries.find(summary => summary.id === targetVisitId);
+    const shouldPersistSession = !targetSummary || targetSummary.items.length === 0;
+
+    if (shouldPersistSession) {
+      try {
+        await ensureSessionRecord(targetVisitId);
+      } catch (error) {
+        console.error('Failed to create session before reflection:', error);
+        showToast('Could not start session', 'info');
+        return;
+      }
+    }
+
+    sendVisitInquiryToSession(targetVisitId, text);
   };
 
   useEffect(() => {
@@ -1292,6 +1658,69 @@ const App: React.FC = () => {
     const target = event.target as HTMLInputElement;
     const files = Array.from(target.files || []);
     if (files.length === 0) return;
+    const isNewSessionCompose = activeTab === 'explore' && isComposingNewSession;
+    const shouldStageUpload =
+      isNewSessionCompose &&
+      (
+        mode === 'gallery' ||
+        pendingSessionArtworks.length > 0
+      );
+
+    if (shouldStageUpload) {
+      const remainingSlots = Math.max(0, 5 - pendingSessionArtworks.length);
+      if (remainingSlots === 0) {
+        showToast('You can add up to 5 artworks to start a session.', 'info');
+        if (target) target.value = '';
+        return;
+      }
+
+      const filesToStage = files.slice(0, remainingSlots);
+      if (filesToStage.length < files.length) {
+        showToast('Only the first 5 artworks can be added to a new session.', 'info');
+      }
+
+      const stagedEntries = await Promise.all(
+        filesToStage.map(async (file) => {
+          const metadata = mode === 'gallery'
+            ? await readExifMetadata(file)
+            : { latitude: undefined, longitude: undefined, timestamp: undefined };
+          let coords = { latitude: metadata.latitude, longitude: metadata.longitude };
+          if (mode === 'camera' && coords.latitude === undefined) {
+            const current = await getCurrentLocation().catch(() => undefined);
+            if (current) coords = current;
+          }
+          const timestamp = metadata.timestamp || Date.now();
+          const photoTime = new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const previewUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+
+          return {
+            id: `upload-${Math.random().toString(36).substring(2, 11)}`,
+            kind: 'upload' as const,
+            file,
+            previewUrl,
+            mode,
+            timestamp,
+            photoTime,
+            coords,
+            label: file.name.replace(/\.[^/.]+$/, '') || 'New upload',
+            sublabel: mode === 'camera' ? 'Camera capture' : photoTime,
+          };
+        }),
+      );
+
+      startTransition(() => {
+        setPendingSessionArtworks((prev) => [...prev, ...stagedEntries]);
+      });
+
+      if (target) target.value = '';
+      return;
+    }
+    const isLibraryOnlyUpload = activeTab === 'collect';
     const uploadKey = buildUploadRequestKey(files, mode);
 
     if (inFlightUploadKeysRef.current.has(uploadKey)) {
@@ -1328,9 +1757,11 @@ const App: React.FC = () => {
             reader.readAsDataURL(file);
           });
 
-          const { visitId, isNew } = resolveUploadSession();
+          const { visitId, isNew } = isLibraryOnlyUpload
+            ? { visitId: undefined, isNew: false }
+            : resolveUploadSession();
 
-          if (isNew) {
+          if (isNew && visitId) {
             const now = Date.now();
             const newVisit: VisitDraft = {
               id: visitId,
@@ -1352,6 +1783,14 @@ const App: React.FC = () => {
             sessionCapturedAt: capturedAt,
             conversation: [],
             visitId,
+            sessionLinks: visitId
+              ? [{
+                  sessionId: visitId,
+                  sessionTitle: DEFAULT_VISIT_TITLE,
+                  sequenceNumber: 0,
+                  source: mode === 'camera' ? 'camera' : 'upload',
+                }]
+              : undefined,
             isAnalyzing: true,
             syncStatus: 'pending',
             streamingText: '',
@@ -1360,7 +1799,9 @@ const App: React.FC = () => {
           };
 
           setItems(prev => [placeholderItem, ...prev]);
-          setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+          if (visitId) {
+            setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+          }
 
           if (coords.latitude !== undefined && coords.longitude !== undefined) {
             resolveMuseum(coords.latitude, coords.longitude)
@@ -1416,6 +1857,14 @@ const App: React.FC = () => {
                 photoTime: analysis.photo_time,
                 referenceUrls: analysis.reference_urls || [],
                 artistEntityId: analysis.artist_entity_id || undefined,
+                sessionLinks: visitId && analysis.artwork_id
+                  ? [{
+                      sessionId: visitId,
+                      sessionTitle: analysis.session_title || DEFAULT_VISIT_TITLE,
+                      sequenceNumber: 0,
+                      source: mode === 'camera' ? 'camera' : 'upload',
+                    }]
+                  : undefined,
               };
               setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
               setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...updates } : prev);
@@ -1436,7 +1885,7 @@ const App: React.FC = () => {
                 }).catch(() => {});
               }
               if (visitId && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-                const sessionItems = items.filter(i => i.visitId === visitId);
+                const sessionItems = items.filter(i => itemBelongsToSession(i, visitId));
                 const history = visitStreams[visitId] || [];
                 triggerUploadCommentary(visitId, [updates], sessionItems, history);
               }
@@ -1475,9 +1924,11 @@ const App: React.FC = () => {
         }));
 
         const anchorMeta = memoryFiles[0].metadata;
-        const { visitId: batchVisitId, isNew } = resolveUploadSession();
+        const { visitId: batchVisitId, isNew } = isLibraryOnlyUpload
+          ? { visitId: undefined, isNew: false }
+          : resolveUploadSession();
 
-        if (isNew) {
+        if (isNew && batchVisitId) {
           const now = Date.now();
           const newVisit: VisitDraft = {
             id: batchVisitId,
@@ -1488,7 +1939,9 @@ const App: React.FC = () => {
           setVisitDrafts(prev => [newVisit, ...prev.filter(v => v.id !== batchVisitId)]);
         }
 
-        setVisit(prev => ({ ...prev, id: batchVisitId, itemIds: [], globalConversation: [] }));
+        if (batchVisitId) {
+          setVisit(prev => ({ ...prev, id: batchVisitId, itemIds: [], globalConversation: [] }));
+        }
 
         const batchCapturedAtBase = Date.now();
         const batchPlaceholders: GalleryItem[] = memoryFiles.map((memFile, index) => {
@@ -1503,6 +1956,14 @@ const App: React.FC = () => {
             keywords: [],
             conversation: [],
             visitId: batchVisitId,
+            sessionLinks: batchVisitId
+              ? [{
+                  sessionId: batchVisitId,
+                  sessionTitle: DEFAULT_VISIT_TITLE,
+                  sequenceNumber: index,
+                  source: mode === 'camera' ? 'camera' : 'upload',
+                }]
+              : undefined,
             vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
             timestamp: itemTime,
             sessionCapturedAt: batchCapturedAtBase + index,
@@ -1523,7 +1984,9 @@ const App: React.FC = () => {
         });
 
         setItems(prev => [...batchPlaceholders, ...prev]);
-        setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, ...batchPlaceholders.map(p => p.id)] }));
+        if (batchVisitId) {
+          setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, ...batchPlaceholders.map(p => p.id)] }));
+        }
 
         if (anchorMeta.latitude !== undefined && anchorMeta.longitude !== undefined) {
           resolveMuseum(anchorMeta.latitude, anchorMeta.longitude)
@@ -1559,16 +2022,24 @@ const App: React.FC = () => {
               description: parseAnalysis(analysis.description),
               date: analysis.date,
               medium: analysis.medium,
-              sessionTitle: analysis.session_title,
+              sessionTitle: batchVisitId ? analysis.session_title : undefined,
               artworkId: analysis.artwork_id,
               isAnalyzing: false,
               location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
               photoTime: analysis.photo_time,
               referenceUrls: analysis.reference_urls || [],
               artistEntityId: analysis.artist_entity_id || undefined,
+              sessionLinks: batchVisitId && analysis.artwork_id
+                ? [{
+                    sessionId: batchVisitId,
+                    sessionTitle: analysis.session_title || DEFAULT_VISIT_TITLE,
+                    sequenceNumber: batchPlaceholders.findIndex((placeholder) => placeholder.id === newItemId),
+                    source: mode === 'camera' ? 'camera' : 'upload',
+                  }]
+                : undefined,
             };
             setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
-            if (analysis.artwork_id) {
+            if (batchVisitId && analysis.artwork_id) {
               const now = Date.now();
               appendVisitMessages(batchVisitId, [
                 { id: `capture-${newItemId}`, role: 'user', text: '', type: 'artwork_capture', artworkId: analysis.artwork_id, createdAt: now },
@@ -1601,11 +2072,11 @@ const App: React.FC = () => {
           }
         }
 
-        if (analyzedArtworks.length > 0) {
+        if (batchVisitId && analyzedArtworks.length > 0) {
           const history = visitStreams[batchVisitId] || [];
           triggerUploadCommentary(batchVisitId, analyzedArtworks, analyzedItems, history);
         }
-        if (batchPlaceholders.length >= 2) setFilteredVisitId(batchVisitId);
+        if (batchVisitId && batchPlaceholders.length >= 2) setFilteredVisitId(batchVisitId);
       }
     } finally {
       inFlightUploadKeysRef.current.delete(uploadKey);
@@ -1788,9 +2259,17 @@ const App: React.FC = () => {
 
     if (currentSummary.items.length > 0) {
       await updateSession(visitId, USER_ID, trimmedTitle);
-      setItems(prev => prev.map(item =>
-        item.visitId === visitId ? { ...item, sessionTitle: trimmedTitle } : item
-      ));
+      setItems(prev => prev.map(item => (
+        itemBelongsToSession(item, visitId)
+          ? updateSessionLinkForItem(item, visitId, (existing) => ({
+              sessionId: visitId,
+              sessionTitle: trimmedTitle,
+              sequenceNumber: existing?.sequenceNumber,
+              source: existing?.source,
+              createdAt: existing?.createdAt,
+            }))
+          : item
+      )));
     }
 
     setVisitDrafts(prev => {
@@ -1824,7 +2303,11 @@ const App: React.FC = () => {
   };
 
   const removeVisitLocally = (sessionId: string) => {
-    setItems(prev => prev.filter(item => item.visitId !== sessionId));
+    setItems(prev => prev.map(item => (
+      itemBelongsToSession(item, sessionId)
+        ? updateSessionLinkForItem(item, sessionId, () => null)
+        : item
+    )));
     setVisitDrafts(prev => prev.filter(draft => draft.id !== sessionId));
     setVisitStreams(prev => {
       const next = { ...prev };
@@ -1837,8 +2320,8 @@ const App: React.FC = () => {
       return next;
     });
     setVisit(prev => prev.id === sessionId ? { ...prev, id: '', itemIds: [], globalConversation: [] } : prev);
-    if (interpretingItem?.visitId === sessionId) {
-      setInterpretingItem(null);
+    if (interpretingItem && itemBelongsToSession(interpretingItem, sessionId)) {
+      setInterpretingItem(prev => prev ? updateSessionLinkForItem(prev, sessionId, () => null) : prev);
     }
     setFilteredVisitId(prev => (prev === sessionId ? null : prev));
   };
@@ -1850,7 +2333,7 @@ const App: React.FC = () => {
         await deleteSession(sessionId, USER_ID);
       }
       removeVisitLocally(sessionId);
-      showToast('Session deleted', 'success');
+      showToast('Session deleted. Artworks stayed in your library.', 'success');
       console.log(`Successfully deleted session: ${sessionId}`);
     } catch (error) {
       console.error("Failed to delete session:", error);
@@ -1908,6 +2391,7 @@ const App: React.FC = () => {
     if (tabId === 'explore') {
       setFilteredVisitId(null);
       setIsComposingNewSession(true);
+      resetPreparedSessionState();
       setVisit({
         id: '',
         itemIds: [],
@@ -1928,6 +2412,7 @@ const App: React.FC = () => {
     setActiveTab('explore');
     setFilteredVisitId(summaryId);
     setIsComposingNewSession(false);
+    resetPreparedSessionState();
     setArtistPageContext(null);
     setMovementPageContext(null);
     setInterpretingItem(null);
@@ -1950,7 +2435,7 @@ const App: React.FC = () => {
     'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900';
 
   const getExpandedNavItemClassName = (isActive: boolean) =>
-    `w-full flex items-center gap-3.5 px-3 text-[12px] font-semibold tracking-[0.1em] uppercase text-left ${sidebarNavItemSharedClassName} ${
+    `w-full flex items-center gap-3.5 px-3 text-[13px] font-medium text-left ${sidebarNavItemSharedClassName} ${
       isActive ? sidebarNavItemActiveClassName : sidebarNavItemInactiveClassName
     }`;
 
@@ -1971,7 +2456,7 @@ const App: React.FC = () => {
     >
       <button
         onClick={() => handleSelectVisitSummary(summary.id)}
-        className="w-full rounded-[16px] px-4 py-3.5 pr-12 text-left"
+        className="w-full rounded-[16px] px-4 py-2 pr-12 text-left"
       >
         <div className="flex min-w-0 flex-col gap-0.5">
           {editingVisitId === summary.id ? (
@@ -2001,7 +2486,7 @@ const App: React.FC = () => {
               activeVisitSummary?.id === summary.id && activeTab === 'explore' ? 'text-neutral-500' : 'text-neutral-400/90'
             }`}
           >
-            {summary.artworkCount} {summary.artworkCount === 1 ? 'piece' : 'pieces'}
+            {summary.artworkCount} {summary.artworkCount === 1 ? 'artwork' : 'artworks'}
           </p>
         </div>
       </button>
@@ -2116,7 +2601,7 @@ const App: React.FC = () => {
       className="h-full w-full rounded-full object-cover"
     />
   ) : (
-    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[12px] font-bold uppercase text-neutral-900">
+    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[12px] font-bold text-neutral-900">
       {currentUser ? currentUser.username[0] : 'U'}
     </div>
   );
@@ -2136,6 +2621,20 @@ const App: React.FC = () => {
             onClassify={handleUpdateClassification}
           />
         </Suspense>
+
+        <AddFromLibraryModal
+          open={isLibraryPickerOpen}
+          items={availableLibraryArtworks}
+          selectedIds={pendingLibraryArtworkIds}
+          searchValue={libraryPickerSearch}
+          onClose={() => {
+            setIsLibraryPickerOpen(false);
+            setLibraryPickerSearch('');
+          }}
+          onSearchChange={setLibraryPickerSearch}
+          onToggleSelect={stageLibraryArtworkForSession}
+          onConfirm={() => setIsLibraryPickerOpen(false)}
+        />
 
         {showLoginModal && !currentUser && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
@@ -2177,25 +2676,25 @@ const App: React.FC = () => {
               {showAccountModal === 'account' ? (
                 <div className="flex flex-col gap-5 px-5 py-5">
                   <div>
-                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Display name</label>
+                    <label className="text-[11px] font-medium text-neutral-400">Display name</label>
                     <div className="mt-1.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-900">
                       {currentUser?.full_name || '—'}
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Username</label>
+                    <label className="text-[11px] font-medium text-neutral-400">Username</label>
                     <div className="mt-1.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-900">
                       {currentUser?.full_name?.toLowerCase().replace(/\s+/g, '') || '—'}
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Email</label>
+                    <label className="text-[11px] font-medium text-neutral-400">Email</label>
                     <div className="mt-1.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-500">
                       {currentUser?.email || '—'}
                     </div>
                   </div>
                   <div className="border-t border-neutral-100 pt-4">
-                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Plan</label>
+                    <label className="text-[11px] font-medium text-neutral-400">Plan</label>
                     <div className="mt-2 flex items-center justify-between">
                       <span className="text-[13px] capitalize text-neutral-700">{quotaInfo?.tier ?? 'free'}</span>
                       <span className="text-[11px] text-neutral-400">
@@ -2227,7 +2726,7 @@ const App: React.FC = () => {
               ) : (
                 <div className="flex flex-col gap-5 px-5 py-5">
                   <div>
-                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Gallery theme</label>
+                    <label className="text-[11px] font-medium text-neutral-400">Gallery theme</label>
                     <select className="mt-1.5 w-full appearance-none rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-600 outline-none">
                       <option value="">Minimal (default)</option>
                       <option value="warm">Warm</option>
@@ -2235,7 +2734,7 @@ const App: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Card density</label>
+                    <label className="text-[11px] font-medium text-neutral-400">Card density</label>
                     <select className="mt-1.5 w-full appearance-none rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[14px] text-neutral-600 outline-none">
                       <option value="">Comfortable (default)</option>
                       <option value="compact">Compact</option>
@@ -2243,7 +2742,7 @@ const App: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-400">Analysis language</label>
+                    <label className="text-[11px] font-medium text-neutral-400">Analysis language</label>
                     <select
                       value={language}
                       onChange={(event) => {
@@ -2280,7 +2779,7 @@ const App: React.FC = () => {
                 title="Expand sidebar"
                 aria-label="Expand sidebar"
               >
-                <span className="text-[24px] font-bold tracking-[0.22em] uppercase transition-all duration-200 group-hover:translate-y-2 group-hover:opacity-0">
+                <span className="text-[24px] font-bold tracking-[0.22em] transition-all duration-200 group-hover:translate-y-2 group-hover:opacity-0">
                   M
                 </span>
                 <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-200 group-hover:opacity-100">
@@ -2341,7 +2840,7 @@ const App: React.FC = () => {
             <div className="mt-auto p-3 relative">
               <button
                 onClick={() => setUserMenuOpen(prev => !prev)}
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white text-[12px] font-bold uppercase text-neutral-900 shadow-sm transition-colors hover:bg-neutral-50"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white text-[12px] font-bold text-neutral-900 shadow-sm transition-colors hover:bg-neutral-50"
               >
                 {userAvatar}
               </button>
@@ -2351,20 +2850,30 @@ const App: React.FC = () => {
                   <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
                   <div className="absolute bottom-3 left-full z-50 ml-3 w-[240px] rounded-2xl border border-neutral-200 bg-white p-4 shadow-xl">
                     <div>
-                      <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400">Language</label>
-                      <select
-                        value={language}
-                        onChange={(event) => {
-                          const nextLanguage = event.target.value;
-                          setLanguage(nextLanguage);
-                          localStorage.setItem('musee_language', nextLanguage);
-                          setUserMenuOpen(false);
-                        }}
-                        className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 outline-none focus:border-neutral-400 transition-colors"
-                      >
-                        <option value="en">English</option>
-                        <option value="zh">中文</option>
-                      </select>
+                      <label className="text-[10px] font-medium text-neutral-400">Language</label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-xs text-neutral-700 transition-colors hover:border-neutral-300">
+                          <span>{language === 'zh' ? '中文' : 'English'}</span>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mr-0.5 text-neutral-400">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-0">
+                        <DropdownMenuRadioGroup
+                          value={language}
+                          onValueChange={(nextLanguage) => {
+                            setLanguage(nextLanguage);
+                            localStorage.setItem('musee_language', nextLanguage);
+                            setUserMenuOpen(false);
+                          }}
+                        >
+                          <DropdownMenuRadioItem value="en">English</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="zh">中文</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     </div>
                     <div className="mt-4 space-y-2">
                       {currentUser && (
@@ -2426,7 +2935,7 @@ const App: React.FC = () => {
         >
           {/* Brand & Collapse Row */}
           <div className="flex h-[52px] items-center justify-between border-b border-neutral-200 px-5 shrink-0">
-            <h1 className="text-[14px] font-bold tracking-[0.2em] uppercase text-neutral-800">Musee</h1>
+            <h1 className="text-[14px] font-bold tracking-[0.04em] text-neutral-800">Musee</h1>
             <button
               onClick={() => {
                 if (window.innerWidth < 768) {
@@ -2462,14 +2971,9 @@ const App: React.FC = () => {
 
           <div className="h-px bg-neutral-200/60 my-1 mx-4" />
 
-          {/* Sessions Section */}
-          <div className="px-4 pt-3 pb-1 shrink-0">
-            <p className="text-[10px] tracking-[0.2em] uppercase font-bold text-neutral-400">Sessions</p>
-          </div>
-
           {/* Search bar inside sidebar */}
           <div className="px-3 py-1.5 shrink-0">
-            <div className="flex items-center gap-2.5 rounded-[16px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-3.5 py-2 text-neutral-700 shadow-inner">
+            <div className="flex items-center gap-2.5 rounded-[16px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-3.5 py-2 text-neutral-700">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-neutral-400">
                 <circle cx="11" cy="11" r="7" />
                 <path d="m20 20-3.5-3.5" />
@@ -2494,7 +2998,7 @@ const App: React.FC = () => {
           <div className="p-3 shrink-0 relative">
             <button
               onClick={() => setUserMenuOpen(prev => !prev)}
-              className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-white shadow-sm hover:bg-neutral-50 transition-colors text-left"
+              className="w-full flex items-center justify-between gap-3 pl-3.5 pr-4 py-2.5 rounded-xl border border-neutral-200 bg-white shadow-sm hover:bg-neutral-50 transition-colors text-left"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 {/* Avatar */}
@@ -2518,20 +3022,30 @@ const App: React.FC = () => {
                 <div className="absolute bottom-full left-3 right-3 mb-2 z-50 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
                   {/* Language Select */}
                   <div>
-                    <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400">Language</label>
-                    <select
-                      value={language}
-                      onChange={(event) => {
-                        const nextLanguage = event.target.value;
-                        setLanguage(nextLanguage);
-                        localStorage.setItem('musee_language', nextLanguage);
-                        setUserMenuOpen(false);
-                      }}
-                      className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 outline-none focus:border-neutral-400 transition-colors"
-                    >
-                      <option value="en">English</option>
-                      <option value="zh">中文</option>
-                    </select>
+                    <label className="text-[10px] font-medium text-neutral-400">Language</label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-xs text-neutral-700 transition-colors hover:border-neutral-300">
+                          <span>{language === 'zh' ? '中文' : 'English'}</span>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mr-0.5 text-neutral-400">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-0">
+                        <DropdownMenuRadioGroup
+                          value={language}
+                          onValueChange={(nextLanguage) => {
+                            setLanguage(nextLanguage);
+                            localStorage.setItem('musee_language', nextLanguage);
+                            setUserMenuOpen(false);
+                          }}
+                        >
+                          <DropdownMenuRadioItem value="en">English</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="zh">中文</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   {/* Settings (Account details) */}
@@ -2680,6 +3194,15 @@ const App: React.FC = () => {
                   userId={currentUser?.user_id || USER_ID}
                   goalGalleryInputRef={goalGalleryInputRef}
                   goalCameraInputRef={goalCameraInputRef}
+                  preparedSessionItems={pendingSessionArtworks.map((entry) => ({
+                    id: entry.id,
+                    previewUrl: entry.previewUrl,
+                    label: entry.label,
+                    sublabel: entry.sublabel,
+                    kind: entry.kind,
+                  }))}
+                  preparedSessionMessage={newSessionDraftMessage}
+                  isSubmittingPreparedSession={isSubmittingPreparedSession}
                   visitStreamScrollRef={visitStreamScrollRef}
                   visitStreamEndRef={visitStreamEndRef}
                   onCloseArtworkDetail={closeArtworkDetail}
@@ -2733,6 +3256,10 @@ const App: React.FC = () => {
                       .then(res => setSessionGoal(res?.session?.id || sid, goal))
                       .catch(() => {});
                   }}
+                  onPreparedSessionMessageChange={setNewSessionDraftMessage}
+                  onOpenLibraryPicker={() => setIsLibraryPickerOpen(true)}
+                  onRemovePreparedSessionItem={removePendingSessionArtwork}
+                  onSubmitPreparedSession={() => void submitPreparedSession()}
                   onFileUpload={handleFileUpload}
                   onOpenSessionArtwork={(item) =>
                     openArtworkDetail(
@@ -2752,6 +3279,7 @@ const App: React.FC = () => {
                 <CollectView
                   headerLeftSlot={headerMenuButton}
                   topLevelLeftSlot={collectionFloatingMenuButton}
+                  onFileUpload={handleFileUpload}
                   items={items}
                   visit={visit}
                   filteredVisitId={filteredVisitId}
@@ -2895,13 +3423,13 @@ const App: React.FC = () => {
               </h3>
               <p className="mb-8 text-sm leading-relaxed text-neutral-500">
                 {deleteConfirmation.type === 'item'
-                  ? 'This will permanently remove this piece and its curated analysis from your Musee.'
-                  : `This will permanently delete ${pendingDeleteVisitSummary?.title || 'this session'} and its ${pendingDeleteVisitSummary?.artworkCount || 0} ${pendingDeleteVisitSummary?.artworkCount === 1 ? 'captured artwork' : 'captured artworks'} from Musee.`}
+                  ? 'This will permanently remove this artwork and its curated analysis from your Musee.'
+                  : `This will permanently delete ${pendingDeleteVisitSummary?.title || 'this session'} and its reflections from Musee. The ${pendingDeleteVisitSummary?.artworkCount || 0} ${pendingDeleteVisitSummary?.artworkCount === 1 ? 'artwork will stay' : 'artworks will stay'} in your library.`}
               </p>
               <div className="flex space-x-3">
                 <button
                   onClick={() => setDeleteConfirmation(null)}
-                  className="flex-1 rounded-full px-6 py-3 text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-500 transition-colors hover:bg-neutral-50"
+                  className="flex-1 rounded-full px-6 py-3 text-[12px] font-semibold text-neutral-500 transition-colors hover:bg-neutral-50"
                 >
                   Cancel
                 </button>
@@ -2910,7 +3438,7 @@ const App: React.FC = () => {
                     if (deleteConfirmation.type === 'item') confirmDeleteItem(deleteConfirmation.id);
                     else confirmDeleteSession(deleteConfirmation.id);
                   }}
-                  className="flex-1 rounded-full bg-neutral-900 px-6 py-3 text-[10px] font-bold uppercase tracking-[0.3em] text-white transition-colors hover:bg-black"
+                  className="flex-1 rounded-full bg-neutral-900 px-6 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-black"
                 >
                   Delete
                 </button>
