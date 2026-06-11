@@ -110,7 +110,7 @@ function SkillChip({
         border: '0.5px solid rgba(26,23,20,0.12)', borderRadius: 4,
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        fontFamily: "'Noto Serif SC', 'Georgia', serif", textAlign: 'left',
+        fontFamily: 'var(--font-family-serif)', textAlign: 'left',
         transition: 'opacity 0.2s',
       }}
     >
@@ -146,7 +146,7 @@ function ActionBtn({
         width: '100%', padding: '.65rem .9rem',
         background: 'transparent',
         border: primary ? '0.5px solid rgba(26,23,20,0.38)' : '0.5px solid rgba(26,23,20,0.14)',
-        borderRadius: 3, fontFamily: "'Noto Serif SC', 'Georgia', serif", fontSize: 13,
+        borderRadius: 3, fontFamily: 'var(--font-family-serif)', fontSize: 13,
         color: '#1a1714', cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.3 : 1, textAlign: 'left',
         display: 'flex', alignItems: 'center', gap: 4,
@@ -410,7 +410,7 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
                     placeholder="Write your answer…"
                     style={{
                       width: '100%', minHeight: 72, padding: '0.5rem 0.6rem',
-                      fontFamily: "'Noto Serif SC', 'Georgia', serif", fontSize: 13,
+                      fontFamily: 'var(--font-family-serif)', fontSize: 13,
                       lineHeight: 1.75, color: '#1a1714',
                       background: '#fff', border: '0.5px solid rgba(26,23,20,0.2)',
                       borderRadius: 3, resize: 'vertical', outline: 'none',
@@ -448,7 +448,7 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
                 onClick={() => toggleHeart(respMsg.respFor)}
                 style={{
                   padding: '0 1rem', height: 38, flexShrink: 0,
-                  fontFamily: "'Noto Serif SC', 'Georgia', serif", fontSize: 13,
+                  fontFamily: 'var(--font-family-serif)', fontSize: 13,
                   borderRadius: 3, border: '0.5px solid',
                   cursor: 'pointer', transition: 'all 0.15s',
                   background: isHearted ? '#1a1714' : 'transparent',
@@ -483,7 +483,7 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
                         border: '0.5px solid rgba(26,23,20,0.12)', borderRadius: 4,
                         cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.35 : 1,
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        fontFamily: "'Noto Serif SC', 'Georgia', serif", textAlign: 'left',
+                        fontFamily: 'var(--font-family-serif)', textAlign: 'left',
                         transition: 'opacity 0.2s',
                       }}
                     >
@@ -530,7 +530,7 @@ const InteractiveExplorationView: React.FC<Props> = ({ item }) => {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 1.25rem 4rem', fontFamily: "'Noto Serif SC', 'Georgia', serif", background: '#faf9f7', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 1.25rem 4rem', fontFamily: 'var(--font-family-serif)', background: '#faf9f7', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         @keyframes explore-tp {
           0%,80%,100%{opacity:.2;transform:scale(.7)}40%{opacity:1;transform:scale(1)}

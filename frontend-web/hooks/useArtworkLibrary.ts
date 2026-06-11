@@ -4,7 +4,7 @@ import {
   resolveImageUrl,
   updateArtworkClassification,
 } from '../api/artworks';
-import type { ArtworkClassification, GalleryItem, TagCoordinate } from '../types';
+import type { ArtworkClassification, GalleryItem, SessionLink, TagCoordinate } from '../types';
 import type { ArtworkDetailContext } from '../lib/appNavigation';
 import {
   readArtworkBootstrapCache,
@@ -76,6 +76,19 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
     tag.name.startsWith('#') ? tag.name.toLowerCase() : `#${tag.name.toLowerCase()}`,
   );
 
+  const sessionLinks: SessionLink[] = Array.isArray(item.session_links)
+    ? item.session_links
+        .filter((link: any) => link?.session_id)
+        .map((link: any) => ({
+          id: link.id,
+          sessionId: link.session_id,
+          sessionTitle: link.session_title,
+          sequenceNumber: link.sequence_number,
+          source: link.source,
+          createdAt: link.created_at,
+        }))
+    : [];
+
   return {
     id: item.id,
     artworkId: item.id,
@@ -88,6 +101,7 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
     medium: item.medium,
     timestamp: item.photo_time ? new Date(item.photo_time).getTime() : (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
     visitId: item.session_id,
+    sessionLinks,
     location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
     photoTime: item.photo_time,
     sessionTitle: item.session_title,
@@ -130,6 +144,7 @@ function mapCachedArtworkToGalleryItem(item: ArtworkBootstrapCacheItem): Gallery
     sessionCapturedAt: item.sessionCapturedAt,
     conversation: [],
     visitId: item.visitId,
+    sessionLinks: item.sessionLinks,
     location: item.location,
     photoTime: item.photoTime,
     sessionTitle: item.sessionTitle,
@@ -164,6 +179,7 @@ function mapGalleryItemToCacheItem(item: GalleryItem): ArtworkBootstrapCacheItem
     timestamp: item.timestamp,
     sessionCapturedAt: item.sessionCapturedAt,
     visitId: item.visitId,
+    sessionLinks: item.sessionLinks,
     location: typeof item.location === 'string' ? item.location : undefined,
     photoTime: item.photoTime,
     sessionTitle: item.sessionTitle,

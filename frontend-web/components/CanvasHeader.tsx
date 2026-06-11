@@ -69,9 +69,9 @@ export default function CanvasHeader({
   return (
     <div
       className={`flex min-h-[52px] items-center gap-2.5 border-b border-neutral-200/80 bg-[var(--color-bg-primary)] shrink-0 z-10 sticky top-0 ${
-        isInline ? 'px-5 sm:px-8' : 'px-4'
+        isInline ? 'px-5 sm:px-6' : 'px-4'
       }`}
-      style={{ fontFamily: 'system-ui, sans-serif' }}
+      style={{ fontFamily: 'var(--font-family-sans)' }}
     >
       {leftSlot && (
         <div className="shrink-0">

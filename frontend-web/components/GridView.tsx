@@ -135,15 +135,10 @@ const GridView: React.FC<Props> = ({
               )}
             </div>
           ))}
-          {isAnalyzing && (
-            <div className="aspect-square rounded bg-neutral-50 flex items-center justify-center">
-              <div className="w-5 h-5 border-2 border-neutral-200 border-t-neutral-500 rounded-full animate-spin" />
-            </div>
-          )}
         </div>
         {displayItems.length === 0 && !isAnalyzing && (
           <div className="flex items-center justify-center h-64">
-            <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No pieces yet</p>
+            <p className="text-[12px] text-neutral-300">No artworks yet</p>
           </div>
         )}
       </div>

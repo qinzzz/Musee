@@ -38,6 +38,15 @@ export interface ArtistEntity {
 
 export type ArtworkClassification = 'unsorted' | 'love' | 'respect' | 'not_for_me';
 
+export interface SessionLink {
+  id?: string;
+  sessionId: string;
+  sessionTitle?: string;
+  sequenceNumber?: number;
+  source?: 'library' | 'upload' | 'camera';
+  createdAt?: string;
+}
+
 export interface GalleryItem {
   id: string;
   url: string;
@@ -47,6 +56,7 @@ export interface GalleryItem {
   sessionCapturedAt?: number;
   conversation: Message[];
   visitId?: string;
+  sessionLinks?: SessionLink[];
   // Artwork analysis fields from backend
   artistName?: string;
   artworkName?: string;

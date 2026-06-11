@@ -116,6 +116,19 @@ async def lifespan(app: FastAPI):
                         updated_at TIMESTAMP DEFAULT NOW()
                     )
                 """))
+                _conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS session_artworks (
+                        id VARCHAR PRIMARY KEY,
+                        session_id VARCHAR NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                        artwork_id VARCHAR NOT NULL REFERENCES saved_artworks(id) ON DELETE CASCADE,
+                        sequence_number INTEGER NOT NULL DEFAULT 0,
+                        source VARCHAR(20) NOT NULL DEFAULT 'library',
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        CONSTRAINT uq_session_artwork UNIQUE (session_id, artwork_id)
+                    )
+                """))
+                _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_session_artworks_session_sequence ON session_artworks(session_id, sequence_number)"))
+                _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_session_artworks_artwork_id ON session_artworks(artwork_id)"))
                 _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_user_id ON saved_artworks(user_id)"))
                 _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_device_id ON saved_artworks(device_id)"))
                 _conn.commit()

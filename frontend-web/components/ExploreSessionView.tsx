@@ -32,6 +32,22 @@ type VisitStreamEntry =
       message: VisitStreamMessage;
     };
 
+type GroupedVisitStreamEntry =
+  | {
+      type: 'artwork_group';
+      id: string;
+      createdAt: number;
+      items: GalleryItem[];
+    }
+  | {
+      type: 'message';
+      id: string;
+      createdAt: number;
+      message: VisitStreamMessage;
+    };
+
+type ArtworkEventSource = 'library' | 'upload' | 'camera';
+
 type InterpretationItem = GalleryItem & {
   allVisitItems?: GalleryItem[];
   is_liked?: boolean;
@@ -55,6 +71,15 @@ type ExploreSessionViewProps = {
   userId: string;
   goalGalleryInputRef: React.RefObject<HTMLInputElement | null>;
   goalCameraInputRef: React.RefObject<HTMLInputElement | null>;
+  preparedSessionItems: Array<{
+    id: string;
+    previewUrl: string;
+    label: string;
+    sublabel: string;
+    kind: 'library' | 'upload';
+  }>;
+  preparedSessionMessage: string;
+  isSubmittingPreparedSession: boolean;
   visitStreamScrollRef: React.RefObject<HTMLDivElement | null>;
   visitStreamEndRef: React.RefObject<HTMLDivElement | null>;
   onCloseArtworkDetail: () => void;
@@ -74,6 +99,10 @@ type ExploreSessionViewProps = {
   onSaveSessionTitle: (title: string) => Promise<void>;
   onSessionGoalInputChange: (value: string) => void;
   onSubmitGoal: (goal: string) => void;
+  onPreparedSessionMessageChange: (value: string) => void;
+  onOpenLibraryPicker: () => void;
+  onRemovePreparedSessionItem: (entryId: string) => void;
+  onSubmitPreparedSession: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   onOpenSessionArtwork: (item: GalleryItem) => void;
 };
@@ -123,7 +152,7 @@ const SessionDetailsPanel: React.FC<{
     <div className="rounded-b-[22px] border border-t-0 border-neutral-200 bg-[var(--color-bg-primary)] px-5 py-4 shadow-[0_18px_50px_rgba(0,0,0,0.08)] sm:px-8">
       <div className="max-w-[560px] space-y-4">
         <div>
-          <p className="mb-2 text-[11px] font-medium tracking-[0.18em] uppercase text-neutral-400">Session name</p>
+          <p className="mb-2 text-[11px] font-medium text-neutral-400">Session name</p>
           <input
             value={titleDraft}
             onChange={(event) => setTitleDraft(event.target.value)}
@@ -142,7 +171,7 @@ const SessionDetailsPanel: React.FC<{
           />
         </div>
         <div>
-          <p className="mb-2 text-[11px] font-medium tracking-[0.18em] uppercase text-neutral-400">Session goal</p>
+          <p className="mb-2 text-[11px] font-medium text-neutral-400">Session goal</p>
           <textarea
             value={goalDraft}
             onChange={(event) => setGoalDraft(event.target.value)}
@@ -171,6 +200,33 @@ const InsightPill: React.FC<{ title: string; text: string }> = ({ title, text })
   );
 };
 
+function getArtworkEventSourceForSession(item: GalleryItem, sessionId: string): ArtworkEventSource {
+  const sessionLink = item.sessionLinks?.find((link) => link.sessionId === sessionId);
+  if (sessionLink?.source === 'library' || sessionLink?.source === 'upload' || sessionLink?.source === 'camera') {
+    return sessionLink.source;
+  }
+  return 'camera';
+}
+
+function getArtworkGroupLabel(items: GalleryItem[], sessionId: string): string {
+  const count = items.length;
+  const sources = Array.from(new Set(items.map((item) => getArtworkEventSourceForSession(item, sessionId))));
+
+  if (sources.length === 1) {
+    switch (sources[0]) {
+      case 'library':
+        return count === 1 ? 'Added from collection' : `Added ${count} artworks from collection`;
+      case 'upload':
+        return count === 1 ? 'Uploaded an artwork' : `Uploaded ${count} artworks`;
+      case 'camera':
+      default:
+        return count === 1 ? 'Captured an artwork' : `Captured ${count} artworks`;
+    }
+  }
+
+  return count === 1 ? 'Added an artwork' : `Added ${count} artworks from multiple sources`;
+}
+
 export default function ExploreSessionView({
   activeVisitSummary,
   activeVisitStream,
@@ -189,6 +245,9 @@ export default function ExploreSessionView({
   userId,
   goalGalleryInputRef,
   goalCameraInputRef,
+  preparedSessionItems,
+  preparedSessionMessage,
+  isSubmittingPreparedSession,
   visitStreamScrollRef,
   visitStreamEndRef,
   onCloseArtworkDetail,
@@ -204,10 +263,45 @@ export default function ExploreSessionView({
   onSaveSessionTitle,
   onSessionGoalInputChange,
   onSubmitGoal,
+  onPreparedSessionMessageChange,
+  onOpenLibraryPicker,
+  onRemovePreparedSessionItem,
+  onSubmitPreparedSession,
   onFileUpload,
   onOpenSessionArtwork,
 }: ExploreSessionViewProps) {
   const [sessionDetailsOpen, setSessionDetailsOpen] = React.useState(false);
+
+  const groupedVisitStream = React.useMemo<GroupedVisitStreamEntry[]>(() => {
+    const grouped: GroupedVisitStreamEntry[] = [];
+
+    activeVisitStream.forEach((entry) => {
+      if (entry.type === 'artwork') {
+        const previous = grouped[grouped.length - 1];
+        if (previous?.type === 'artwork_group') {
+          previous.items.push(entry.item);
+          return;
+        }
+
+        grouped.push({
+          type: 'artwork_group',
+          id: `artwork-group-${entry.id}`,
+          createdAt: entry.createdAt,
+          items: [entry.item],
+        });
+        return;
+      }
+
+      grouped.push({
+        type: 'message',
+        id: entry.id,
+        createdAt: entry.createdAt,
+        message: entry.message,
+      });
+    });
+
+    return grouped;
+  }, [activeVisitStream]);
 
   React.useEffect(() => {
     setSessionDetailsOpen(false);
@@ -303,34 +397,82 @@ export default function ExploreSessionView({
                 <p className="text-[15px] text-neutral-400 font-medium font-sans">
                   Photograph an artwork to begin your session.
                 </p>
+                <button
+                  onClick={onOpenLibraryPicker}
+                  className="mt-5 rounded-full border border-neutral-200 bg-white px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
+                >
+                  Add from library
+                </button>
               </div>
             </div>
           ) : (
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-24">
-              <div className="w-full max-w-sm">
+              <div className="w-full max-w-[640px]">
                 <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-neutral-800 font-sans mb-2 text-center">
                   What&apos;s your focus today?
                 </h2>
                 <p className="text-[14px] text-neutral-400 text-center mb-7">
                   Share your goal for this visit or skip and start capturing.
                 </p>
+                {preparedSessionItems.length > 0 && (
+                  <div className="mb-4 rounded-[24px] border border-neutral-200 bg-white p-4 shadow-sm">
+                    <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                      {preparedSessionItems.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="group relative h-[92px] w-[92px] shrink-0 overflow-hidden rounded-[18px] border border-neutral-200 bg-neutral-50"
+                        >
+                          <img src={entry.previewUrl} alt={entry.label} className="h-full w-full object-cover" />
+                          <button
+                            onClick={() => onRemovePreparedSessionItem(entry.id)}
+                            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/80 text-white shadow-sm transition-colors hover:bg-black"
+                            aria-label={`Remove ${entry.label}`}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="relative">
                   <textarea
-                    placeholder="e.g. I want to learn about medieval art, find inspiration for my interior design…"
+                    placeholder={
+                      preparedSessionItems.length > 0
+                        ? 'Add an opening question or note before you start chatting…'
+                        : 'e.g. I want to learn about medieval art, find inspiration for my interior design…'
+                    }
                     className="w-full bg-white rounded-[20px] px-5 py-4 pr-14 text-[14px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none shadow-sm border border-neutral-100 focus:border-neutral-300 transition-colors leading-relaxed"
                     rows={3}
-                    value={sessionGoalInput}
-                    onChange={(event) => onSessionGoalInputChange(event.target.value)}
+                    value={preparedSessionItems.length > 0 ? preparedSessionMessage : sessionGoalInput}
+                    onChange={(event) => {
+                      if (preparedSessionItems.length > 0) {
+                        onPreparedSessionMessageChange(event.target.value);
+                      } else {
+                        onSessionGoalInputChange(event.target.value);
+                      }
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' && !event.shiftKey) {
                         event.preventDefault();
-                        handleSubmitGoal();
+                        if (preparedSessionItems.length > 0) {
+                          onSubmitPreparedSession();
+                        } else {
+                          handleSubmitGoal();
+                        }
                       }
                     }}
                   />
                   <button
-                    onClick={handleSubmitGoal}
-                    disabled={!sessionGoalInput.trim()}
+                    onClick={preparedSessionItems.length > 0 ? onSubmitPreparedSession : handleSubmitGoal}
+                    disabled={
+                      preparedSessionItems.length > 0
+                        ? isSubmittingPreparedSession
+                        : !sessionGoalInput.trim()
+                    }
                     className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-20 transition-opacity"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -355,21 +497,27 @@ export default function ExploreSessionView({
                   className="hidden"
                   onChange={(event) => onFileUpload(event, 'camera')}
                 />
-                <div className="mt-5 flex gap-3">
+                <div className="mt-5 flex flex-wrap justify-center gap-3">
+                  <button
+                    onClick={onOpenLibraryPicker}
+                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
+                  >
+                    Add from library
+                  </button>
                   <button
                     onClick={() => goalGalleryInputRef.current?.click()}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100"
+                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                       <polyline points="17 8 12 3 7 8" />
                       <line x1="12" y1="3" x2="12" y2="15" />
                     </svg>
-                    Capture artwork
+                    Upload artworks
                   </button>
                   <button
                     onClick={() => goalCameraInputRef.current?.click()}
-                    className="flex items-center justify-center gap-2 bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[13px] font-medium"
+                    className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[13px] font-medium"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -443,7 +591,7 @@ export default function ExploreSessionView({
                                 <div className="absolute inset-0 w-7 h-7 border-t-2 border-neutral-700 rounded-full animate-spin" />
                               </div>
                               {!collapsed && (
-                                <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-500">Analyzing</p>
+                                <p className="text-[10px] font-medium text-neutral-500">Analyzing</p>
                               )}
                             </div>
                           )}
@@ -462,83 +610,81 @@ export default function ExploreSessionView({
               style={{ overscrollBehaviorY: 'contain', touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
               <div className="mx-auto w-full max-w-[640px] space-y-3 sm:space-y-4">
-                {activeVisitStream.map((entry) =>
-                  entry.type === 'artwork' ? (
+                {groupedVisitStream.map((entry) =>
+                  entry.type === 'artwork_group' ? (
                     <div key={entry.id} className="space-y-2">
                       <div className="flex justify-end">
-                        <div className="flex items-center gap-2 rounded-[20px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-4 py-2.5 text-neutral-800">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50">
+                        <div className="flex items-center gap-2.5 rounded-[20px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-neutral-800 shadow-sm sm:rounded-[28px] sm:px-6 sm:py-3">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-50">
                             <rect x="3" y="3" width="18" height="18" rx="2" />
                             <circle cx="8.5" cy="8.5" r="1.5" />
                             <polyline points="21 15 16 10 5 21" />
                           </svg>
-                          <span className="text-[13px]">Captured an artwork</span>
+                          <span className="text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
+                            {getArtworkGroupLabel(entry.items, activeVisitSummary.id)}
+                          </span>
                         </div>
                       </div>
                       <div className="flex justify-start">
-                        <button
-                          onClick={() => {
-                            if (entry.item.isDeletedPlaceholder) return;
-                            onOpenSessionArtwork(entry.item);
-                          }}
-                          className={`relative overflow-hidden rounded-[20px] bg-white text-left shadow-sm transition-shadow ${
-                            entry.item.isDeletedPlaceholder ? 'cursor-default' : 'hover:shadow-md'
-                          }`}
-                          style={{ maxWidth: '260px', width: '260px' }}
-                        >
-                          <div className="relative">
-                            {entry.item.isDeletedPlaceholder ? (
-                              <div
-                                className="flex items-center justify-center bg-neutral-100 text-neutral-400"
-                                style={{ height: '160px' }}
+                        <div className="w-full max-w-[640px]">
+                          <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                            {entry.items.map((item) => (
+                              <button
+                                key={item.id}
+                                onClick={() => {
+                                  if (item.isDeletedPlaceholder) return;
+                                  onOpenSessionArtwork(item);
+                                }}
+                                className={`group relative shrink-0 overflow-hidden rounded-[24px] bg-white text-left shadow-sm transition-shadow ${
+                                  item.isDeletedPlaceholder ? 'cursor-default' : 'hover:shadow-md'
+                                }`}
+                                style={{
+                                  width: entry.items.length === 1 ? '200px' : '160px',
+                                }}
                               >
-                                <p className="text-[11px] tracking-[0.28em] uppercase">Deleted artwork</p>
-                              </div>
-                            ) : (
-                              <img
-                                src={entry.item.url}
-                                alt={entry.item.artworkName || 'Artwork'}
-                                className="w-full object-cover"
-                                style={{ height: '160px' }}
-                              />
-                            )}
-                            {entry.item.isAnalyzing && (
-                              <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center gap-2">
-                                <div className="relative">
-                                  <div className="w-6 h-6 border-2 border-neutral-100 rounded-full" />
-                                  <div className="absolute inset-0 w-6 h-6 border-t-2 border-neutral-600 rounded-full animate-spin" />
+                                <div className="relative aspect-square">
+                                  {item.isDeletedPlaceholder ? (
+                                    <div className="flex h-full items-center justify-center bg-neutral-100 text-neutral-400">
+                                      <p className="text-[12px] font-medium">Deleted artwork</p>
+                                    </div>
+                                  ) : (
+                                    <img
+                                      src={item.url}
+                                      alt={item.artworkName || 'Artwork'}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  )}
+                                  {item.isAnalyzing && (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/70">
+                                      <div className="relative">
+                                        <div className="h-6 w-6 rounded-full border-2 border-neutral-100" />
+                                        <div className="absolute inset-0 h-6 w-6 animate-spin rounded-full border-t-2 border-neutral-600" />
+                                      </div>
+                                      <p className="text-[10px] font-medium text-neutral-400">Analyzing</p>
+                                    </div>
+                                  )}
                                 </div>
-                                <p className="text-[9px] tracking-[0.3em] uppercase text-neutral-400">Analyzing</p>
-                              </div>
-                            )}
+                                {!item.isDeletedPlaceholder && (
+                                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent px-3 py-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                    <p className="truncate text-[12px] font-medium text-white">
+                                      {item.isAnalyzing ? 'Analyzing…' : (item.artworkName || 'Untitled')}
+                                    </p>
+                                    {item.artistName && (
+                                      <p className="mt-0.5 truncate text-[10px] text-white/75">{item.artistName}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </button>
+                            ))}
                           </div>
-                          <div className="px-4 py-3">
-                            <p className="text-[13px] font-semibold text-neutral-900 truncate">
-                              {entry.item.isAnalyzing ? 'Analyzing…' : (entry.item.artworkName || 'Untitled')}
-                            </p>
-                            {entry.item.artistName && (
-                              <p className="text-[11px] text-neutral-500 truncate mt-0.5">{entry.item.artistName}</p>
-                            )}
-                            {!entry.item.isAnalyzing && !entry.item.isDeletedPlaceholder && (
-                              <p className="text-[11px] text-neutral-400 mt-2">Tap to explore →</p>
-                            )}
-                          </div>
-                        </button>
-                      </div>
-                      {entry.item.insights && entry.item.insights.length > 0 && (
-                        <div className="space-y-1.5">
-                          <p className="text-[9px] tracking-[0.35em] uppercase text-neutral-400 font-bold px-1">Fun Facts</p>
-                          {entry.item.insights.map((insight, index) => (
-                            <InsightPill key={index} title={insight.title} text={insight.text} />
-                          ))}
                         </div>
-                      )}
+                      </div>
                     </div>
                   ) : (
                     <React.Fragment key={entry.id}>
                       {entry.message.role === 'user' ? (
                         <div className="flex justify-end">
-                          <div className="max-w-[85%] rounded-[20px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3.5 text-neutral-800 shadow-sm sm:rounded-[28px] sm:px-6 sm:py-5">
+                          <div className="max-w-[85%] rounded-[20px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-neutral-800 shadow-sm sm:rounded-[28px] sm:px-6 sm:py-3">
                             <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">{entry.message.text}</p>
                           </div>
                         </div>

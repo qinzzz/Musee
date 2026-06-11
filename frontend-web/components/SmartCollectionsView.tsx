@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { fetchSmartCollections, type SmartCollection, resolveImageUrl } from '../api/artworks';
+import CollectionGridSkeleton from './CollectionGridSkeleton';
 
 const RARITY_STYLE: Record<string, { label: string; classes: string }> = {
   common:    { label: 'Common',    classes: 'bg-neutral-100 text-neutral-500' },
@@ -38,20 +39,18 @@ const SmartCollectionsView: React.FC<Props> = ({ userId, onSelect }) => {
     <div className="h-full overflow-y-auto">
       <div className="px-5 sm:px-8 pt-5 pb-32">
         {loading && (
-          <div className="flex items-center justify-center h-48">
-            <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">Building collections…</p>
-          </div>
+          <CollectionGridSkeleton />
         )}
 
         {error && (
           <div className="flex items-center justify-center h-48">
-            <p className="text-[10px] tracking-[0.3em] uppercase text-red-300">Failed to load</p>
+            <p className="text-[12px] text-red-300">Failed to load</p>
           </div>
         )}
 
         {!loading && !error && collections.length === 0 && (
           <div className="flex flex-col items-center justify-center h-48 gap-2">
-            <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No collections yet</p>
+            <p className="text-[12px] text-neutral-300">No collections yet</p>
             <p className="text-[11px] text-neutral-400">Explore more artworks to unlock movement collections</p>
           </div>
         )}

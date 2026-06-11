@@ -125,7 +125,7 @@ const AlbumView: React.FC<Props> = ({ items, onInterpret, onDelete }) => {
             <div className="flex items-baseline space-x-2 mb-3 pb-2 border-b border-neutral-100">
               <h2 className="font-serif text-base sm:text-lg text-neutral-800">{group.label}</h2>
               <span className="text-[9px] tracking-[0.2em] uppercase text-neutral-400">
-                {group.items.length} {group.items.length === 1 ? 'piece' : 'pieces'}
+                {group.items.length} {group.items.length === 1 ? 'artwork' : 'artworks'}
               </span>
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3.5">
@@ -159,7 +159,7 @@ const AlbumView: React.FC<Props> = ({ items, onInterpret, onDelete }) => {
         ))}
         {groups.length === 0 && (
           <div className="flex items-center justify-center h-64">
-            <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No pieces yet</p>
+            <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-300">No artworks yet</p>
           </div>
         )}
       </div>

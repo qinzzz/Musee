@@ -40,7 +40,7 @@ export default function ArtMovementPage({ collection, items, leftSlot, onClose, 
   return (
     <div
       className={isInline ? "w-full h-full relative z-10 flex flex-col bg-[var(--color-bg-primary)] overflow-hidden" : "fixed inset-0 z-[1200] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"}
-      style={{ fontFamily: 'system-ui, sans-serif' }}
+      style={{ fontFamily: 'var(--font-family-sans)' }}
     >
       {/* Header */}
       <CanvasHeader
@@ -60,7 +60,7 @@ export default function ArtMovementPage({ collection, items, leftSlot, onClose, 
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-neutral-900 text-2xl font-bold tracking-tight">{collection.name}</h1>
               <span
-                className="text-[10px] font-semibold tracking-wider uppercase px-2.5 py-1 rounded-full shrink-0"
+                className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium"
                 style={{ background: `${rarity.color}25`, color: rarity.color }}
               >
                 {rarity.label}
@@ -77,7 +77,7 @@ export default function ArtMovementPage({ collection, items, leftSlot, onClose, 
 
           <div className="border-t border-neutral-200 mb-5" />
 
-          <h2 className="text-neutral-500 text-xs font-semibold tracking-widest uppercase mb-4">
+          <h2 className="mb-4 text-xs font-medium text-neutral-500">
             In your collection
             {collectionItems.length > 0 && (
               <span className="ml-2 text-neutral-400 normal-case font-normal tracking-normal">

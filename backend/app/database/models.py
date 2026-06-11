@@ -83,6 +83,12 @@ class SavedArtwork(Base):
     collections = relationship("Collection", secondary="collection_artworks", back_populates="artworks")
     artwork_tags = relationship("Tag", secondary="artwork_tags", back_populates="artworks")
     session = relationship("Session", back_populates="artworks")
+    session_links = relationship(
+        "SessionArtwork",
+        back_populates="artwork",
+        cascade="all, delete-orphan",
+        order_by="SessionArtwork.sequence_number",
+    )
 
     def to_dict(self, include_conversations=False):
         """Convert model to dictionary. include_conversations param retained for call-site compatibility but no longer used."""
@@ -104,6 +110,7 @@ class SavedArtwork(Base):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "session_id": self.session_id,
             "session_title": self.session.title if self.session else None,
+            "session_links": [link.to_dict() for link in self.session_links] if hasattr(self, 'session_links') else [],
             "artwork_tags": [tag.to_dict() for tag in self.artwork_tags] if hasattr(self, 'artwork_tags') else [],
             "date": self.params.get('date') if self.params and isinstance(self.params, dict) else None,
             "medium": self.params.get('medium') if self.params and isinstance(self.params, dict) else None,
@@ -258,6 +265,12 @@ class Session(Base):
     # Relationships
     user = relationship("User", back_populates="sessions")
     artworks = relationship("SavedArtwork", back_populates="session")
+    artwork_links = relationship(
+        "SessionArtwork",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="SessionArtwork.sequence_number",
+    )
     messages = relationship("SessionMessage", back_populates="session", cascade="all, delete-orphan", order_by="SessionMessage.sequence_number")
 
     def to_dict(self, include_artworks=False):
@@ -272,8 +285,43 @@ class Session(Base):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
         if include_artworks:
-            result["artworks"] = [artwork.to_dict(include_conversations=False) for artwork in self.artworks]
+            if self.artwork_links:
+                result["artworks"] = [link.artwork.to_dict(include_conversations=False) for link in self.artwork_links if link.artwork]
+            else:
+                result["artworks"] = [artwork.to_dict(include_conversations=False) for artwork in self.artworks]
         return result
+
+
+class SessionArtwork(Base):
+    """Many-to-many session membership for saved artworks."""
+
+    __tablename__ = "session_artworks"
+    __table_args__ = (
+        UniqueConstraint("session_id", "artwork_id", name="uq_session_artwork"),
+        Index("idx_session_artworks_session_sequence", "session_id", "sequence_number"),
+        Index("idx_session_artworks_artwork_id", "artwork_id"),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    artwork_id = Column(String, ForeignKey("saved_artworks.id", ondelete="CASCADE"), nullable=False)
+    sequence_number = Column(Integer, nullable=False, default=0)
+    source = Column(String(20), nullable=False, default="library")
+    created_at = Column(DateTime, server_default=func.now())
+
+    session = relationship("Session", back_populates="artwork_links")
+    artwork = relationship("SavedArtwork", back_populates="session_links")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "session_title": self.session.title if self.session else None,
+            "artwork_id": self.artwork_id,
+            "sequence_number": self.sequence_number,
+            "source": self.source,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 class SessionMessage(Base):

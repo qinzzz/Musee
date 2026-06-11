@@ -47,7 +47,7 @@ export default function LearningHubPage({ onClose, initialGuide, inline, leftSlo
   return (
     <div
       className={inline ? "relative w-full h-full bg-[var(--color-bg-primary)] flex flex-col overflow-hidden animate-in fade-in duration-300" : "fixed inset-0 z-[1100] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"}
-      style={{ fontFamily: 'system-ui, sans-serif' }}
+      style={{ fontFamily: 'var(--font-family-sans)' }}
     >
       {selectedGuide ? (
         <CanvasHeader
@@ -77,7 +77,7 @@ export default function LearningHubPage({ onClose, initialGuide, inline, leftSlo
           /* Index — list of guides */
           <div className="h-full overflow-y-auto">
             <div className="max-w-2xl mx-auto px-5 sm:px-8 py-8">
-              <p className="text-[11px] tracking-[0.2em] uppercase text-neutral-400 font-bold mb-6">
+              <p className="mb-6 text-[11px] font-medium text-neutral-400">
                 Guides
               </p>
               <div className="flex flex-col gap-3">
@@ -98,7 +98,7 @@ export default function LearningHubPage({ onClose, initialGuide, inline, leftSlo
                       <div className="flex items-center gap-2 mb-0.5">
                         <p className="text-[14px] font-semibold text-neutral-900 leading-tight">{g.title}</p>
                         {g.badge && (
-                          <span className="text-[9px] tracking-[0.15em] uppercase font-semibold px-2 py-0.5 rounded-full bg-[#f1ece1] border border-neutral-200/40 text-neutral-600">
+                          <span className="rounded-full border border-neutral-200/40 bg-[#f1ece1] px-2 py-0.5 text-[10px] font-medium text-neutral-600">
                             {g.badge}
                           </span>
                         )}
