@@ -5,13 +5,11 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
 import GoogleLogin from './components/GoogleLogin';
 import {
-  analyzeArtworkStream,
-  analyzeArtwork,
   analyzeArtworkFromExisting,
+  saveArtworkUpload,
   base64ToFile,
   prefetchExploreDataWithContext,
   type ArtworkAnalysisResult,
-  type StreamingMetrics,
 } from './api/analysis';
 import { getCurrentUser, getOrCreateUserId, getUserQuota, logout, type UserQuota } from './api/auth';
 import { visitChatStream } from './api/chat';
@@ -74,41 +72,23 @@ const ArtistPage = lazy(() => import('./components/ArtistPage'));
 const ArtMovementPage = lazy(() => import('./components/ArtMovementPage'));
 const LearningHubPage = lazy(() => import('./components/LearningHubPage'));
 
-// Helper to report metrics (can integrate with @vercel/speed-insights or custom analytics)
-const reportStreamingMetrics = (metrics: StreamingMetrics) => {
-  console.log('=== Streaming Analysis Metrics ===');
-  console.log(`Request ID: ${metrics.request_id}`);
-  console.log(`Model: ${metrics.model}`);
-  console.log(`Image Processing: ${metrics.timings.image_processing_ms}ms`);
-  console.log(`Time to AI Call: ${metrics.timings.time_to_ai_call_ms}ms`);
-  console.log(`Time to First Chunk: ${metrics.timings.time_to_first_chunk_ms}ms`);
-  console.log(`AI First Chunk Latency: ${metrics.timings.ai_first_chunk_latency_ms}ms`);
-  console.log(`Streaming Duration: ${metrics.timings.streaming_duration_ms}ms`);
-  console.log(`Total Duration: ${metrics.timings.total_duration_ms}ms`);
-  console.log('==================================');
-
-  // If @vercel/speed-insights is installed, report custom metrics:
-  // import { track } from '@vercel/speed-insights';
-  // track('artwork-analysis', {
-  //   ttfc: metrics.timings.time_to_first_chunk_ms,
-  //   total: metrics.timings.total_duration_ms,
-  //   model: metrics.model
-  // });
-
-  // Or send to Google Analytics if available
-  if (typeof window !== 'undefined' && (window as any).gtag) {
-    (window as any).gtag('event', 'artwork_analysis_timing', {
-      event_category: 'performance',
-      time_to_first_chunk: metrics.timings.time_to_first_chunk_ms,
-      total_duration: metrics.timings.total_duration_ms,
-      model: metrics.model
-    });
-  }
-};
-
 const ScreenLoader: React.FC<{ label?: string }> = ({ label = 'Loading' }) => (
   <div className="flex h-full w-full items-center justify-center bg-[var(--color-bg-primary)]">
     <p className="text-[12px] text-neutral-300">{label}…</p>
+  </div>
+);
+
+const SessionListSkeleton: React.FC<{ compact?: boolean }> = ({ compact = false }) => (
+  <div className={`space-y-2 ${compact ? 'px-1 pb-1' : ''}`}>
+    {Array.from({ length: compact ? 4 : 6 }).map((_, index) => (
+      <div
+        key={index}
+        className={`animate-pulse rounded-[22px] border border-neutral-200/70 bg-white/70 ${compact ? 'px-3 py-3' : 'px-4 py-3'}`}
+      >
+        <div className="h-4 w-32 rounded-full bg-neutral-200/80" />
+        <div className="mt-2 h-3 w-20 rounded-full bg-neutral-100" />
+      </div>
+    ))}
   </div>
 );
 
@@ -140,7 +120,7 @@ type ToastAction = {
   onClick: () => void;
 };
 
-type AppTab = 'explore' | 'collect' | 'profile' | 'learn';
+type AppTab = 'newSession' | 'collect' | 'profile' | 'learn';
 
 const downscaleImage = (dataUrl: string, maxWidth = 1600): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -394,6 +374,21 @@ const updateSessionLinkForItem = (
   };
 };
 
+const buildSessionLink = (
+  sessionId: string | undefined,
+  sessionTitle: string | undefined,
+  sequenceNumber: number | undefined,
+  source: SessionLink['source'],
+): SessionLink[] | undefined => {
+  if (!sessionId) return undefined;
+  return [{
+    sessionId,
+    sessionTitle,
+    sequenceNumber,
+    source,
+  }];
+};
+
 const App: React.FC = () => {
   const initialNavigationState = getInitialNavigationState(window.location.pathname);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -405,7 +400,7 @@ const App: React.FC = () => {
   const inFlightUploadKeysRef = useRef<Set<string>>(new Set());
   const [isUnsortedFlowOpen, setIsUnsortedFlowOpen] = useState(false);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
-  const [activeTab, setActiveTab] = useState<'explore' | 'collect' | 'profile' | 'learn'>(initialNavigationState.activeTab);
+  const [activeTab, setActiveTab] = useState<'newSession' | 'collect' | 'profile' | 'learn'>(initialNavigationState.activeTab);
   const [learningInitialGuide] = useState<string | null>(initialNavigationState.learningInitialGuide);
   const [collectTab, setCollectTab] = useState<CollectTab>(initialNavigationState.collectTab);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -692,6 +687,7 @@ const App: React.FC = () => {
     artworksLoaded,
     deleteConfirmation,
     defaultVisitTitle: DEFAULT_VISIT_TITLE,
+    initialIsComposingNewSession: initialNavigationState.activeTab === 'newSession',
     visitDraftsStorageKey: VISIT_DRAFTS_STORAGE_KEY,
     visitStreamsStorageKey: VISIT_STREAMS_STORAGE_KEY,
     sessionGoalsStorageKey: 'musee_session_goals',
@@ -811,9 +807,6 @@ const App: React.FC = () => {
 
   const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'community'>('metadata');
   const [artworkHeaderEditToken, setArtworkHeaderEditToken] = useState(0);
-  const [interpretingMode, setInterpretingMode] = useState<'professional' | 'interactive'>(
-    () => (localStorage.getItem('musee_analysis_mode') as 'professional' | 'interactive') ?? 'professional'
-  );
 
   const [visit, setVisit] = useState<Visit>({
     id: 'initial-' + Math.random().toString(36).substring(7),
@@ -913,7 +906,7 @@ const App: React.FC = () => {
   }, [corridorEntries, thumbEntries, activeThumbIndex]);
 
   useEffect(() => {
-    if (activeTab !== 'explore' || interpretingItem || !visitStreamEndRef.current || !activeVisitSummary) return;
+    if (activeTab !== 'newSession' || interpretingItem || !visitStreamEndRef.current || !activeVisitSummary) return;
 
     requestAnimationFrame(() => {
       visitStreamEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -1131,7 +1124,7 @@ const App: React.FC = () => {
 
   const triggerUploadCommentary = (
     visitId: string,
-    newArtworks: { artistName?: string; artworkName?: string; description?: string; keywords?: string[] }[],
+    newArtworks: Array<Partial<Pick<GalleryItem, 'artistName' | 'artworkName' | 'description' | 'keywords' | 'date' | 'medium' | 'isAnalyzing'>>>,
     sessionItems: GalleryItem[],
     conversationHistory: VisitStreamMessage[],
   ) => {
@@ -1302,32 +1295,6 @@ const App: React.FC = () => {
 
       const libraryStreamMessages: VisitStreamMessage[] = [];
       let streamCursor = now;
-      const placeholdersForUploads: GalleryItem[] = uploadEntries.map((entry) => {
-        const placeholderId = `pending-${entry.id}`;
-        const placeholder: GalleryItem = {
-          id: placeholderId,
-          url: entry.previewUrl,
-          keywords: [],
-          vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
-          timestamp: entry.timestamp,
-          sessionCapturedAt: streamCursor++,
-          conversation: [],
-          visitId: sessionId,
-          sessionTitle,
-          sessionLinks: [{
-            sessionId,
-            sessionTitle,
-            sequenceNumber: pendingSessionArtworks.findIndex((candidate) => candidate.id === entry.id),
-            source: entry.mode === 'camera' ? 'camera' : 'upload',
-          }],
-          isAnalyzing: true,
-          syncStatus: 'pending',
-          photoTime: entry.photoTime,
-          location: entry.location,
-        };
-        return placeholder;
-      });
-
       setItems(prev => {
         const next = prev.map((item) => {
           const matchingEntry = libraryEntries.find((entry) => entry.artwork.id === item.id);
@@ -1340,7 +1307,7 @@ const App: React.FC = () => {
             source: 'library',
           }));
         });
-        return [...placeholdersForUploads, ...next];
+        return next;
       });
 
       libraryEntries.forEach((entry) => {
@@ -1355,7 +1322,7 @@ const App: React.FC = () => {
         appendVisitMessages(sessionId, libraryStreamMessages);
       }
 
-      setActiveTab('explore');
+      setActiveTab('newSession');
       setFilteredVisitId(sessionId);
       setIsComposingNewSession(false);
       setVisit({ id: sessionId, itemIds: [], globalConversation: [] });
@@ -1373,61 +1340,75 @@ const App: React.FC = () => {
       );
 
       for (const uploadEntry of uploadEntries) {
-        const placeholderId = `pending-${uploadEntry.id}`;
+        let persistedItemId: string | null = null;
+        let placeholderId: string | null = null;
         try {
-          const analysis = await analyzeArtwork(
-            uploadEntry.file,
-            USER_ID,
-            undefined,
+          const sequenceNumber = pendingSessionArtworks.findIndex((entry) => entry.id === uploadEntry.id);
+          const placeholder = createLocalUploadPlaceholder({
+            previewUrl: uploadEntry.previewUrl,
+            mode: uploadEntry.mode,
+            timestamp: uploadEntry.timestamp,
+            photoTime: uploadEntry.photoTime,
+            location: uploadEntry.location,
             sessionId,
-            uploadEntry.location,
-            uploadEntry.photoTime,
-            uploadEntry.coords?.latitude,
-            uploadEntry.coords?.longitude,
-          );
-          const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
-          const updates: Partial<GalleryItem> = {
-            id: analysis.artwork_id || placeholderId,
-            artworkId: analysis.artwork_id,
-            url: analysis.photo_uri || uploadEntry.previewUrl,
+            sessionTitle,
+            sequenceNumber,
+          });
+          placeholderId = placeholder.id;
+          setItems(prev => [placeholder, ...prev]);
+          setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, placeholder.id] }));
+          resolvedSessionItems.push(placeholder);
+
+          const persistedItem = await persistRawArtwork({
+            file: uploadEntry.file,
+            previewUrl: uploadEntry.previewUrl,
+            mode: uploadEntry.mode,
+            timestamp: uploadEntry.timestamp,
+            photoTime: uploadEntry.photoTime,
+            coords: uploadEntry.coords,
+            location: uploadEntry.location,
+            sessionId,
+            sessionTitle,
+            sequenceNumber,
+          });
+          persistedItemId = persistedItem.id;
+          const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
+          resolvedSessionItems[resolvedSessionItems.length - 1] = liveItem;
+          appendVisitMessages(sessionId, [
+            { id: `capture-${placeholder.id}`, role: 'user', text: '', type: 'artwork_capture', artworkId: persistedItem.artworkId!, createdAt: Date.now() },
+            { id: `card-${placeholder.id}`, role: 'model', text: '', type: 'artwork_card', artworkId: persistedItem.artworkId!, createdAt: Date.now() + 1 },
+          ]);
+
+          const analysis = await analyzeArtworkFromExisting(persistedItem.artworkId!);
+          applyArtworkAnalysisResult(persistedItem.id, analysis, {
+            sessionTitle,
+            visitId: sessionId,
+            sessionLinks: buildSessionLink(
+              sessionId,
+              analysis.session_title || sessionTitle,
+              sequenceNumber,
+              uploadEntry.mode === 'camera' ? 'camera' : 'upload',
+            ),
+          });
+          resolvedSessionItems[resolvedSessionItems.length - 1] = {
+            ...liveItem,
             artistName: analysis.artist_name,
             artworkName: analysis.artwork_name,
             description: parseAnalysis(analysis.description),
             date: analysis.date,
             medium: analysis.medium,
-            keywords,
+            keywords: analysis.tags,
             isAnalyzing: false,
-            syncStatus: 'synced',
-            sessionTitle,
-            visitId: sessionId,
-            sessionLinks: [{
-              sessionId,
-              sessionTitle,
-              sequenceNumber: pendingSessionArtworks.findIndex((entry) => entry.id === uploadEntry.id),
-              source: uploadEntry.mode === 'camera' ? 'camera' : 'upload',
-            }],
-            photoTime: analysis.photo_time || uploadEntry.photoTime,
-            location: analysis.location && typeof analysis.location === 'object'
-              ? JSON.stringify(analysis.location)
-              : analysis.location || uploadEntry.location,
-            referenceUrls: analysis.reference_urls || [],
-            artistEntityId: analysis.artist_entity_id || undefined,
+            analysisStatus: 'analyzed',
           };
-
-          setItems(prev => prev.map((item) => item.id === placeholderId ? { ...item, ...updates } : item));
-          resolvedSessionItems.push({
-            ...(placeholdersForUploads.find((item) => item.id === placeholderId) as GalleryItem),
-            ...updates,
-          } as GalleryItem);
-          if (analysis.artwork_id) {
-            appendVisitMessages(sessionId, [
-              { id: `capture-${placeholderId}`, role: 'user', text: '', type: 'artwork_capture', artworkId: analysis.artwork_id, createdAt: Date.now() },
-              { id: `card-${placeholderId}`, role: 'model', text: '', type: 'artwork_card', artworkId: analysis.artwork_id, createdAt: Date.now() + 1 },
-            ]);
-          }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Analysis failed.';
-          setItems(prev => prev.map((item) => item.id === placeholderId ? { ...item, isAnalyzing: false, streamingText: message, syncStatus: 'failed' } : item));
+          console.error('Failed to save/analyze staged upload:', error);
+          if (placeholderId && persistedItemId) {
+            markArtworkAnalysisFailed(persistedItemId, message);
+          } else if (placeholderId) {
+            removeUploadPlaceholder(placeholderId);
+          }
         }
       }
 
@@ -1476,7 +1457,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!scrollRef.current || activeTab !== 'explore') return;
+    if (!scrollRef.current || activeTab !== 'newSession') return;
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
     const maxScroll = scrollWidth - clientWidth;
     const edgeThreshold = 6;
@@ -1651,6 +1632,202 @@ const App: React.FC = () => {
     });
   };
 
+  const updateSavedArtworkInState = React.useCallback((
+    targetId: string,
+    updates: Partial<GalleryItem>,
+  ) => {
+    setItems((prev) => prev.map((item) => {
+      if (item.id !== targetId && item.artworkId !== targetId) return item;
+      return { ...item, ...updates };
+    }));
+    setInterpretingItem((prev) => {
+      if (!prev || (prev.id !== targetId && prev.artworkId !== targetId)) return prev;
+      return { ...prev, ...updates };
+    });
+  }, [setItems, setInterpretingItem]);
+
+  const markArtworkAnalysisFailed = React.useCallback((
+    itemId: string,
+    message: string,
+  ) => {
+    updateSavedArtworkInState(itemId, {
+      isAnalyzing: false,
+      analysisStatus: 'failed',
+      analysisError: message,
+      streamingText: message,
+      syncStatus: 'synced',
+    });
+  }, [updateSavedArtworkInState]);
+
+  const applyArtworkAnalysisResult = React.useCallback((
+    itemId: string,
+    analysis: ArtworkAnalysisResult,
+    extras?: Partial<GalleryItem>,
+  ) => {
+    const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
+    setTagPositions(prev => {
+      const updated = { ...prev };
+      keywords.forEach((tag: string) => {
+        if (!updated[tag]) updated[tag] = { x: (Math.random() * 2 - 1), y: (Math.random() * 2 - 1) };
+      });
+      return updated;
+    });
+
+    updateSavedArtworkInState(itemId, {
+      keywords,
+      artistName: analysis.artist_name,
+      artworkName: analysis.artwork_name,
+      description: parseAnalysis(analysis.description),
+      date: analysis.date,
+      medium: analysis.medium,
+      artworkId: analysis.artwork_id,
+      isAnalyzing: false,
+      analysisStatus: 'analyzed',
+      analysisError: undefined,
+      streamingText: undefined,
+      syncStatus: 'synced',
+      location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
+      photoTime: analysis.photo_time,
+      referenceUrls: analysis.reference_urls || [],
+      artistEntityId: analysis.artist_entity_id || undefined,
+      ...extras,
+    });
+  }, [setTagPositions, updateSavedArtworkInState]);
+
+  const createLocalUploadPlaceholder = React.useCallback((options: {
+    previewUrl: string;
+    timestamp: number;
+    photoTime: string;
+    location?: string;
+    sessionId?: string;
+    sessionTitle?: string;
+    sequenceNumber?: number;
+    mode: 'gallery' | 'camera';
+  }): GalleryItem => {
+    const source: SessionLink['source'] = options.mode === 'camera' ? 'camera' : 'upload';
+    return {
+      id: `upload-placeholder-${Math.random().toString(36).slice(2, 11)}`,
+      url: options.previewUrl,
+      keywords: [],
+      vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
+      timestamp: options.timestamp,
+      sessionCapturedAt: Date.now(),
+      conversation: [],
+      visitId: options.sessionId,
+      sessionTitle: options.sessionTitle,
+      sessionLinks: buildSessionLink(
+        options.sessionId,
+        options.sessionTitle,
+        options.sequenceNumber,
+        source,
+      ),
+      isAnalyzing: true,
+      analysisStatus: 'pending',
+      analysisError: undefined,
+      syncStatus: 'pending',
+      location: options.location,
+      photoTime: options.photoTime,
+      artistName: 'Unknown Artist',
+      artworkName: 'Untitled',
+    };
+  }, []);
+
+  const reconcilePlaceholderWithSavedArtwork = React.useCallback((
+    placeholder: GalleryItem,
+    persistedItem: GalleryItem,
+  ): GalleryItem => {
+    const reconciled: GalleryItem = {
+      ...placeholder,
+      id: persistedItem.id,
+      artworkId: persistedItem.artworkId,
+      visitId: persistedItem.visitId,
+      sessionTitle: persistedItem.sessionTitle,
+      sessionLinks: persistedItem.sessionLinks,
+      location: persistedItem.location,
+      photoTime: persistedItem.photoTime,
+      artistName: persistedItem.artistName,
+      artworkName: persistedItem.artworkName,
+      analysisStatus: persistedItem.analysisStatus,
+      analysisError: undefined,
+      syncStatus: 'synced',
+      isAnalyzing: true,
+    };
+    setItems((prev) => prev.map((item) => (
+      item.id === placeholder.id
+        ? reconciled
+        : item
+    )));
+    setVisit((prev) => ({
+      ...prev,
+      itemIds: prev.itemIds.map((id) => (id === placeholder.id ? persistedItem.id : id)),
+    }));
+    setInterpretingItem((prev) => (
+      prev?.id === placeholder.id
+        ? reconciled
+        : prev
+    ));
+    return reconciled;
+  }, [setItems, setVisit, setInterpretingItem]);
+
+  const removeUploadPlaceholder = React.useCallback((placeholderId: string) => {
+    setItems((prev) => prev.filter((item) => item.id !== placeholderId));
+    setVisit((prev) => ({ ...prev, itemIds: prev.itemIds.filter((id) => id !== placeholderId) }));
+    setInterpretingItem((prev) => (prev?.id === placeholderId ? null : prev));
+  }, [setItems, setVisit, setInterpretingItem]);
+
+  const persistRawArtwork = React.useCallback(async (options: {
+    file: File;
+    previewUrl: string;
+    mode: 'gallery' | 'camera';
+    timestamp: number;
+    photoTime: string;
+    coords?: { latitude?: number; longitude?: number };
+    location?: string;
+    sessionId?: string;
+    sessionTitle?: string;
+    sequenceNumber?: number;
+  }): Promise<GalleryItem> => {
+    const source: SessionLink['source'] = options.mode === 'camera' ? 'camera' : 'upload';
+    const saved = await saveArtworkUpload(
+      options.file,
+      USER_ID,
+      options.sessionId,
+      options.location,
+      options.photoTime,
+      options.coords?.latitude,
+      options.coords?.longitude,
+      source,
+      options.sequenceNumber,
+    );
+
+    return {
+      id: saved.id,
+      artworkId: saved.id,
+      url: options.previewUrl,
+      keywords: [],
+      vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
+      timestamp: options.timestamp,
+      sessionCapturedAt: Date.now(),
+      conversation: [],
+      visitId: options.sessionId,
+      sessionTitle: saved.session_title || options.sessionTitle,
+      sessionLinks: buildSessionLink(
+        options.sessionId,
+        saved.session_title || options.sessionTitle,
+        options.sequenceNumber,
+        source,
+      ),
+      isAnalyzing: true,
+      analysisStatus: 'pending',
+      analysisError: undefined,
+      syncStatus: 'synced',
+      location: saved.location && typeof saved.location === 'object' ? JSON.stringify(saved.location) : saved.location || options.location,
+      photoTime: saved.photo_time || options.photoTime,
+      artistName: saved.artist_name || 'Unknown Artist',
+      artworkName: saved.artwork_name || 'Untitled',
+    };
+  }, []);
+
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
     mode: 'gallery' | 'camera' = 'camera'
@@ -1658,7 +1835,7 @@ const App: React.FC = () => {
     const target = event.target as HTMLInputElement;
     const files = Array.from(target.files || []);
     if (files.length === 0) return;
-    const isNewSessionCompose = activeTab === 'explore' && isComposingNewSession;
+    const isNewSessionCompose = activeTab === 'newSession' && isComposingNewSession;
     const shouldStageUpload =
       isNewSessionCompose &&
       (
@@ -1721,6 +1898,8 @@ const App: React.FC = () => {
       return;
     }
     const isLibraryOnlyUpload = activeTab === 'collect';
+    const collectionUploadSuccessMessage =
+      files.length === 1 ? 'Added an artwork to collection' : `Added ${files.length} artworks to collection`;
     const uploadKey = buildUploadRequestKey(files, mode);
 
     if (inFlightUploadKeysRef.current.has(uploadKey)) {
@@ -1748,6 +1927,7 @@ const App: React.FC = () => {
         const photoTime = new Date(photoTimestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
         setIsAnalyzing(true);
+        let placeholder: GalleryItem | null = null;
 
         try {
           const base64 = await new Promise<string>((resolve, reject) => {
@@ -1772,145 +1952,118 @@ const App: React.FC = () => {
             setVisitDrafts(prev => [newVisit, ...prev.filter(v => v.id !== visitId)]);
           }
 
-          const newItemId = Math.random().toString(36).substring(2, 11);
-          const capturedAt = Date.now();
-          const placeholderItem: GalleryItem = {
-            id: newItemId,
-            url: base64,
-            keywords: [],
-            vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
+          placeholder = createLocalUploadPlaceholder({
+            previewUrl: base64,
+            mode,
             timestamp: photoTimestamp,
-            sessionCapturedAt: capturedAt,
-            conversation: [],
-            visitId,
-            sessionLinks: visitId
-              ? [{
-                  sessionId: visitId,
-                  sessionTitle: DEFAULT_VISIT_TITLE,
-                  sequenceNumber: 0,
-                  source: mode === 'camera' ? 'camera' : 'upload',
-                }]
-              : undefined,
-            isAnalyzing: true,
-            syncStatus: 'pending',
-            streamingText: '',
-            location: coords ? JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city: '', country: '', museum: '' }) : undefined,
             photoTime,
-          };
+            location: coords.latitude !== undefined
+              ? JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city: '', country: '', museum: '' })
+              : undefined,
+            sessionId: visitId,
+            sessionTitle: DEFAULT_VISIT_TITLE,
+            sequenceNumber: 0,
+          });
 
-          setItems(prev => [placeholderItem, ...prev]);
+          setItems(prev => [placeholder, ...prev]);
           if (visitId) {
-            setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, newItemId] }));
+            setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, placeholder.id] }));
+          }
+
+          const persistedItem = await persistRawArtwork({
+            file,
+            previewUrl: base64,
+            mode,
+            timestamp: photoTimestamp,
+            photoTime,
+            coords,
+            location: coords.latitude !== undefined
+              ? JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city: '', country: '', museum: '' })
+              : undefined,
+            sessionId: visitId,
+            sessionTitle: DEFAULT_VISIT_TITLE,
+            sequenceNumber: 0,
+          });
+          const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
+          if (visitId) {
+            const now = Date.now();
+            appendVisitMessages(visitId, [
+              { id: `capture-${placeholder.id}`, role: 'user', text: '', type: 'artwork_capture', artworkId: persistedItem.artworkId!, createdAt: now },
+              { id: `card-${placeholder.id}`, role: 'model', text: '', type: 'artwork_card', artworkId: persistedItem.artworkId!, createdAt: now + 1 },
+            ]);
+          }
+
+          if (isLibraryOnlyUpload) {
+            showToast(collectionUploadSuccessMessage, 'success');
           }
 
           if (coords.latitude !== undefined && coords.longitude !== undefined) {
             resolveMuseum(coords.latitude, coords.longitude)
               .then(({ city, country, museum }) => {
                 const resolved = JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude, city, country, museum });
-                setItems(prev => prev.map(item => item.id === newItemId ? { ...item, location: resolved } : item));
+                updateSavedArtworkInState(persistedItem.id, { location: resolved });
               })
               .catch(() => {});
           }
 
-          const exploreContextFired = { current: false };
-          const safeFile = base64ToFile(base64, file.name);
-
-          await analyzeArtworkStream(
-            safeFile, USER_ID,
-            (chunk) => setInterpretingItem(prev => {
-              if (!prev || prev.id !== newItemId) return prev;
-              const newText = (prev.streamingText || '') + chunk;
-              if (!exploreContextFired.current) {
-                const jsonStart = newText.indexOf('{');
-                if (jsonStart !== -1) {
-                  const json = newText.substring(jsonStart);
-                  const artistMatch = json.match(/"artist"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-                  const titleMatch = json.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-                  if (artistMatch) {
-                    exploreContextFired.current = true;
-                    prefetchExploreDataWithContext(base64, artistMatch[1], titleMatch?.[1]);
-                  }
-                }
+          const analysis = await analyzeArtworkFromExisting(persistedItem.artworkId!, {});
+          applyArtworkAnalysisResult(persistedItem.id, analysis, {
+            sessionLinks: buildSessionLink(
+              visitId,
+              analysis.session_title || liveItem.sessionTitle || DEFAULT_VISIT_TITLE,
+              0,
+              mode === 'camera' ? 'camera' : 'upload',
+            ),
+            sessionTitle: analysis.session_title || liveItem.sessionTitle,
+          });
+          if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+            prefetchExploreDataWithContext(base64, analysis.artist_name, analysis.artwork_name);
+          }
+          if (analysis.artwork_id && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+            fetchAndPersistInsights(analysis.artwork_id).then(insights => {
+              if (insights.length > 0) {
+                updateSavedArtworkInState(persistedItem.id, { insights });
               }
-              return { ...prev, streamingText: newText };
-            }),
-            (analysis) => {
-              const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
-              setTagPositions(prev => {
-                const updated = { ...prev };
-                keywords.forEach((tag: string) => {
-                  if (!updated[tag]) updated[tag] = { x: (Math.random() * 2 - 1), y: (Math.random() * 2 - 1) };
-                });
-                return updated;
-              });
-              const updates = {
-                keywords,
-                artistName: analysis.artist_name,
-                artworkName: analysis.artwork_name,
-                description: parseAnalysis(analysis.description),
-                date: analysis.date,
-                medium: analysis.medium,
-                artworkId: analysis.artwork_id,
-                isAnalyzing: false,
-                streamingText: undefined,
-                location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
-                photoTime: analysis.photo_time,
-                referenceUrls: analysis.reference_urls || [],
-                artistEntityId: analysis.artist_entity_id || undefined,
-                sessionLinks: visitId && analysis.artwork_id
-                  ? [{
-                      sessionId: visitId,
-                      sessionTitle: analysis.session_title || DEFAULT_VISIT_TITLE,
-                      sequenceNumber: 0,
-                      source: mode === 'camera' ? 'camera' : 'upload',
-                    }]
-                  : undefined,
-              };
-              setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
-              setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, ...updates } : prev);
-              setIsAnalyzing(false);
-              if (visitId && analysis.artwork_id) {
-                const now = Date.now();
-                appendVisitMessages(visitId, [
-                  { id: `capture-${newItemId}`, role: 'user', text: '', type: 'artwork_capture', artworkId: analysis.artwork_id, createdAt: now },
-                  { id: `card-${newItemId}`, role: 'model', text: '', type: 'artwork_card', artworkId: analysis.artwork_id, createdAt: now + 1 },
-                ]);
-              }
-              if (analysis.artwork_id && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-                fetchAndPersistInsights(analysis.artwork_id).then(insights => {
-                  if (insights.length > 0) {
-                    setItems(prev => prev.map(i => i.id === newItemId ? { ...i, insights } : i));
-                    setInterpretingItem(prev => (prev?.id === newItemId) ? { ...prev, insights } : prev);
-                  }
-                }).catch(() => {});
-              }
-              if (visitId && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-                const sessionItems = items.filter(i => itemBelongsToSession(i, visitId));
-                const history = visitStreams[visitId] || [];
-                triggerUploadCommentary(visitId, [updates], sessionItems, history);
-              }
-            },
-            (error) => {
-              const msg = error?.message || 'Analysis failed.';
-              if (msg.includes('402') || msg.includes('quota_exceeded')) {
-                setItems(prev => prev.filter(item => item.id !== newItemId));
-                setInterpretingItem(prev => (prev?.id === newItemId) ? null : prev);
-                showToast("You've reached your artwork limit. Upgrade to save more.", 'info');
-              } else {
-                setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, streamingText: msg, syncStatus: 'failed' } : item));
-                setInterpretingItem(prev => (prev && prev.id === newItemId) ? { ...prev, isAnalyzing: false, streamingText: msg, syncStatus: 'failed' } : prev);
-              }
-              setIsAnalyzing(false);
-            },
-            visitId, undefined, undefined, photoTime, coords?.latitude, coords?.longitude
-          );
+            }).catch(() => {});
+          }
+          if (visitId && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+            const sessionItems = items
+              .map((entry) => (
+                entry.id === placeholder.id || entry.id === persistedItem.id
+                  ? { ...entry, ...liveItem }
+                  : entry
+              ))
+              .filter(i => itemBelongsToSession(i, visitId));
+            const history = visitStreams[visitId] || [];
+            triggerUploadCommentary(visitId, [{
+              ...liveItem,
+              artistName: analysis.artist_name,
+              artworkName: analysis.artwork_name,
+              description: parseAnalysis(analysis.description),
+              date: analysis.date,
+              medium: analysis.medium,
+              keywords: analysis.tags,
+              isAnalyzing: false,
+            }], sessionItems, history);
+          }
+          setIsAnalyzing(false);
         } catch (error) {
           console.error('Upload failed:', error);
+          if (placeholder) {
+            removeUploadPlaceholder(placeholder.id);
+          }
+          setIsAnalyzing(false);
         }
       } else {
         setIsAnalyzing(true);
-        let finishedCount = 0;
-        const analyzedArtworks: { artistName?: string; artworkName?: string; description?: string; keywords?: string[] }[] = [];
+        const analyzedArtworks: {
+          artistName?: string;
+          artworkName?: string;
+          description?: string;
+          date?: string;
+          medium?: string;
+          keywords?: string[];
+        }[] = [];
         const analyzedItems: GalleryItem[] = [];
 
         const memoryFiles = await Promise.all(files.map(async (file) => {
@@ -1943,33 +2096,13 @@ const App: React.FC = () => {
           setVisit(prev => ({ ...prev, id: batchVisitId, itemIds: [], globalConversation: [] }));
         }
 
-        const batchCapturedAtBase = Date.now();
-        const batchPlaceholders: GalleryItem[] = memoryFiles.map((memFile, index) => {
-          const id = Math.random().toString(36).substring(2, 11);
-          (memFile as any).generatedId = id;
+        const placeholders = memoryFiles.map((memFile, index) => {
           const itemTime = memFile.metadata.timestamp || Date.now();
           const itemTimeLabel = new Date(itemTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-          return {
-            id,
-            url: memFile.base64,
-            keywords: [],
-            conversation: [],
-            visitId: batchVisitId,
-            sessionLinks: batchVisitId
-              ? [{
-                  sessionId: batchVisitId,
-                  sessionTitle: DEFAULT_VISIT_TITLE,
-                  sequenceNumber: index,
-                  source: mode === 'camera' ? 'camera' : 'upload',
-                }]
-              : undefined,
-            vibe: { backgroundColor: '#ffffff', padding: 4, borderRadius: '12px', borderType: 'solid', accentColor: '#000000' },
+          return createLocalUploadPlaceholder({
+            previewUrl: memFile.base64,
+            mode,
             timestamp: itemTime,
-            sessionCapturedAt: batchCapturedAtBase + index,
-            isAnalyzing: true,
-            syncStatus: 'pending',
-            streamingText: '',
             photoTime: itemTimeLabel,
             location: memFile.metadata.latitude
               ? JSON.stringify({
@@ -1980,12 +2113,82 @@ const App: React.FC = () => {
                   museum: '',
                 })
               : undefined,
-          };
+            sessionId: batchVisitId,
+            sessionTitle: DEFAULT_VISIT_TITLE,
+            sequenceNumber: index,
+          });
         });
 
-        setItems(prev => [...batchPlaceholders, ...prev]);
-        if (batchVisitId) {
-          setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, ...batchPlaceholders.map(p => p.id)] }));
+        if (placeholders.length > 0) {
+          setItems(prev => [...placeholders, ...prev]);
+          if (batchVisitId) {
+            setVisit(prev => ({ ...prev, itemIds: [...prev.itemIds, ...placeholders.map((item) => item.id)] }));
+          }
+        }
+
+        const persistedUploads: Array<{ item: GalleryItem; placeholder: GalleryItem; file: File; base64: string; metadata: { latitude?: number; longitude?: number; timestamp?: number } }> = [];
+
+        for (let index = 0; index < memoryFiles.length; index++) {
+          const memFile = memoryFiles[index];
+          const placeholder = placeholders[index];
+          const itemTime = memFile.metadata.timestamp || Date.now();
+          const itemTimeLabel = new Date(itemTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const locationString = memFile.metadata.latitude
+            ? JSON.stringify({
+                latitude: memFile.metadata.latitude,
+                longitude: memFile.metadata.longitude,
+                city: '',
+                country: '',
+                museum: '',
+              })
+            : undefined;
+          try {
+            const persistedItem = await persistRawArtwork({
+              file: base64ToFile(memFile.base64, memFile.name),
+              previewUrl: memFile.base64,
+              mode,
+              timestamp: itemTime,
+              photoTime: itemTimeLabel,
+              coords: { latitude: memFile.metadata.latitude, longitude: memFile.metadata.longitude },
+              location: locationString,
+              sessionId: batchVisitId,
+              sessionTitle: DEFAULT_VISIT_TITLE,
+              sequenceNumber: index,
+            });
+            const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
+            persistedUploads.push({
+              item: liveItem,
+              placeholder,
+              file: base64ToFile(memFile.base64, memFile.name),
+              base64: memFile.base64,
+              metadata: memFile.metadata,
+            });
+          } catch (error) {
+            console.error('Failed to save artwork before analysis:', error);
+            removeUploadPlaceholder(placeholder.id);
+          }
+        }
+
+        const persistedItems = persistedUploads.map((entry) => entry.item);
+        if (persistedItems.length > 0) {
+          if (batchVisitId) {
+            const now = Date.now();
+            appendVisitMessages(
+              batchVisitId,
+              persistedUploads.flatMap((entry, index) => ([
+                { id: `capture-${entry.placeholder.id}`, role: 'user', text: '', type: 'artwork_capture', artworkId: entry.item.artworkId!, createdAt: now + (index * 2) },
+                { id: `card-${entry.placeholder.id}`, role: 'model', text: '', type: 'artwork_card', artworkId: entry.item.artworkId!, createdAt: now + (index * 2) + 1 },
+              ])),
+            );
+          }
+          if (isLibraryOnlyUpload) {
+            showToast(
+              persistedItems.length === 1
+                ? 'Added an artwork to collection'
+                : `Added ${persistedItems.length} artworks to collection`,
+              'success',
+            );
+          }
         }
 
         if (anchorMeta.latitude !== undefined && anchorMeta.longitude !== undefined) {
@@ -1993,82 +2196,47 @@ const App: React.FC = () => {
             .then(({ city, country, museum }) => {
               const resolved = JSON.stringify({ latitude: anchorMeta.latitude, longitude: anchorMeta.longitude, city, country, museum });
               resolvedLocation.current = resolved;
-              setItems(prev => prev.map(item => batchPlaceholders.some(p => p.id === item.id) ? { ...item, location: resolved } : item));
+              setItems(prev => prev.map(item => persistedUploads.some(p => p.item.id === item.id) ? { ...item, location: resolved } : item));
             })
             .catch(() => {});
         }
 
-        for (const memFile of memoryFiles) {
-          const newItemId = (memFile as any).generatedId;
-          const itemTimeLabel = new Date(memFile.metadata.timestamp || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
+        for (const entry of persistedUploads) {
           try {
-            const safeFile = base64ToFile(memFile.base64, memFile.name);
-            const analysis = await analyzeArtwork(
-              safeFile,
-              USER_ID,
-              undefined,
-              batchVisitId,
-              resolvedLocation.current,
-              itemTimeLabel,
-              memFile.metadata?.latitude,
-              memFile.metadata?.longitude
-            );
-            const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
-            const updates = {
-              keywords,
-              artistName: analysis.artist_name,
-              artworkName: analysis.artwork_name,
-              description: parseAnalysis(analysis.description),
-              date: analysis.date,
-              medium: analysis.medium,
-              sessionTitle: batchVisitId ? analysis.session_title : undefined,
-              artworkId: analysis.artwork_id,
-              isAnalyzing: false,
-              location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
-              photoTime: analysis.photo_time,
-              referenceUrls: analysis.reference_urls || [],
-              artistEntityId: analysis.artist_entity_id || undefined,
-              sessionLinks: batchVisitId && analysis.artwork_id
-                ? [{
-                    sessionId: batchVisitId,
-                    sessionTitle: analysis.session_title || DEFAULT_VISIT_TITLE,
-                    sequenceNumber: batchPlaceholders.findIndex((placeholder) => placeholder.id === newItemId),
-                    source: mode === 'camera' ? 'camera' : 'upload',
-                  }]
-                : undefined,
-            };
-            setItems(prev => prev.map(item => item.id === newItemId ? { ...item, ...updates } : item));
-            if (batchVisitId && analysis.artwork_id) {
-              const now = Date.now();
-              appendVisitMessages(batchVisitId, [
-                { id: `capture-${newItemId}`, role: 'user', text: '', type: 'artwork_capture', artworkId: analysis.artwork_id, createdAt: now },
-                { id: `card-${newItemId}`, role: 'model', text: '', type: 'artwork_card', artworkId: analysis.artwork_id, createdAt: now + 1 },
-              ]);
-            }
+            const analysis = await analyzeArtworkFromExisting(entry.item.artworkId!);
+            applyArtworkAnalysisResult(entry.item.id, analysis, {
+              sessionLinks: buildSessionLink(
+                batchVisitId,
+                analysis.session_title || DEFAULT_VISIT_TITLE,
+                entry.item.sessionLinks?.[0]?.sequenceNumber,
+                mode === 'camera' ? 'camera' : 'upload',
+              ),
+              sessionTitle: batchVisitId ? analysis.session_title || DEFAULT_VISIT_TITLE : undefined,
+            });
             if (analysis.artwork_id && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
               fetchAndPersistInsights(analysis.artwork_id).then(insights => {
                 if (insights.length > 0) {
-                  setItems(prev => prev.map(i => i.id === newItemId ? { ...i, insights } : i));
+                  updateSavedArtworkInState(entry.item.id, { insights });
                 }
               }).catch(() => {});
             }
             if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-              analyzedArtworks.push(updates);
-              const placeholder = batchPlaceholders.find(p => p.id === newItemId);
-              if (placeholder) analyzedItems.push({ ...placeholder, ...updates });
+              const resolvedItem = {
+                ...entry.item,
+                artistName: analysis.artist_name,
+                artworkName: analysis.artwork_name,
+                description: parseAnalysis(analysis.description),
+                date: analysis.date,
+                medium: analysis.medium,
+                keywords: analysis.tags,
+                isAnalyzing: false,
+              };
+              analyzedArtworks.push(resolvedItem);
+              analyzedItems.push(resolvedItem);
             }
           } catch (e) {
             const errMsg = (e as Error)?.message || '';
-            if (errMsg.includes('402') || errMsg.includes('quota_exceeded')) {
-              setItems(prev => prev.filter(item => item.id !== newItemId));
-              showToast("You've reached your artwork limit. Upgrade to save more.", 'info');
-            } else {
-              setItems(prev => prev.map(item => item.id === newItemId ? { ...item, isAnalyzing: false, description: 'Analysis failed.', syncStatus: 'failed' } : item));
-            }
-          } finally {
-            finishedCount++;
-            if (finishedCount === memoryFiles.length) setIsAnalyzing(false);
+            markArtworkAnalysisFailed(entry.item.id, errMsg || 'Analysis failed.');
           }
         }
 
@@ -2076,7 +2244,8 @@ const App: React.FC = () => {
           const history = visitStreams[batchVisitId] || [];
           triggerUploadCommentary(batchVisitId, analyzedArtworks, analyzedItems, history);
         }
-        if (batchVisitId && batchPlaceholders.length >= 2) setFilteredVisitId(batchVisitId);
+        if (batchVisitId && persistedItems.length >= 2) setFilteredVisitId(batchVisitId);
+        setIsAnalyzing(false);
       }
     } finally {
       inFlightUploadKeysRef.current.delete(uploadKey);
@@ -2130,93 +2299,59 @@ const App: React.FC = () => {
     }
   };
 
-  const updateItemConversation = (id: string, newMessages: Message[]) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, conversation: [...item.conversation, ...newMessages] } : item));
-  };
-
   const handleDeleteItem = (id: string) => {
     setDeleteConfirmation({ id, type: 'item' });
   };
 
   const handleRetryAnalysis = async (item: GalleryItem) => {
     const itemId = item.id;
-    setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: true, streamingText: undefined, syncStatus: i.syncStatus === 'failed' ? 'pending' : i.syncStatus } : i));
+    updateSavedArtworkInState(itemId, {
+      isAnalyzing: true,
+      analysisStatus: 'analyzing',
+      analysisError: undefined,
+      streamingText: undefined,
+      syncStatus: 'synced',
+    });
     try {
-      const safeFile = base64ToFile(item.url, 'artwork.jpg');
-      await analyzeArtworkStream(
-        safeFile, USER_ID,
-        (chunk) => setItems(prev => prev.map(i => i.id === itemId ? { ...i, streamingText: (i.streamingText || '') + chunk } : i)),
-        (analysis) => {
-          const keywords = analysis.tags.map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
-          setItems(prev => prev.map(i => i.id === itemId ? {
-            ...i,
-            keywords, artistName: analysis.artist_name, artworkName: analysis.artwork_name,
-            description: parseAnalysis(analysis.description), date: analysis.date, medium: analysis.medium,
-            artworkId: analysis.artwork_id, isAnalyzing: false, streamingText: undefined,
-            location: analysis.location && typeof analysis.location === 'object' ? JSON.stringify(analysis.location) : analysis.location,
-            photoTime: analysis.photo_time, sessionTitle: analysis.session_title,
-            referenceUrls: analysis.reference_urls || [],
-            artistEntityId: analysis.artist_entity_id || undefined,
-          } : i));
-          setIsAnalyzing(false);
-          if (analysis.artwork_id && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-            fetchAndPersistInsights(analysis.artwork_id).then(insights => {
-              if (insights.length > 0)
-                setItems(prev => prev.map(i => i.id === itemId ? { ...i, insights } : i));
-            }).catch(() => {});
-          }
-        },
-        (error) => {
-          const msg = error?.message || 'Analysis failed.';
-          if (msg.includes('402') || msg.includes('quota_exceeded')) {
-            setItems(prev => prev.filter(i => i.id !== itemId));
-            showToast("You've reached your artwork limit. Upgrade to save more.", 'info');
-          } else {
-            setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: false, streamingText: msg, syncStatus: i.syncStatus === 'pending' ? 'failed' : i.syncStatus } : i));
-          }
-          setIsAnalyzing(false);
-        },
-        item.visitId, undefined, item.location, item.photoTime,
-      );
+      const analysis = await analyzeArtworkFromExisting(item.artworkId || item.id);
+      applyArtworkAnalysisResult(itemId, analysis, {
+        sessionTitle: analysis.session_title || item.sessionTitle,
+        sessionLinks: item.sessionLinks,
+      });
+      if (analysis.artwork_id && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+        fetchAndPersistInsights(analysis.artwork_id).then(insights => {
+          if (insights.length > 0) updateSavedArtworkInState(itemId, { insights });
+        }).catch(() => {});
+      }
     } catch {
-      setItems(prev => prev.map(i => i.id === itemId ? { ...i, isAnalyzing: false, streamingText: 'Retry failed.', syncStatus: i.syncStatus === 'pending' ? 'failed' : i.syncStatus } : i));
-      setIsAnalyzing(false);
+      markArtworkAnalysisFailed(itemId, 'Retry failed.');
     }
   };
 
   const handleRefreshAnalysis = async (overrides?: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => {
     if (!interpretingItem?.artworkId) return;
     const targetItem = interpretingItem;
-    setItems(prev => prev.map(item => item.id === targetItem.id ? { ...item, isAnalyzing: true } : item));
-    setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, isAnalyzing: true } : prev);
+    updateSavedArtworkInState(targetItem.id, {
+      isAnalyzing: true,
+      analysisStatus: 'analyzing',
+      analysisError: undefined,
+    });
     try {
       const result = await analyzeArtworkFromExisting(targetItem.artworkId, {
         artistName: overrides?.artistName,
         artworkName: overrides?.artworkName,
       });
-      const keywords = (result.tags || []).map((tag: string) => tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`);
-      const updates = {
-        artistName: result.artist_name,
-        artworkName: result.artwork_name,
-        description: parseAnalysis(result.description),
-        date: result.date,
-        medium: result.medium,
-        keywords,
+      applyArtworkAnalysisResult(targetItem.id, result, {
         referenceUrls: result.reference_urls || [],
-        isAnalyzing: false,
-      };
-      setItems(prev => prev.map(item => item.id === targetItem.id ? { ...item, ...updates } : item));
-      setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, ...updates } : prev);
+      });
       fetchAndPersistInsights(targetItem.artworkId).then(insights => {
         if (insights.length > 0) {
-          setItems(prev => prev.map(i => i.id === targetItem.id ? { ...i, insights } : i));
-          setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, insights } : prev);
+          updateSavedArtworkInState(targetItem.id, { insights });
         }
       }).catch(() => {});
     } catch (error) {
       console.error('Failed to refresh analysis:', error);
-      setItems(prev => prev.map(item => item.id === targetItem.id ? { ...item, isAnalyzing: false } : item));
-      setInterpretingItem(prev => prev?.id === targetItem.id ? { ...prev, isAnalyzing: false } : prev);
+      markArtworkAnalysisFailed(targetItem.id, 'Refresh failed.');
       throw error;
     }
   };
@@ -2344,10 +2479,11 @@ const App: React.FC = () => {
   };
 
   const recentVisitSummaries = useMemo(() => visitSummaries.slice(0, 10), [visitSummaries]);
+  const sessionsLoading = !artworksLoaded && visitSummaries.length === 0;
 
   const topLevelNavigation: Array<{ id: AppTab; label: string; icon: React.ReactNode }> = [
     {
-      id: 'explore',
+      id: 'newSession',
       label: 'New Session',
       icon: (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2388,7 +2524,7 @@ const App: React.FC = () => {
   const handleSwitchTopLevelTab = (tabId: AppTab) => {
     setActiveTab(tabId);
     setRecentsOpen(false);
-    if (tabId === 'explore') {
+    if (tabId === 'newSession') {
       setFilteredVisitId(null);
       setIsComposingNewSession(true);
       resetPreparedSessionState();
@@ -2409,7 +2545,7 @@ const App: React.FC = () => {
 
   const handleSelectVisitSummary = (summaryId: string) => {
     if (editingVisitId === summaryId) return;
-    setActiveTab('explore');
+    setActiveTab('newSession');
     setFilteredVisitId(summaryId);
     setIsComposingNewSession(false);
     resetPreparedSessionState();
@@ -2425,7 +2561,7 @@ const App: React.FC = () => {
   };
 
   const isTopLevelTabActive = (tabId: AppTab) =>
-    tabId === 'explore' ? isNewSessionEntryActive : activeTab === tabId;
+    tabId === 'newSession' ? isNewSessionEntryActive : activeTab === tabId;
 
   const sidebarNavItemSharedClassName =
     'h-11 rounded-2xl ring-1 ring-transparent transition-colors';
@@ -2449,7 +2585,7 @@ const App: React.FC = () => {
       key={summary.id}
       data-visit-menu-root="true"
       className={`relative w-full rounded-[20px] p-1 ${
-        activeVisitSummary?.id === summary.id && activeTab === 'explore'
+        activeVisitSummary?.id === summary.id && activeTab === 'newSession'
           ? 'bg-[var(--color-bg-tertiary)] text-neutral-900 shadow-sm ring-1 ring-neutral-200'
           : 'text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-900 font-medium'
       }`}
@@ -2483,7 +2619,7 @@ const App: React.FC = () => {
           )}
           <p
             className={`mt-1 truncate font-mono text-[10px] font-semibold leading-none tracking-wide ${
-              activeVisitSummary?.id === summary.id && activeTab === 'explore' ? 'text-neutral-500' : 'text-neutral-400/90'
+              activeVisitSummary?.id === summary.id && activeTab === 'newSession' ? 'text-neutral-500' : 'text-neutral-400/90'
             }`}
           >
             {summary.artworkCount} {summary.artworkCount === 1 ? 'artwork' : 'artworks'}
@@ -2498,7 +2634,7 @@ const App: React.FC = () => {
               setOpenVisitMenuId(prev => (prev === summary.id ? null : summary.id));
             }}
             className={`absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-colors ${
-              activeVisitSummary?.id === summary.id && activeTab === 'explore'
+              activeVisitSummary?.id === summary.id && activeTab === 'newSession'
                 ? 'text-neutral-500 hover:bg-white hover:text-neutral-900'
                 : 'text-neutral-400 hover:bg-white/80 hover:text-neutral-700'
             }`}
@@ -2592,8 +2728,8 @@ const App: React.FC = () => {
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
 
-  const isVisitMode = activeTab === 'explore' && (isComposingNewSession || !!filteredVisitId);
-  const isNewSessionEntryActive = activeTab === 'explore' && isComposingNewSession;
+  const isVisitMode = activeTab === 'newSession' && (isComposingNewSession || !!filteredVisitId);
+  const isNewSessionEntryActive = activeTab === 'newSession' && isComposingNewSession;
   const userAvatar = currentUser?.profile_picture_url ? (
     <img
       src={currentUser.profile_picture_url}
@@ -2827,7 +2963,9 @@ const App: React.FC = () => {
                     <p className="text-[16px] font-semibold text-neutral-900">Recents</p>
                   </div>
                   <div data-visit-menu-root="true" className="max-h-[min(70vh,560px)] space-y-2 overflow-y-auto px-1 pb-1">
-                    {recentVisitSummaries.length > 0 ? (
+                    {sessionsLoading ? (
+                      <SessionListSkeleton compact={true} />
+                    ) : recentVisitSummaries.length > 0 ? (
                       recentVisitSummaries.map((summary) => renderVisitSummaryCard(summary))
                     ) : (
                       <div className="px-3 py-4 text-[12px] text-neutral-400">No recent sessions yet.</div>
@@ -2927,7 +3065,7 @@ const App: React.FC = () => {
 
         {/* Global unified sidebar */}
         <aside
-          className={`shrink-0 z-30 overflow-hidden border-r border-neutral-200 bg-[var(--color-bg-secondary)] transition-all duration-300 flex flex-col h-full ${
+          className={`shrink-0 z-[120] overflow-hidden border-r border-neutral-200 bg-[var(--color-bg-secondary)] transition-all duration-300 flex flex-col h-full ${
             sidebarOpen
               ? 'fixed inset-y-0 left-0 w-[260px] translate-x-0 shadow-[0_18px_60px_rgba(0,0,0,0.12)] md:shadow-none md:relative md:inset-auto md:translate-x-0'
               : 'fixed inset-y-0 left-0 w-[260px] -translate-x-full md:translate-x-0 md:relative md:inset-auto'
@@ -2989,7 +3127,11 @@ const App: React.FC = () => {
 
           {/* Sessions Scroll List */}
           <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0 space-y-2 scrollbar-thin">
-            {visitSummaries.map((summary) => renderVisitSummaryCard(summary))}
+            {sessionsLoading ? (
+              <SessionListSkeleton />
+            ) : (
+              visitSummaries.map((summary) => renderVisitSummaryCard(summary))
+            )}
           </div>
 
           <div className="h-px bg-neutral-200/60 my-1 mx-4" />
@@ -3174,7 +3316,7 @@ const App: React.FC = () => {
                   />
                 </Suspense>
               </div>
-            ) : activeTab === 'explore' ? (
+            ) : activeTab === 'newSession' ? (
               activeVisitSummary ? (
                 <ExploreSessionView
                   activeVisitSummary={activeVisitSummary}
@@ -3186,7 +3328,6 @@ const App: React.FC = () => {
                   headerLeftSlot={headerMenuButton}
                   showSessionHeader={!isComposingNewSession}
                   interpretationRightMode={interpretationRightMode}
-                  interpretingMode={interpretingMode}
                   sessionGoalInput={sessionGoalInput}
                   sessionGoals={sessionGoals}
                   sessionGoalDismissed={sessionGoalDismissed}
@@ -3211,11 +3352,6 @@ const App: React.FC = () => {
                   onDeleteArtwork={(itemId) => setDeleteConfirmation({ type: 'item', id: itemId })}
                   onNavigateInterpretation={handleNavigateInterpretation}
                   onInterpretationRightModeChange={setInterpretationRightMode}
-                  onSwitchInterpretingMode={() => {
-                    const nextMode = interpretingMode === 'professional' ? 'interactive' : 'professional';
-                    setInterpretingMode(nextMode);
-                    localStorage.setItem('musee_analysis_mode', nextMode);
-                  }}
                   onRefreshAnalysis={handleRefreshAnalysis}
                   onOpenArtistFromInterpretation={(artistEntityId, artworkId, artistName) => {
                     if (!interpretingItem) return;
@@ -3270,7 +3406,14 @@ const App: React.FC = () => {
                   }
                 />
               ) : (
-                <div className="flex flex-1 items-center justify-center px-6 bg-[var(--color-bg-primary)]">
+                <div className="relative flex flex-1 items-center justify-center bg-[var(--color-bg-primary)] px-6">
+                  {headerMenuButton ? (
+                    <div className="pointer-events-none absolute left-4 top-3 z-20 md:hidden">
+                      <div className="pointer-events-auto">
+                        {headerMenuButton}
+                      </div>
+                    </div>
+                  ) : null}
                   <EmptyWall isVisitMode={false} />
                 </div>
               )
@@ -3294,18 +3437,12 @@ const App: React.FC = () => {
                   artworkHeaderActions={artworkHeaderActions}
                   artworkHeaderEditToken={artworkHeaderEditToken}
                   interpretationRightMode={interpretationRightMode}
-                  interpretingMode={interpretingMode}
                   onCloseArtworkDetail={closeArtworkDetail}
                   onUpdateMetadata={updateItemMetadata}
                   onUpdateClassification={handleUpdateClassification}
                   onDeleteArtwork={(itemId) => setDeleteConfirmation({ type: 'item', id: itemId })}
                   onNavigateInterpretation={handleNavigateInterpretation}
                   onInterpretationRightModeChange={setInterpretationRightMode}
-                  onSwitchInterpretingMode={() => {
-                    const nextMode = interpretingMode === 'professional' ? 'interactive' : 'professional';
-                    setInterpretingMode(nextMode);
-                    localStorage.setItem('musee_analysis_mode', nextMode);
-                  }}
                   onRefreshAnalysis={handleRefreshAnalysis}
                   onNavigateToArtistFromInterpretation={(artistEntityId, artworkId, artistName) => {
                     if (!interpretingItem) return;
@@ -3373,7 +3510,7 @@ const App: React.FC = () => {
             ) : null}
           </div>
 
-        {interpretingItem && activeTab !== 'explore' && activeTab !== 'collect' && (
+        {interpretingItem && activeTab !== 'newSession' && activeTab !== 'collect' && (
           <InterpretationModal
             item={interpretingItem}
             onClose={closeArtworkDetail}
@@ -3384,12 +3521,6 @@ const App: React.FC = () => {
             onNavigate={handleNavigateInterpretation}
             rightMode={interpretationRightMode}
             onRightModeChange={setInterpretationRightMode}
-            interpretingMode={interpretingMode}
-            onSwitchMode={() => {
-              const nextMode = interpretingMode === 'professional' ? 'interactive' : 'professional';
-              setInterpretingMode(nextMode);
-              localStorage.setItem('musee_analysis_mode', nextMode);
-            }}
             onRefreshAnalysis={handleRefreshAnalysis}
             userId={currentUser?.user_id || USER_ID}
             onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
@@ -3447,7 +3578,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'explore' && !interpretingItem && !(
+        {activeTab === 'newSession' && !interpretingItem && !(
           activeVisitSummary &&
           activeVisitStream.length === 0 &&
           !sessionGoalDismissed.has(activeVisitSummary.id)

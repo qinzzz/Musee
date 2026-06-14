@@ -29,14 +29,12 @@ type CollectViewProps = {
   artworkHeaderActions: React.ReactNode;
   artworkHeaderEditToken: number;
   interpretationRightMode: 'metadata' | 'community';
-  interpretingMode: 'professional' | 'interactive';
   onCloseArtworkDetail: () => void;
   onUpdateMetadata: (itemId: string, fields: Partial<GalleryItem>) => void;
   onUpdateClassification: (itemId: string, classification: ArtworkClassification) => Promise<void>;
   onDeleteArtwork: (itemId: string) => void;
   onNavigateInterpretation: (direction: 'prev' | 'next') => void;
   onInterpretationRightModeChange: (mode: 'metadata' | 'community') => void;
-  onSwitchInterpretingMode: () => void;
   onRefreshAnalysis: () => Promise<void>;
   onNavigateToArtistFromInterpretation: (
     artistEntityId: string,
@@ -73,14 +71,12 @@ export default function CollectView({
   artworkHeaderActions,
   artworkHeaderEditToken,
   interpretationRightMode,
-  interpretingMode,
   onCloseArtworkDetail,
   onUpdateMetadata,
   onUpdateClassification,
   onDeleteArtwork,
   onNavigateInterpretation,
   onInterpretationRightModeChange,
-  onSwitchInterpretingMode,
   onRefreshAnalysis,
   onNavigateToArtistFromInterpretation,
   onCollectTabChange,
@@ -116,8 +112,6 @@ export default function CollectView({
             onNavigate={onNavigateInterpretation}
             rightMode={interpretationRightMode}
             onRightModeChange={onInterpretationRightModeChange}
-            interpretingMode={interpretingMode}
-            onSwitchMode={onSwitchInterpretingMode}
             onRefreshAnalysis={onRefreshAnalysis}
             userId={userId}
             onNavigateToArtist={onNavigateToArtistFromInterpretation}
@@ -131,7 +125,7 @@ export default function CollectView({
   }
 
   return (
-    <div className="relative flex-1 overflow-hidden pl-0 pt-0">
+    <div className="relative flex-1 overflow-y-auto pl-0 pt-0">
       <OrganizeView
         topBarLeftSlot={topLevelLeftSlot}
         onFileUpload={onFileUpload}

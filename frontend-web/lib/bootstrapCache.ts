@@ -28,6 +28,8 @@ type ArtworkBootstrapCacheItem = {
   insights?: Array<{ title: string; text: string }>;
   artistEntityId?: string;
   classification?: 'unsorted' | 'love' | 'respect' | 'not_for_me';
+  analysisStatus?: 'pending' | 'analyzing' | 'failed' | 'analyzed';
+  analysisError?: string;
 };
 
 type ArtworkBootstrapCachePayload = {

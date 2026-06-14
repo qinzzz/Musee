@@ -55,7 +55,12 @@ Key variables in your `.env.local`:
 
 ### 3. Running the Server
 ```bash
-uvicorn app.main:app --reload --port 8000
+python scripts/run_dev_server.py
+```
+- The launcher clears stale `8000` listeners before starting `uvicorn`, which helps avoid the common local dev state where the port is occupied but the backend is not serving.
+- For more stable phone/device testing, run without the file watcher:
+```bash
+python scripts/run_dev_server.py --no-reload
 ```
 - **Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Health**: [http://localhost:8000/health](http://localhost:8000/health)

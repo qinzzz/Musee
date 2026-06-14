@@ -4,8 +4,7 @@ import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Message, Album, NeighborItem, Visit, GalleryItem, ArtworkClassification } from '../types';
 import { updateArtwork, fetchAndPersistInsights } from '../api/artworks';
-import { chatWithArtworkStream, getTagExplanation, suggestTopics, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../api/chat';
-import { base64ToFile } from '../api/misc';
+import { getTagExplanation, suggestTopics, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../api/chat';
 import ArtworkClassificationChip from './ArtworkClassificationChip';
 import ArtworkActionsMenu from './ArtworkActionsMenu';
 interface Props {
@@ -19,7 +18,7 @@ interface Props {
     keywords?: string[];
     date?: string;
     medium?: string;
-    artworkId?: string;  // Backend DB artwork ID for persistent conversations
+    artworkId?: string;  // Backend DB artwork ID
     isAnalyzing?: boolean;  // Loading state while analyzing
     streamingText?: string;  // Real-time streaming text during analysis
     location?: any;
@@ -29,16 +28,15 @@ interface Props {
     insights?: Array<{ title: string; text: string }>;
     artistEntityId?: string;
     classification?: ArtworkClassification;
+    analysisStatus?: import('../types').ArtworkAnalysisStatus;
+    analysisError?: string;
   };
   onClose: () => void;
-  onUpdateConversation?: (id: string, newMessages: Message[]) => void;
   onUpdateMetadata?: (id: string, updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => void;
   allVisitItems?: any[];
   onNavigate?: (direction: 'prev' | 'next') => void;
   rightMode: 'metadata' | 'community';
   onRightModeChange: (mode: 'metadata' | 'community') => void;
-  onSwitchMode?: () => void;
-  interpretingMode?: 'professional' | 'interactive';
   onRefreshAnalysis?: (overrides?: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => Promise<void>;
   onDelete?: () => void;
   userId?: string;
@@ -143,9 +141,7 @@ const Insight: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversation, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onSwitchMode, interpretingMode, onRefreshAnalysis, onDelete, userId, onNavigateToArtist, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
-  const [messages, setMessages] = useState<Message[]>(item.conversation);
-  const [isTyping, setIsTyping] = useState(false);
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onRefreshAnalysis, onDelete, userId, onNavigateToArtist, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
   const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false);
   const [insights, setInsights] = useState<Array<{ title: string; text: string }>>([]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -155,9 +151,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateConversat
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageAspect, setImageAspect] = useState<number>(1);
-const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const [mobileImageHeight, setMobileImageHeight] = useState(-1); // -1 = unset (uses CSS). Set on mount for mobile = 4:3 aspect ratio
-  const scrollRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
   // Inline editing state
@@ -291,7 +285,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
   // Sync internal state when navigating between items in a session
   useEffect(() => {
-    setMessages(item.conversation || []);
     setInsights([]);
     onRightModeChange('metadata'); // Reset to metadata view for the new piece
     // mobileImageHeight no longer used for mobile
@@ -330,12 +323,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
         .catch(() => setCommunity({ entity: null, comments: [] }));
     }
   }, [item.artworkId, item.isAnalyzing]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
 
   // Parse streaming JSON to extract fields progressively during analysis
   const streamingFields = useMemo(() => {
@@ -456,77 +443,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') { e.preventDefault(); saveAllFields(); }
     if (e.key === 'Escape') { cancelEditing(); }
-  };
-
-  const handleSend = async (text: string) => {
-    if (!text.trim()) return;
-    const userMsg: Message = { role: 'user', text };
-    setMessages(prev => [...prev, userMsg]);
-    setIsTyping(true);
-
-    try {
-      let imageFile: File | undefined;
-      if (item.url.startsWith('data:')) {
-        imageFile = base64ToFile(item.url, 'artwork.jpg');
-      } else if (item.url.startsWith('blob:')) {
-        try {
-          const response = await fetch(item.url);
-          const blob = await response.blob();
-          imageFile = new File([blob], 'artwork.jpg', { type: blob.type || 'image/jpeg' });
-        } catch (e) {
-          console.error('Failed to fetch blob URL:', e);
-        }
-      }
-
-      const assistantMsg: Message = { role: 'model', text: '' };
-      setMessages(prev => [...prev, assistantMsg]);
-      setIsTyping(false);
-      setIsWaitingForFirstChunk(true);
-
-      await chatWithArtworkStream(
-        text,
-        (chunk) => {
-          setIsWaitingForFirstChunk(false);
-          setMessages(prev => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last && last.role === 'model') {
-              last.text += chunk;
-            }
-            return next;
-          });
-        },
-        (fullResponse) => {
-          setIsWaitingForFirstChunk(false);
-          setMessages(prev => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last && last.role === 'model') {
-              last.text = fullResponse;
-            }
-            return next;
-          });
-
-          const updatedMessages: Message[] = [...messages, userMsg, { role: 'model' as const, text: fullResponse }];
-          onUpdateConversation?.(item.id, [userMsg, { role: 'model', text: fullResponse }]);
-
-        },
-        (error) => {
-          console.error('Chat error:', error);
-          const errorMsg: Message = { role: 'model', text: 'Apologies, the architectural dialogue has been interrupted.' };
-          setMessages(prev => [...prev, errorMsg]);
-          onUpdateConversation?.(item.id, [userMsg, errorMsg]);
-        },
-        item.artworkId,
-        item.artistName,
-        item.artworkName,
-        messages,
-        imageFile
-      );
-    } catch (e) {
-      console.error(e);
-      setIsTyping(false);
-    }
   };
 
   // Initialize mobile image height on mount
@@ -675,7 +591,7 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
 
               {/* Analyzing overlay badge on photo */}
-              {item.isAnalyzing && interpretingMode !== 'interactive' && (
+              {item.isAnalyzing && (
                 <div className="absolute inset-0 flex items-end justify-start p-3 pointer-events-none">
                   <div className="flex items-center gap-2 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
                     <div className="relative w-3 h-3 shrink-0">
@@ -697,19 +613,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
             <div className={`px-2 py-2 border-b border-neutral-100 items-center justify-between shrink-0 relative ${isInline ? (isEditing ? 'flex' : 'hidden') : (isEditing ? 'flex' : 'hidden sm:flex')}`} onClick={handleToolbarClick}>
               {/* LEFT: action icons */}
               <div className={`flex items-center gap-1 ${isEditing ? 'flex-1 justify-start' : ''}`}>
-                {false && rightMode === 'metadata' && messages.length > 0 && (
-                  <button
-                    onClick={() => onRightModeChange('metadata')}
-                    title="View conversation"
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-neutral-400 hover:text-neutral-700 hover:bg-neutral-50 transition-all"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <span className="text-[9px] tracking-[0.2em] uppercase font-bold">{messages.length}</span>
-                  </button>
-                )}
-
                 {isEditing && (
                   <div className="flex items-center px-2">
                     <button
@@ -851,11 +754,11 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                   </div>
                 )}
               </div>
-            ) : rightMode === 'metadata' ? (
+            ) : (
               <div className={`sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-5 sm:p-7 space-y-5 sm:space-y-7 ${hasNavigationFooter ? 'pb-28 sm:pb-32' : 'pb-20 sm:pb-7'}`}>
 
                 {/* Error state */}
-                {!item.isAnalyzing && item.streamingText && !item.artistName && (
+                {!item.isAnalyzing && item.analysisStatus === 'failed' && item.streamingText && (
                   <div className="rounded-xl border border-red-200 bg-red-50/80 p-4">
                     <p className="text-[9px] tracking-[0.3em] uppercase text-red-600 font-bold mb-2">Analysis failed</p>
                     <p className="text-[13px] text-red-800 leading-relaxed">{item.streamingText}</p>
@@ -1098,52 +1001,6 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
                 )}
 
               </div>
-            ) : (
-              /* ── CHAT MODE ── */
-              <div ref={scrollRef} className={`sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-4 sm:p-6 space-y-4 sm:space-y-6 scroll-smooth ${hasNavigationFooter ? 'pb-28 sm:pb-32' : 'pb-20 sm:pb-6'}`}>
-                {messages.length === 0 && (
-                  <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-12">
-                    <div className="w-12 h-px bg-neutral-200 mb-6"></div>
-                    <p className="text-[11px] text-neutral-400 italic mb-4 font-serif leading-relaxed px-8">
-                      The curator awaits your spatial and conceptual queries.
-                    </p>
-                  </div>
-                )}
-                {messages.map((m, idx) => (
-                  <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {m.role === 'user' ? (
-                      <div className="max-w-[85%] p-3 sm:p-4 text-[14px] leading-relaxed tracking-wide bg-neutral-900 text-white rounded-2xl rounded-tr-none">
-                        {m.text}
-                      </div>
-                    ) : (
-                      <div className="w-full text-[14px] leading-relaxed text-neutral-800 font-serif">
-                        {m.text ? (
-                          <div className="prose prose-sm max-w-none prose-neutral prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
-                            <ReactMarkdown components={markdownComponents}>{m.text}</ReactMarkdown>
-                          </div>
-                        ) : (isWaitingForFirstChunk && idx === messages.length - 1 ? (
-                          <div className="flex space-x-1.5 py-1">
-                            <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse"></div>
-                            <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-75"></div>
-                            <div className="w-1.5 h-1.5 bg-neutral-300 rounded-full animate-pulse delay-150"></div>
-                          </div>
-                        ) : null)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {isTyping && !isWaitingForFirstChunk && (
-                  <div className="flex justify-start px-2">
-                    <div className="flex space-x-1.5 py-4">
-                      <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce"></div>
-                      <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce delay-100"></div>
-                      <div className="w-1.5 h-1.5 bg-neutral-200 rounded-full animate-bounce delay-200"></div>
-                    </div>
-                  </div>
-                )}
-
-              </div>
             )}
           </div>
         </div>
@@ -1210,47 +1067,43 @@ const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
 
   return (
     <>
-    <div
-      className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center sm:overflow-y-auto sm:p-12"
-    >
-      <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xl" onClick={onClose} />
+      <div className="fixed inset-0 z-[80] flex items-start justify-center sm:items-center sm:overflow-y-auto sm:p-12">
+        <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xl" onClick={onClose} />
 
-      {/* Loading spinner */}
-      {!imageLoaded && (
-        <div className="absolute z-10 flex flex-col items-center space-y-4">
-          <div className="w-12 h-12 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
-          <p className="text-[10px] tracking-widest text-neutral-400 uppercase">Loading...</p>
-        </div>
-      )}
+        {!imageLoaded && (
+          <div className="absolute z-10 flex flex-col items-center space-y-4">
+            <div className="w-12 h-12 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
+            <p className="text-[10px] tracking-widest text-neutral-400 uppercase">Loading...</p>
+          </div>
+        )}
 
-      {mainDiv}
-    </div>
+        {mainDiv}
+      </div>
 
-    {/* Lightbox — tap image on mobile to view full */}
-    {lightboxOpen && createPortal(
-      <div
-        className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center cursor-zoom-out"
-        onClick={() => setLightboxOpen(false)}
-      >
-        <img
-          src={item.url}
-          className="max-w-full max-h-full object-contain"
-          alt="Full view"
-        />
-        <button
-          className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
-          onClick={() => setLightboxOpen(false)}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </div>,
-      document.body
-    )}
-
-
-</>
+      {lightboxOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex cursor-zoom-out items-center justify-center bg-black/95"
+            onClick={() => setLightboxOpen(false)}
+          >
+            <img
+              src={item.url}
+              className="max-h-full max-w-full object-contain"
+              alt="Full view"
+            />
+            <button
+              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+              onClick={() => setLightboxOpen(false)}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 };
 

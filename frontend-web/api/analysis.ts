@@ -18,6 +18,30 @@ export interface ArtworkAnalysisResult {
   session_title?: string;
   reference_urls?: ReferenceItem[];
   artist_entity_id?: string;
+  analysis_status?: 'pending' | 'analyzing' | 'failed' | 'analyzed';
+  analysis_error?: string | null;
+}
+
+export interface SavedArtworkUploadResult {
+  id: string;
+  photo_uri: string;
+  artist_name: string;
+  artwork_name: string;
+  location?: string | Record<string, unknown> | null;
+  photo_time?: string | null;
+  session_id?: string | null;
+  session_title?: string | null;
+  session_links?: Array<{
+    id?: string;
+    session_id: string;
+    session_title?: string;
+    sequence_number?: number;
+    source?: 'library' | 'upload' | 'camera';
+    created_at?: string;
+  }>;
+  analysis_status: 'pending' | 'analyzing' | 'failed' | 'analyzed';
+  analysis_error?: string | null;
+  created_at?: string;
 }
 
 export interface StreamingMetrics {
@@ -149,7 +173,46 @@ export async function analyzeArtwork(
     session_title: data.session_title,
     reference_urls: data.reference_urls || [],
     artist_entity_id: data.artist_entity_id,
+    analysis_status: data.analysis_status,
+    analysis_error: data.analysis_error,
   };
+}
+
+export async function saveArtworkUpload(
+  imageSource: File,
+  userId?: string,
+  sessionId?: string,
+  location?: string,
+  photoTime?: string,
+  latitude?: number,
+  longitude?: number,
+  source: 'upload' | 'camera' = 'upload',
+  sequenceNumber?: number,
+): Promise<SavedArtworkUploadResult> {
+  const formData = new FormData();
+  formData.append('image', imageSource);
+  formData.append('client_type', 'web');
+  formData.append('source', source);
+
+  if (userId) formData.append('user_id', userId);
+  if (sessionId) formData.append('session_id', sessionId);
+  if (location) formData.append('location', location);
+  if (photoTime) formData.append('photo_time', photoTime);
+  if (latitude !== undefined) formData.append('latitude', latitude.toString());
+  if (longitude !== undefined) formData.append('longitude', longitude.toString());
+  if (sequenceNumber !== undefined) formData.append('sequence_number', sequenceNumber.toString());
+
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
 }
 
 export async function analyzeArtworkFromExisting(
@@ -194,6 +257,8 @@ export async function analyzeArtworkFromExisting(
     session_title: data.session_title,
     reference_urls: data.reference_urls || [],
     artist_entity_id: data.artist_entity_id,
+    analysis_status: data.analysis_status,
+    analysis_error: data.analysis_error,
   };
 }
 

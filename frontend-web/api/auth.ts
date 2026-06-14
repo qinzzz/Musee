@@ -50,7 +50,7 @@ export interface UserQuota {
 }
 
 export async function getUserQuota(userId: string): Promise<UserQuota> {
-  const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/users/${encodeURIComponent(userId)}/quota`, {
+  const response = await fetch(`${API_BASE_URL}/users/${encodeURIComponent(userId)}/quota`, {
     headers: (() => {
       const token = localStorage.getItem(AUTH_TOKEN_KEY);
       return token ? { Authorization: `Bearer ${token}` } : {};

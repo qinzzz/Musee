@@ -48,7 +48,7 @@ const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, o
       )}
 
       {/* Error state */}
-      {!item.isAnalyzing && item.streamingText && !item.artistName && (
+      {!item.isAnalyzing && item.analysisStatus === 'failed' && item.streamingText && (
         <div className="absolute bottom-0 left-0 right-0 bg-neutral-900/90 text-white py-2 px-3 z-20 flex items-center justify-between gap-2">
           <p className="text-[9px] tracking-wider uppercase font-bold">Analysis failed</p>
           {onRetry && (

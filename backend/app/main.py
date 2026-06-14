@@ -85,6 +85,18 @@ async def lifespan(app: FastAPI):
                 _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS insights JSONB"))
                 _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS classification VARCHAR(20) NOT NULL DEFAULT 'unsorted'"))
                 _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS classification_updated_at TIMESTAMP"))
+                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_status VARCHAR(20) NOT NULL DEFAULT 'analyzed'"))
+                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_error TEXT"))
+                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_attempted_at TIMESTAMP"))
+                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_completed_at TIMESTAMP"))
+                _conn.execute(text("""
+                    UPDATE saved_artworks
+                    SET analysis_status = CASE
+                        WHEN COALESCE(analysis_status, '') = '' AND analysis IS NOT NULL THEN 'analyzed'
+                        WHEN COALESCE(analysis_status, '') = '' THEN 'pending'
+                        ELSE analysis_status
+                    END
+                """))
                 _conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS skill_events (
                         id SERIAL PRIMARY KEY,
@@ -153,10 +165,20 @@ allowed_origins = [
     "http://localhost:5173",
 ]
 
+allowed_origin_regex = (
+    r"^https?://("
+    r"localhost|127\.0\.0\.1|"
+    r"192\.168\.\d{1,3}\.\d{1,3}|"
+    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+    r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}"
+    r")(:\d+)?$"
+)
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=allowed_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

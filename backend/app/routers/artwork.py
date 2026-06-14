@@ -13,7 +13,7 @@ from datetime import datetime
 import anyio
 
 from app.database.connection import get_db, SessionLocal
-from app.database.models import SavedArtwork, Conversation, Tag, User, Session as SessionModel, SessionArtwork, SkillEvent, ArtworkEntity, ArtistEntity, PublicComment, SessionMessage, TasteProfile
+from app.database.models import SavedArtwork, Tag, User, Session as SessionModel, SessionArtwork, SkillEvent, ArtworkEntity, ArtistEntity, PublicComment, SessionMessage, TasteProfile
 from app.models.artwork import AIProvider, UpdateArtworkRequest, UpdateArtworkClassificationRequest
 from pydantic import BaseModel
 import base64
@@ -78,6 +78,188 @@ def _ensure_session_artwork_link(
     )
     db.add(link)
     return link
+
+
+def _get_primary_session_link(
+    db: Session,
+    artwork_id: str,
+) -> Optional[SessionArtwork]:
+    return (
+        db.query(SessionArtwork)
+        .filter(SessionArtwork.artwork_id == artwork_id)
+        .order_by(SessionArtwork.created_at.desc(), SessionArtwork.sequence_number.asc())
+        .first()
+    )
+
+
+def _get_primary_session_id(
+    db: Session,
+    artwork_id: str,
+) -> Optional[str]:
+    link = _get_primary_session_link(db, artwork_id)
+    return link.session_id if link else None
+
+
+def _get_artwork_session_ids(
+    db: Session,
+    artwork_id: str,
+) -> List[str]:
+    return [
+        session_id
+        for (session_id,) in (
+            db.query(SessionArtwork.session_id)
+            .filter(SessionArtwork.artwork_id == artwork_id)
+            .distinct()
+            .all()
+        )
+        if session_id
+    ]
+
+
+def _coerce_location_payload(location: Optional[Union[str, Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
+    if location is None:
+        return None
+    if isinstance(location, dict):
+        return location
+    if isinstance(location, str):
+        try:
+            if location.strip().startswith("{"):
+                return json.loads(location)
+            return {"raw": location}
+        except Exception:
+            return {"raw": location}
+    return None
+
+
+def _ensure_user_and_session(
+    db: Session,
+    user_id: Optional[str],
+    session_id: Optional[str],
+    location: Optional[Dict[str, Any]],
+) -> Optional[SessionModel]:
+    if user_id:
+        usr = db.query(User).filter(User.user_id == user_id).first()
+        if not usr:
+            usr = User(user_id=user_id, device_id=user_id)
+            db.add(usr)
+            db.flush()
+
+    if not session_id:
+        return None
+
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if session:
+        return session
+
+    initial_title = "Personal Visit"
+    if location:
+        initial_title = location.get("museum") or location.get("city") or initial_title
+
+    session = SessionModel(
+        id=session_id,
+        user_id=user_id or "anonymous",
+        title=initial_title,
+    )
+    db.add(session)
+    db.flush()
+    return session
+
+
+def _apply_analysis_to_saved_artwork(
+    db: Session,
+    artwork: SavedArtwork,
+    parsed_result: Dict[str, Any],
+    vision_ref_urls: Optional[List[str]],
+) -> Dict[str, Optional[str]]:
+    artwork.artist_name = parsed_result["artist_name"]
+    artwork.artwork_name = parsed_result["artwork_name"]
+    artwork.analysis = parsed_result["analysis"]
+    artwork.movement = parsed_result["movement"]
+    artwork.period_bucket = parsed_result["period_bucket"]
+    artwork.is_recognized = 1 if (
+        parsed_result["artist_name"].lower() != "unknown artist" and
+        parsed_result["artwork_name"].lower() not in {"unknown", "untitled"}
+    ) else 0
+    artwork.analysis_status = "analyzed"
+    artwork.analysis_error = None
+    artwork.analysis_completed_at = datetime.utcnow()
+    if vision_ref_urls:
+        artwork.reference_urls = vision_ref_urls
+
+    current_params = dict(artwork.params) if isinstance(artwork.params, dict) else {}
+    if parsed_result["date"] is not None:
+        current_params["date"] = parsed_result["date"]
+    if parsed_result["medium"] is not None:
+        current_params["medium"] = parsed_result["medium"]
+    artwork.params = current_params
+
+    if parsed_result["tags"]:
+        batch_link_tags(db, artwork, parsed_result["tags"])
+
+    entity_id_fast = None
+    artist_entity_id_fast = None
+    linked_artist_entity_id = artwork.artist_entity_id
+    if artwork.artist_name and artwork.artist_name != "Unknown Artist" and artwork.artwork_name:
+        try:
+            entity = upsert_artwork_entity(db, artwork.artist_name, artwork.artwork_name)
+            artist_ent = upsert_artist_entity(db, artwork.artist_name)
+            db.flush()
+            artwork.artwork_entity_id = entity.id
+            artwork.artist_entity_id = artist_ent.id
+            linked_artist_entity_id = artist_ent.id
+            if entity.dim_status in (None, "pending"):
+                entity_id_fast = entity.id
+            if artist_ent.bio_status in (None, "pending"):
+                artist_entity_id_fast = artist_ent.id
+        except Exception as exc:
+            logger.warning("Entity upsert failed while enriching artwork %s: %s", artwork.id, exc)
+
+    return {
+        "entity_id_fast": entity_id_fast,
+        "artist_entity_id_fast": artist_entity_id_fast,
+        "linked_artist_entity_id": linked_artist_entity_id,
+    }
+
+
+def _create_saved_artwork_record_sync(
+    user_id: Optional[str],
+    session_id: Optional[str],
+    photo_uri: str,
+    location: Optional[Dict[str, Any]],
+    photo_time: Optional[str],
+    source: str = "upload",
+    sequence_number: Optional[int] = None,
+) -> str:
+    with SessionLocal() as local_db:
+        session = _ensure_user_and_session(local_db, user_id, session_id, location)
+        artwork = SavedArtwork(
+            photo_uri=photo_uri,
+            artist_name="Unknown Artist",
+            artwork_name="Untitled",
+            user_id=user_id,
+            is_recognized=0,
+            analysis=None,
+            params={},
+            session_id=session_id,
+            location=location,
+            photo_time=photo_time,
+            analysis_status="pending",
+            analysis_error=None,
+        )
+        local_db.add(artwork)
+        local_db.commit()
+        local_db.refresh(artwork)
+
+        _ensure_session_artwork_link(
+            local_db,
+            session_id=session_id,
+            artwork_id=str(artwork.id),
+            source=source,
+            sequence_number=sequence_number,
+        )
+        local_db.commit()
+
+        return str(artwork.id)
 
 
 def _normalize(s: str) -> str:
@@ -1172,343 +1354,6 @@ async def analyze_artist_stream(
     )
 
 
-@router.post("/artwork-chat")
-async def analyze_bite(
-    query: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
-    artist_name: Optional[str] = Form(None),
-    artwork_name: Optional[str] = Form(None),
-    conversation_history: Optional[str] = Form(None),
-    artwork_id: Optional[str] = Form(None),
-    model: Optional[AIProvider] = Form(None),
-    identity: Optional[str] = Form("default"),
-    language: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
-):
-    """
-    Get artwork insight based on query and context
-
-    Two modes:
-    1. **artwork_id mode**: Pass artwork_id to read history from DB and persist messages
-    2. **stateless mode**: Pass conversation_history as JSON (no DB writes)
-
-    - **query**: User's question
-    - **image**: Image file (optional)
-    - **artist_name**: Artist name (used in stateless mode or as override)
-    - **artwork_name**: Artwork name (used in stateless mode or as override)
-    - **artwork_id**: If provided, reads/writes conversation from/to DB
-    - **conversation_history**: JSON array of [{role, content}, ...] for stateless mode
-    - **model**: AI model preference
-    - **identity**: AI persona
-    - **language**: Response language
-    """
-    ai_provider = determine_ai_provider(model)
-
-    try:
-        user_message = query or "Tell me more about this artwork."
-        session_id = None
-
-        # Fail if both image and artwork_id are missing
-        if not image and not artwork_id:
-            raise HTTPException(
-                status_code=400, 
-                detail="Must provide either an image or an artwork_id (session context)"
-            )
-
-        image_bytes = None
-        if image:
-            image_bytes, image_metadata = await process_image(image)
-            
-            # Optionally override if needed
-            if image_metadata.get("exif_location"):
-                location = json.dumps(image_metadata["exif_location"])
-            if image_metadata.get("exif_timestamp"):
-                photo_time = image_metadata["exif_timestamp"]
-
-        previous_messages = []
-        artwork = None
-        user_msg_record = None
-
-        # Mode 1: artwork_id provided - use DB for conversation history
-        if artwork_id:
-            artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
-            if not artwork:
-                raise HTTPException(status_code=404, detail="Artwork not found")
-
-            # Use artwork's artist/artwork names unless overridden
-            if not artist_name:
-                artist_name = artwork.artist_name
-            if not artwork_name:
-                artwork_name = artwork.artwork_name
-
-            # Use artwork's session_id if not explicitly provided
-            if artwork.session_id:
-                session_id = artwork.session_id
-                logger.info(f"Inferred session_id {session_id} from artwork_id {artwork_id}")
-
-            # Load conversation history from DB
-            conversations = db.query(Conversation).filter(
-                Conversation.saved_artwork_id == artwork_id
-            ).order_by(Conversation.sequence_number).all()
-
-            previous_messages = [
-                ConversationMessage(role=c.role, content=c.content)
-                for c in conversations
-            ]
-
-            # Load image from storage if not provided in request
-            if not image_bytes and artwork.photo_uri:
-                try:
-                    # Find the appropriate storage service for this URI
-                    storage = StorageFactory.get_service_for_uri(artwork.photo_uri)
-                    if storage:
-                        image_bytes = await storage.load(artwork.photo_uri)
-                        logger.info(f"Loaded image from storage: {artwork.photo_uri}")
-                    else:
-                        # For iOS local paths, we can't load on server
-                        logger.warning(f"Cannot load image - no storage handler for URI: {artwork.photo_uri}")
-                except Exception as e:
-                    logger.error(f"Failed to load image from storage {artwork.photo_uri}: {e}")
-
-            # Get next sequence number (most robust way)
-            max_seq = db.query(func.max(Conversation.sequence_number)).filter(
-                Conversation.saved_artwork_id == artwork_id
-            ).scalar()
-            next_seq = (max_seq + 1) if max_seq is not None else 0
-
-            # Write user message to DB FIRST (before LLM call)
-            user_msg_record = Conversation(
-                saved_artwork_id=artwork_id,
-                sequence_number=next_seq,
-                role="user",
-                content=user_message
-            )
-            db.add(user_msg_record)
-            db.flush()  # Persist user message immediately
-
-        # Mode 2: stateless mode - parse conversation_history from JSON
-        elif conversation_history:
-            try:
-                conv_data = json.loads(conversation_history)
-                previous_messages = [
-                    ConversationMessage(role=msg.get('role', 'user'), content=msg.get('content', ''))
-                    for msg in conv_data if msg.get('content')
-                ]
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse conversation_history JSON")
-
-        # Get session context if session_id provided
-        session_context = None
-        if session_id:
-            session_context = await get_session_context(session_id)
-
-        # Call LLM
-        ai_service = AIServiceFactory.get_service(ai_provider)
-        bite_text = await ai_service.get_artwork_bite(
-            image_bytes,
-            artist_name or "Unknown Artist",
-            artwork_name or "Unknown",
-            user_message,
-            previous_messages,
-            identity=identity,
-            language=language,
-            session_context=session_context
-        )
-
-        # If artwork_id mode, write assistant message to DB
-        if artwork_id and artwork:
-            next_seq = (user_msg_record.sequence_number + 1) if user_msg_record else len(previous_messages)
-            assistant_msg_record = Conversation(
-                saved_artwork_id=artwork_id,
-                sequence_number=next_seq,
-                role="assistant",
-                content=bite_text
-            )
-            db.add(assistant_msg_record)
-            db.commit()
-
-        return {
-            "response": bite_text,
-            "query": query,
-            "model_used": ai_provider.value,
-            "artwork_id": artwork_id
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        if "API error" in str(e):
-            raise HTTPException(status_code=503, detail=str(e))
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
-
-
-@router.post("/artwork-chat-stream")
-async def analyze_bite_stream(
-    query: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
-    artist_name: Optional[str] = Form(None),
-    artwork_name: Optional[str] = Form(None),
-    conversation_history: Optional[str] = Form(None),
-    artwork_id: Optional[str] = Form(None),
-    model: Optional[AIProvider] = Form(None),
-    identity: Optional[str] = Form("default"),
-    language: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
-):
-    """
-    Stream artwork insight based on query and context using SSE
-    """
-    ai_provider = determine_ai_provider(model)
-
-    try:
-        user_message = query or "Tell me more about this artwork."
-        session_id = None
-
-        if not image and not artwork_id:
-            raise HTTPException(
-                status_code=400, 
-                detail="Must provide either an image or an artwork_id (session context)"
-            )
-
-        image_bytes = None
-        if image:
-            image_bytes, image_metadata = await process_image(image)
-            
-            # Optionally override if needed
-            if image_metadata.get("exif_location"):
-                location = json.dumps(image_metadata["exif_location"])
-            if image_metadata.get("exif_timestamp"):
-                photo_time = image_metadata["exif_timestamp"]
-
-        previous_messages = []
-        artwork = None
-        user_msg_record = None
-
-        # Mode 1: artwork_id provided - use DB for conversation history
-        if artwork_id:
-            artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
-            if not artwork:
-                raise HTTPException(status_code=404, detail="Artwork not found")
-
-            if not artist_name:
-                artist_name = artwork.artist_name
-            if not artwork_name:
-                artwork_name = artwork.artwork_name
-
-            # Use artwork's session_id if not explicitly provided
-            if not session_id and artwork.session_id:
-                session_id = artwork.session_id
-                logger.info(f"Inferred session_id {session_id} from artwork_id {artwork_id}")
-
-            conversations = db.query(Conversation).filter(
-                Conversation.saved_artwork_id == artwork_id
-            ).order_by(Conversation.sequence_number).all()
-
-            previous_messages = [
-                ConversationMessage(role=c.role, content=c.content)
-                for c in conversations
-            ]
-
-            if not image_bytes and artwork.photo_uri:
-                try:
-                    storage = StorageFactory.get_service_for_uri(artwork.photo_uri)
-                    if storage:
-                        image_bytes = await storage.load(artwork.photo_uri)
-                except Exception as e:
-                    logger.error(f"Failed to load image: {e}")
-
-            # Get next sequence number (most robust way)
-            max_seq = db.query(func.max(Conversation.sequence_number)).filter(
-                Conversation.saved_artwork_id == artwork_id
-            ).scalar()
-            next_seq = (max_seq + 1) if max_seq is not None else 0
-            user_msg_record = Conversation(
-                saved_artwork_id=artwork_id,
-                sequence_number=next_seq,
-                role="user",
-                content=user_message
-            )
-            db.add(user_msg_record)
-            db.commit()  # Commit user message immediately so it's visible to other sessions
-            db.refresh(user_msg_record) # Ensure we have the latest state for sequence number
-
-        # Mode 2: stateless mode
-        elif conversation_history:
-            try:
-                conv_data = json.loads(conversation_history)
-                previous_messages = [
-                    ConversationMessage(role=msg.get('role', 'user'), content=msg.get('content', ''))
-                    for msg in conv_data if msg.get('content')
-                ]
-            except json.JSONDecodeError:
-                pass
-
-        # Get session context if session_id provided
-        session_context = None
-        if session_id:
-            session_context = await get_session_context(session_id)
-
-        async def event_generator():
-            nonlocal user_message, artist_name, artwork_name, previous_messages, identity, language, ai_provider, artwork_id, user_msg_record, session_context
-
-            full_text = ""
-            ai_service = AIServiceFactory.get_service(ai_provider)
-
-            try:
-                async for chunk in ai_service.get_artwork_bite_stream(
-                    image_bytes,
-                    artist_name or "Unknown Artist",
-                    artwork_name or "Unknown",
-                    user_message,
-                    previous_messages,
-                    identity=identity,
-                    language=language,
-                    session_context=session_context
-                ):
-                    full_text += chunk
-                    yield f"event: chunk\ndata: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
-
-                # If artwork_id mode, write assistant message to DB
-                if artwork_id:
-                    # Create a new session for the background task to avoid issues with the main request session
-                    from app.database.connection import SessionLocal
-                    with SessionLocal() as background_db:
-                        next_seq = (user_msg_record.sequence_number + 1) if user_msg_record else len(previous_messages)
-                        assistant_msg_record = Conversation(
-                            saved_artwork_id=artwork_id,
-                            sequence_number=next_seq,
-                            role="assistant",
-                            content=full_text
-                        )
-                        background_db.add(assistant_msg_record)
-                        background_db.commit()
-
-                # Send completion event
-                yield f"event: complete\ndata: {json.dumps({'type': 'result', 'response': full_text, 'model_used': ai_provider.value})}\n\n"
-
-            except Exception as e:
-                logger.error(f"Streaming chat error: {str(e)}", exc_info=True)
-                yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
-
-        return StreamingResponse(
-            event_generator(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"
-            }
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in analyze_bite_stream: {str(e)}", exc_info=True)
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/suggest-topic")
 async def suggest_topic(
     artist_name: str = Form(...),
@@ -2551,7 +2396,7 @@ async def get_artworks(
         artworks = query.order_by(SavedArtwork.created_at.desc()).offset(offset).limit(limit).all()
 
         return {
-            "items": [a.to_dict(include_conversations=True) for a in artworks],
+            "items": [a.to_dict() for a in artworks],
             "count": len(artworks),
             "offset": offset,
             "limit": limit
@@ -2677,7 +2522,7 @@ async def get_artist_artworks(
         .order_by(SavedArtwork.created_at.desc())
         .all()
     )
-    return [a.to_dict(include_conversations=False) for a in artworks]
+    return [a.to_dict() for a in artworks]
 
 
 @router.post("/artworks/{artwork_id}/artist")
@@ -2689,6 +2534,11 @@ async def backfill_artwork_artist(
     artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
+    artwork.analysis_status = "analyzing"
+    artwork.analysis_error = None
+    artwork.analysis_attempted_at = datetime.utcnow()
+    db.commit()
+    db.refresh(artwork)
 
     artist_name = artwork.artist_name or ""
     if not artist_name or artist_name.lower() in ("unknown", "unknown artist", ""):
@@ -2724,7 +2574,7 @@ async def backfill_artwork_artist(
 
 @router.get("/artworks/{artwork_id}")
 async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
-    """Get a specific artwork with full conversation history"""
+    """Get a specific artwork instance with its saved metadata."""
     artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
 
     if not artwork:
@@ -2934,7 +2784,7 @@ async def analyze_artwork_unified(
         if not user_id:
             user_id = existing_artwork.user_id or existing_artwork.device_id
         if not session_id:
-            session_id = existing_artwork.session_id
+            session_id = _get_primary_session_id(db, artwork_id)
         if location is None:
             location = existing_artwork.location
         if photo_time is None:
@@ -2980,20 +2830,56 @@ async def analyze_artwork_unified(
     elif location:
         parsed_location = location
 
+    if not existing_artwork and user_id:
+        generated_photo_uri = photo_uri
+        if not generated_photo_uri:
+            if client_type == "web" or image is not None:
+                storage = get_storage_service()
+                generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
+            else:
+                generated_photo_uri = f"artwork_{uuid.uuid4().hex[:12]}"
+
+        existing_artwork_id = await anyio.to_thread.run_sync(
+            _create_saved_artwork_record_sync,
+            user_id,
+            session_id,
+            generated_photo_uri,
+            parsed_location,
+            photo_time,
+            "upload",
+            None,
+        )
+        existing_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == existing_artwork_id).first()
+    if existing_artwork:
+        existing_artwork.analysis_status = "analyzing"
+        existing_artwork.analysis_error = None
+        existing_artwork.analysis_attempted_at = datetime.utcnow()
+        db.commit()
+        db.refresh(existing_artwork)
+
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
-    vision_hint, vision_ref_urls = await get_vision_hint(image_bytes)
-    session_context = await get_session_context(session_id) if session_id else None
 
-    analysis_text = await ai_service.identify_artist(
-        image_bytes,
-        identity=identity,
-        language=language,
-        session_context=session_context,
-        vision_hint=vision_hint,
-        artist_name=artist_name,
-        artwork_name=artwork_name,
-    )
+    try:
+        vision_hint, vision_ref_urls = await get_vision_hint(image_bytes)
+        session_context = await get_session_context(session_id) if session_id else None
+
+        analysis_text = await ai_service.identify_artist(
+            image_bytes,
+            identity=identity,
+            language=language,
+            session_context=session_context,
+            vision_hint=vision_hint,
+            artist_name=artist_name,
+            artwork_name=artwork_name,
+        )
+    except Exception as exc:
+        if existing_artwork:
+            existing_artwork.analysis_status = "failed"
+            existing_artwork.analysis_error = str(exc)
+            existing_artwork.analysis_completed_at = None
+            db.commit()
+        raise
 
     fallback_artist = existing_artwork.artist_name if existing_artwork and existing_artwork.artist_name else "Unknown Artist"
     fallback_title = existing_artwork.artwork_name if existing_artwork and existing_artwork.artwork_name else "Untitled"
@@ -3003,41 +2889,15 @@ async def analyze_artwork_unified(
     linked_artist_entity_id = existing_artwork.artist_entity_id if existing_artwork else None
 
     if existing_artwork:
-        existing_artwork.artist_name = parsed_result["artist_name"]
-        existing_artwork.artwork_name = parsed_result["artwork_name"]
-        existing_artwork.analysis = parsed_result["analysis"]
-        existing_artwork.movement = parsed_result["movement"]
-        existing_artwork.period_bucket = parsed_result["period_bucket"]
-        existing_artwork.is_recognized = 1 if (
-            parsed_result["artist_name"].lower() != "unknown artist" and
-            parsed_result["artwork_name"].lower() != "unknown"
-        ) else 0
-        if vision_ref_urls:
-            existing_artwork.reference_urls = vision_ref_urls
-        current_params = dict(existing_artwork.params) if isinstance(existing_artwork.params, dict) else {}
-        if parsed_result["date"] is not None:
-            current_params["date"] = parsed_result["date"]
-        if parsed_result["medium"] is not None:
-            current_params["medium"] = parsed_result["medium"]
-        existing_artwork.params = current_params
-        if parsed_result["tags"]:
-            batch_link_tags(db, existing_artwork, parsed_result["tags"])
-        entity_id_fast = None
-        artist_entity_id_fast = None
-        if existing_artwork.artist_name and existing_artwork.artist_name != "Unknown Artist" and existing_artwork.artwork_name:
-            try:
-                entity = upsert_artwork_entity(db, existing_artwork.artist_name, existing_artwork.artwork_name)
-                artist_ent = upsert_artist_entity(db, existing_artwork.artist_name)
-                db.flush()
-                existing_artwork.artwork_entity_id = entity.id
-                existing_artwork.artist_entity_id = artist_ent.id
-                linked_artist_entity_id = artist_ent.id
-                if entity.dim_status in (None, "pending"):
-                    entity_id_fast = entity.id
-                if artist_ent.bio_status in (None, "pending"):
-                    artist_entity_id_fast = artist_ent.id
-            except Exception as e:
-                logger.warning("Entity upsert failed in unified refresh: %s", e)
+        bg_ids = _apply_analysis_to_saved_artwork(
+            db,
+            existing_artwork,
+            parsed_result,
+            vision_ref_urls,
+        )
+        entity_id_fast = bg_ids["entity_id_fast"]
+        artist_entity_id_fast = bg_ids["artist_entity_id_fast"]
+        linked_artist_entity_id = bg_ids["linked_artist_entity_id"]
         db.commit()
         db.refresh(existing_artwork)
 
@@ -3066,6 +2926,8 @@ async def analyze_artwork_unified(
             "reference_urls": vision_ref_urls,
             "artist_entity_id": linked_artist_entity_id,
             "model_used": ai_provider.value,
+            "analysis_status": existing_artwork.analysis_status,
+            "analysis_error": existing_artwork.analysis_error,
         }
 
     response = {"analysis": parsed_result["analysis"], "model_used": ai_provider.value}
@@ -3215,6 +3077,69 @@ async def analyze_artwork_unified(
     return response
 
 
+@router.post("/artworks/upload")
+async def save_artwork_upload(
+    image: UploadFile = File(...),
+    user_id: Optional[str] = Form(None),
+    client_type: Optional[str] = Form("web"),
+    photo_uri: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    photo_time: Optional[str] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
+    source: Optional[str] = Form("upload"),
+    sequence_number: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    require_same_user(current_user, user_id)
+    if user_id and settings.use_database:
+        check_artwork_quota(user_id, db)
+
+    image_bytes, image_metadata = await process_image(image)
+
+    if location:
+        logger.info("Metadata Source [Upload Location]: FRONTEND (Value: %s)", location)
+    elif image_metadata.get("location_data"):
+        location = json.dumps(image_metadata["location_data"])
+        logger.info("Metadata Source [Upload Location]: PHOTO EXIF (Resolved: %s)", location)
+    elif latitude is not None and longitude is not None:
+        location_data = await reverse_geocode(latitude, longitude)
+        location = json.dumps(location_data)
+        logger.info("Metadata Source [Upload Location]: FRONTEND COORDS (Resolved: %s)", location)
+
+    if image_metadata.get("exif_timestamp"):
+        photo_time = image_metadata["exif_timestamp"]
+
+    if client_type == "web" or not client_type:
+        storage = get_storage_service()
+        generated_photo_uri = await storage.save(image_bytes, image.filename or "artwork.jpg", user_id)
+    else:
+        generated_photo_uri = photo_uri or f"artwork_{uuid.uuid4().hex[:12]}"
+
+    parsed_location = _coerce_location_payload(location)
+
+    artwork_id = await anyio.to_thread.run_sync(
+        _create_saved_artwork_record_sync,
+        user_id,
+        session_id,
+        generated_photo_uri,
+        parsed_location,
+        photo_time,
+        source or "upload",
+        sequence_number,
+    )
+
+    saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    if not saved_artwork:
+        raise HTTPException(status_code=500, detail="Artwork was saved but could not be reloaded")
+
+    response = saved_artwork.to_dict()
+    response["photo_uri"] = generated_photo_uri
+    return response
+
+
 @router.post("/artworks/{artwork_id}/reanalyze")
 async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
     """
@@ -3245,9 +3170,15 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
 
     vision_hint, vision_ref_urls = await get_vision_hint(image_bytes)
 
-    analysis_text = await ai_service.identify_artist(
-        image_bytes, identity="default", vision_hint=vision_hint,
-    )
+    try:
+        analysis_text = await ai_service.identify_artist(
+            image_bytes, identity="default", vision_hint=vision_hint,
+        )
+    except Exception as exc:
+        artwork.analysis_status = "failed"
+        artwork.analysis_error = str(exc)
+        db.commit()
+        raise
 
     # Parse structured response
     artist_name = artwork.artist_name
@@ -3286,6 +3217,9 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
     artwork.analysis      = extracted_analysis
     artwork.movement      = movement_val
     artwork.period_bucket = period_bucket_val
+    artwork.analysis_status = "analyzed"
+    artwork.analysis_error = None
+    artwork.analysis_completed_at = datetime.utcnow()
     artwork.is_recognized = 1 if (
         artist_name.lower() != "unknown artist" and artwork_name.lower() != "unknown"
     ) else 0
@@ -3325,34 +3259,18 @@ async def delete_artwork(artwork_id: str, user_id: str = Query(...), db: Session
     if artwork.user_id != user_id and artwork.device_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this artwork")
 
-    session_id = artwork.session_id
-    linked_session_ids = [
-        row[0]
-        for row in db.query(SessionArtwork.session_id).filter(SessionArtwork.artwork_id == artwork_id).all()
-    ]
+    linked_session_ids = _get_artwork_session_ids(db, artwork_id)
     db.delete(artwork)
     db.commit()
 
-    # Auto-cleanup legacy empty session
-    if session_id:
-        remaining = db.query(SavedArtwork).filter(SavedArtwork.session_id == session_id).count()
-        linked_remaining = db.query(SessionArtwork).filter(SessionArtwork.session_id == session_id).count()
-        if remaining == 0 and linked_remaining == 0:
-            session_to_del = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-            if session_to_del:
-                db.delete(session_to_del)
-                db.commit()
-                logger.info(f"Auto-deleted empty session: {session_id}")
-
     for linked_session_id in linked_session_ids:
-        remaining_legacy = db.query(SavedArtwork).filter(SavedArtwork.session_id == linked_session_id).count()
         remaining_links = db.query(SessionArtwork).filter(SessionArtwork.session_id == linked_session_id).count()
-        if remaining_legacy == 0 and remaining_links == 0:
+        if remaining_links == 0:
             session_to_del = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()
             if session_to_del:
                 db.delete(session_to_del)
                 db.commit()
-                logger.info(f"Auto-deleted empty linked session: {linked_session_id}")
+                logger.info(f"Auto-deleted empty session: {linked_session_id}")
 
     return {"message": "Artwork deleted successfully"}
 
@@ -3406,12 +3324,7 @@ async def batch_delete_artworks(
     """
     try:
         # Identify affected sessions before deletion
-        affected_sessions = db.query(SavedArtwork.session_id).filter(
-            SavedArtwork.id.in_(artwork_ids),
-            SavedArtwork.user_id == user_id
-        ).distinct().all()
-        affected_session_ids = {s[0] for s in affected_sessions if s[0]}
-        affected_session_ids.update(
+        affected_session_ids = set(
             sid for (sid,) in db.query(SessionArtwork.session_id).filter(SessionArtwork.artwork_id.in_(artwork_ids)).distinct().all()
         )
 
@@ -3424,9 +3337,8 @@ async def batch_delete_artworks(
 
         # Cleanup empty sessions
         for sid in affected_session_ids:
-            remaining = db.query(SavedArtwork).filter(SavedArtwork.session_id == sid).count()
             linked_remaining = db.query(SessionArtwork).filter(SessionArtwork.session_id == sid).count()
-            if remaining == 0 and linked_remaining == 0:
+            if linked_remaining == 0:
                 s_to_del = db.query(SessionModel).filter(SessionModel.id == sid).first()
                 if s_to_del:
                     db.delete(s_to_del)
@@ -3518,12 +3430,6 @@ async def delete_session(session_id: str, user_id: str = Query(...), db: Session
 
     if session_record.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this session")
-
-    # Preserve artworks by detaching any legacy one-to-one links from this session
-    db.query(SavedArtwork).filter(SavedArtwork.session_id == session_id).update(
-        {SavedArtwork.session_id: None},
-        synchronize_session=False,
-    )
 
     # Remove many-to-many session links
     db.query(SessionArtwork).filter(SessionArtwork.session_id == session_id).delete()
@@ -3639,7 +3545,7 @@ async def attach_artworks_to_session(
     )
     return {
         "inserted": inserted,
-        "artworks": [art.to_dict(include_conversations=False) for art in linked_artworks],
+        "artworks": [art.to_dict() for art in linked_artworks],
     }
 
 
@@ -3663,16 +3569,7 @@ async def get_session_artworks(
         .all()
     )
 
-    if linked_artworks:
-        return {"items": [art.to_dict(include_conversations=False) for art in linked_artworks]}
-
-    legacy_artworks = (
-        db.query(SavedArtwork)
-        .filter(SavedArtwork.session_id == session_id, SavedArtwork.user_id == user_id)
-        .order_by(SavedArtwork.created_at.asc())
-        .all()
-    )
-    return {"items": [art.to_dict(include_conversations=False) for art in legacy_artworks]}
+    return {"items": [art.to_dict() for art in linked_artworks]}
 
 
 @router.put("/sessions/{session_id}")
@@ -3745,9 +3642,7 @@ async def get_session_context(session_id: str) -> Optional[Dict[str, Any]]:
                 .order_by(SessionArtwork.sequence_number.asc())
                 .all()
             )
-            artworks = linked_artworks or db.query(SavedArtwork).filter(
-                SavedArtwork.session_id == session_id
-            ).order_by(SavedArtwork.created_at).all()
+            artworks = linked_artworks
             
             if not artworks and not session_record.narrative_summary:
                 return None

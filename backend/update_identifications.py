@@ -10,6 +10,8 @@ Usage:
 import os, sys, json, re, asyncio, argparse, httpx
 sys.path.insert(0, '.')
 
+from sqlalchemy.orm import selectinload
+
 from app.database.connection import SessionLocal
 from app.database.models import SavedArtwork
 from app.services.ai_service import AIService, ARTWORK_ANALYSIS_SCHEMA
@@ -56,15 +58,21 @@ async def main():
     if args.limit:
         query = query.limit(args.limit)
 
-    artworks = query.order_by(SavedArtwork.session_id, SavedArtwork.created_at).all()
+    artworks = (
+        query
+        .options(selectinload(SavedArtwork.session_links))
+        .order_by(SavedArtwork.created_at)
+        .all()
+    )
     total = len(artworks)
-    print(f"Processing {total} artworks (grouped by session)...\n")
+    print(f"Processing {total} artworks (grouped by session links)...\n")
 
     # Build session groups so we can pass prior identifications as context
     from collections import defaultdict
     session_groups: dict = defaultdict(list)
     for aw in artworks:
-        session_groups[aw.session_id or aw.id].append(aw)
+        primary_session_id = aw.session_links[0].session_id if aw.session_links else aw.id
+        session_groups[primary_session_id].append(aw)
 
     done = 0
     idx = 0

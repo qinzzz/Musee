@@ -65,14 +65,6 @@ export function useAppNavigationSync({
 
     const initialState = getInitialNavigationState(window.location.pathname);
 
-    if (window.location.pathname.startsWith('/art-movements/')) {
-      onSetMovementPageContext(null);
-      onSetArtistPageContext(null);
-      onSetActiveTab('collect');
-      onSetCollectTab('movements');
-      return;
-    }
-
     onSetArtistPageContext(initialState.artistPageContext);
     onSetMovementPageContext(null);
     onSetActiveTab(initialState.activeTab);

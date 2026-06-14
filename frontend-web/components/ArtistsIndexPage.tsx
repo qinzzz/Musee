@@ -1,10 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { ArtistEntity } from '../types';
-import { fetchUserArtists } from '../api/artworks';
-
-interface ArtistRow extends ArtistEntity {
-  artwork_count: number;
-}
+import React from 'react';
+import { type ArtistRow } from '../api/artworks';
+import { useUserArtists } from '../hooks/useUserArtists';
 
 interface Props {
   userId: string;
@@ -13,17 +9,14 @@ interface Props {
 }
 
 export default function ArtistsIndexPage({ userId, onSelectArtist, onClose }: Props) {
-  const [artists, setArtists] = useState<ArtistRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchUserArtists(userId)
-      .then(data => { if (!cancelled) setArtists(data); })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setIsLoading(false); });
-    return () => { cancelled = true; };
-  }, [userId]);
+  const {
+    artists,
+    isLoading,
+    error,
+  } = useUserArtists({
+    userId,
+    enabled: true,
+  });
 
   return (
     <div
@@ -53,6 +46,10 @@ export default function ArtistsIndexPage({ userId, onSelectArtist, onClose }: Pr
                 <div key={i} className="h-16 rounded-xl bg-neutral-200/40 animate-pulse" />
               ))}
             </div>
+          ) : error && artists.length === 0 ? (
+            <p className="text-neutral-400 text-sm italic mt-8 text-center">
+              Couldn&apos;t load artists right now.
+            </p>
           ) : artists.length === 0 ? (
             <p className="text-neutral-400 text-sm italic mt-8 text-center">
               No artists recorded yet.

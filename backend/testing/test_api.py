@@ -582,56 +582,6 @@ class APITester:
             latency = time.time() - start_time if 'start_time' in locals() else 0
             self.log_test("PUT /api/artworks/{artwork_id}", "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
 
-    async def test_artwork_chat(self, language: str = "english"):
-        """Test POST /api/artwork-chat endpoint (stateless)"""
-        image_path = self.test_image_path
-        test_name = f"POST /api/artwork-chat [{language}]" if self.config.grid_test else "POST /api/artwork-chat"
-
-        if not image_path:
-            self.log_test(test_name, "SKIP", "No images available")
-            return
-
-        # Use artwork info from test data or defaults
-        artist_name = self.test_artwork_info.get('artist_name', 'Test Artist') if self.test_artwork_info else 'Test Artist'
-        artwork_name = self.test_artwork_info.get('artwork_name', 'Test Artwork') if self.test_artwork_info else 'Test Artwork'
-
-        try:
-            conversation_history = [
-                {"role": "assistant", "content": "This is a beautiful painting."},
-                {"role": "user", "content": "What technique did the artist use?"}
-            ]
-
-            data = aiohttp.FormData()
-            data.add_field('image', open(image_path, 'rb'), filename=image_path.name)
-            data.add_field('artist_name', artist_name)
-            data.add_field('artwork_name', artwork_name)
-            data.add_field('query', 'Tell me about the brushwork technique.')
-            data.add_field('conversation_history', json.dumps(conversation_history))
-            if self.config.grid_test:
-                data.add_field('language', language)
-
-            start_time = time.time()
-            async with self.session.post(
-                f"{self.config.base_url}/api/artwork-chat",
-                data=data
-            ) as response:
-                result = await response.json()
-                latency = time.time() - start_time
-                assert response.status == 200
-                assert 'response' in result
-                assert 'model_used' in result
-
-                self.log_test(
-                    test_name,
-                    "PASS",
-                    f"Got response (model: {result.get('model_used')}) | Latency: {latency:.3f}s"
-                )
-                # Print LLM response in verbose mode
-                self.log_llm_response(result.get('response', ''))
-        except Exception as e:
-            latency = time.time() - start_time if 'start_time' in locals() else 0
-            self.log_test(test_name, "FAIL", f"{str(e)} | Latency: {latency:.3f}s")
-
     async def test_suggest_topic(self, language: str = "english"):
         """Test POST /api/suggest-topic endpoint (stateless)"""
         test_name = f"POST /api/suggest-topic [{language}]" if self.config.grid_test else "POST /api/suggest-topic"
@@ -848,7 +798,6 @@ class APITester:
             ("Get Saved Artworks", self.test_get_saved_artworks, False),
             ("Get Saved Artwork", self.test_get_saved_artwork, False),
             ("Update Saved Artwork", self.test_update_saved_artwork, False),
-            ("Artwork Chat", self.test_artwork_chat, True),
             ("Suggest Topic", self.test_suggest_topic, True),
             ("Generate Summary", self.test_generate_summary, True),
 
@@ -949,7 +898,7 @@ Examples:
     parser.add_argument(
         '--llm',
         action='store_true',
-        help='Only run LLM-calling tests (artwork-analyze, artwork-chat, suggest-topic, generate-summary)'
+        help='Only run LLM-calling tests (artwork-analyze, suggest-topic, generate-summary)'
     )
 
     parser.add_argument(
