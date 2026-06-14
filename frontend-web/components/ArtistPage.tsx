@@ -27,7 +27,7 @@ function rawToGalleryItem(raw: any): GalleryItem {
     keywords: raw.artwork_tags?.map((t: any) => t.name) ?? [],
     vibe: raw.params?.vibe ?? { backgroundColor: '#1a1a1a', padding: 0, borderRadius: 'none', borderType: 'none', accentColor: '#888' },
     timestamp: raw.created_at ? new Date(raw.created_at).getTime() : 0,
-    conversation: (raw.conversation_history ?? []).map((m: any) => ({ role: m.role, text: m.content })),
+    conversation: [],
     artistName: raw.artist_name,
     artworkName: raw.artwork_name,
     description: raw.summary,

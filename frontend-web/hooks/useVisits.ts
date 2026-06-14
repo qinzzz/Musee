@@ -46,6 +46,7 @@ type UseVisitsOptions = {
   artworksLoaded: boolean;
   deleteConfirmation: DeleteConfirmation;
   defaultVisitTitle: string;
+  initialIsComposingNewSession?: boolean;
   visitDraftsStorageKey: string;
   visitStreamsStorageKey: string;
   sessionGoalsStorageKey: string;
@@ -121,13 +122,14 @@ export function useVisits({
   artworksLoaded,
   deleteConfirmation,
   defaultVisitTitle,
+  initialIsComposingNewSession = false,
   visitDraftsStorageKey,
   visitStreamsStorageKey,
   sessionGoalsStorageKey,
 }: UseVisitsOptions) {
   const [visitSearch, setVisitSearch] = useState('');
   const [filteredVisitId, setFilteredVisitId] = useState<string | null>(null);
-  const [isComposingNewSession, setIsComposingNewSession] = useState(false);
+  const [isComposingNewSession, setIsComposingNewSession] = useState(initialIsComposingNewSession);
   const [openVisitMenuId, setOpenVisitMenuId] = useState<string | null>(null);
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
   const [editingVisitTitle, setEditingVisitTitle] = useState('');

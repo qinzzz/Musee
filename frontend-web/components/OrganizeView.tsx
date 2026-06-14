@@ -1,13 +1,13 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { GalleryItem, Visit, Album, ArtistEntity, ArtworkClassification } from '../types';
-import { fetchUserArtists, type SmartCollection } from '../api/artworks';
+import React, { useState, useMemo, useRef } from 'react';
+import { GalleryItem, Visit, Album, ArtworkClassification } from '../types';
+import { type ArtistRow, type SmartCollection } from '../api/artworks';
 import GridView from './GridView';
-import SmartCollectionsView from './SmartCollectionsView';
 import CreateBoardModal from './CreateBoardModal';
 import ConfirmBoardDeleteModal from './ConfirmBoardDeleteModal';
 import CollectionGridSkeleton from './CollectionGridSkeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { buildArtistInvalidationKey, useUserArtists } from '../hooks/useUserArtists';
 
 const OverflowDotsIcon: React.FC<{ className?: string }> = ({ className = 'h-3.5 w-3.5' }) => (
   <svg viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
@@ -16,6 +16,8 @@ const OverflowDotsIcon: React.FC<{ className?: string }> = ({ className = 'h-3.5
     <circle cx="13" cy="8" r="1.25" />
   </svg>
 );
+
+const ARTIST_CARD_MEDIA_HEIGHT = 'h-[200px] sm:h-[220px]';
 
 const BoardCoverMosaic: React.FC<{ covers: string[] }> = ({ covers }) => {
   const slots = [covers[0] ?? null, covers[1] ?? null, covers[2] ?? null] as const;
@@ -47,13 +49,61 @@ const BoardCoverMosaic: React.FC<{ covers: string[] }> = ({ covers }) => {
   );
 };
 
-export type CollectTab = 'saved' | 'boards' | 'movements' | 'artists';
+const ArtistArtworkCluster: React.FC<{ works: GalleryItem[] }> = ({ works }) => {
+  const visibleWorks = works.slice(0, 3);
+
+  if (visibleWorks.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center rounded-[18px] bg-[var(--color-bg-tertiary)] text-neutral-300">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path d="M21 15l-5-5L5 21" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (visibleWorks.length === 1) {
+    const [work] = visibleWorks;
+    return (
+      <div className="h-full min-h-0 overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)]">
+        <img src={work.url} alt={work.artworkName || work.artistName || ''} className="block h-full w-full object-cover" />
+      </div>
+    );
+  }
+
+  if (visibleWorks.length === 2) {
+    return (
+      <div className="grid h-full min-h-0 grid-rows-2 gap-1.5">
+        {visibleWorks.map((work) => (
+          <div key={work.id} className="min-h-0 overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)]">
+            <img src={work.url} alt={work.artworkName || work.artistName || ''} className="block h-full w-full object-cover" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const [first, second, third] = visibleWorks;
+  return (
+    <div className="grid h-full min-h-0 grid-cols-2 grid-rows-[1.2fr_0.9fr] gap-1.5">
+      <div className="col-span-2 min-h-0 overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)]">
+        <img src={first.url} alt={first.artworkName || first.artistName || ''} className="block h-full w-full object-cover" />
+      </div>
+      <div className="min-h-0 overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)]">
+        <img src={second.url} alt={second.artworkName || second.artistName || ''} className="block h-full w-full object-cover" />
+      </div>
+      <div className="min-h-0 overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)]">
+        <img src={third.url} alt={third.artworkName || third.artistName || ''} className="block h-full w-full object-cover" />
+      </div>
+    </div>
+  );
+};
+
+export type CollectTab = 'saved' | 'boards' | 'artists';
 type SavedLayout = 'grid' | 'grouped';
 type ActiveFilter = 'all' | ArtworkClassification;
-
-interface ArtistRow extends ArtistEntity {
-  artwork_count: number;
-}
 
 interface Props {
   topBarLeftSlot?: React.ReactNode;
@@ -95,6 +145,7 @@ const OrganizeView: React.FC<Props> = ({
 }) => {
   const [savedLayout, setSavedLayout] = useState<SavedLayout>('grid');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
+  const [collectionSearch, setCollectionSearch] = useState('');
   const [selectedBoard, setSelectedBoard] = useState<'liked' | string | null>(null);
   const [newBoardName, setNewBoardName] = useState('');
   const [isSubmittingBoard, setIsSubmittingBoard] = useState(false);
@@ -104,22 +155,9 @@ const OrganizeView: React.FC<Props> = ({
   } | null>(null);
   const [renameBoardTarget, setRenameBoardTarget] = useState<Album | null>(null);
   const [deleteBoardTarget, setDeleteBoardTarget] = useState<Album | null>(null);
-  const [artists, setArtists] = useState<ArtistRow[]>([]);
-  const [artistsLoading, setArtistsLoading] = useState(false);
   const collectionUploadInputRef = useRef<HTMLInputElement>(null);
   const boards = albums || [];
-
-  // Fetch artists when the tab is first activated
-  useEffect(() => {
-    if (collectTab !== 'artists' || !userId || artists.length > 0) return;
-    let cancelled = false;
-    setArtistsLoading(true);
-    fetchUserArtists(userId)
-      .then(data => { if (!cancelled) setArtists(data); })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setArtistsLoading(false); });
-    return () => { cancelled = true; };
-  }, [collectTab, userId]);
+  const showCollectionUpload = true;
 
   const likedItems = useMemo(() => items.filter(i => likedIds?.has(i.id)), [items, likedIds]);
   const classificationCounts = useMemo(() => {
@@ -138,22 +176,51 @@ const OrganizeView: React.FC<Props> = ({
     );
   }, [items]);
   const showFilterBar = items.length > 0;
+  const normalizedCollectionSearch = collectionSearch.trim().toLowerCase();
+  const artistInvalidationKey = useMemo(() => buildArtistInvalidationKey(items), [items]);
+  const {
+    artists,
+    isLoading: artistsLoading,
+    error: artistsError,
+  } = useUserArtists({
+    userId,
+    invalidationKey: artistInvalidationKey,
+    enabled: collectTab === 'artists',
+    prefetch: Boolean(userId && items.length > 0),
+  });
 
   const filteredItems = useMemo(() => {
     if (activeFilter === 'all') return items;
     return items.filter((item) => (item.classification || 'unsorted') === activeFilter);
   }, [items, activeFilter]);
 
+  const searchedSavedItems = useMemo(() => {
+    if (!normalizedCollectionSearch) return filteredItems;
+    return filteredItems.filter((item) => {
+      const haystacks = [
+        item.artworkName,
+        item.artistName,
+        item.location?.museum_name,
+        item.location?.institution_name,
+        item.location?.city,
+        item.movement,
+        item.medium,
+        ...(item.keywords || []),
+      ].filter(Boolean) as string[];
+      return haystacks.some((value) => value.toLowerCase().includes(normalizedCollectionSearch));
+    });
+  }, [filteredItems, normalizedCollectionSearch]);
+
   const groupedItems = useMemo(() => {
     const groups = new Map<string, GalleryItem[]>();
-    [...filteredItems].sort((a, b) => b.timestamp - a.timestamp).forEach(item => {
+    [...searchedSavedItems].sort((a, b) => b.timestamp - a.timestamp).forEach(item => {
       const d = new Date(item.timestamp);
       const key = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(item);
     });
     return Array.from(groups.entries()).map(([label, groupItems]) => ({ label, items: groupItems }));
-  }, [filteredItems]);
+  }, [searchedSavedItems]);
 
   const boardDetailItems = useMemo(() => {
     if (!selectedBoard) return [];
@@ -161,6 +228,23 @@ const OrganizeView: React.FC<Props> = ({
     const album = boards.find(a => a.id === selectedBoard);
     return album ? items.filter(i => album.itemIds.includes(i.id)) : [];
   }, [selectedBoard, likedItems, boards, items]);
+
+  const searchedBoardDetailItems = useMemo(() => {
+    if (!normalizedCollectionSearch) return boardDetailItems;
+    return boardDetailItems.filter((item) => {
+      const haystacks = [
+        item.artworkName,
+        item.artistName,
+        item.location?.museum_name,
+        item.location?.institution_name,
+        item.location?.city,
+        item.movement,
+        item.medium,
+        ...(item.keywords || []),
+      ].filter(Boolean) as string[];
+      return haystacks.some((value) => value.toLowerCase().includes(normalizedCollectionSearch));
+    });
+  }, [boardDetailItems, normalizedCollectionSearch]);
 
   const boardDetailName = useMemo(() => {
     if (!selectedBoard) return '';
@@ -186,6 +270,30 @@ const OrganizeView: React.FC<Props> = ({
   const getArtistCovers = (artistId: string) =>
     items.filter(i => i.artistEntityId === artistId).slice(0, 4).map(i => i.url);
 
+  const searchedBoards = useMemo(() => {
+    if (!normalizedCollectionSearch) return boards;
+    return boards.filter((board) => board.name.toLowerCase().includes(normalizedCollectionSearch));
+  }, [boards, normalizedCollectionSearch]);
+
+  const searchedArtists = useMemo(() => {
+    if (!normalizedCollectionSearch) return artists;
+    return artists.filter((artist) =>
+      [artist.display_name, artist.nationality]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(normalizedCollectionSearch)),
+    );
+  }, [artists, normalizedCollectionSearch]);
+
+  const collectionSearchPlaceholder = useMemo(() => {
+    if (collectTab === 'saved') {
+      return selectedBoard ? `Search ${boardDetailName || 'board'}` : 'Search artworks';
+    }
+    if (collectTab === 'boards') {
+      return selectedBoard ? `Search ${boardDetailName || 'board'}` : 'Search boards';
+    }
+    return 'Search artists';
+  }, [boardDetailName, collectTab, selectedBoard]);
+
   const boardOverflowButtonClassName =
     'flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-400 transition-colors hover:border-neutral-300 hover:text-neutral-700';
 
@@ -200,7 +308,6 @@ const OrganizeView: React.FC<Props> = ({
   const TABS: { id: CollectTab; label: string }[] = [
     { id: 'saved',     label: 'All Artworks' },
     { id: 'boards',    label: 'Boards' },
-    { id: 'movements', label: 'Smart Collections' },
     { id: 'artists',   label: 'Artists' },
   ];
 
@@ -280,7 +387,7 @@ const OrganizeView: React.FC<Props> = ({
   };
 
   return (
-    <div className="flex flex-col w-full h-full overflow-hidden">
+    <div className="flex w-full min-h-full flex-col">
       <input
         ref={collectionUploadInputRef}
         type="file"
@@ -290,29 +397,55 @@ const OrganizeView: React.FC<Props> = ({
         onChange={(event) => onFileUpload(event, 'gallery')}
       />
 
-      {/* ── Top tab bar ── */}
-      <div className="shrink-0 flex h-[52px] items-center gap-4 px-4 sm:px-8 border-b border-neutral-100 overflow-x-auto no-scrollbar">
-        {topBarLeftSlot ? (
-          <div className="shrink-0 md:hidden">
-            {topBarLeftSlot}
-          </div>
-        ) : null}
-        {TABS.map(tab => (
+      <div className="shrink-0 md:hidden flex h-[52px] items-center justify-between gap-3 border-b border-neutral-100 px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          {topBarLeftSlot ? <div className="shrink-0">{topBarLeftSlot}</div> : null}
+          <span className="truncate text-[15px] font-semibold text-neutral-900">Collection</span>
+        </div>
+        {showCollectionUpload ? (
           <button
-            key={tab.id}
-            onClick={() => {
-              onCollectTabChange(tab.id);
-              setSelectedBoard(null);
-            }}
-            className={`shrink-0 h-full text-[13px] sm:text-[14px] font-medium border-b-2 transition-all -mb-px whitespace-nowrap ${
-              collectTab === tab.id
-                ? 'border-neutral-900 text-neutral-900'
-                : 'border-transparent text-neutral-400 hover:text-neutral-700'
-            }`}
-          >{tab.label}</button>
-        ))}
-        <div className="ml-auto hidden min-w-0 items-center md:flex">
-          {collectTab === 'saved' && (
+            onClick={() => collectionUploadInputRef.current?.click()}
+            className="shrink-0 rounded-full border border-neutral-200 bg-white px-4 py-2 text-[12px] font-medium text-neutral-700 transition-colors hover:border-neutral-400 hover:bg-neutral-50"
+          >
+            Upload
+          </button>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col md:mx-auto md:w-full md:max-w-[1000px] md:px-8 md:pt-8 lg:pt-10">
+
+      {/* ── Top tab bar ── */}
+      <div className="sticky top-0 z-[80] flex h-[52px] items-center gap-6 overflow-x-auto bg-[var(--color-bg-primary)] px-4 no-scrollbar sm:px-8 md:px-0">
+        <div className="flex min-w-0 items-center gap-6 overflow-x-auto no-scrollbar">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                onCollectTabChange(tab.id);
+                setSelectedBoard(null);
+              }}
+              className={`shrink-0 h-full text-[13px] sm:text-[14px] font-medium border-b-2 transition-all -mb-px whitespace-nowrap ${
+                collectTab === tab.id
+                  ? 'border-neutral-900 text-neutral-900'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-700'
+              }`}
+            >{tab.label}</button>
+          ))}
+        </div>
+        <div className="ml-auto hidden min-w-0 items-center gap-3 md:flex">
+          <div className="flex w-[240px] items-center gap-2.5 rounded-full border border-neutral-200 bg-white px-3.5 py-2 text-neutral-700">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0 text-neutral-400">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              value={collectionSearch}
+              onChange={(event) => setCollectionSearch(event.target.value)}
+              placeholder={collectionSearchPlaceholder}
+              className="w-full bg-transparent text-[12px] font-medium text-neutral-700 placeholder-neutral-400 outline-none"
+            />
+          </div>
+          {showCollectionUpload && (
             <button
               onClick={() => collectionUploadInputRef.current?.click()}
               className="shrink-0 rounded-full border border-neutral-200 bg-white px-4 py-2 text-[12px] font-medium text-neutral-700 transition-colors hover:border-neutral-400 hover:bg-neutral-50"
@@ -323,13 +456,28 @@ const OrganizeView: React.FC<Props> = ({
         </div>
       </div>
 
+      <div className="px-4 pt-3 md:hidden">
+        <div className="flex w-full items-center gap-2.5 rounded-full border border-neutral-200 bg-white px-3.5 py-2 text-neutral-700">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0 text-neutral-400">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            value={collectionSearch}
+            onChange={(event) => setCollectionSearch(event.target.value)}
+            placeholder={collectionSearchPlaceholder}
+            className="w-full bg-transparent text-[16px] font-medium text-neutral-700 placeholder-neutral-400 outline-none"
+          />
+        </div>
+      </div>
+
       {/* ── Content ── */}
-      <div className="flex-1 min-h-0 overflow-hidden relative">
+      <div className="relative">
 
         {/* ── SAVED ── */}
         {collectTab === 'saved' && (
-          <div className="flex flex-col h-full">
-            <div className="shrink-0 flex items-center justify-between gap-3 px-5 sm:px-8 pt-3 pb-2">
+          <div className="flex flex-col">
+            <div className="sticky top-[52px] z-[70] flex items-center justify-between gap-3 bg-[var(--color-bg-primary)] px-4 pt-3 pb-2 sm:px-8 md:px-0">
               <div className="flex min-w-0 items-center gap-2 overflow-x-auto no-scrollbar">
                 {showFilterBar && (
                   <>
@@ -388,27 +536,27 @@ const OrganizeView: React.FC<Props> = ({
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 relative">
+            <div className="relative">
               {savedLayout === 'grid' ? (
                 <GridView
-                  items={filteredItems}
+                  items={searchedSavedItems}
                   visit={visit}
                   filteredVisitId={filteredVisitId}
                   isAnalyzing={isAnalyzing}
                   boards={boards}
-                  onInterpret={(item, contextItems) => onInterpret(item, { items: contextItems || filteredItems, label: savedContextLabel })}
+                  onInterpret={(item, contextItems) => onInterpret(item, { items: contextItems || searchedSavedItems, label: savedContextLabel })}
                   onDelete={onDelete}
                   onRequestCreateBoard={openCreateBoardModal}
                   onAddToBoard={onAddItemsToBoard}
                 />
               ) : (
-                <div className="h-full overflow-y-auto">
+                <div>
                   {groupedItems.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
                       <p className="text-[12px] text-neutral-300">No artworks yet</p>
                     </div>
                   ) : (
-                    <div className="px-5 sm:px-8 pt-4 pb-32 space-y-8">
+                    <div className="px-4 pt-4 pb-32 space-y-8 sm:px-8 md:px-0">
                       {groupedItems.map(group => (
                         <div key={group.label}>
                           <p className="mb-3 text-[11px] font-medium text-neutral-400">{group.label}</p>
@@ -430,10 +578,12 @@ const OrganizeView: React.FC<Props> = ({
                 </div>
               )}
 
-              {filteredItems.length === 0 && (
+              {searchedSavedItems.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <p className="text-[12px] text-neutral-300">
-                    {activeFilter === 'love'
+                    {normalizedCollectionSearch
+                      ? 'No matching artworks'
+                      : activeFilter === 'love'
                       ? 'No loved works yet'
                       : activeFilter === 'respect'
                         ? 'No respected works yet'
@@ -451,9 +601,9 @@ const OrganizeView: React.FC<Props> = ({
 
         {/* ── BOARDS ── */}
         {collectTab === 'boards' && (
-          <div className="h-full overflow-y-auto">
+          <div>
             {selectedBoard === null ? (
-              <div className="px-5 sm:px-8 pt-5 pb-32">
+              <div className="px-4 pt-5 pb-32 sm:px-8 md:px-0">
                 <div className="mb-5 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-medium text-neutral-400">Boards</p>
@@ -479,7 +629,7 @@ const OrganizeView: React.FC<Props> = ({
                     <p className="text-[11px] text-neutral-400">Create a board to start curating your collection.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
                     {likedItems.length > 0 && (
                       <button onClick={() => setSelectedBoard('liked')} className="text-left group">
                         <BoardCoverMosaic covers={likedItems.slice(0, 3).map((item) => item.url)} />
@@ -487,7 +637,7 @@ const OrganizeView: React.FC<Props> = ({
                         <p className="text-[11px] text-neutral-400 mt-0.5">{likedItems.length} {likedItems.length === 1 ? 'artwork' : 'artworks'}</p>
                       </button>
                     )}
-                    {boards.map(album => {
+                    {searchedBoards.map(album => {
                       const covers = getCoverImages(album.itemIds);
                       const count = album.itemIds.filter(id => items.find(i => i.id === id)).length;
                       return (
@@ -546,8 +696,8 @@ const OrganizeView: React.FC<Props> = ({
                 )}
               </div>
             ) : (
-              <div className="flex flex-col h-full">
-                <div className="shrink-0 flex items-center gap-3 px-5 sm:px-8 pt-4 pb-3 border-b border-neutral-100">
+              <div className="flex flex-col">
+                <div className="shrink-0 flex items-center gap-3 px-4 pt-4 pb-3 border-b border-neutral-100 sm:px-8 md:px-0">
                   <button
                     onClick={() => setSelectedBoard(null)}
                     className="flex items-center gap-1.5 text-neutral-400 hover:text-neutral-900 transition-colors"
@@ -561,18 +711,20 @@ const OrganizeView: React.FC<Props> = ({
                   <span className="text-[12px] font-semibold text-neutral-900">{boardDetailName}</span>
                   <span className="text-[10px] text-neutral-400 ml-auto">{boardDetailItems.length} {boardDetailItems.length === 1 ? 'artwork' : 'artworks'}</span>
                 </div>
-                <div className="flex-1 min-h-0 overflow-y-auto">
-                  {boardDetailItems.length === 0 ? (
+                <div className="flex-1 min-h-0">
+                  {searchedBoardDetailItems.length === 0 ? (
                     <div className="flex items-center justify-center h-32">
-                      <p className="text-[12px] text-neutral-300">Empty board</p>
+                      <p className="text-[12px] text-neutral-300">
+                        {normalizedCollectionSearch ? 'No matching artworks' : 'Empty board'}
+                      </p>
                     </div>
                   ) : (
-                    <div className="px-5 sm:px-8 pt-4 pb-32 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
-                      {boardDetailItems.map(item => (
+                    <div className="px-4 pt-4 pb-32 grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 sm:px-8 md:grid-cols-5 md:px-0">
+                      {searchedBoardDetailItems.map(item => (
                         <div
                           key={item.id}
                           className="aspect-square cursor-pointer overflow-hidden rounded bg-neutral-100 hover:opacity-90 transition-opacity"
-                          onClick={() => onInterpret(item, { items: boardDetailItems, label: boardDetailName })}
+                          onClick={() => onInterpret(item, { items: searchedBoardDetailItems, label: boardDetailName })}
                         >
                           <img src={item.url} alt="" className="w-full h-full object-cover" />
                         </div>
@@ -585,59 +737,64 @@ const OrganizeView: React.FC<Props> = ({
           </div>
         )}
 
-        {/* ── ART MOVEMENTS ── */}
-        {collectTab === 'movements' && (
-          <SmartCollectionsView
-            userId={userId ?? null}
-            onSelect={onOpenMovement}
-          />
-        )}
-
         {/* ── ARTISTS ── */}
         {collectTab === 'artists' && (
-          <div className="h-full overflow-y-auto">
-            <div className="px-5 sm:px-8 pt-5 pb-32">
+          <div>
+            <div className="px-4 pt-5 pb-32 sm:px-8 md:px-0">
               {artistsLoading ? (
                 <CollectionGridSkeleton />
-              ) : artists.length === 0 ? (
+              ) : artistsError && searchedArtists.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 gap-2">
-                  <p className="text-[12px] text-neutral-300">No artists yet</p>
-                  <p className="text-[11px] text-neutral-400">Explore artworks to discover artists</p>
+                  <p className="text-[12px] text-neutral-300">Couldn&apos;t load artists</p>
+                  <p className="text-[11px] text-neutral-400">Try again in a moment.</p>
+                </div>
+              ) : searchedArtists.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 gap-2">
+                  <p className="text-[12px] text-neutral-300">
+                    {normalizedCollectionSearch ? 'No matching artists' : 'No artists yet'}
+                  </p>
+                  {!normalizedCollectionSearch && (
+                    <p className="text-[11px] text-neutral-400">Explore artworks to discover artists</p>
+                  )}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
-                  {artists.map(artist => {
-                    const covers = getArtistCovers(artist.id);
-                    const lifespan = artist.birth_year && artist.death_year
-                      ? `${artist.birth_year}–${artist.death_year}`
-                      : artist.birth_year ? `b. ${artist.birth_year}` : null;
-                    const subtitle = [artist.nationality, lifespan].filter(Boolean).join(' · ');
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                  {searchedArtists.map(artist => {
+                    const artistWorks = items
+                      .filter((item) => item.artistEntityId === artist.id && !item.isDeletedPlaceholder)
+                      .slice(0, 3);
                     return (
                       <button
                         key={artist.id}
                         onClick={() => onOpenArtist(artist.id, artist.display_name)}
-                        className="text-left group"
+                        className="group flex h-full flex-col rounded-[24px] border border-neutral-200 bg-white p-3 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all hover:border-neutral-300 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]"
                       >
-                        {/* 2×2 cover grid */}
-                        <div className="grid grid-cols-2 gap-0.5 bg-neutral-100 overflow-hidden rounded-xl aspect-square mb-2.5">
-                          {covers.slice(0, 4).map((url, i) => (
-                            <img key={i} src={url} alt="" className="w-full h-full object-cover aspect-square" />
-                          ))}
-                          {covers.length === 0 && (
-                            <div className="col-span-2 row-span-2 flex items-center justify-center bg-neutral-100">
-                              <span className="text-3xl font-bold text-neutral-300">
-                                {artist.display_name[0]?.toUpperCase()}
-                              </span>
-                            </div>
-                          )}
-                          {covers.length > 0 && Array(Math.max(0, 4 - covers.length)).fill(null).map((_, i) => (
-                            <div key={`e${i}`} className="bg-neutral-100 aspect-square" />
-                          ))}
+                        <div className={`grid ${ARTIST_CARD_MEDIA_HEIGHT} min-h-0 grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] gap-2.5`}>
+                          <div className="h-full min-h-0 overflow-hidden rounded-[20px] bg-[var(--color-bg-tertiary)]">
+                            {artist.profile_image_url ? (
+                              <img
+                                src={artist.profile_image_url}
+                                alt={artist.display_name}
+                                className="block h-full w-full object-cover object-center"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center bg-[var(--color-bg-tertiary)]">
+                                <span className="text-4xl font-semibold text-neutral-300">
+                                  {artist.display_name[0]?.toUpperCase()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <ArtistArtworkCluster works={artistWorks} />
                         </div>
-                        <p className="text-[12px] font-semibold text-neutral-900 leading-tight mb-0.5 truncate">{artist.display_name}</p>
-                        <p className="text-[11px] text-neutral-400 truncate">
-                          {subtitle || `${artist.artwork_count} ${artist.artwork_count === 1 ? 'work' : 'works'}`}
-                        </p>
+                        <div className="mt-3 flex items-end justify-between gap-3 px-1">
+                          <p className="min-w-0 truncate text-[13px] font-semibold leading-tight text-neutral-900">
+                            {artist.display_name}
+                          </p>
+                          <span className="shrink-0 text-[11px] text-neutral-400">
+                            {artist.artwork_count} {artist.artwork_count === 1 ? 'work' : 'works'}
+                          </span>
+                        </div>
                       </button>
                     );
                   })}
@@ -684,6 +841,7 @@ const OrganizeView: React.FC<Props> = ({
           }}
         />
 
+      </div>
       </div>
     </div>
   );

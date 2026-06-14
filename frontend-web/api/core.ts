@@ -1,4 +1,19 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+function resolveApiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_URL;
+  if (configured) {
+    return configured;
+  }
+
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol || 'http:';
+    const hostname = window.location.hostname || 'localhost';
+    return `${protocol}//${hostname}:8000/api`;
+  }
+
+  return 'http://localhost:8000/api';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 const API_TIMEOUT = 185000;
 const AUTH_TOKEN_KEY = 'musee_auth_token';
 const USER_INFO_KEY = 'musee_user_info';

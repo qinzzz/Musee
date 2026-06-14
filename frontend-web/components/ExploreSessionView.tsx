@@ -63,7 +63,6 @@ type ExploreSessionViewProps = {
   headerLeftSlot?: React.ReactNode;
   showSessionHeader?: boolean;
   interpretationRightMode: 'metadata' | 'community';
-  interpretingMode: 'professional' | 'interactive';
   sessionGoalInput: string;
   sessionGoals: Record<string, string>;
   sessionGoalDismissed: Set<string>;
@@ -88,7 +87,6 @@ type ExploreSessionViewProps = {
   onDeleteArtwork: (itemId: string) => void;
   onNavigateInterpretation: (direction: 'prev' | 'next') => void;
   onInterpretationRightModeChange: (mode: 'metadata' | 'community') => void;
-  onSwitchInterpretingMode: () => void;
   onRefreshAnalysis: () => Promise<void>;
   onOpenArtistFromInterpretation: (
     artistEntityId: string,
@@ -167,7 +165,7 @@ const SessionDetailsPanel: React.FC<{
               }
             }}
             disabled={isSavingTitle}
-            className="w-full rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[14px] text-neutral-800 outline-none transition-colors focus:border-neutral-300"
+            className="w-full rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] sm:text-[14px] text-neutral-800 outline-none transition-colors focus:border-neutral-300"
           />
         </div>
         <div>
@@ -178,7 +176,7 @@ const SessionDetailsPanel: React.FC<{
             onBlur={commitGoal}
             rows={3}
             placeholder="Add a focus for this visit…"
-            className="w-full resize-none rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[14px] leading-relaxed text-neutral-800 outline-none transition-colors focus:border-neutral-300"
+            className="w-full resize-none rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] sm:text-[14px] leading-relaxed text-neutral-800 outline-none transition-colors focus:border-neutral-300"
           />
         </div>
       </div>
@@ -237,7 +235,6 @@ export default function ExploreSessionView({
   headerLeftSlot,
   showSessionHeader = true,
   interpretationRightMode,
-  interpretingMode,
   sessionGoalInput,
   sessionGoals,
   sessionGoalDismissed,
@@ -256,7 +253,6 @@ export default function ExploreSessionView({
   onDeleteArtwork,
   onNavigateInterpretation,
   onInterpretationRightModeChange,
-  onSwitchInterpretingMode,
   onRefreshAnalysis,
   onOpenArtistFromInterpretation,
   onSaveExistingGoal,
@@ -337,8 +333,6 @@ export default function ExploreSessionView({
             onNavigate={onNavigateInterpretation}
             rightMode={interpretationRightMode}
             onRightModeChange={onInterpretationRightModeChange}
-            interpretingMode={interpretingMode}
-            onSwitchMode={onSwitchInterpretingMode}
             onRefreshAnalysis={onRefreshAnalysis}
             userId={userId}
             onNavigateToArtist={onOpenArtistFromInterpretation}
@@ -409,10 +403,10 @@ export default function ExploreSessionView({
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-24">
               <div className="w-full max-w-[640px]">
                 <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-neutral-800 font-sans mb-2 text-center">
-                  What&apos;s your focus today?
+                  What are you drawn to today?
                 </h2>
                 <p className="text-[14px] text-neutral-400 text-center mb-7">
-                  Share your goal for this visit or skip and start capturing.
+                  Start a visit around a theme, mood, question, or nothing at all.
                 </p>
                 {preparedSessionItems.length > 0 && (
                   <div className="mb-4 rounded-[24px] border border-neutral-200 bg-white p-4 shadow-sm">
@@ -445,7 +439,7 @@ export default function ExploreSessionView({
                         ? 'Add an opening question or note before you start chatting…'
                         : 'e.g. I want to learn about medieval art, find inspiration for my interior design…'
                     }
-                    className="w-full bg-white rounded-[20px] px-5 py-4 pr-14 text-[14px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none shadow-sm border border-neutral-100 focus:border-neutral-300 transition-colors leading-relaxed"
+                    className="w-full bg-white rounded-[20px] px-5 py-4 pr-14 text-[16px] sm:text-[14px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none shadow-sm border border-neutral-100 focus:border-neutral-300 transition-colors leading-relaxed"
                     rows={3}
                     value={preparedSessionItems.length > 0 ? preparedSessionMessage : sessionGoalInput}
                     onChange={(event) => {

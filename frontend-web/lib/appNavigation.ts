@@ -1,6 +1,6 @@
-export type AppTab = 'explore' | 'collect' | 'profile' | 'learn';
+export type AppTab = 'newSession' | 'collect' | 'profile' | 'learn';
 
-export type CollectTab = 'saved' | 'boards' | 'movements' | 'artists';
+export type CollectTab = 'saved' | 'boards' | 'artists';
 
 export type ArtistPageContext = {
   artistEntityId?: string;
@@ -45,7 +45,7 @@ export type InitialNavigationState = {
 };
 
 export function getInitialNavigationState(pathname: string): InitialNavigationState {
-  let activeTab: AppTab = 'explore';
+  let activeTab: AppTab = 'newSession';
   let collectTab: CollectTab = 'saved';
   let artistPageContext: ArtistPageContext | null = null;
 
@@ -56,9 +56,7 @@ export function getInitialNavigationState(pathname: string): InitialNavigationSt
   } else if (
     pathname === '/saved' ||
     pathname === '/boards' ||
-    pathname === '/art-movements' ||
     pathname === '/artists' ||
-    pathname.startsWith('/art-movements/') ||
     pathname.startsWith('/artists/')
   ) {
     activeTab = 'collect';
@@ -66,8 +64,6 @@ export function getInitialNavigationState(pathname: string): InitialNavigationSt
 
   if (pathname === '/boards') {
     collectTab = 'boards';
-  } else if (pathname === '/art-movements') {
-    collectTab = 'movements';
   } else if (pathname === '/artists' || pathname.startsWith('/artists/')) {
     collectTab = 'artists';
   }
@@ -94,7 +90,6 @@ export function stateToPath(tab: AppTab, collectTab: CollectTab): string {
   if (tab === 'learn') return '/learning';
   if (tab === 'collect') {
     if (collectTab === 'boards') return '/boards';
-    if (collectTab === 'movements') return '/art-movements';
     if (collectTab === 'artists') return '/artists';
     return '/saved';
   }

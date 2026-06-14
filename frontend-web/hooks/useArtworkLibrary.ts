@@ -88,6 +88,9 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
           createdAt: link.created_at,
         }))
     : [];
+  const primarySessionLink = sessionLinks[0];
+
+  const analysisStatus = item.analysis_status || 'analyzed';
 
   return {
     id: item.id,
@@ -100,22 +103,23 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
     date: item.date,
     medium: item.medium,
     timestamp: item.photo_time ? new Date(item.photo_time).getTime() : (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
-    visitId: item.session_id,
+    visitId: primarySessionLink?.sessionId,
     sessionLinks,
     location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
     photoTime: item.photo_time,
-    sessionTitle: item.session_title,
+    sessionTitle: primarySessionLink?.sessionTitle || item.session_title,
     movement: item.movement,
     periodBucket: item.period_bucket,
     referenceUrls: item.reference_urls || [],
     insights: item.insights || [],
     artistEntityId: item.artist_entity_id || undefined,
     classification: item.classification || 'unsorted',
+    analysisStatus,
+    analysisError: item.analysis_error || undefined,
     syncStatus: 'synced',
-    conversation: (item.conversation_history || []).map((message: any) => ({
-      role: message.role === 'assistant' ? 'model' : 'user',
-      text: message.content,
-    })),
+    isAnalyzing: analysisStatus === 'pending' || analysisStatus === 'analyzing',
+    streamingText: analysisStatus === 'failed' ? (item.analysis_error || 'Analysis failed.') : undefined,
+    conversation: [],
     sessionCapturedAt: item.created_at
       ? new Date(item.created_at).getTime()
       : (item.photo_time ? new Date(item.photo_time).getTime() : Date.now()),
@@ -154,7 +158,11 @@ function mapCachedArtworkToGalleryItem(item: ArtworkBootstrapCacheItem): Gallery
     insights: item.insights,
     artistEntityId: item.artistEntityId,
     classification: item.classification,
+    analysisStatus: item.analysisStatus,
+    analysisError: item.analysisError,
     syncStatus: 'synced',
+    isAnalyzing: item.analysisStatus === 'pending' || item.analysisStatus === 'analyzing',
+    streamingText: item.analysisStatus === 'failed' ? (item.analysisError || 'Analysis failed.') : undefined,
     vibe: {
       backgroundColor: '#ffffff',
       padding: 4,
@@ -189,6 +197,8 @@ function mapGalleryItemToCacheItem(item: GalleryItem): ArtworkBootstrapCacheItem
     insights: item.insights,
     artistEntityId: item.artistEntityId,
     classification: item.classification,
+    analysisStatus: item.analysisStatus,
+    analysisError: item.analysisError,
   };
 }
 

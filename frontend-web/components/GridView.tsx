@@ -65,8 +65,8 @@ const GridView: React.FC<Props> = ({
   };
 
   return (
-    <div className="relative w-full h-full overflow-hidden">
-      <div className="h-full overflow-y-auto px-4 sm:px-10 pt-6 pb-32">
+    <div className="relative w-full">
+      <div className="px-4 pt-4 pb-4 sm:px-8 md:px-0 md:pt-0">
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-4">
           {displayItems.map(item => (
             <div

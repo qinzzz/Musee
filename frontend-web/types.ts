@@ -37,6 +37,7 @@ export interface ArtistEntity {
 }
 
 export type ArtworkClassification = 'unsorted' | 'love' | 'respect' | 'not_for_me';
+export type ArtworkAnalysisStatus = 'pending' | 'analyzing' | 'failed' | 'analyzed';
 
 export interface SessionLink {
   id?: string;
@@ -61,7 +62,7 @@ export interface GalleryItem {
   artistName?: string;
   artworkName?: string;
   description?: string;
-  artworkId?: string;  // Backend DB artwork ID for persistent conversations
+  artworkId?: string;  // Backend DB artwork ID
   isAnalyzing?: boolean; // Loading state for batch analysis
   date?: string;
   medium?: string;
@@ -75,6 +76,8 @@ export interface GalleryItem {
   insights?: Array<{ title: string; text: string }>;
   artistEntityId?: string;
   classification?: ArtworkClassification;
+  analysisStatus?: ArtworkAnalysisStatus;
+  analysisError?: string;
   syncStatus?: 'pending' | 'synced' | 'failed';
   isDeletedPlaceholder?: boolean;
 }

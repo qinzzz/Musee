@@ -15,6 +15,11 @@ interface Point {
   y: number;
 }
 
+interface TouchSnapshot {
+  clientX: number;
+  clientY: number;
+}
+
 const CANVAS_SIZE = 3000;
 const VIEWPORT_INITIAL_X = 1500;
 const VIEWPORT_INITIAL_Y = 1500;
@@ -41,7 +46,7 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
   const offsetRef = useRef(offset);
-  const lastTouches = useRef<Touch[]>([]);
+  const lastTouches = useRef<TouchSnapshot[]>([]);
   const isPanningRef = useRef(false);
 
   zoomRef.current = zoom;

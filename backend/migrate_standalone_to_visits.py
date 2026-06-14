@@ -7,13 +7,18 @@ from collections import defaultdict
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.database.connection import SessionLocal
-from app.database.models import SavedArtwork, Session as SessionModel, User
+from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, User
 
 def migrate():
     db = SessionLocal()
     try:
-        # 1. Fetch all artworks without a session
-        artworks = db.query(SavedArtwork).filter(SavedArtwork.session_id == None).all()
+        # 1. Fetch all artworks without any session links
+        artworks = (
+            db.query(SavedArtwork)
+            .outerjoin(SessionArtwork, SessionArtwork.artwork_id == SavedArtwork.id)
+            .filter(SessionArtwork.id == None)
+            .all()
+        )
         
         if not artworks:
             print("No artworks found without a session ID. Migration complete.")
@@ -53,9 +58,16 @@ def migrate():
             db.add(new_session)
             db.flush() # Get the generated UUID
 
-            # Update artworks
-            for art in group_artworks:
-                art.session_id = new_session.id
+            # Link artworks to the new session
+            for index, art in enumerate(group_artworks):
+                db.add(
+                    SessionArtwork(
+                        session_id=new_session.id,
+                        artwork_id=art.id,
+                        sequence_number=index,
+                        source="library",
+                    )
+                )
             
         db.commit()
         print("Migration finished successfully.")

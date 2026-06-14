@@ -1,4 +1,4 @@
-import type { ArtworkSkill, ArtworkClassification, ReferenceItem, TasteProfileSnapshot } from '../types';
+import type { ArtworkSkill, ArtworkClassification, ReferenceItem, TasteProfileSnapshot, ArtistEntity } from '../types';
 import { API_BASE_URL, fetchWithTimeout, resolveImageUrl } from './core';
 
 export interface ArtworkAnalysisResult {
@@ -44,6 +44,10 @@ export interface CommunityData {
   entity: { id: string; display_artist: string; display_title: string; instance_count: number } | null;
   comments: PublicComment[];
 }
+
+export type ArtistRow = ArtistEntity & {
+  artwork_count: number;
+};
 
 export async function fetchUserArtworks(userId: string): Promise<any> {
   const params = new URLSearchParams({
@@ -93,7 +97,7 @@ export async function fetchArtistProfile(artistEntityId: string): Promise<import
   return response.json();
 }
 
-export async function fetchUserArtists(userId: string): Promise<any[]> {
+export async function fetchUserArtists(userId: string): Promise<ArtistRow[]> {
   const response = await fetchWithTimeout(
     `${API_BASE_URL}/artists?user_id=${encodeURIComponent(userId)}`,
     { timeout: 15000 },

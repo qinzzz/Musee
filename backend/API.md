@@ -13,7 +13,6 @@
 | Method | Path | Request Fields | Response Fields |
 |--------|------|----------------|-----------------|
 | **POST** | `/artwork-analyze` | `image` (file), `model?`, `identity?`, `language?` | `{analysis, model_used}` |
-| **POST** | `/artwork-chat` | `query?`, `image?` (file), `artist_name?`, `artwork_name?`, `conversation_history?` (JSON), `model?`, `identity?`, `language?` | `{response, query, model_used}` |
 | **POST** | `/suggest-topic` | `artist_name`, `artwork_name`, `conversation_history` (JSON), `model?`, `identity?`, `language?` | `{suggested_topics[], model_used}` |
 | **POST** | `/generate-summary` | `image` (file), `artist_name`, `artwork_name`, `conversation_history?` (JSON), `model?`, `identity?`, `language?` | `{summary, model_used}` |
 
@@ -112,7 +111,6 @@ is_recognized         integer (0 or 1)
 photo_time            string (optional)
 created_at            datetime
 updated_at            datetime
-conversation_history  Conversation[]
 tags                  Tag[]
 ```
 
@@ -144,19 +142,6 @@ name                  string
 user_id               UUID
 created_at            datetime
 ```
-
-### Conversation
-```
-id                    UUID
-saved_artwork_id      UUID
-sequence_number       integer
-role                  string ("user" | "assistant")
-content               string
-message_metadata      JSON (optional)
-created_at            datetime
-```
-
----
 
 ## Query Parameters Legend
 
