@@ -267,6 +267,24 @@ export default function ExploreSessionView({
   onOpenSessionArtwork,
 }: ExploreSessionViewProps) {
   const [sessionDetailsOpen, setSessionDetailsOpen] = React.useState(false);
+  const composerTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const composerValue = preparedSessionItems.length > 0 ? preparedSessionMessage : sessionGoalInput;
+  const resizeComposerTextarea = React.useCallback(() => {
+    const textarea = composerTextareaRef.current;
+    if (!textarea) return;
+
+    const styles = window.getComputedStyle(textarea);
+    const fontSize = parseFloat(styles.fontSize) || 14;
+    const lineHeight = parseFloat(styles.lineHeight) || fontSize * 1.625;
+    const paddingTop = parseFloat(styles.paddingTop) || 0;
+    const paddingBottom = parseFloat(styles.paddingBottom) || 0;
+    const borderTop = parseFloat(styles.borderTopWidth) || 0;
+    const borderBottom = parseFloat(styles.borderBottomWidth) || 0;
+    const oneLineHeight = Math.ceil(lineHeight + paddingTop + paddingBottom + borderTop + borderBottom);
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.max(textarea.scrollHeight + borderTop + borderBottom, oneLineHeight)}px`;
+  }, []);
 
   const groupedVisitStream = React.useMemo<GroupedVisitStreamEntry[]>(() => {
     const grouped: GroupedVisitStreamEntry[] = [];
@@ -302,6 +320,17 @@ export default function ExploreSessionView({
   React.useEffect(() => {
     setSessionDetailsOpen(false);
   }, [activeVisitSummary.id]);
+
+  React.useLayoutEffect(() => {
+    resizeComposerTextarea();
+  }, [composerValue, preparedSessionItems.length, resizeComposerTextarea]);
+
+  React.useEffect(() => {
+    resizeComposerTextarea();
+    const animationFrame = window.requestAnimationFrame(resizeComposerTextarea);
+    void document.fonts?.ready.then(resizeComposerTextarea);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [resizeComposerTextarea]);
 
   const handleSubmitGoal = () => {
     const goal = sessionGoalInput.trim();
@@ -400,14 +429,8 @@ export default function ExploreSessionView({
               </div>
             </div>
           ) : (
-            <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-24">
+            <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6">
               <div className="w-full max-w-[640px]">
-                <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-neutral-800 font-sans mb-2 text-center">
-                  What are you drawn to today?
-                </h2>
-                <p className="text-[14px] text-neutral-400 text-center mb-7">
-                  Start a visit around a theme, mood, question, or nothing at all.
-                </p>
                 {preparedSessionItems.length > 0 && (
                   <div className="mb-4 rounded-[24px] border border-neutral-200 bg-white p-4 shadow-sm">
                     <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
@@ -432,48 +455,54 @@ export default function ExploreSessionView({
                     </div>
                   </div>
                 )}
-                <div className="relative">
-                  <textarea
-                    placeholder={
-                      preparedSessionItems.length > 0
-                        ? 'Add an opening question or note before you start chatting…'
-                        : 'e.g. I want to learn about medieval art, find inspiration for my interior design…'
-                    }
-                    className="w-full bg-white rounded-[20px] px-5 py-4 pr-14 text-[16px] sm:text-[14px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none shadow-sm border border-neutral-100 focus:border-neutral-300 transition-colors leading-relaxed"
-                    rows={3}
-                    value={preparedSessionItems.length > 0 ? preparedSessionMessage : sessionGoalInput}
-                    onChange={(event) => {
-                      if (preparedSessionItems.length > 0) {
-                        onPreparedSessionMessageChange(event.target.value);
-                      } else {
-                        onSessionGoalInputChange(event.target.value);
+                <div className="space-y-4">
+                  <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-neutral-800 font-sans text-center">
+                    What are you drawn to today?
+                  </h2>
+                  <div className="relative">
+                    <textarea
+                      ref={composerTextareaRef}
+                      placeholder={
+                        preparedSessionItems.length > 0
+                          ? 'Add an opening question or note before you start chatting…'
+                          : 'Ask anything about art'
                       }
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
+                      className="w-full overflow-hidden bg-white rounded-[20px] px-5 py-4 pr-14 text-[16px] sm:text-[14px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none shadow-sm border border-neutral-100 focus:border-neutral-300 transition-colors leading-relaxed"
+                      rows={1}
+                      value={composerValue}
+                      onChange={(event) => {
                         if (preparedSessionItems.length > 0) {
-                          onSubmitPreparedSession();
+                          onPreparedSessionMessageChange(event.target.value);
                         } else {
-                          handleSubmitGoal();
+                          onSessionGoalInputChange(event.target.value);
                         }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          if (preparedSessionItems.length > 0) {
+                            onSubmitPreparedSession();
+                          } else {
+                            handleSubmitGoal();
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={preparedSessionItems.length > 0 ? onSubmitPreparedSession : handleSubmitGoal}
+                      disabled={
+                        preparedSessionItems.length > 0
+                          ? isSubmittingPreparedSession
+                          : !sessionGoalInput.trim()
                       }
-                    }}
-                  />
-                  <button
-                    onClick={preparedSessionItems.length > 0 ? onSubmitPreparedSession : handleSubmitGoal}
-                    disabled={
-                      preparedSessionItems.length > 0
-                        ? isSubmittingPreparedSession
-                        : !sessionGoalInput.trim()
-                    }
-                    className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-20 transition-opacity"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="22" y1="2" x2="11" y2="13" />
-                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                    </svg>
-                  </button>
+                      className="absolute bottom-4 right-3 w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-20 transition-opacity"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <input
                   ref={goalGalleryInputRef}

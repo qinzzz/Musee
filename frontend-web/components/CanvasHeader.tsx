@@ -23,8 +23,11 @@ export default function CanvasHeader({
   onChildClick,
   childExpanded = false,
 }: Props) {
+  const titleContainerClassName = '[@media(hover:hover)]:group-hover:bg-neutral-100/80';
+  const chevronClassName = 'text-neutral-400 [@media(hover:hover)]:group-hover:text-neutral-700';
+
   const titleContent = (
-    <div className="inline-flex min-w-0 items-center rounded-[14px] px-2 py-1 transition-colors group-hover:bg-neutral-100/80 group-active:bg-neutral-200/70">
+    <div className={`inline-flex min-w-0 items-center rounded-[14px] px-2 py-1 transition-colors ${titleContainerClassName}`}>
       <div className="flex min-w-0 flex-1 flex-col justify-center">
         <div className="flex min-w-0 items-center gap-2 text-[13px] sm:text-[14px] font-medium tracking-wide">
           {parentLabel && (
@@ -38,7 +41,7 @@ export default function CanvasHeader({
               {childLabel}
             </span>
             {onChildClick ? (
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-neutral-400 transition-colors group-hover:bg-neutral-100 group-hover:text-neutral-700 group-active:bg-neutral-200/80">
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center transition-colors ${chevronClassName}`}>
                 <svg
                   width="14"
                   height="14"
@@ -69,7 +72,7 @@ export default function CanvasHeader({
   return (
     <div
       className={`flex min-h-[52px] items-center gap-2.5 border-b border-neutral-200/80 bg-[var(--color-bg-primary)] shrink-0 z-10 sticky top-0 ${
-        isInline ? 'px-5 sm:px-6' : 'px-4'
+        isInline ? 'px-4 sm:px-6' : 'px-4'
       }`}
       style={{ fontFamily: 'var(--font-family-sans)' }}
     >
@@ -94,7 +97,7 @@ export default function CanvasHeader({
         <button
           type="button"
           onClick={onChildClick}
-          className="group -ml-2 flex min-w-0 flex-1 items-center text-left"
+          className="group -ml-2 inline-flex max-w-full min-w-0 shrink-0 items-center text-left"
           aria-expanded={childExpanded}
         >
           {titleContent}

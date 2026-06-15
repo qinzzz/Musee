@@ -46,7 +46,7 @@ export default function LearningHubPage({ onClose, initialGuide, inline, leftSlo
 
   return (
     <div
-      className={inline ? "relative w-full h-full bg-[var(--color-bg-primary)] flex flex-col overflow-hidden animate-in fade-in duration-300" : "fixed inset-0 z-[1100] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"}
+      className={inline ? "relative w-full h-full bg-[var(--color-bg-primary)] flex flex-col overflow-hidden animate-in fade-in duration-300" : "fixed inset-0 z-[var(--z-fullscreen-page)] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"}
       style={{ fontFamily: 'var(--font-family-sans)' }}
     >
       {selectedGuide ? (

@@ -47,6 +47,7 @@ import { Toaster } from './components/ui/sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -121,6 +122,7 @@ type ToastAction = {
 };
 
 type AppTab = 'newSession' | 'collect' | 'profile' | 'learn';
+const SHOW_LEARN_TAB = false;
 
 const downscaleImage = (dataUrl: string, maxWidth = 1600): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -232,6 +234,59 @@ const buildUploadRequestKey = (files: File[], mode: 'gallery' | 'camera'): strin
     .sort()
     .join('|');
   return `${mode}:${fileParts}`;
+};
+
+const BACKEND_UNSUPPORTED_EXTENSIONS = new Set(['heic', 'heif']);
+
+const isBackendUnsupportedImage = (file: File): boolean => {
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  const mimeType = file.type.toLowerCase();
+  return BACKEND_UNSUPPORTED_EXTENSIONS.has(extension) || mimeType.includes('heic') || mimeType.includes('heif');
+};
+
+const transcodeImageToJpeg = async (file: File): Promise<File> => {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Could not decode image for upload.'));
+      img.src = objectUrl;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth || image.width;
+    canvas.height = image.naturalHeight || image.height;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Could not prepare image for upload.');
+    }
+
+    context.drawImage(image, 0, 0);
+
+    const jpegBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Could not convert image to JPEG.'));
+      }, 'image/jpeg', 0.92);
+    });
+
+    const baseName = file.name.replace(/\.[^/.]+$/, '') || 'camera-capture';
+    return new File([jpegBlob], `${baseName}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: file.lastModified,
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
+const normalizeUploadFile = async (file: File): Promise<File> => {
+  if (!isBackendUnsupportedImage(file)) {
+    return file;
+  }
+  return transcodeImageToJpeg(file);
 };
 
 const MOCK_NEIGHBORS: NeighborItem[] = [
@@ -944,18 +999,6 @@ const App: React.FC = () => {
       });
     }).catch(() => {});
   }, [activeVisitSummary?.id]);
-
-  useEffect(() => {
-    if (!openVisitMenuId) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest('[data-visit-menu-root="true"]')) return;
-      setOpenVisitMenuId(null);
-    };
-    window.addEventListener('pointerdown', handlePointerDown);
-    return () => window.removeEventListener('pointerdown', handlePointerDown);
-  }, [openVisitMenuId]);
 
   useEffect(() => {
     if (!editingVisitId || !renameInputRef.current) return;
@@ -1833,7 +1876,8 @@ const App: React.FC = () => {
     mode: 'gallery' | 'camera' = 'camera'
   ) => {
     const target = event.target as HTMLInputElement;
-    const files = Array.from(target.files || []);
+    const rawFiles = Array.from(target.files || []);
+    const files = await Promise.all(rawFiles.map((file) => normalizeUploadFile(file)));
     if (files.length === 0) return;
     const isNewSessionCompose = activeTab === 'newSession' && isComposingNewSession;
     const shouldStageUpload =
@@ -2509,7 +2553,9 @@ const App: React.FC = () => {
         </svg>
       ),
     },
-    {
+  ];
+  if (SHOW_LEARN_TAB) {
+    topLevelNavigation.push({
       id: 'learn',
       label: 'Learn',
       icon: (
@@ -2518,8 +2564,8 @@ const App: React.FC = () => {
           <path d="M22 3h-6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3h7z" />
         </svg>
       ),
-    },
-  ];
+    });
+  }
 
   const handleSwitchTopLevelTab = (tabId: AppTab) => {
     setActiveTab(tabId);
@@ -2583,7 +2629,6 @@ const App: React.FC = () => {
   const renderVisitSummaryCard = (summary: VisitSummary) => (
     <div
       key={summary.id}
-      data-visit-menu-root="true"
       className={`relative w-full rounded-[20px] p-1 ${
         activeVisitSummary?.id === summary.id && activeTab === 'newSession'
           ? 'bg-[var(--color-bg-tertiary)] text-neutral-900 shadow-sm ring-1 ring-neutral-200'
@@ -2627,53 +2672,64 @@ const App: React.FC = () => {
         </div>
       </button>
       {editingVisitId !== summary.id && (
-        <>
-          <button
-            onClick={(event) => {
-              event.stopPropagation();
-              setOpenVisitMenuId(prev => (prev === summary.id ? null : summary.id));
-            }}
-            className={`absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-colors ${
-              activeVisitSummary?.id === summary.id && activeTab === 'newSession'
-                ? 'text-neutral-500 hover:bg-white hover:text-neutral-900'
-                : 'text-neutral-400 hover:bg-white/80 hover:text-neutral-700'
-            }`}
-            aria-label={`Open actions for ${summary.title}`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <circle cx="5" cy="12" r="1.7" />
-              <circle cx="12" cy="12" r="1.7" />
-              <circle cx="19" cy="12" r="1.7" />
-            </svg>
-          </button>
-          {openVisitMenuId === summary.id && (
-            <div
-              data-visit-menu-root="true"
-              className="absolute right-2 top-[calc(50%+22px)] z-20 min-w-[170px] rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.12)]"
+        <DropdownMenu
+          open={openVisitMenuId === summary.id}
+          onOpenChange={(open) => setOpenVisitMenuId(open ? summary.id : null)}
+        >
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
+              className={`absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-colors ${
+                activeVisitSummary?.id === summary.id && activeTab === 'newSession'
+                  ? 'text-neutral-500 hover:bg-white hover:text-neutral-900'
+                  : 'text-neutral-400 hover:bg-white/80 hover:text-neutral-700'
+              }`}
+              aria-label={`Open actions for ${summary.title}`}
             >
-              <button
-                onClick={() => handleStartRenameVisit(summary.id, summary.title)}
-                className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[12px] font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                </svg>
-                <span>Rename session</span>
-              </button>
-              <button
-                onClick={() => handleDeleteSession(summary.id)}
-                className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-[12px] font-medium text-red-600 transition-colors hover:bg-red-50"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-                <span>Delete session</span>
-              </button>
-            </div>
-          )}
-        </>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="12" r="1.7" />
+                <circle cx="12" cy="12" r="1.7" />
+                <circle cx="19" cy="12" r="1.7" />
+              </svg>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            sideOffset={6}
+            className="min-w-[170px]"
+            onCloseAutoFocus={(event) => event.preventDefault()}
+          >
+            <DropdownMenuItem
+              className="gap-2 font-medium"
+              onSelect={(event) => {
+                event.preventDefault();
+                setOpenVisitMenuId(null);
+                handleStartRenameVisit(summary.id, summary.title);
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+              <span>Rename session</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              destructive
+              className="gap-2 font-medium"
+              onSelect={(event) => {
+                event.preventDefault();
+                setOpenVisitMenuId(null);
+                handleDeleteSession(summary.id);
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+              <span>Delete session</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
@@ -2773,7 +2829,7 @@ const App: React.FC = () => {
         />
 
         {showLoginModal && !currentUser && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+          <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-6">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowLoginModal(false)} />
             <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
               <h3 className="text-lg font-bold text-neutral-900 mb-2">Sign in to Musee</h3>
@@ -2794,7 +2850,7 @@ const App: React.FC = () => {
         )}
 
         {showAccountModal && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+          <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-6">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAccountModal(null)} />
             <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl">
               <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
@@ -2959,10 +3015,10 @@ const App: React.FC = () => {
                   sideOffset={12}
                   className="w-[340px] overflow-visible rounded-[24px] p-2"
                 >
-                  <div data-visit-menu-root="true" className="px-3 py-2">
+                  <div className="px-3 py-2">
                     <p className="text-[16px] font-semibold text-neutral-900">Recents</p>
                   </div>
-                  <div data-visit-menu-root="true" className="max-h-[min(70vh,560px)] space-y-2 overflow-y-auto px-1 pb-1">
+                  <div className="max-h-[min(70vh,560px)] space-y-2 overflow-y-auto px-1 pb-1">
                     {sessionsLoading ? (
                       <SessionListSkeleton compact={true} />
                     ) : recentVisitSummaries.length > 0 ? (
@@ -2985,8 +3041,8 @@ const App: React.FC = () => {
 
               {userMenuOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
-                  <div className="absolute bottom-3 left-full z-50 ml-3 w-[240px] rounded-2xl border border-neutral-200 bg-white p-4 shadow-xl">
+                  <div className="fixed inset-0 z-[var(--z-floating-backdrop)]" onClick={() => setUserMenuOpen(false)} />
+                  <div className="absolute bottom-3 left-full z-[var(--z-floating)] ml-3 w-[240px] rounded-2xl border border-neutral-200 bg-white p-4 shadow-xl">
                     <div>
                       <label className="text-[10px] font-medium text-neutral-400">Language</label>
                     <DropdownMenu>
@@ -3065,7 +3121,7 @@ const App: React.FC = () => {
 
         {/* Global unified sidebar */}
         <aside
-          className={`shrink-0 z-[120] overflow-hidden border-r border-neutral-200 bg-[var(--color-bg-secondary)] transition-all duration-300 flex flex-col h-full ${
+          className={`shrink-0 z-[var(--z-drawer)] md:z-auto overflow-hidden border-r border-neutral-200 bg-[var(--color-bg-secondary)] transition-all duration-300 flex flex-col h-full ${
             sidebarOpen
               ? 'fixed inset-y-0 left-0 w-[260px] translate-x-0 shadow-[0_18px_60px_rgba(0,0,0,0.12)] md:shadow-none md:relative md:inset-auto md:translate-x-0'
               : 'fixed inset-y-0 left-0 w-[260px] -translate-x-full md:translate-x-0 md:relative md:inset-auto'
@@ -3126,7 +3182,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Sessions Scroll List */}
-          <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0 space-y-2 scrollbar-thin">
+          <div className="relative z-10 flex-1 overflow-y-auto px-3 py-3 min-h-0 space-y-2 scrollbar-thin">
             {sessionsLoading ? (
               <SessionListSkeleton />
             ) : (
@@ -3137,7 +3193,7 @@ const App: React.FC = () => {
           <div className="h-px bg-neutral-200/60 my-1 mx-4" />
 
           {/* User Profile Footer */}
-          <div className="p-3 shrink-0 relative">
+          <div className={`relative shrink-0 p-3 ${userMenuOpen ? 'z-[var(--z-floating)]' : 'z-0'}`}>
             <button
               onClick={() => setUserMenuOpen(prev => !prev)}
               className="w-full flex items-center justify-between gap-3 pl-3.5 pr-4 py-2.5 rounded-xl border border-neutral-200 bg-white shadow-sm hover:bg-neutral-50 transition-colors text-left"
@@ -3160,8 +3216,8 @@ const App: React.FC = () => {
             {/* Popover Settings Dropdown Menu */}
             {userMenuOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
-                <div className="absolute bottom-full left-3 right-3 mb-2 z-50 bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                <div className="fixed inset-0 z-[var(--z-floating-backdrop)]" onClick={() => setUserMenuOpen(false)} />
+                <div className="absolute bottom-full left-3 right-3 mb-2 z-[var(--z-floating)] bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
                   {/* Language Select */}
                   <div>
                     <label className="text-[10px] font-medium text-neutral-400">Language</label>
@@ -3245,7 +3301,7 @@ const App: React.FC = () => {
           <button
             type="button"
             aria-label="Close menu"
-            className="fixed inset-0 z-20 bg-neutral-900/20 backdrop-blur-[1px] md:hidden animate-in fade-in duration-300"
+            className="fixed inset-0 z-[var(--z-drawer-backdrop)] bg-neutral-900/20 backdrop-blur-[1px] md:hidden animate-in fade-in duration-300"
             onClick={() => setSidebarOpen(false)}
           />
         )}
@@ -3541,7 +3597,7 @@ const App: React.FC = () => {
         )}
 
         {deleteConfirmation && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-6">
             <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm" onClick={() => setDeleteConfirmation(null)} />
             <div className="relative w-full max-w-md rounded-[2rem] bg-white p-10 shadow-2xl">
               <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100">

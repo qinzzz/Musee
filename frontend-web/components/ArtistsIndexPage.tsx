@@ -20,7 +20,7 @@ export default function ArtistsIndexPage({ userId, onSelectArtist, onClose }: Pr
 
   return (
     <div
-      className="fixed inset-0 z-[1200] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"
+      className="fixed inset-0 z-[var(--z-fullscreen-page)] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"
       style={{ fontFamily: 'var(--font-family-sans)' }}
     >
       {/* Header */}

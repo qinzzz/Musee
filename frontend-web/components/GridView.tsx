@@ -38,8 +38,13 @@ const GridView: React.FC<Props> = ({
 }) => {
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
   const [isApplyingBoard, setIsApplyingBoard] = React.useState(false);
+  const suppressInterpretUntilRef = React.useRef(0);
   const displayItems = items;
   const isSelectionMode = selectedIds.length > 0;
+
+  const suppressInterpret = React.useCallback((durationMs = 250) => {
+    suppressInterpretUntilRef.current = Date.now() + durationMs;
+  }, []);
 
   const toggleSelection = React.useCallback((itemId: string) => {
     setSelectedIds(prev => (
@@ -73,6 +78,9 @@ const GridView: React.FC<Props> = ({
               key={item.id}
               className="group relative aspect-square cursor-pointer rounded bg-neutral-100"
               onClick={() => {
+                if (Date.now() < suppressInterpretUntilRef.current) {
+                  return;
+                }
                 if (isSelectionMode) {
                   toggleSelection(item.id);
                   return;
@@ -113,18 +121,30 @@ const GridView: React.FC<Props> = ({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        suppressInterpret();
+                      }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        suppressInterpret();
+                      }}
                       className="absolute top-2 right-2 z-30 flex h-7 w-7 items-center justify-center rounded-md border border-white/80 bg-black/35 text-white opacity-0 transition-opacity group-hover:opacity-100"
                       aria-label="Artwork actions"
                     >
                       <OverflowDotsIcon />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-[180px]">
+                  <DropdownMenuContent
+                    className="min-w-[180px]"
+                    onCloseAutoFocus={(event) => event.preventDefault()}
+                  >
                     <DropdownMenuItem
                       destructive
                       onSelect={(event) => {
                         event.preventDefault();
+                        event.stopPropagation();
+                        suppressInterpret(400);
                         onDelete(item.id);
                       }}
                     >

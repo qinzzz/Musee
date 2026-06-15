@@ -57,7 +57,7 @@ const CreateBoardModal: React.FC<Props> = ({
   if (!mounted || !open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-md rounded-[2rem] bg-white p-10 shadow-2xl">
         <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100">

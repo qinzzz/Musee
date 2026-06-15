@@ -264,7 +264,7 @@ const TopographyView: React.FC<Props> = ({ items, cachedTagMap, neighborItems = 
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-[60] bg-[#fdfdfd] overflow-hidden cursor-grab active:cursor-grabbing select-none animate-in fade-in duration-700"
+      className="fixed inset-0 z-[var(--z-overlay)] bg-[#fdfdfd] overflow-hidden cursor-grab active:cursor-grabbing select-none animate-in fade-in duration-700"
       style={{ touchAction: 'none' }}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}

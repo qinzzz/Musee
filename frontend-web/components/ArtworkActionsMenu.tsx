@@ -24,6 +24,8 @@ const ArtworkActionsMenu: React.FC<Props> = ({
         <button
           type="button"
           disabled={disabled}
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
           className={buttonClassName}
           aria-label="Artwork actions"
         >
@@ -34,9 +36,18 @@ const ArtworkActionsMenu: React.FC<Props> = ({
           </svg>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[180px]">
+      <DropdownMenuContent
+        className="min-w-[180px]"
+        onCloseAutoFocus={(event) => event.preventDefault()}
+      >
         {onEdit && (
-          <DropdownMenuItem onSelect={onEdit}>
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onEdit();
+            }}
+          >
             <div className="flex items-center gap-3">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
@@ -46,7 +57,14 @@ const ArtworkActionsMenu: React.FC<Props> = ({
           </DropdownMenuItem>
         )}
         {onDelete && (
-          <DropdownMenuItem destructive onSelect={onDelete}>
+          <DropdownMenuItem
+            destructive
+            onSelect={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onDelete();
+            }}
+          >
             <div className="flex items-center gap-3">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />

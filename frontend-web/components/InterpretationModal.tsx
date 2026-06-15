@@ -7,6 +7,7 @@ import { updateArtwork, fetchAndPersistInsights } from '../api/artworks';
 import { getTagExplanation, suggestTopics, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../api/chat';
 import ArtworkClassificationChip from './ArtworkClassificationChip';
 import ArtworkActionsMenu from './ArtworkActionsMenu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 interface Props {
   item: {
     url: string;
@@ -52,52 +53,78 @@ const HoverTag: React.FC<{
   tag: string;
   artworkId?: string;
 }> = ({ tag, artworkId }) => {
-  const [isHovered, setIsHovered] = useState(false);
   const [explanation, setExplanation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleMouseEnter = async () => {
-    setIsHovered(true);
-    if (!explanation && !isLoading) {
-      setIsLoading(true);
-      try {
-        const result = await getTagExplanation(tag, artworkId);
-        setExplanation(result);
-      } catch (e) {
-        console.error('Failed to get tag explanation:', e);
-        setExplanation('Unable to load explanation.');
-      } finally {
-        setIsLoading(false);
-      }
+  const loadExplanation = async () => {
+    if (explanation || isLoading) return;
+    setIsLoading(true);
+    try {
+      const result = await getTagExplanation(tag, artworkId);
+      setExplanation(normalizeExplanation(result));
+    } catch (e) {
+      console.error('Failed to get tag explanation:', e);
+      setExplanation('Unable to load explanation.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleMouseLeave = () => {
-    setIsHovered(false);
+  const normalizeExplanation = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('{')) return trimmed;
+
+    try {
+      const parsed = JSON.parse(trimmed) as { explanation?: string; definition?: string; text?: string; meaning?: string };
+      return (
+        parsed.explanation?.trim()
+        || parsed.definition?.trim()
+        || parsed.text?.trim()
+        || parsed.meaning?.trim()
+        || trimmed
+      );
+    } catch {
+      return trimmed;
+    }
+  };
+
+  const handleOpenChange = async (open: boolean) => {
+    if (!open) return;
+    await loadExplanation();
   };
 
   return (
-    <div className="relative inline-block">
-      <span
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        className="text-[10px] tracking-wide text-neutral-500 bg-neutral-50 px-3 py-1 rounded-full border border-neutral-100 hover:bg-neutral-100 hover:text-neutral-700 transition-colors cursor-default whitespace-nowrap"
-      >
-        {tag}
-      </span>
-      {isHovered && (
-        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-white rounded-xl shadow-xl border border-neutral-100 p-3 animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-white border-r border-b border-neutral-100"></div>
-          {isLoading ? (
+    <TooltipProvider delayDuration={120}>
+      <Tooltip onOpenChange={handleOpenChange}>
+        <TooltipTrigger asChild>
+          <span
+            onPointerEnter={() => {
+              void loadExplanation();
+            }}
+            onFocus={() => {
+              void loadExplanation();
+            }}
+            className="text-[10px] tracking-wide text-neutral-500 bg-neutral-50 px-3 py-1 rounded-full border border-neutral-100 hover:bg-neutral-100 hover:text-neutral-700 transition-colors cursor-default whitespace-nowrap"
+          >
+            {tag}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          align="center"
+          collisionPadding={16}
+          className="animate-in fade-in zoom-in-95 duration-150 border-neutral-200 shadow-[0_18px_50px_rgba(0,0,0,0.14)]"
+        >
+          {isLoading || !explanation ? (
             <div className="flex items-center justify-center py-2">
               <div className="w-4 h-4 border-t-2 border-neutral-400 rounded-full animate-spin"></div>
             </div>
           ) : (
             <p className="text-[11px] leading-relaxed text-neutral-600">{explanation}</p>
           )}
-        </div>
-      )}
-    </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };
 
@@ -908,7 +935,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                         />
                       </div>
                     ) : (
-                      <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}>
+                      <div className="flex flex-wrap gap-2">
                         {editTags.map((tag, idx) => (
                           <HoverTag key={idx} tag={tag} artworkId={item.artworkId} />
                         ))}
@@ -921,6 +948,17 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                   <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50/80 px-3 py-2">
                     <div className="w-3.5 h-3.5 border-t-[1.5px] border-neutral-700 rounded-full animate-spin shrink-0"></div>
                     <span className="text-[10px] tracking-[0.24em] uppercase text-neutral-500 font-bold">Refreshing analysis…</span>
+                  </div>
+                )}
+
+                {displayDescription && (
+                  <div>
+                    <div className="text-[13px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
+                      <ReactMarkdown components={markdownComponents}>{displayDescription}</ReactMarkdown>
+                      {item.isAnalyzing && (
+                        <span className="inline-block w-1.5 h-3 bg-neutral-400 animate-pulse ml-0.5"></span>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -939,17 +977,6 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                             <Insight key={idx} pt={pt} idx={idx} c={c} />
                           );
                         })}
-                    </div>
-                  </div>
-                )}
-
-                {displayDescription && (
-                  <div>
-                    <div className="text-[13px] sm:text-[14px] leading-relaxed text-neutral-600 font-serif">
-                      <ReactMarkdown components={markdownComponents}>{displayDescription}</ReactMarkdown>
-                      {item.isAnalyzing && (
-                        <span className="inline-block w-1.5 h-3 bg-neutral-400 animate-pulse ml-0.5"></span>
-                      )}
                     </div>
                   </div>
                 )}
@@ -1042,7 +1069,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
         {/* Lightbox — tap image on mobile to view full */}
         {lightboxOpen && createPortal(
           <div
-            className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center cursor-zoom-out"
+            className="fixed inset-0 z-[var(--z-lightbox)] bg-black/95 flex items-center justify-center cursor-zoom-out"
             onClick={() => setLightboxOpen(false)}
           >
             <img
@@ -1067,7 +1094,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
 
   return (
     <>
-      <div className="fixed inset-0 z-[80] flex items-start justify-center sm:items-center sm:overflow-y-auto sm:p-12">
+      <div className="fixed inset-0 z-[var(--z-overlay)] flex items-start justify-center sm:items-center sm:overflow-y-auto sm:p-12">
         <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xl" onClick={onClose} />
 
         {!imageLoaded && (
@@ -1083,7 +1110,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
       {lightboxOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-[200] flex cursor-zoom-out items-center justify-center bg-black/95"
+            className="fixed inset-0 z-[var(--z-lightbox)] flex cursor-zoom-out items-center justify-center bg-black/95"
             onClick={() => setLightboxOpen(false)}
           >
             <img
