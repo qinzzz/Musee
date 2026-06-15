@@ -70,7 +70,7 @@ export default function AddFromLibraryModal({
   const selectedCount = selectedIds.length;
 
   return createPortal(
-    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/20 p-4 backdrop-blur-[2px] sm:p-6">
+    <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/20 p-4 backdrop-blur-[2px] sm:p-6">
       <button
         type="button"
         aria-label="Close add from library modal"

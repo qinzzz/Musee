@@ -80,7 +80,7 @@ const CuratorRoom: React.FC<Props> = ({ items, conversation, onClose, onUpdateCo
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-12">
+    <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-0 sm:p-12">
       <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-2xl" onClick={onClose} />
 
       <div className="relative w-full max-w-5xl h-[100dvh] sm:h-[80vh] bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-500">

@@ -22,7 +22,7 @@ const TagDefinitionModal: React.FC<Props> = ({ tag, onClose }) => {
   }, [tag]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-neutral-900/30 backdrop-blur-md" onClick={onClose} />
       
       <div className="relative w-full max-w-lg bg-white rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 flex flex-col">

@@ -71,7 +71,7 @@ const ExhibitionHallView: React.FC<Props> = ({
   const activeItem = items[activeThumbIndex];
 
   return (
-    <div className="fixed inset-0 z-[60] bg-neutral-950 flex flex-col animate-in fade-in duration-700">
+    <div className="fixed inset-0 z-[var(--z-overlay)] bg-neutral-950 flex flex-col animate-in fade-in duration-700">
       {/* 1. Top Header with Search & Back */}
       <div className="shrink-0 h-24 flex items-center justify-between px-6 sm:px-12 relative z-20">
         <button 

@@ -240,7 +240,6 @@ def _create_saved_artwork_record_sync(
             is_recognized=0,
             analysis=None,
             params={},
-            session_id=session_id,
             location=location,
             photo_time=photo_time,
             analysis_status="pending",
@@ -860,7 +859,6 @@ async def analyze_artist(
                         is_recognized=1 if a_name != "Unknown Artist" else 0,
                         analysis=e_analysis,
                         params={"date": d_val, "medium": m_val},
-                        session_id=s_id,
                         location=loc,
                         photo_time=p_time,
                         movement=mv_val,
@@ -1198,7 +1196,7 @@ async def analyze_artist_stream(
                         photo_uri=p_uri, artist_name=a_name, artwork_name=w_name,
                         user_id=u_id, is_recognized=1 if a_name != "Unknown Artist" else 0,
                         analysis=desc or full_txt, params={"date": d_val, "medium": m_val},
-                        session_id=s_id, location=loc, photo_time=p_time,
+                        location=loc, photo_time=p_time,
                         movement=mv_val, period_bucket=pb_val, reference_urls=ref_urls or [],
                     )
                     local_db.add(art)
@@ -2973,7 +2971,6 @@ async def analyze_artwork_unified(
                     is_recognized=1 if a_name != "Unknown Artist" else 0,
                     analysis=e_analysis,
                     params={"date": d_val, "medium": m_val},
-                    session_id=s_id,
                     location=loc,
                     photo_time=p_time,
                     movement=mv_val,

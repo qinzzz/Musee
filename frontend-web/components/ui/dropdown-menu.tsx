@@ -9,14 +9,16 @@ const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 8, align = 'start', ...props }, ref) => (
+>(({ className, side = 'bottom', sideOffset = 8, align = 'start', collisionPadding = 16, ...props }, ref) => (
   <DropdownMenuPortal>
     <DropdownMenuPrimitive.Content
       ref={ref}
+      side={side}
       sideOffset={sideOffset}
       align={align}
+      collisionPadding={collisionPadding}
       className={cn(
-        'z-50 min-w-[180px] overflow-hidden rounded-2xl border border-neutral-200 bg-white p-1 shadow-xl',
+        'z-[var(--z-floating)] min-w-[180px] overflow-hidden rounded-2xl border border-neutral-200 bg-white p-1 shadow-xl',
         className
       )}
       {...props}

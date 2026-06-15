@@ -397,7 +397,7 @@ const OrganizeView: React.FC<Props> = ({
         onChange={(event) => onFileUpload(event, 'gallery')}
       />
 
-      <div className="shrink-0 md:hidden flex h-[52px] items-center justify-between gap-3 border-b border-neutral-100 px-4">
+      <div className="sticky top-0 z-[90] shrink-0 flex h-[52px] items-center justify-between gap-3 border-b border-neutral-100 bg-[var(--color-bg-primary)] px-4 md:hidden">
         <div className="flex min-w-0 items-center gap-3">
           {topBarLeftSlot ? <div className="shrink-0">{topBarLeftSlot}</div> : null}
           <span className="truncate text-[15px] font-semibold text-neutral-900">Collection</span>
@@ -415,7 +415,7 @@ const OrganizeView: React.FC<Props> = ({
       <div className="flex flex-col md:mx-auto md:w-full md:max-w-[1000px] md:px-8 md:pt-8 lg:pt-10">
 
       {/* ── Top tab bar ── */}
-      <div className="sticky top-0 z-[80] flex h-[52px] items-center gap-6 overflow-x-auto bg-[var(--color-bg-primary)] px-4 no-scrollbar sm:px-8 md:px-0">
+      <div className="sticky top-[52px] z-[80] flex h-[52px] items-center gap-6 overflow-x-auto bg-[var(--color-bg-primary)] px-4 no-scrollbar sm:px-8 md:top-0 md:px-0">
         <div className="flex min-w-0 items-center gap-6 overflow-x-auto no-scrollbar">
           {TABS.map(tab => (
             <button

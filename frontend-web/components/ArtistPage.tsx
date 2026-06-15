@@ -104,7 +104,7 @@ export default function ArtistPage({ artistEntityId, artworkId, artistName, user
 
   return (
     <div
-      className={isInline ? "w-full h-full relative z-10 flex flex-col bg-[var(--color-bg-primary)] overflow-hidden" : "fixed inset-0 z-[1200] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"}
+      className={isInline ? "w-full h-full relative z-10 flex flex-col bg-[var(--color-bg-primary)] overflow-hidden" : "fixed inset-0 z-[var(--z-fullscreen-page)] bg-[var(--color-bg-primary)] flex flex-col overflow-hidden"}
       style={{ fontFamily: 'var(--font-family-sans)' }}
     >
       {/* Header */}
