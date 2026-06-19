@@ -93,6 +93,7 @@ type ExploreSessionViewProps = {
     artworkId: string,
     artistName?: string,
   ) => void;
+  onOpenSessionFromInterpretation: (sessionId: string) => void;
   onSaveExistingGoal: (goal: string) => void;
   onSaveSessionTitle: (title: string) => Promise<void>;
   onSessionGoalInputChange: (value: string) => void;
@@ -255,6 +256,7 @@ export default function ExploreSessionView({
   onInterpretationRightModeChange,
   onRefreshAnalysis,
   onOpenArtistFromInterpretation,
+  onOpenSessionFromInterpretation,
   onSaveExistingGoal,
   onSaveSessionTitle,
   onSessionGoalInputChange,
@@ -365,6 +367,7 @@ export default function ExploreSessionView({
             onRefreshAnalysis={onRefreshAnalysis}
             userId={userId}
             onNavigateToArtist={onOpenArtistFromInterpretation}
+            onNavigateToSession={onOpenSessionFromInterpretation}
             navigationContextLabel={artworkDetailContext?.parentLabel || activeVisitSummary.title}
             editRequestToken={artworkHeaderEditToken}
             isInline={true}
@@ -380,7 +383,6 @@ export default function ExploreSessionView({
         <CanvasHeader
           parentLabel=""
           childLabel={activeVisitSummary.title}
-          subtitle={activeVisitSummary.location || undefined}
           leftSlot={headerLeftSlot}
           isInline={true}
           onChildClick={() => setSessionDetailsOpen((value) => !value)}

@@ -3,6 +3,7 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Optional, List, Union, Dict, Any
+from collections import Counter
 import asyncio
 import json
 import logging
@@ -34,6 +35,24 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 CLASSIFICATION_VALUES = {"unsorted", "love", "respect", "not_for_me"}
 SESSION_ARTWORK_LIMIT = 5
+DEFAULT_SESSION_TITLE = "Untitled Session"
+SESSION_TITLE_STATE_DRAFT = "draft"
+SESSION_TITLE_STATE_AUTO = "auto"
+SESSION_TITLE_STATE_USER_LOCKED = "user_locked"
+TITLE_REASON_FALLBACK = "fallback"
+TITLE_REASON_THEME = "theme"
+TITLE_REASON_ARTIST = "artist"
+TITLE_REASON_VENUE = "venue"
+TITLE_REASON_GOAL = "goal"
+TITLE_REASON_ARTWORK = "artwork"
+TITLE_REASON_RANK = {
+    TITLE_REASON_THEME: 1,
+    TITLE_REASON_ARTIST: 2,
+    TITLE_REASON_ARTWORK: 3,
+    TITLE_REASON_VENUE: 4,
+    TITLE_REASON_GOAL: 5,
+    TITLE_REASON_FALLBACK: 9,
+}
 TASTE_DIMENSIONS = [
     ("figurative_abstract", "dim_figurative_abstract", "具象", "抽象"),
     ("emotive_conceptual", "dim_emotive_conceptual", "感性", "理性"),
@@ -42,6 +61,208 @@ TASTE_DIMENSIONS = [
     ("playful_serious", "dim_playful_serious", "玩味", "严肃"),
 ]
 PROFILE_MIN_SAMPLE = 5
+
+
+def _normalize_session_title(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = re.sub(r"\s+", " ", value).strip().strip("\"'")
+    return normalized or None
+
+
+def _humanize_label(value: Optional[str]) -> Optional[str]:
+    normalized = _normalize_session_title(value)
+    if not normalized:
+        return None
+    normalized = normalized.lstrip("#").replace("_", " ").replace("-", " ")
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized.title() if normalized else None
+
+
+def _clean_goal_to_title(goal: Optional[str]) -> Optional[str]:
+    normalized = _normalize_session_title(goal)
+    if not normalized:
+        return None
+
+    lowered = normalized.lower()
+    for pattern in (
+        r"^help me (understand|explore|analyze|find|figure out)\s+",
+        r"^can you help me\s+",
+        r"^i want to (understand|explore|find|learn|look at)\s+",
+        r"^i'm trying to\s+",
+        r"^im trying to\s+",
+        r"^why do i like\s+",
+        r"^how do i\s+",
+    ):
+        lowered = re.sub(pattern, "", lowered, count=1).strip()
+
+    tokens = re.findall(r"[a-z0-9][a-z0-9'&-]*", lowered)
+    if not tokens:
+        return None
+
+    stopwords = {
+        "a", "an", "and", "are", "at", "for", "from", "i", "in", "is", "it",
+        "me", "my", "of", "on", "or", "the", "this", "to", "what", "with", "why",
+    }
+    significant = [token for token in tokens if token not in stopwords]
+    selected = significant[:4] if significant else tokens[:4]
+    if not selected:
+        return None
+    return _humanize_label(" ".join(selected))
+
+
+def _sync_session_display_title(session: SessionModel) -> None:
+    effective_user_title = _normalize_session_title(session.user_title)
+    effective_system_title = _normalize_session_title(session.system_title) or DEFAULT_SESSION_TITLE
+
+    session.user_title = effective_user_title
+    session.system_title = effective_system_title
+
+    if effective_user_title:
+        session.title = effective_user_title
+        session.title_state = SESSION_TITLE_STATE_USER_LOCKED
+    else:
+        session.title = effective_system_title
+        session.title_state = (
+            SESSION_TITLE_STATE_DRAFT
+            if effective_system_title == DEFAULT_SESSION_TITLE
+            else SESSION_TITLE_STATE_AUTO
+        )
+
+
+def _derive_session_system_title(session: SessionModel) -> tuple[str, str]:
+    goal = _clean_goal_to_title((session.metadata_json or {}).get("user_goal"))
+    first_user_message_title: Optional[str] = None
+    for message in session.messages or []:
+        if message.role != "user":
+            continue
+        if message.type != "text":
+            continue
+        first_user_message_title = _clean_goal_to_title(message.content)
+        if first_user_message_title:
+            break
+
+    movement_counts: Counter[str] = Counter()
+    tag_counts: Counter[str] = Counter()
+    artist_counts: Counter[str] = Counter()
+    artwork_title_counts: Counter[str] = Counter()
+    museum_counts: Counter[str] = Counter()
+    city_counts: Counter[str] = Counter()
+
+    linked_artworks = [link.artwork for link in session.artwork_links if link.artwork]
+    artwork_count = len(linked_artworks)
+
+    for artwork in linked_artworks:
+        movement = _humanize_label(artwork.movement)
+        if movement:
+            movement_counts[movement] += 1
+
+        artist_name = _normalize_session_title(artwork.artist_name)
+        if artist_name and artist_name.lower() not in {"unknown artist", "unknown"}:
+            artist_counts[artist_name] += 1
+
+        artwork_name = _normalize_session_title(artwork.artwork_name)
+        if artwork_name and artwork_name.lower() not in {"untitled", "unknown"}:
+            artwork_title_counts[artwork_name] += 1
+
+        for tag in artwork.artwork_tags or []:
+            tag_name = _humanize_label(tag.name)
+            if tag_name:
+                tag_counts[tag_name] += 1
+
+        location_payload = _coerce_location_payload(artwork.location)
+        museum_name = _normalize_session_title(
+            (location_payload or {}).get("museum") if location_payload else artwork.museum_name
+        ) or _normalize_session_title(artwork.museum_name)
+        city_name = _normalize_session_title((location_payload or {}).get("city") if location_payload else None)
+        if museum_name:
+            museum_counts[museum_name] += 1
+        if city_name:
+            city_counts[city_name] += 1
+
+    top_movement = movement_counts.most_common(1)
+    if top_movement and top_movement[0][1] >= 2:
+        return top_movement[0][0], TITLE_REASON_THEME
+
+    top_tag = tag_counts.most_common(1)
+    if top_tag and top_tag[0][1] >= 2:
+        return top_tag[0][0], TITLE_REASON_THEME
+
+    top_artist = artist_counts.most_common(1)
+    if top_artist and (artwork_count == 1 or top_artist[0][1] >= 2):
+        return top_artist[0][0], TITLE_REASON_ARTIST
+
+    top_artwork = artwork_title_counts.most_common(1)
+    if top_artwork and artwork_count == 1:
+        return top_artwork[0][0], TITLE_REASON_ARTWORK
+
+    top_museum = museum_counts.most_common(1)
+    if top_museum:
+        return top_museum[0][0], TITLE_REASON_VENUE
+
+    top_city = city_counts.most_common(1)
+    if top_city:
+        return top_city[0][0], TITLE_REASON_VENUE
+
+    if goal:
+        return goal, TITLE_REASON_GOAL
+    if first_user_message_title:
+        return first_user_message_title, TITLE_REASON_GOAL
+
+    return DEFAULT_SESSION_TITLE, TITLE_REASON_FALLBACK
+
+
+def _is_material_title_upgrade(
+    existing_reason: str,
+    next_reason: str,
+    existing_title: str,
+    next_title: str,
+) -> bool:
+    if next_title == existing_title:
+        return False
+    if existing_title == DEFAULT_SESSION_TITLE and next_title != DEFAULT_SESSION_TITLE:
+        return True
+    return TITLE_REASON_RANK.get(next_reason, 99) < TITLE_REASON_RANK.get(existing_reason, 99)
+
+
+def _refresh_session_title(
+    db: Session,
+    session: Optional[SessionModel],
+) -> Optional[SessionModel]:
+    if not session:
+        return None
+
+    metadata = dict(session.metadata_json or {})
+    proposed_title, proposed_reason = _derive_session_system_title(session)
+    proposed_title = _normalize_session_title(proposed_title) or DEFAULT_SESSION_TITLE
+
+    current_system_title = _normalize_session_title(session.system_title) or DEFAULT_SESSION_TITLE
+    current_reason = metadata.get("title_reason") or TITLE_REASON_FALLBACK
+    upgrade_count = int(metadata.get("title_auto_upgrade_count") or 0)
+
+    if session.user_title:
+        session.system_title = proposed_title
+        metadata["title_reason"] = proposed_reason
+    elif current_system_title == DEFAULT_SESSION_TITLE and proposed_title != DEFAULT_SESSION_TITLE:
+        session.system_title = proposed_title
+        metadata["title_reason"] = proposed_reason
+    elif (
+        proposed_title != current_system_title
+        and upgrade_count < 1
+        and _is_material_title_upgrade(current_reason, proposed_reason, current_system_title, proposed_title)
+    ):
+        session.system_title = proposed_title
+        metadata["title_reason"] = proposed_reason
+        metadata["title_auto_upgrade_count"] = upgrade_count + 1
+    else:
+        session.system_title = current_system_title
+        metadata["title_reason"] = current_reason
+
+    session.metadata_json = metadata
+    session.updated_at = datetime.utcnow()
+    _sync_session_display_title(session)
+    db.flush()
+    return session
 
 
 def _ensure_session_artwork_link(
@@ -149,19 +370,19 @@ def _ensure_user_and_session(
 
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if session:
+        _sync_session_display_title(session)
         return session
-
-    initial_title = "Personal Visit"
-    if location:
-        initial_title = location.get("museum") or location.get("city") or initial_title
 
     session = SessionModel(
         id=session_id,
         user_id=user_id or "anonymous",
-        title=initial_title,
+        title=DEFAULT_SESSION_TITLE,
+        system_title=DEFAULT_SESSION_TITLE,
+        title_state=SESSION_TITLE_STATE_DRAFT,
     )
     db.add(session)
     db.flush()
+    _refresh_session_title(db, session)
     return session
 
 
@@ -256,6 +477,9 @@ def _create_saved_artwork_record_sync(
             source=source,
             sequence_number=sequence_number,
         )
+        if session:
+            local_db.flush()
+            _refresh_session_title(local_db, session)
         local_db.commit()
 
         return str(artwork.id)
@@ -829,26 +1053,12 @@ async def analyze_artist(
                         local_db.add(usr)
                         local_db.flush()
                     
-                    # Ensure session exists (Mandatory in Visit-Only Architecture)
-                    if s_id:
-                        sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
-                        if not sess_record:
-                            # Determine initial title from location
-                            initial_title = "Personal Visit"
-                            if loc:
-                                try:
-                                    loc_data = json.loads(loc) if isinstance(loc, str) else loc
-                                    initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
-                                except:
-                                    pass
-
-                            sess_record = SessionModel(
-                                id=s_id,
-                                user_id=u_id or "anonymous",
-                                title=initial_title
-                            )
-                            local_db.add(sess_record)
-                            local_db.flush()
+                    session_record = _ensure_user_and_session(
+                        local_db,
+                        u_id,
+                        s_id,
+                        _coerce_location_payload(loc),
+                    )
                     
                     # Create artwork
                     art = SavedArtwork(
@@ -883,6 +1093,9 @@ async def analyze_artist(
                         artwork_id=str(art.id),
                         source="upload",
                     )
+                    if session_record:
+                        local_db.flush()
+                        _refresh_session_title(local_db, session_record)
                     local_db.commit()
 
                     # Link artwork entity and artist entity (non-fatal)
@@ -1181,16 +1394,12 @@ async def analyze_artist_stream(
                         local_db.add(User(user_id=u_id, device_id=u_id))
                         local_db.flush()
 
-                    if s_id and not local_db.query(SessionModel).filter(SessionModel.id == s_id).first():
-                        initial_title = "Personal Visit"
-                        if loc:
-                            try:
-                                loc_data = json.loads(loc) if isinstance(loc, str) else loc
-                                initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
-                            except Exception:
-                                pass
-                        local_db.add(SessionModel(id=s_id, user_id=u_id or "anonymous", title=initial_title))
-                        local_db.flush()
+                    session_record = _ensure_user_and_session(
+                        local_db,
+                        u_id,
+                        s_id,
+                        _coerce_location_payload(loc),
+                    )
 
                     art = SavedArtwork(
                         photo_uri=p_uri, artist_name=a_name, artwork_name=w_name,
@@ -1222,6 +1431,9 @@ async def analyze_artist_stream(
                         artwork_id=str(art.id),
                         source="upload",
                     )
+                    if session_record:
+                        local_db.flush()
+                        _refresh_session_title(local_db, session_record)
                     local_db.commit()
 
                     entity_id_for_analysis = None
@@ -2705,6 +2917,9 @@ async def update_artwork(
             artwork.artwork_name.lower() != "unknown"
         ) else 0
 
+        for linked_session_id in _get_artwork_session_ids(db, artwork_id):
+            linked_session = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()
+            _refresh_session_title(db, linked_session)
         db.commit()
         db.refresh(artwork)
 
@@ -2896,6 +3111,9 @@ async def analyze_artwork_unified(
         entity_id_fast = bg_ids["entity_id_fast"]
         artist_entity_id_fast = bg_ids["artist_entity_id_fast"]
         linked_artist_entity_id = bg_ids["linked_artist_entity_id"]
+        for linked_session_id in _get_artwork_session_ids(db, str(existing_artwork.id)):
+            linked_session = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()
+            _refresh_session_title(db, linked_session)
         db.commit()
         db.refresh(existing_artwork)
 
@@ -2923,6 +3141,7 @@ async def analyze_artwork_unified(
             "artwork_id": str(existing_artwork.id),
             "reference_urls": vision_ref_urls,
             "artist_entity_id": linked_artist_entity_id,
+            "session_title": existing_artwork.to_dict().get("session_title"),
             "model_used": ai_provider.value,
             "analysis_status": existing_artwork.analysis_status,
             "analysis_error": existing_artwork.analysis_error,
@@ -2949,19 +3168,12 @@ async def analyze_artwork_unified(
                     local_db.add(usr)
                     local_db.flush()
 
-                if s_id:
-                    sess_record = local_db.query(SessionModel).filter(SessionModel.id == s_id).first()
-                    if not sess_record:
-                        initial_title = "Personal Visit"
-                        if loc:
-                            try:
-                                loc_data = json.loads(loc) if isinstance(loc, str) else loc
-                                initial_title = loc_data.get("museum") or loc_data.get("city") or initial_title
-                            except Exception:
-                                pass
-                        sess_record = SessionModel(id=s_id, user_id=u_id or "anonymous", title=initial_title)
-                        local_db.add(sess_record)
-                        local_db.flush()
+                session_record = _ensure_user_and_session(
+                    local_db,
+                    u_id,
+                    s_id,
+                    _coerce_location_payload(loc),
+                )
 
                 art = SavedArtwork(
                     photo_uri=p_uri,
@@ -2986,6 +3198,9 @@ async def analyze_artwork_unified(
                     artwork_id=str(art.id),
                     source="upload",
                 )
+                if session_record:
+                    local_db.flush()
+                    _refresh_session_title(local_db, session_record)
                 local_db.commit()
 
                 entity_id_for_analysis = None
@@ -3268,6 +3483,10 @@ async def delete_artwork(artwork_id: str, user_id: str = Query(...), db: Session
                 db.delete(session_to_del)
                 db.commit()
                 logger.info(f"Auto-deleted empty session: {linked_session_id}")
+        else:
+            session_to_refresh = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()
+            _refresh_session_title(db, session_to_refresh)
+            db.commit()
 
     return {"message": "Artwork deleted successfully"}
 
@@ -3340,7 +3559,10 @@ async def batch_delete_artworks(
                 if s_to_del:
                     db.delete(s_to_del)
                     logger.info(f"Auto-deleted empty session (batch): {sid}")
-        
+            else:
+                session_to_refresh = db.query(SessionModel).filter(SessionModel.id == sid).first()
+                _refresh_session_title(db, session_to_refresh)
+
         db.commit()
 
         return {
@@ -3413,6 +3635,9 @@ async def append_session_messages(
             sequence_number=max_seq + i + 1,
         ))
         inserted += 1
+    session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if session_record:
+        _refresh_session_title(db, session_record)
     db.commit()
     return {"inserted": inserted}
 
@@ -3442,13 +3667,31 @@ async def delete_session(session_id: str, user_id: str = Query(...), db: Session
     return {"message": "Session deleted successfully"}
 
 
+@router.get("/sessions")
+async def list_sessions(
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    require_same_user(current_user, user_id)
+    sessions = (
+        db.query(SessionModel)
+        .filter(SessionModel.user_id == user_id)
+        .order_by(SessionModel.updated_at.desc(), SessionModel.created_at.desc())
+        .all()
+    )
+    return [session.to_dict() for session in sessions]
+
+
 @router.post("/sessions")
 async def create_session(
     request: CreateSessionRequest,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """Create a session record, or return the existing one if the id already exists for this user."""
+    require_same_user(current_user, user_id)
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         user = User(user_id=user_id, device_id=user_id)
@@ -3462,17 +3705,29 @@ async def create_session(
     if session_record:
         if session_record.user_id != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to access this session")
+        _refresh_session_title(db, session_record)
+        db.commit()
         return {
             "message": "Session already exists",
             "session": session_record.to_dict(),
         }
 
+    requested_title = _normalize_session_title(request.title)
     session_record = SessionModel(
         id=session_id,
         user_id=user_id,
-        title=(request.title or "Untitled Session").strip() or "Untitled Session",
+        title=DEFAULT_SESSION_TITLE,
+        user_title=requested_title if requested_title and requested_title != DEFAULT_SESSION_TITLE else None,
+        system_title=requested_title or DEFAULT_SESSION_TITLE,
+        title_state=(
+            SESSION_TITLE_STATE_USER_LOCKED
+            if requested_title and requested_title != DEFAULT_SESSION_TITLE
+            else SESSION_TITLE_STATE_DRAFT
+        ),
     )
     db.add(session_record)
+    db.flush()
+    _refresh_session_title(db, session_record)
     db.commit()
     db.refresh(session_record)
 
@@ -3531,6 +3786,7 @@ async def attach_artworks_to_session(
         )
         inserted += 1
 
+    _refresh_session_title(db, session_record)
     db.commit()
 
     linked_artworks = (
@@ -3589,7 +3845,8 @@ async def update_session(
     if not next_title:
         raise HTTPException(status_code=400, detail="Session title cannot be empty")
 
-    session_record.title = next_title
+    session_record.user_title = next_title
+    _refresh_session_title(db, session_record)
     db.commit()
     db.refresh(session_record)
 
@@ -3614,6 +3871,7 @@ async def set_session_goal(
     meta = dict(session_record.metadata_json or {})
     meta["user_goal"] = goal
     session_record.metadata_json = meta
+    _refresh_session_title(db, session_record)
     db.commit()
     return {"ok": True}
 

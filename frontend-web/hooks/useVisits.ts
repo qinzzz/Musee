@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { GalleryItem, Message } from '../types';
+import { fetchSessions, type SessionRecord } from '../api/sessions';
 
 export type VisitStreamMessage = Message & {
   id: string;
@@ -42,6 +43,7 @@ export type ActiveVisitStreamEntry =
 type DeleteConfirmation = { id: string; type: 'item' | 'session' } | null;
 
 type UseVisitsOptions = {
+  userId: string;
   items: GalleryItem[];
   artworksLoaded: boolean;
   deleteConfirmation: DeleteConfirmation;
@@ -118,6 +120,7 @@ function parseDisplayDate(dateStr: string): string {
 }
 
 export function useVisits({
+  userId,
   items,
   artworksLoaded,
   deleteConfirmation,
@@ -159,6 +162,7 @@ export function useVisits({
       return {};
     }
   });
+  const [persistedSessions, setPersistedSessions] = useState<SessionRecord[]>([]);
 
   useEffect(() => {
     localStorage.setItem(visitDraftsStorageKey, JSON.stringify(visitDrafts));
@@ -172,8 +176,33 @@ export function useVisits({
     localStorage.setItem(sessionGoalsStorageKey, JSON.stringify(sessionGoals));
   }, [sessionGoals, sessionGoalsStorageKey]);
 
+  const refreshPersistedSessions = () => {
+    let cancelled = false;
+
+    fetchSessions(userId)
+      .then((sessions) => {
+        if (!cancelled) {
+          setPersistedSessions(sessions);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPersistedSessions([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  };
+
+  useEffect(() => {
+    return refreshPersistedSessions();
+  }, [userId]);
+
   const visitSummaries = useMemo(() => {
     const grouped = new Map<string, GalleryItem[]>();
+    const persistedSessionMap = new Map(persistedSessions.map((session) => [session.id, session]));
     items.forEach((item) => {
       const memberships = getItemSessionMemberships(item);
       memberships.forEach(({ visitId }) => {
@@ -188,6 +217,8 @@ export function useVisits({
     grouped.forEach((visitItems, id) => {
       knownIds.add(id);
       const draft = visitDrafts.find((entry) => entry.id === id);
+      const persistedSession = persistedSessionMap.get(id);
+      const persistedUpdatedAt = persistedSession?.updated_at ? new Date(persistedSession.updated_at).getTime() : 0;
       const sortedItems = [...visitItems].sort((a, b) => {
         const aSequence = getItemSequenceNumberForVisit(a, id);
         const bSequence = getItemSequenceNumberForVisit(b, id);
@@ -202,9 +233,9 @@ export function useVisits({
       const firstItem = sortedItems[0];
       const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
       const linkedTitle = latestItem?.sessionLinks?.find((link) => link.sessionId === id)?.sessionTitle;
-      const title = linkedTitle || latestItem?.sessionTitle || location || draft?.title || defaultVisitTitle;
+      const title = persistedSession?.title || linkedTitle || latestItem?.sessionTitle || draft?.title || location || defaultVisitTitle;
       const lastArtworkTimestamp = latestItem ? getVisitItemTimestamp(latestItem) : 0;
-      const updatedAt = Math.max(draft?.updatedAt || 0, lastArtworkTimestamp);
+      const updatedAt = Math.max(draft?.updatedAt || 0, persistedUpdatedAt, lastArtworkTimestamp);
       summaries.push({
         id,
         title,
@@ -216,6 +247,22 @@ export function useVisits({
           : (latestItem?.photoTime ? parseDisplayDate(latestItem.photoTime) : null),
         items: sortedItems,
       });
+    });
+
+    persistedSessions.forEach((session) => {
+      if (knownIds.has(session.id)) return;
+      const persistedUpdatedAt = session.updated_at ? new Date(session.updated_at).getTime() : Date.now();
+      const draft = visitDrafts.find((entry) => entry.id === session.id);
+      summaries.push({
+        id: session.id,
+        title: session.title || draft?.title || defaultVisitTitle,
+        location: null,
+        artworkCount: 0,
+        updatedAt: Math.max(persistedUpdatedAt, draft?.updatedAt || 0),
+        dateLabel: new Date(Math.max(persistedUpdatedAt, draft?.updatedAt || persistedUpdatedAt)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        items: [],
+      });
+      knownIds.add(session.id);
     });
 
     visitDrafts.forEach((draft) => {
@@ -238,7 +285,7 @@ export function useVisits({
         return summary.title.toLowerCase().includes(search) || (summary.location || '').toLowerCase().includes(search);
       })
       .sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [defaultVisitTitle, items, visitDrafts, visitSearch]);
+  }, [defaultVisitTitle, items, persistedSessions, visitDrafts, visitSearch]);
 
   const activeVisitSummary = useMemo(() => {
     if (isComposingNewSession) {
@@ -363,9 +410,11 @@ export function useVisits({
     setSessionGoalInput,
     sessionGoals,
     setSessionGoals,
+    persistedSessions,
     visitSummaries,
     activeVisitSummary,
     pendingDeleteVisitSummary,
     activeVisitStream,
+    refreshPersistedSessions,
   };
 }

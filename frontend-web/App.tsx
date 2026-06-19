@@ -708,6 +708,7 @@ const App: React.FC = () => {
   const [recentsOpen, setRecentsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
+  const sessionUserId = currentUser?.user_id || USER_ID;
   const {
     visitSearch,
     setVisitSearch,
@@ -733,11 +734,14 @@ const App: React.FC = () => {
     setSessionGoalInput,
     sessionGoals,
     setSessionGoals,
+    persistedSessions,
     visitSummaries,
     activeVisitSummary,
     pendingDeleteVisitSummary,
     activeVisitStream,
+    refreshPersistedSessions,
   } = useVisits({
+    userId: sessionUserId,
     items,
     artworksLoaded,
     deleteConfirmation,
@@ -1114,7 +1118,9 @@ const App: React.FC = () => {
 
   const ensureSessionRecord = async (sessionId: string) => {
     const summary = visitSummaries.find(visitSummary => visitSummary.id === sessionId);
-    return createSession(USER_ID, sessionId, summary?.title || DEFAULT_VISIT_TITLE);
+    const response = await createSession(sessionUserId, sessionId, summary?.title || DEFAULT_VISIT_TITLE);
+    refreshPersistedSessions();
+    return response;
   };
 
   const resolveUploadSession = () => {
@@ -1162,7 +1168,9 @@ const App: React.FC = () => {
         artwork_id: m.artworkId,
         created_at: m.createdAt,
       };
-    }));
+    })).finally(() => {
+      refreshPersistedSessions();
+    });
   };
 
   const triggerUploadCommentary = (
@@ -1315,7 +1323,8 @@ const App: React.FC = () => {
     setIsSubmittingPreparedSession(true);
 
     try {
-      const created = await createSession(USER_ID, undefined, DEFAULT_VISIT_TITLE);
+      const created = await createSession(sessionUserId, undefined, DEFAULT_VISIT_TITLE);
+      refreshPersistedSessions();
       const sessionId = created?.session?.id as string;
       const sessionTitle = created?.session?.title || DEFAULT_VISIT_TITLE;
       const now = Date.now();
@@ -1328,7 +1337,8 @@ const App: React.FC = () => {
       );
 
       if (libraryEntries.length > 0) {
-        await attachArtworksToSession(sessionId, USER_ID, libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id));
+        await attachArtworksToSession(sessionId, sessionUserId, libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id));
+        refreshPersistedSessions();
       }
 
       setVisitDrafts(prev => [
@@ -2431,13 +2441,18 @@ const App: React.FC = () => {
   const saveVisitTitle = async (visitId: string, nextTitle: string) => {
     const trimmedTitle = nextTitle.trim() || DEFAULT_VISIT_TITLE;
     const currentSummary = visitSummaries.find(summary => summary.id === visitId);
+    const isPersistedSession = persistedSessions.some((session) => session.id === visitId);
 
     if (!currentSummary || trimmedTitle === currentSummary.title) {
       return;
     }
 
+    if (isPersistedSession) {
+      await updateSession(visitId, sessionUserId, trimmedTitle);
+      refreshPersistedSessions();
+    }
+
     if (currentSummary.items.length > 0) {
-      await updateSession(visitId, USER_ID, trimmedTitle);
       setItems(prev => prev.map(item => (
         itemBelongsToSession(item, visitId)
           ? updateSessionLinkForItem(item, visitId, (existing) => ({
@@ -2507,11 +2522,16 @@ const App: React.FC = () => {
 
   const confirmDeleteSession = async (sessionId: string) => {
     try {
-      const sessionSummary = visitSummaries.find(summary => summary.id === sessionId);
-      if (sessionSummary?.items.length) {
-        await deleteSession(sessionId, USER_ID);
+      try {
+        await deleteSession(sessionId, sessionUserId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes('404')) {
+          throw error;
+        }
       }
       removeVisitLocally(sessionId);
+      refreshPersistedSessions();
       showToast('Session deleted. Artworks stayed in your library.', 'success');
       console.log(`Successfully deleted session: ${sessionId}`);
     } catch (error) {
@@ -3423,11 +3443,15 @@ const App: React.FC = () => {
                       },
                     });
                   }}
+                  onOpenSessionFromInterpretation={handleSelectVisitSummary}
                   onSaveExistingGoal={(newGoal) => {
                     const sid = activeVisitSummary.id;
                     setSessionGoals(prev => ({ ...prev, [sid]: newGoal }));
                     ensureSessionRecord(sid)
-                      .then(res => setSessionGoal(res?.session?.id || sid, newGoal))
+                      .then(async (res) => {
+                        await setSessionGoal(res?.session?.id || sid, newGoal);
+                        refreshPersistedSessions();
+                      })
                       .catch(() => {});
                   }}
                   onSaveSessionTitle={async (newTitle) => {
@@ -3445,7 +3469,10 @@ const App: React.FC = () => {
                     setSessionGoals(prev => ({ ...prev, [sid]: goal }));
                     setSessionGoalDismissed(prev => new Set([...prev, sid]));
                     ensureSessionRecord(sid)
-                      .then(res => setSessionGoal(res?.session?.id || sid, goal))
+                      .then(async (res) => {
+                        await setSessionGoal(res?.session?.id || sid, goal);
+                        refreshPersistedSessions();
+                      })
                       .catch(() => {});
                   }}
                   onPreparedSessionMessageChange={setNewSessionDraftMessage}
@@ -3514,6 +3541,7 @@ const App: React.FC = () => {
                       },
                     });
                   }}
+                  onNavigateToSessionFromInterpretation={handleSelectVisitSummary}
                   onCollectTabChange={setCollectTab}
                   onCreateBoard={handleCreateAlbum}
                   onRenameBoard={handleRenameAlbum}
@@ -3592,6 +3620,7 @@ const App: React.FC = () => {
                 },
               });
             }}
+            onNavigateToSession={handleSelectVisitSummary}
             navigationContextLabel={artworkDetailContext?.parentLabel || 'Artwork Set'}
           />
         )}

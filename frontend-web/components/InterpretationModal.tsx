@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
-import { Message, Album, NeighborItem, Visit, GalleryItem, ArtworkClassification } from '../types';
+import { Message, Album, NeighborItem, Visit, GalleryItem, ArtworkClassification, SessionLink } from '../types';
 import { updateArtwork, fetchAndPersistInsights } from '../api/artworks';
 import { getTagExplanation, suggestTopics, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../api/chat';
 import ArtworkClassificationChip from './ArtworkClassificationChip';
@@ -25,6 +25,8 @@ interface Props {
     location?: any;
     photoTime?: string;
     visitId?: string;
+    sessionTitle?: string;
+    sessionLinks?: SessionLink[];
     referenceUrls?: import('../types').ReferenceItem[];
     insights?: Array<{ title: string; text: string }>;
     artistEntityId?: string;
@@ -42,6 +44,7 @@ interface Props {
   onDelete?: () => void;
   userId?: string;
   onNavigateToArtist?: (artistEntityId: string | undefined, artworkId: string | undefined, artistName: string | undefined) => void;
+  onNavigateToSession?: (sessionId: string) => void;
   isInline?: boolean;
   onUpdateClassification?: (itemId: string, classification: ArtworkClassification) => Promise<void>;
   navigationContextLabel?: string;
@@ -168,7 +171,7 @@ const Insight: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onRefreshAnalysis, onDelete, userId, onNavigateToArtist, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onRefreshAnalysis, onDelete, userId, onNavigateToArtist, onNavigateToSession, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
   const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false);
   const [insights, setInsights] = useState<Array<{ title: string; text: string }>>([]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -387,6 +390,28 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
   const displayDate = streamingFields?.date || item.date;
   const displayMedium = streamingFields?.medium || item.medium;
   const displayDescription = streamingFields?.description || item.description;
+  const sessionMemberships = useMemo(() => {
+    const fallbackTitle = item.sessionTitle?.trim() || 'Untitled Session';
+    const links = item.sessionLinks && item.sessionLinks.length > 0
+      ? item.sessionLinks
+      : (item.visitId
+          ? [{
+              sessionId: item.visitId,
+              sessionTitle: item.sessionTitle,
+            }]
+          : []);
+
+    const seen = new Set<string>();
+    return links.reduce<Array<{ sessionId: string; title: string }>>((acc, link) => {
+      if (!link?.sessionId || seen.has(link.sessionId)) return acc;
+      seen.add(link.sessionId);
+      acc.push({
+        sessionId: link.sessionId,
+        title: link.sessionTitle?.trim() || fallbackTitle,
+      });
+      return acc;
+    }, []);
+  }, [item.sessionLinks, item.sessionTitle, item.visitId]);
   const navigationIndex = allVisitItems?.findIndex(i => i.id === item.id) ?? -1;
   const currentClassification = item.classification || 'unsorted';
   const hasResolvedIdentity = Boolean(displayArtist || displayTitle || displayDate || displayMedium);
@@ -941,6 +966,27 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {!isInitialPanelLoading && sessionMemberships.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">
+                      {sessionMemberships.length === 1 ? 'Session' : 'Sessions'}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {sessionMemberships.map((membership) => (
+                        <button
+                          key={membership.sessionId}
+                          type="button"
+                          onClick={() => onNavigateToSession?.(membership.sessionId)}
+                          className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[11px] font-medium text-neutral-600 transition-colors hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-900"
+                          title={membership.sessionId}
+                        >
+                          {membership.title}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 

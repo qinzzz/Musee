@@ -1,11 +1,12 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { GalleryItem, Visit, Album, ArtworkClassification } from '../types';
 import { type ArtistRow, type SmartCollection } from '../api/artworks';
 import GridView from './GridView';
 import CreateBoardModal from './CreateBoardModal';
 import ConfirmBoardDeleteModal from './ConfirmBoardDeleteModal';
 import CollectionGridSkeleton from './CollectionGridSkeleton';
+import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { buildArtistInvalidationKey, useUserArtists } from '../hooks/useUserArtists';
 
@@ -155,6 +156,8 @@ const OrganizeView: React.FC<Props> = ({
   } | null>(null);
   const [renameBoardTarget, setRenameBoardTarget] = useState<Album | null>(null);
   const [deleteBoardTarget, setDeleteBoardTarget] = useState<Album | null>(null);
+  const [selectedArtworkIds, setSelectedArtworkIds] = useState<string[]>([]);
+  const [isApplyingBoard, setIsApplyingBoard] = useState(false);
   const collectionUploadInputRef = useRef<HTMLInputElement>(null);
   const boards = albums || [];
   const showCollectionUpload = true;
@@ -293,6 +296,40 @@ const OrganizeView: React.FC<Props> = ({
     }
     return 'Search artists';
   }, [boardDetailName, collectTab, selectedBoard]);
+
+  useEffect(() => {
+    if (collectTab !== 'saved' || savedLayout !== 'grid') {
+      setSelectedArtworkIds([]);
+    }
+  }, [collectTab, savedLayout]);
+
+  useEffect(() => {
+    const searchableIds = new Set(searchedSavedItems.map((item) => item.id));
+    setSelectedArtworkIds((prev) => prev.filter((id) => searchableIds.has(id)));
+  }, [searchedSavedItems]);
+
+  const toggleArtworkSelection = (itemId: string) => {
+    setSelectedArtworkIds((prev) => (
+      prev.includes(itemId)
+        ? prev.filter((id) => id !== itemId)
+        : [...prev, itemId]
+    ));
+  };
+
+  const clearArtworkSelection = () => {
+    setSelectedArtworkIds([]);
+  };
+
+  const handleAddSelectionToBoard = async (boardId: string) => {
+    if (!boardId || selectedArtworkIds.length === 0) return;
+    try {
+      setIsApplyingBoard(true);
+      await onAddItemsToBoard(boardId, selectedArtworkIds);
+      clearArtworkSelection();
+    } finally {
+      setIsApplyingBoard(false);
+    }
+  };
 
   const boardOverflowButtonClassName =
     'flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-400 transition-colors hover:border-neutral-300 hover:text-neutral-700';
@@ -544,10 +581,11 @@ const OrganizeView: React.FC<Props> = ({
                   filteredVisitId={filteredVisitId}
                   isAnalyzing={isAnalyzing}
                   boards={boards}
+                  selectedIds={selectedArtworkIds}
+                  hasSelectionOverlay={selectedArtworkIds.length > 0}
+                  onToggleSelection={toggleArtworkSelection}
                   onInterpret={(item, contextItems) => onInterpret(item, { items: contextItems || searchedSavedItems, label: savedContextLabel })}
                   onDelete={onDelete}
-                  onRequestCreateBoard={openCreateBoardModal}
-                  onAddToBoard={onAddItemsToBoard}
                 />
               ) : (
                 <div>
@@ -593,6 +631,63 @@ const OrganizeView: React.FC<Props> = ({
                             ? 'No unsorted works'
                             : 'No artworks yet'}
                   </p>
+                </div>
+              )}
+
+              {savedLayout === 'grid' && selectedArtworkIds.length > 0 && (
+                <div className="pointer-events-none sticky bottom-5 z-[69] flex min-h-[72px] items-end px-4 sm:px-8 md:px-0">
+                  <div className="pointer-events-auto inline-flex w-fit max-w-full items-center gap-4 rounded-[78px] border border-neutral-200 bg-white px-6 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
+                    <div className="whitespace-nowrap text-[13px] font-semibold text-neutral-900">
+                      {selectedArtworkIds.length} selected
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="secondary"
+                          className="min-w-[160px] justify-between gap-3"
+                          disabled={isApplyingBoard}
+                        >
+                          <span>{isApplyingBoard ? 'Saving…' : 'Add to board'}</span>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="min-w-[180px]">
+                        {boards.map((board) => (
+                          <DropdownMenuItem
+                            key={board.id}
+                            onSelect={(event) => {
+                              event.preventDefault();
+                              handleAddSelectionToBoard(board.id);
+                            }}
+                          >
+                            {board.name}
+                          </DropdownMenuItem>
+                        ))}
+                        {boards.length > 0 && <div className="my-1 h-px bg-neutral-100" />}
+                        <DropdownMenuItem
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            openCreateBoardModal({
+                              itemIds: selectedArtworkIds,
+                              onCreated: () => clearArtworkSelection(),
+                            });
+                          }}
+                        >
+                          <span className="mr-2 text-[14px] leading-none">+</span>
+                          <span>New board</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button
+                      onClick={clearArtworkSelection}
+                      variant="ghost"
+                      className="px-0 font-medium"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
