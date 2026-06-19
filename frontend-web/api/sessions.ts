@@ -1,6 +1,19 @@
 import { API_BASE_URL, fetchWithTimeout } from './core';
 import type { GalleryItem } from '../types';
 
+export interface SessionRecord {
+  id: string;
+  user_id: string;
+  title: string;
+  user_title?: string | null;
+  system_title?: string | null;
+  title_state?: 'draft' | 'auto' | 'user_locked';
+  narrative_summary?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface SessionMessagePayload {
   id?: string;
   role: 'user' | 'model';
@@ -24,6 +37,12 @@ export async function setSessionGoal(sessionId: string, goal: string): Promise<v
     body: JSON.stringify({ goal }),
     timeout: 5000,
   }).catch(() => {});
+}
+
+export async function fetchSessions(userId: string): Promise<SessionRecord[]> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions?user_id=${encodeURIComponent(userId)}`, { timeout: 10000 });
+  if (!response.ok) return [];
+  return response.json();
 }
 
 export async function appendSessionMessages(sessionId: string, messages: SessionMessagePayload[]): Promise<void> {

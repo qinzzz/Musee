@@ -89,6 +89,9 @@ async def lifespan(app: FastAPI):
                 _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_error TEXT"))
                 _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_attempted_at TIMESTAMP"))
                 _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_completed_at TIMESTAMP"))
+                _conn.execute(text("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_title VARCHAR"))
+                _conn.execute(text("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS system_title VARCHAR"))
+                _conn.execute(text("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS title_state VARCHAR(20) NOT NULL DEFAULT 'draft'"))
                 _conn.execute(text("""
                     UPDATE saved_artworks
                     SET analysis_status = CASE
@@ -96,6 +99,27 @@ async def lifespan(app: FastAPI):
                         WHEN COALESCE(analysis_status, '') = '' THEN 'pending'
                         ELSE analysis_status
                     END
+                """))
+                _conn.execute(text("""
+                    UPDATE sessions
+                    SET system_title = COALESCE(NULLIF(system_title, ''), NULLIF(title, ''), 'Untitled Session')
+                    WHERE COALESCE(system_title, '') = ''
+                """))
+                _conn.execute(text("""
+                    UPDATE sessions
+                    SET title = COALESCE(NULLIF(user_title, ''), NULLIF(system_title, ''), NULLIF(title, ''), 'Untitled Session')
+                    WHERE COALESCE(title, '') = ''
+                       OR title IS DISTINCT FROM COALESCE(NULLIF(user_title, ''), NULLIF(system_title, ''), NULLIF(title, ''), 'Untitled Session')
+                """))
+                _conn.execute(text("""
+                    UPDATE sessions
+                    SET title_state = CASE
+                        WHEN COALESCE(NULLIF(user_title, ''), '') <> '' THEN 'user_locked'
+                        WHEN COALESCE(NULLIF(system_title, ''), 'Untitled Session') = 'Untitled Session' THEN 'draft'
+                        ELSE 'auto'
+                    END
+                    WHERE COALESCE(title_state, '') = ''
+                       OR title_state NOT IN ('draft', 'auto', 'user_locked')
                 """))
                 _conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS skill_events (

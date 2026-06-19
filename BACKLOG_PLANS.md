@@ -60,9 +60,9 @@ Start with flows that are:
 - Use selectors such as `data-testid` so tests can reliably find important UI elements.
 
 
-## 2. Session / Artwork Bootstrap Cache Idea
+## 2. Session / Artwork Bootstrap Cache
 
-Status: deferred until current bugs are stabilized
+Status: completed
 
 ### Problem
 
@@ -130,13 +130,9 @@ Include:
 - TTL / freshness rule
 - safe fallback on parse failure
 
-### Recommended rollout
+### Implementation outcome
 
-1. Stabilize current upload/session/history bugs first.
-2. Add artwork metadata bootstrap only.
-3. Hydrate immediately from cache.
-4. Refetch from backend and replace/merge.
-5. Later unify visit drafts/streams/goals into the same boot model.
+The lightweight bootstrap cache has been implemented as a warm-start layer so artwork/session context can appear immediately on app load while backend data revalidates in the background.
 
 ### Important design principle
 
@@ -148,10 +144,209 @@ or
 
 - intentionally wait and show a clear loading state
 
-The long-term preferred direction is coherent, lightweight bootstrap hydration with backend revalidation.
+The implemented direction is coherent, lightweight bootstrap hydration with backend revalidation.
 
 
-## 3. Artist Detail Loading Cleanup
+## 3. Unified Session Titling Pipeline (MVP)
+
+Status: planned next
+
+### Goal
+
+Create one unified, scalable session titling pipeline that behaves consistently across:
+
+- chat-only sessions
+- upload / camera sessions
+- library-curated sessions
+- mixed sessions
+
+### Design intention
+
+The MVP should favor:
+
+- consistency over cleverness
+- stability over frequent retitling
+- deterministic behavior over opaque inference
+- backend-owned canonical titles over frontend-specific fallbacks
+- user control over system-generated naming
+
+This is meant to produce a strong, elegant MVP title system before introducing any LLM-driven naming.
+
+### Core product behavior
+
+1. Every new session starts as `Untitled Session`.
+2. The backend owns canonical titling.
+3. The frontend may show temporary draft placeholders, but should not invent final title policy.
+4. The system should auto-generate one good title once meaningful evidence exists.
+5. The system may upgrade that automatic title once if later evidence is materially better.
+6. Manual rename always wins and should stop all future automatic display-title changes.
+
+### MVP title model
+
+Store:
+
+- `user_title` — manual override
+- `system_title` — backend-generated automatic title
+- `title_state` — `draft`, `auto`, or `user_locked`
+
+Displayed title:
+
+- `user_title`
+- else `system_title`
+- else `Untitled Session`
+
+### Important architecture rule
+
+Do not persist a session kind such as `chat_only`, `capture_visit`, or `mixed` as canonical state.
+
+Reason:
+
+- session mode can change over time
+- persisted interpretation would drift
+- the resolver should derive naming strategy from current facts instead
+
+Persist facts, not interpretations.
+
+### Inputs the resolver should use
+
+- user goal
+- first user message / reflection prompt
+- artwork count
+- source presence (`upload`, `camera`, `library`)
+- museum / city if available
+- analyzed artist names
+- analyzed artwork titles
+- tags / themes / movement signals
+
+### MVP ranking logic
+
+Prefer titles in roughly this order:
+
+1. strong shared artwork theme
+2. dominant artist anchor
+3. strong museum / venue name
+4. clear user-goal summary
+5. fallback `Untitled Session`
+
+### Stability rule
+
+- `Untitled Session` can always be upgraded once meaningful evidence exists
+- an automatic title can be upgraded once if the new title is clearly better
+- after a strong automatic title is established, stop retitling unless the user renames
+
+### Non-goals for MVP
+
+- no LLM title generation
+- no frequent live retitling
+- no competing frontend/backend naming policies
+- no location-specific fallback like `Personal Visit`
+
+### Implementation direction
+
+1. Remove the split between frontend `Untitled Session` naming and backend implicit location/default naming.
+2. Make backend session creation use one canonical default.
+3. Move title resolution into one backend-owned resolver.
+4. Keep frontend display logic simple and predictable.
+5. Add explicit rename-lock behavior.
+
+
+## 4. LLM-Assisted Session Title Suggestions
+
+Status: deferred until after MVP titling pipeline is stable
+
+### Goal
+
+Explore whether LLM-generated title suggestions can improve title expressiveness after the deterministic MVP pipeline is working reliably.
+
+### Design intention
+
+If added later, LLM titling should be:
+
+- an enhancement layer, not the source of truth
+- constrained by strict validation and normalization rules
+- unable to override user titles
+- unable to introduce unstable title churn
+
+### Recommended direction
+
+- deterministic resolver produces baseline `system_title`
+- optional LLM proposes a better `system_title`
+- accept only if the suggestion is materially better, concise, grounded in session evidence, and passes product formatting constraints
+
+### Notes
+
+- Do not introduce this before the deterministic MVP pipeline is stable.
+- Reliability, predictability, and product clarity matter more than title richness at this stage.
+
+
+## 5. Optimistic Artwork Delete UX
+
+Status: planned
+
+### Goal
+
+Improve artwork deletion responsiveness by dismissing the confirmation modal immediately and showing a temporary pending-delete state while the backend request completes.
+
+### Design intention
+
+The delete interaction should feel immediate without pretending the backend work is already finished.
+
+The UX should favor:
+
+- immediate acknowledgement after confirmation
+- visible in-place progress instead of a blocking modal wait
+- graceful recovery if backend deletion fails
+- minimal layout jump until success is confirmed
+
+This is intentionally a guarded optimistic delete, not a full instant removal.
+
+### Core product behavior
+
+1. User clicks confirm delete.
+2. Deletion modal closes immediately.
+3. The artwork enters a pending-delete frontend state.
+4. Pending-delete artwork remains visible but appears dimmed / transparent and non-interactive.
+5. When backend delete succeeds, remove the artwork from frontend state completely.
+6. If backend delete fails, restore the artwork to its normal solid state and show a failure toast.
+
+### Recommended UI behavior
+
+- apply reduced opacity while delete is in flight
+- disable clicking, editing, classification changes, and repeat delete actions for that artwork
+- if the artwork is open in detail view, close that view immediately on confirm
+- if the artwork appears in multiple views, all instances should reflect the same pending-delete state
+
+### Engineering direction
+
+Track an explicit frontend delete state per artwork, for example:
+
+- `isDeleting`
+
+or a slightly richer state such as:
+
+- `deleteStatus: idle | pending | failed`
+
+The flow should be:
+
+1. mark pending delete locally
+2. fire backend delete request
+3. on success, remove artwork from frontend state
+4. on failure, clear pending state and surface error toast
+
+### Why this direction
+
+- avoids the current frozen-screen feeling after confirmation
+- feels more responsive without hiding backend uncertainty
+- is less visually jarring than immediate removal followed by re-insertion on failure
+- keeps the request lifecycle legible to the user
+
+### Notes
+
+- This should be implemented consistently across grid, collection, session, and artwork-detail entry points.
+- Pending-delete items should not be selectable for other actions while deletion is in flight.
+
+
+## 6. Artist Detail Loading Cleanup
 
 Status: deferred for later cleanup
 
@@ -183,7 +378,7 @@ Clean up the artist detail loading model so the UI reuses already-available fron
 - The cleanup should be done as part of a more comprehensive review of when the app loads, reuses, and revalidates frontend state.
 
 
-## 4. Reflection Image Context Model Cleanup
+## 7. Reflection Image Context Model Cleanup
 
 Status: deferred for later architecture review
 
@@ -222,3 +417,57 @@ Revisit whether session reflection should stay first-turn-only for multimodal im
 
 - No behavior change is planned on this branch.
 - The current implementation is coherent technically, but it may not match the expected product semantics if users assume later-added artworks are also directly seen by the model during ongoing reflection.
+
+
+## 8. Identity / Authorization Model Cleanup
+
+Status: deferred but important
+
+### Problem
+
+The app currently mixes:
+
+- authenticated user flows backed by JWTs
+- anonymous / local-device flows backed by frontend-generated `user_id`
+
+As a result, route-level authorization is enforced inconsistently. Some endpoints verify the JWT subject against `user_id`, while others rely mainly on the request-supplied `user_id` itself.
+
+This makes the system easy to extend incorrectly and leaves the backend too trusting of client-provided identity in anonymous-style flows.
+
+### Goal
+
+Define one clear, scalable identity and authorization model so new endpoints cannot accidentally weaken access control.
+
+### Design intention
+
+The future model should:
+
+- separate authenticated and anonymous behavior explicitly
+- centralize authorization checks instead of repeating ad hoc route logic
+- avoid treating client-supplied `user_id` as a trusted identity primitive
+- make it obvious which routes are public, anonymous-scoped, or authenticated
+
+### Questions to resolve
+
+1. Should session and artwork data remain available in anonymous mode?
+2. If yes, what server-side primitive owns anonymous identity:
+   - signed anonymous token
+   - device/session cookie
+   - temporary server-issued guest account
+3. Which routes should require authenticated identity versus guest identity versus no identity?
+4. How should anonymous data migrate when a guest user signs in?
+
+### Recommended direction
+
+1. Inventory all routes that currently rely on `user_id` query params.
+2. Classify each route as:
+   - authenticated-only
+   - guest-scoped
+   - public
+3. Introduce one shared authorization layer per class.
+4. Remove route-by-route trust in raw client-provided `user_id`.
+
+### Notes
+
+- The current branch includes a narrow local guard fix for the new session bootstrap endpoints.
+- That local fix does not resolve the broader architectural weakness in anonymous identity handling.

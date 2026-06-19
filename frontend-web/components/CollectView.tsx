@@ -41,6 +41,7 @@ type CollectViewProps = {
     artworkId: string,
     artistName?: string,
   ) => void;
+  onNavigateToSessionFromInterpretation: (sessionId: string) => void;
   onCollectTabChange: (tab: CollectTab) => void;
   onCreateBoard: (name: string, itemIds?: string[]) => Promise<Album>;
   onRenameBoard: (boardId: string, name: string) => Promise<Album>;
@@ -79,6 +80,7 @@ export default function CollectView({
   onInterpretationRightModeChange,
   onRefreshAnalysis,
   onNavigateToArtistFromInterpretation,
+  onNavigateToSessionFromInterpretation,
   onCollectTabChange,
   onCreateBoard,
   onRenameBoard,
@@ -115,6 +117,7 @@ export default function CollectView({
             onRefreshAnalysis={onRefreshAnalysis}
             userId={userId}
             onNavigateToArtist={onNavigateToArtistFromInterpretation}
+            onNavigateToSession={onNavigateToSessionFromInterpretation}
             navigationContextLabel={artworkDetailContext?.parentLabel || 'All Artworks'}
             editRequestToken={artworkHeaderEditToken}
             isInline={true}

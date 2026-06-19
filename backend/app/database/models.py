@@ -230,7 +230,10 @@ class Session(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
-    title = Column(String, nullable=True)  # Visit Name (can be museum, city, or user-provided)
+    title = Column(String, nullable=True)  # Backward-compatible displayed title
+    user_title = Column(String, nullable=True)  # Manual user override
+    system_title = Column(String, nullable=True)  # Backend-generated automatic title
+    title_state = Column(String(20), nullable=False, server_default='draft')  # draft | auto | user_locked
     narrative_summary = Column(Text, nullable=True)  # Compressed thematic distillation
     metadata_json = Column(JSON, nullable=True)  # Renamed from 'metadata' to avoid conflict with Base.metadata
     created_at = Column(DateTime, server_default=func.now())
@@ -252,6 +255,9 @@ class Session(Base):
             "id": self.id,
             "user_id": self.user_id,
             "title": self.title,
+            "user_title": self.user_title,
+            "system_title": self.system_title,
+            "title_state": self.title_state,
             "narrative_summary": self.narrative_summary,
             "metadata": self.metadata_json,
             "created_at": self.created_at.isoformat() if self.created_at else None,
