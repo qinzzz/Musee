@@ -35,6 +35,11 @@ export type NavigationHistoryState =
       artistContext: ArtistPageContext;
       activeTab: AppTab;
       collectTab: CollectTab;
+    }
+  | {
+      view: 'capture';
+      activeTab: AppTab;
+      collectTab: CollectTab;
     };
 
 export type InitialNavigationState = {
@@ -107,6 +112,17 @@ export function buildRootHistoryState(
 ): NavigationHistoryState {
   return {
     view: 'root',
+    activeTab,
+    collectTab,
+  };
+}
+
+export function buildCaptureHistoryState(
+  activeTab: AppTab,
+  collectTab: CollectTab,
+): NavigationHistoryState {
+  return {
+    view: 'capture',
     activeTab,
     collectTab,
   };

@@ -43,6 +43,7 @@ import CanvasHeader from './components/CanvasHeader';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import ExploreSessionView from './components/ExploreSessionView';
 import AddFromLibraryModal from './components/AddFromLibraryModal';
+import SessionCapturePage from './components/SessionCapturePage';
 import { Toaster } from './components/ui/sonner';
 import {
   DropdownMenu,
@@ -56,6 +57,7 @@ import { useAppNavigationSync } from './hooks/useAppNavigationSync';
 import { useArtworkLibrary } from './hooks/useArtworkLibrary';
 import { useVisits, type VisitStreamMessage, type VisitDraft, type VisitSummary } from './hooks/useVisits';
 import {
+  buildCaptureHistoryState,
   buildRootHistoryState,
   getInitialNavigationState,
   slugifyName,
@@ -181,6 +183,50 @@ const parseAnalysis = (text: string | null) => {
   return text;
 };
 
+const isKnownArtistName = (artistName?: string | null) => {
+  const normalized = artistName?.trim().toLowerCase();
+  return Boolean(normalized && normalized !== 'unknown artist' && normalized !== 'unknown');
+};
+
+const hasUsableArtworkTitle = (artworkName?: string | null) => {
+  const normalized = artworkName?.trim().toLowerCase();
+  return Boolean(normalized && normalized !== 'untitled' && normalized !== 'unknown artwork');
+};
+
+const hasUsableCommentaryContext = (analysis: {
+  artist_name?: string | null;
+  artwork_name?: string | null;
+  description?: string | null;
+  tags?: string[] | null;
+  date?: string | null;
+  medium?: string | null;
+}) => (
+  isKnownArtistName(analysis.artist_name)
+  || hasUsableArtworkTitle(analysis.artwork_name)
+  || Boolean(parseAnalysis(analysis.description || null)?.trim())
+  || Boolean(analysis.tags?.length)
+  || Boolean(analysis.date?.trim())
+  || Boolean(analysis.medium?.trim())
+);
+
+const describeArtworkForCommentary = (
+  artwork: Partial<Pick<GalleryItem, 'artistName' | 'artworkName'>>,
+) => {
+  const hasKnownArtist = isKnownArtistName(artwork.artistName);
+  const hasTitle = hasUsableArtworkTitle(artwork.artworkName);
+
+  if (hasKnownArtist && hasTitle) {
+    return `"${artwork.artworkName}" by ${artwork.artistName}`;
+  }
+  if (hasTitle) {
+    return `"${artwork.artworkName}"`;
+  }
+  if (hasKnownArtist) {
+    return `a work by ${artwork.artistName}`;
+  }
+  return 'an artwork whose artist is still unknown';
+};
+
 // Helper to format date strings to (Month Day, Year) without time
 export const formatDisplayDate = (dateStr: string | null | undefined): string | null => {
   if (!dateStr) return null;
@@ -228,12 +274,19 @@ export const formatDisplayDate = (dateStr: string | null | undefined): string | 
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const buildUploadRequestKey = (files: File[], mode: 'gallery' | 'camera'): string => {
+const buildUploadRequestKey = (
+  files: File[],
+  mode: 'gallery' | 'camera',
+  options?: { labelFile?: File | null },
+): string => {
   const fileParts = files
     .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
     .sort()
     .join('|');
-  return `${mode}:${fileParts}`;
+  const labelPart = options?.labelFile
+    ? `|label:${options.labelFile.name}:${options.labelFile.size}:${options.labelFile.lastModified}`
+    : '';
+  return `${mode}:${fileParts}${labelPart}`;
 };
 
 const BACKEND_UNSUPPORTED_EXTENSIONS = new Set(['heic', 'heif']);
@@ -446,13 +499,13 @@ const buildSessionLink = (
 
 const App: React.FC = () => {
   const initialNavigationState = getInitialNavigationState(window.location.pathname);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const goalGalleryInputRef = useRef<HTMLInputElement>(null);
-  const goalCameraInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const visitStreamScrollRef = useRef<HTMLDivElement>(null);
   const visitStreamEndRef = useRef<HTMLDivElement>(null);
   const inFlightUploadKeysRef = useRef<Set<string>>(new Set());
+  const allowNextCaptureExitRef = useRef(false);
+  const pendingCaptureExitActionRef = useRef<(() => void) | null>(null);
   const [isUnsortedFlowOpen, setIsUnsortedFlowOpen] = useState(false);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
   const [activeTab, setActiveTab] = useState<'newSession' | 'collect' | 'profile' | 'learn'>(initialNavigationState.activeTab);
@@ -465,6 +518,12 @@ const App: React.FC = () => {
   const [isLibraryPickerOpen, setIsLibraryPickerOpen] = useState(false);
   const [libraryPickerSearch, setLibraryPickerSearch] = useState('');
   const [isSubmittingPreparedSession, setIsSubmittingPreparedSession] = useState(false);
+  const [sessionCaptureState, setSessionCaptureState] = useState<{ key: number; hasUnsavedCaptures: boolean } | null>(
+    window.history.state?.view === 'capture' || window.location.pathname === '/capture'
+      ? { key: Date.now(), hasUnsavedCaptures: false }
+      : null,
+  );
+  const [showCaptureExitModal, setShowCaptureExitModal] = useState(false);
 
   // Curator conversation history — persisted to localStorage
   const [curatorConversations, setCuratorConversations] = useState<CuratorConversation[]>(() => {
@@ -603,17 +662,93 @@ const App: React.FC = () => {
     );
   }
 
+  const requestLeaveSessionCapture = React.useCallback((onConfirmLeave: () => void) => {
+    if (!sessionCaptureState?.hasUnsavedCaptures) {
+      onConfirmLeave();
+      return true;
+    }
+    pendingCaptureExitActionRef.current = onConfirmLeave;
+    setShowCaptureExitModal(true);
+    return false;
+  }, [sessionCaptureState?.hasUnsavedCaptures]);
+
+  const handleCancelCaptureExit = React.useCallback(() => {
+    pendingCaptureExitActionRef.current = null;
+    setShowCaptureExitModal(false);
+  }, []);
+
+  const handleConfirmCaptureExit = React.useCallback(() => {
+    const pendingAction = pendingCaptureExitActionRef.current;
+    pendingCaptureExitActionRef.current = null;
+    setShowCaptureExitModal(false);
+    pendingAction?.();
+  }, []);
+
+  const handleRequestLeaveSessionCapture = React.useCallback(() => {
+    if (allowNextCaptureExitRef.current) {
+      allowNextCaptureExitRef.current = false;
+      pendingCaptureExitActionRef.current = null;
+      setShowCaptureExitModal(false);
+      setSessionCaptureState(null);
+      return true;
+    }
+
+    return requestLeaveSessionCapture(() => {
+      allowNextCaptureExitRef.current = true;
+      window.history.back();
+    });
+  }, [requestLeaveSessionCapture]);
+
+  const openSessionCapturePage = React.useCallback(() => {
+    const nextState = { key: Date.now(), hasUnsavedCaptures: false };
+    setSessionCaptureState(nextState);
+    window.history.pushState(
+      buildCaptureHistoryState(activeTab, collectTab),
+      '',
+      '/capture',
+    );
+  }, [activeTab, collectTab]);
+
+  const closeSessionCapturePage = React.useCallback(() => {
+    void requestLeaveSessionCapture(() => {
+      if (window.history.state?.view === 'capture') {
+        allowNextCaptureExitRef.current = true;
+        window.history.back();
+        return;
+      }
+
+      setSessionCaptureState(null);
+      window.history.pushState(
+        buildRootHistoryState(activeTab, collectTab),
+        '',
+        stateToPath(activeTab, collectTab),
+      );
+    });
+  }, [activeTab, collectTab, requestLeaveSessionCapture]);
+
+  const handleSessionCaptureDirtyChange = React.useCallback((hasUnsavedCaptures: boolean) => {
+    setSessionCaptureState((current) => {
+      if (!current || current.hasUnsavedCaptures === hasUnsavedCaptures) {
+        return current;
+      }
+      return { ...current, hasUnsavedCaptures };
+    });
+  }, []);
+
   useAppNavigationSync({
     activeTab,
     collectTab,
     artistPageContext,
     movementPageContext,
     artworkDetailContext,
+    captureState: sessionCaptureState,
     interpretingItem,
     onRestoreArtworkFromHistory: restoreArtworkFromHistory,
     onSetArtistPageContext: setArtistPageContext,
     onSetMovementPageContext: setMovementPageContext,
     onSetArtworkDetailContext: setArtworkDetailContext,
+    onSetCaptureState: setSessionCaptureState,
+    onRequestLeaveCapture: handleRequestLeaveSessionCapture,
     onSetActiveTab: setActiveTab,
     onSetCollectTab: setCollectTab,
     onSetInterpretingItem: setInterpretingItem,
@@ -1188,15 +1323,20 @@ const App: React.FC = () => {
       const goalClause = sessionGoal
         ? ` Connect your observation to the visitor's stated goal for this visit: "${sessionGoal}".`
         : ' Add a brief personal observation or connection to other works seen today.';
-      trigger = `I just captured "${a.artworkName || 'an artwork'}" by ${a.artistName || 'the artist'}. Write a short response (3–4 sentences): (1) introduce the artist and title naturally, (2) give a one-sentence interpretation of the work, (3)${goalClause} Warm, conversational tone — assume the user may not have opened the artwork card.`;
+      if (isKnownArtistName(a.artistName)) {
+        trigger = `I just captured ${describeArtworkForCommentary(a)}. Write a short response (3–4 sentences): (1) introduce the artist and title naturally, (2) give a one-sentence interpretation of the work, (3)${goalClause} Warm, conversational tone — assume the user may not have opened the artwork card.`;
+      } else {
+        trigger = `I just captured ${describeArtworkForCommentary(a)}. The attribution is still uncertain, so do not invent an artist. Write a short response (3–4 sentences): (1) briefly acknowledge that the artist is currently unknown or unconfirmed, (2) offer a grounded interpretation based on the work's visible qualities or available metadata, and (3)${goalClause} Warm, conversational tone — assume the user may not have opened the artwork card.`;
+      }
     } else {
       const list = newArtworks
-        .map(a => `"${a.artworkName || 'an artwork'}" by ${a.artistName || 'an unknown artist'}`)
+        .map((a) => describeArtworkForCommentary(a))
         .join(', ');
       const goalClause = sessionGoal
         ? ` Tie it to the visitor's stated goal for this visit: "${sessionGoal}".`
         : '';
-      trigger = `I just captured ${newArtworks.length} artworks at once: ${list}. Write ONE short, warm response (3–5 sentences) reacting to this group as a whole — point out a shared thread, an interesting contrast, or what they suggest together. Don't walk through them one by one or repeat the card details.${goalClause} Assume the user may not have opened the artwork cards.`;
+      const hasUnknownAttribution = newArtworks.some((artwork) => !isKnownArtistName(artwork.artistName));
+      trigger = `I just captured ${newArtworks.length} artworks at once: ${list}. Write ONE short, warm response (3–5 sentences) reacting to this group as a whole — point out a shared thread, an interesting contrast, or what they suggest together. Don't walk through them one by one or repeat the card details.${goalClause}${hasUnknownAttribution ? ' Some attributions may still be unknown, so acknowledge uncertainty where needed and do not invent artists.' : ''} Assume the user may not have opened the artwork cards.`;
     }
     setStreamingVisitResponses(prev => ({ ...prev, [visitId]: '' }));
     visitChatStream(
@@ -1881,16 +2021,17 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-    mode: 'gallery' | 'camera' = 'camera'
+  const processUploadFiles = async (
+    rawFiles: File[],
+    mode: 'gallery' | 'camera' = 'camera',
+    resetInput?: () => void,
+    options?: { labelFile?: File | null; bypassStaging?: boolean; captureCoords?: { latitude: number; longitude: number } | null },
   ) => {
-    const target = event.target as HTMLInputElement;
-    const rawFiles = Array.from(target.files || []);
     const files = await Promise.all(rawFiles.map((file) => normalizeUploadFile(file)));
     if (files.length === 0) return;
     const isNewSessionCompose = activeTab === 'newSession' && isComposingNewSession;
     const shouldStageUpload =
+      !options?.bypassStaging &&
       isNewSessionCompose &&
       (
         mode === 'gallery' ||
@@ -1901,7 +2042,7 @@ const App: React.FC = () => {
       const remainingSlots = Math.max(0, 5 - pendingSessionArtworks.length);
       if (remainingSlots === 0) {
         showToast('You can add up to 5 artworks to start a session.', 'info');
-        if (target) target.value = '';
+        resetInput?.();
         return;
       }
 
@@ -1915,11 +2056,10 @@ const App: React.FC = () => {
           const metadata = mode === 'gallery'
             ? await readExifMetadata(file)
             : { latitude: undefined, longitude: undefined, timestamp: undefined };
-          let coords = { latitude: metadata.latitude, longitude: metadata.longitude };
-          if (mode === 'camera' && coords.latitude === undefined) {
-            const current = await getCurrentLocation().catch(() => undefined);
-            if (current) coords = current;
-          }
+          let coords = {
+            latitude: options?.captureCoords?.latitude ?? metadata.latitude,
+            longitude: options?.captureCoords?.longitude ?? metadata.longitude,
+          };
           const timestamp = metadata.timestamp || Date.now();
           const photoTime = new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           const previewUrl = await new Promise<string>((resolve, reject) => {
@@ -1948,17 +2088,17 @@ const App: React.FC = () => {
         setPendingSessionArtworks((prev) => [...prev, ...stagedEntries]);
       });
 
-      if (target) target.value = '';
+      resetInput?.();
       return;
     }
     const isLibraryOnlyUpload = activeTab === 'collect';
     const collectionUploadSuccessMessage =
       files.length === 1 ? 'Added an artwork to collection' : `Added ${files.length} artworks to collection`;
-    const uploadKey = buildUploadRequestKey(files, mode);
+    const uploadKey = buildUploadRequestKey(files, mode, options);
 
     if (inFlightUploadKeysRef.current.has(uploadKey)) {
       console.warn('Ignoring duplicate upload request while analysis is already in progress:', uploadKey);
-      if (target) target.value = '';
+      resetInput?.();
       return;
     }
 
@@ -1971,11 +2111,10 @@ const App: React.FC = () => {
           ? await readExifMetadata(file)
           : { latitude: undefined, longitude: undefined, timestamp: undefined };
 
-        let coords = { latitude: metadata.latitude, longitude: metadata.longitude };
-        if (mode === 'camera' && coords.latitude === undefined) {
-          const current = await getCurrentLocation().catch(() => undefined);
-          if (current) coords = current;
-        }
+        let coords = {
+          latitude: options?.captureCoords?.latitude ?? metadata.latitude,
+          longitude: options?.captureCoords?.longitude ?? metadata.longitude,
+        };
 
         const photoTimestamp = metadata.timestamp || Date.now();
         const photoTime = new Date(photoTimestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -2060,7 +2199,9 @@ const App: React.FC = () => {
               .catch(() => {});
           }
 
-          const analysis = await analyzeArtworkFromExisting(persistedItem.artworkId!, {});
+          const analysis = await analyzeArtworkFromExisting(persistedItem.artworkId!, {
+            labelFile: options?.labelFile || null,
+          });
           applyArtworkAnalysisResult(persistedItem.id, analysis, {
             sessionLinks: buildSessionLink(
               visitId,
@@ -2080,24 +2221,27 @@ const App: React.FC = () => {
               }
             }).catch(() => {});
           }
-          if (visitId && analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+          if (visitId && hasUsableCommentaryContext(analysis)) {
+            const analyzedLiveItem = {
+              ...liveItem,
+              artistName: analysis.artist_name || liveItem.artistName,
+              artworkName: analysis.artwork_name || liveItem.artworkName,
+              description: parseAnalysis(analysis.description),
+              date: analysis.date || liveItem.date,
+              medium: analysis.medium || liveItem.medium,
+              keywords: analysis.tags?.length ? analysis.tags : liveItem.keywords,
+              isAnalyzing: false,
+            };
             const sessionItems = items
               .map((entry) => (
                 entry.id === placeholder.id || entry.id === persistedItem.id
-                  ? { ...entry, ...liveItem }
+                  ? { ...entry, ...analyzedLiveItem }
                   : entry
               ))
               .filter(i => itemBelongsToSession(i, visitId));
             const history = visitStreams[visitId] || [];
             triggerUploadCommentary(visitId, [{
-              ...liveItem,
-              artistName: analysis.artist_name,
-              artworkName: analysis.artwork_name,
-              description: parseAnalysis(analysis.description),
-              date: analysis.date,
-              medium: analysis.medium,
-              keywords: analysis.tags,
-              isAnalyzing: false,
+              ...analyzedLiveItem,
             }], sessionItems, history);
           }
           setIsAnalyzing(false);
@@ -2274,15 +2418,15 @@ const App: React.FC = () => {
                 }
               }).catch(() => {});
             }
-            if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
+            if (hasUsableCommentaryContext(analysis)) {
               const resolvedItem = {
                 ...entry.item,
-                artistName: analysis.artist_name,
-                artworkName: analysis.artwork_name,
+                artistName: analysis.artist_name || entry.item.artistName,
+                artworkName: analysis.artwork_name || entry.item.artworkName,
                 description: parseAnalysis(analysis.description),
-                date: analysis.date,
-                medium: analysis.medium,
-                keywords: analysis.tags,
+                date: analysis.date || entry.item.date,
+                medium: analysis.medium || entry.item.medium,
+                keywords: analysis.tags?.length ? analysis.tags : entry.item.keywords,
                 isAnalyzing: false,
               };
               analyzedArtworks.push(resolvedItem);
@@ -2303,8 +2447,46 @@ const App: React.FC = () => {
       }
     } finally {
       inFlightUploadKeysRef.current.delete(uploadKey);
-      if (target) target.value = '';
+      resetInput?.();
     }
+  };
+
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    mode: 'gallery' | 'camera' = 'camera'
+  ) => {
+    const target = event.target as HTMLInputElement;
+    const rawFiles = Array.from(target.files || []);
+    await processUploadFiles(rawFiles, mode, () => {
+      if (target) target.value = '';
+    });
+  };
+
+  const handleSessionCaptureSubmit = async (payload: {
+    artwork: File;
+    label: File | null;
+    coords?: { latitude: number; longitude: number };
+  }) => {
+    const [normalizedArtwork, normalizedLabel] = await Promise.all([
+      normalizeUploadFile(payload.artwork),
+      payload.label ? normalizeUploadFile(payload.label) : Promise.resolve(null),
+    ]);
+
+    if (window.history.state?.view === 'capture') {
+      allowNextCaptureExitRef.current = true;
+      window.history.back();
+    } else {
+      setSessionCaptureState(null);
+    }
+
+    window.setTimeout(() => {
+      void processUploadFiles(
+        [normalizedArtwork],
+        'camera',
+        undefined,
+        { labelFile: normalizedLabel, bypassStaging: true, captureCoords: payload.coords || null },
+      );
+    }, 0);
   };
 
   // Reset interpretation panel state when opening a new artwork
@@ -2982,7 +3164,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {sidebarCollapsed && (
+        {!sessionCaptureState && sidebarCollapsed && (
           <aside className="hidden md:flex md:w-[72px] shrink-0 flex-col border-r border-neutral-200 bg-[var(--color-bg-secondary)]">
             <div className="flex h-[52px] flex-col items-center border-b border-neutral-200 px-3">
               <button
@@ -3140,6 +3322,7 @@ const App: React.FC = () => {
         )}
 
         {/* Global unified sidebar */}
+        {!sessionCaptureState && (
         <aside
           className={`shrink-0 z-[var(--z-drawer)] md:z-auto overflow-hidden border-r border-neutral-200 bg-[var(--color-bg-secondary)] transition-all duration-300 flex flex-col h-full ${
             sidebarOpen
@@ -3315,9 +3498,10 @@ const App: React.FC = () => {
             )}
           </div>
         </aside>
+        )}
 
         {/* Backdrop for mobile drawer */}
-        {sidebarOpen && (
+        {!sessionCaptureState && sidebarOpen && (
           <button
             type="button"
             aria-label="Close menu"
@@ -3331,7 +3515,14 @@ const App: React.FC = () => {
           
           {/* Dynamic Content view wrapper */}
           <div className="flex-1 min-h-0 relative flex flex-col">
-            {artistPageContext ? (
+            {sessionCaptureState ? (
+              <SessionCapturePage
+                key={sessionCaptureState.key}
+                onClose={closeSessionCapturePage}
+                onDirtyChange={handleSessionCaptureDirtyChange}
+                onSubmit={handleSessionCaptureSubmit}
+              />
+            ) : artistPageContext ? (
               <div className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg-primary)] animate-in fade-in duration-300">
                 <Suspense fallback={<ScreenLoader label="Loading artist" />}>
                   <ArtistPage
@@ -3410,7 +3601,6 @@ const App: React.FC = () => {
                   streamingVisitResponse={streamingVisitResponses[activeVisitSummary.id]}
                   userId={currentUser?.user_id || USER_ID}
                   goalGalleryInputRef={goalGalleryInputRef}
-                  goalCameraInputRef={goalCameraInputRef}
                   preparedSessionItems={pendingSessionArtworks.map((entry) => ({
                     id: entry.id,
                     previewUrl: entry.previewUrl,
@@ -3475,6 +3665,7 @@ const App: React.FC = () => {
                       })
                       .catch(() => {});
                   }}
+                  onOpenSessionCapture={openSessionCapturePage}
                   onPreparedSessionMessageChange={setNewSessionDraftMessage}
                   onOpenLibraryPicker={() => setIsLibraryPickerOpen(true)}
                   onRemovePreparedSessionItem={removePendingSessionArtwork}
@@ -3663,7 +3854,42 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'newSession' && !interpretingItem && !(
+        {showCaptureExitModal && (
+          <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-6">
+            <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm" onClick={handleCancelCaptureExit} />
+            <div className="relative w-full max-w-md rounded-[2rem] bg-white p-10 shadow-2xl">
+              <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#171717" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                </svg>
+              </div>
+              <h3 className="mb-3 text-xl font-serif text-neutral-900">
+                Discard captures?
+              </h3>
+              <p className="mb-8 text-sm leading-relaxed text-neutral-500">
+                Your captured artwork and label will be removed if you leave this screen now.
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleConfirmCaptureExit}
+                  className="flex-1 rounded-full px-6 py-3 text-[12px] font-semibold text-neutral-500 transition-colors hover:bg-neutral-50"
+                >
+                  Leave
+                </button>
+                <button
+                  onClick={handleCancelCaptureExit}
+                  className="flex-1 rounded-full bg-neutral-900 px-6 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-black"
+                >
+                  Stay
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'newSession' && !sessionCaptureState && !interpretingItem && !(
           activeVisitSummary &&
           activeVisitStream.length === 0 &&
           !sessionGoalDismissed.has(activeVisitSummary.id)
@@ -3671,6 +3897,7 @@ const App: React.FC = () => {
           <ContextualActionBar
             mode="session"
             onUpload={handleFileUpload}
+            onOpenSessionCapture={openSessionCapturePage}
             isAnalyzing={isAnalyzing}
             onInquiry={handleVisitInquiry}
             onLike={() => interpretingItem && handleToggleLike(interpretingItem.id)}

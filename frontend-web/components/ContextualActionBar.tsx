@@ -6,6 +6,7 @@ export type ActionBarMode = 'session';
 interface Props {
   mode: ActionBarMode;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
+  onOpenSessionCapture: () => void;
   onInquiry?: (text: string) => void;
   onLike?: () => void;
   onCollect?: () => void;
@@ -20,6 +21,7 @@ interface Props {
 
 const ContextualActionBar: React.FC<Props> = ({
   onUpload,
+  onOpenSessionCapture,
   onInquiry,
   onLike,
   onCollect,
@@ -32,9 +34,7 @@ const ContextualActionBar: React.FC<Props> = ({
   placeholder,
 }) => {
   const [text, setText] = useState('');
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -46,15 +46,6 @@ const ContextualActionBar: React.FC<Props> = ({
 
   return (
     <>
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture={isMobile ? 'environment' : undefined}
-        className="hidden"
-        onChange={(e) => onUpload(e, 'camera')}
-        disabled={isAnalyzing}
-      />
       <input
         ref={galleryInputRef}
         type="file"
@@ -138,7 +129,8 @@ const ContextualActionBar: React.FC<Props> = ({
               </button>
               <button
                 type="button"
-                onClick={() => cameraInputRef.current?.click()}
+                onClick={onOpenSessionCapture}
+                disabled={isAnalyzing}
                 className="rounded-[18px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[15px] font-medium text-neutral-700 flex items-center gap-3"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

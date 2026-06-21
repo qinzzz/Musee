@@ -34,6 +34,23 @@ class ClaudeAPIClient(AIClientInterface):
         """Prepare image as base64 string for Claude"""
         return base64.b64encode(image_bytes).decode('utf-8')
 
+    @staticmethod
+    def _build_image_content(image_data: Any) -> List[Dict[str, Any]]:
+        payloads = image_data if isinstance(image_data, list) else [image_data]
+        content: List[Dict[str, Any]] = []
+        for data in payloads:
+            if not data:
+                continue
+            content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": data
+                }
+            })
+        return content
+
     async def call_with_image_and_text(
         self,
         prompt: str,
@@ -56,14 +73,7 @@ class ClaudeAPIClient(AIClientInterface):
                                 "type": "text",
                                 "text": prompt
                             },
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": image_data
-                                }
-                            }
+                            *self._build_image_content(image_data),
                         ]
                     }
                 ]
@@ -183,14 +193,7 @@ class ClaudeAPIClient(AIClientInterface):
                                 "type": "text",
                                 "text": prompt
                             },
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": image_data
-                                }
-                            }
+                            *self._build_image_content(image_data),
                         ]
                     }
                 ]
