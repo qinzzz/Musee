@@ -352,6 +352,48 @@ def _coerce_location_payload(location: Optional[Union[str, Dict[str, Any]]]) -> 
     return None
 
 
+def _location_payload_needs_resolution(location: Optional[Union[str, Dict[str, Any]]]) -> bool:
+    payload = _coerce_location_payload(location)
+    if not payload:
+        return False
+
+    has_coords = payload.get("latitude") is not None and payload.get("longitude") is not None
+    has_resolved_fields = any(
+        isinstance(payload.get(key), str) and payload.get(key).strip()
+        for key in ("city", "country", "museum", "raw")
+    )
+    return has_coords and not has_resolved_fields
+
+
+async def _resolve_location_payload(
+    location: Optional[Union[str, Dict[str, Any]]],
+    latitude: Optional[float],
+    longitude: Optional[float],
+) -> Optional[str]:
+    payload = _coerce_location_payload(location)
+    coords_lat = latitude if latitude is not None else (payload.get("latitude") if payload else None)
+    coords_lon = longitude if longitude is not None else (payload.get("longitude") if payload else None)
+
+    if _location_payload_needs_resolution(payload) and coords_lat is not None and coords_lon is not None:
+        location_data = await reverse_geocode(coords_lat, coords_lon)
+        location_data["latitude"] = coords_lat
+        location_data["longitude"] = coords_lon
+        return json.dumps(location_data)
+
+    if location is not None:
+        if isinstance(location, dict):
+            return json.dumps(location)
+        return str(location)
+
+    if coords_lat is not None and coords_lon is not None:
+        location_data = await reverse_geocode(coords_lat, coords_lon)
+        location_data["latitude"] = coords_lat
+        location_data["longitude"] = coords_lon
+        return json.dumps(location_data)
+
+    return None
+
+
 def _ensure_user_and_session(
     db: Session,
     user_id: Optional[str],
@@ -939,16 +981,14 @@ async def analyze_artist(
     try:
         image_bytes, image_metadata = await process_image(image)
 
-        # Determine location source (Priority: Client provided string > EXIF > Coordinate Resolution)
-        if location:
+        # Determine location source (Priority: resolved client payload > EXIF > coordinate resolution)
+        if location and not _location_payload_needs_resolution(location):
             logger.info(f"Metadata Source [Location]: FRONTEND (Value: {location})")
         elif image_metadata.get("location_data"):
             location = json.dumps(image_metadata["location_data"])
             logger.info(f"Metadata Source [Location]: PHOTO EXIF (Resolved: {location})")
-        elif latitude is not None and longitude is not None:
-            # Frontend provided coordinates, but EXIF didn't have GPS or geocoding failed
-            location_data = await reverse_geocode(latitude, longitude)
-            location = json.dumps(location_data)
+        elif location or (latitude is not None and longitude is not None):
+            location = await _resolve_location_payload(location, latitude, longitude)
             logger.info(f"Metadata Source [Location]: FRONTEND COORDS (Resolved: {location})")
         else:
             logger.info(f"Metadata Source [Location]: NONE")
@@ -2963,6 +3003,7 @@ async def update_artwork_classification(
 @router.post("/artworks/analyze")
 async def analyze_artwork_unified(
     image: Optional[UploadFile] = File(None),
+    label_image: Optional[UploadFile] = File(None),
     artwork_id: Optional[str] = Form(None),
     artist_name: Optional[str] = Form(None),
     artwork_name: Optional[str] = Form(None),
@@ -2989,6 +3030,7 @@ async def analyze_artwork_unified(
     existing_artwork: Optional[SavedArtwork] = None
     parsed_location = None
     image_bytes: Optional[bytes] = None
+    label_image_bytes: Optional[bytes] = None
 
     if artwork_id:
         existing_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
@@ -3010,14 +3052,13 @@ async def analyze_artwork_unified(
 
     if image:
         image_bytes, image_metadata = await process_image(image)
-        if location:
+        if location and not _location_payload_needs_resolution(location):
             logger.info(f"Metadata Source [Location]: FRONTEND (Value: {location})")
         elif image_metadata.get("location_data"):
             location = json.dumps(image_metadata["location_data"])
             logger.info(f"Metadata Source [Location]: PHOTO EXIF (Resolved: {location})")
-        elif latitude is not None and longitude is not None:
-            location_data = await reverse_geocode(latitude, longitude)
-            location = json.dumps(location_data)
+        elif location or (latitude is not None and longitude is not None):
+            location = await _resolve_location_payload(location, latitude, longitude)
             logger.info(f"Metadata Source [Location]: FRONTEND COORDS (Resolved: {location})")
         if image_metadata.get("exif_timestamp"):
             photo_time = image_metadata["exif_timestamp"]
@@ -3034,6 +3075,9 @@ async def analyze_artwork_unified(
         if not image_bytes:
             raise HTTPException(status_code=422, detail="Could not load stored image for analysis")
         image_bytes = compress_for_ai(image_bytes)
+
+    if label_image:
+        label_image_bytes, _ = await process_image(label_image)
 
     if location and isinstance(location, str):
         try:
@@ -3079,6 +3123,7 @@ async def analyze_artwork_unified(
 
         analysis_text = await ai_service.identify_artist(
             image_bytes,
+            label_image_bytes=label_image_bytes,
             identity=identity,
             language=language,
             session_context=session_context,
@@ -3311,14 +3356,13 @@ async def save_artwork_upload(
 
     image_bytes, image_metadata = await process_image(image)
 
-    if location:
+    if location and not _location_payload_needs_resolution(location):
         logger.info("Metadata Source [Upload Location]: FRONTEND (Value: %s)", location)
     elif image_metadata.get("location_data"):
         location = json.dumps(image_metadata["location_data"])
         logger.info("Metadata Source [Upload Location]: PHOTO EXIF (Resolved: %s)", location)
-    elif latitude is not None and longitude is not None:
-        location_data = await reverse_geocode(latitude, longitude)
-        location = json.dumps(location_data)
+    elif location or (latitude is not None and longitude is not None):
+        location = await _resolve_location_payload(location, latitude, longitude)
         logger.info("Metadata Source [Upload Location]: FRONTEND COORDS (Resolved: %s)", location)
 
     if image_metadata.get("exif_timestamp"):

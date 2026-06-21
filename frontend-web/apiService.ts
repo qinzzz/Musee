@@ -201,7 +201,7 @@ function decodePcmToAudioBuffer(
   return Promise.resolve(buffer);
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const API_TIMEOUT = 185000; // 185 seconds (slightly above backend's 180s AI timeout)
 const AUTH_TOKEN_KEY = 'musee_auth_token';
 const USER_INFO_KEY = 'musee_user_info';
@@ -474,6 +474,7 @@ export async function analyzeArtworkFromExisting(
   context?: {
     artistName?: string;
     artworkName?: string;
+    labelFile?: File | null;
   }
 ): Promise<ArtworkAnalysisResult> {
   const formData = new FormData();
@@ -483,6 +484,9 @@ export async function analyzeArtworkFromExisting(
   }
   if (context?.artworkName) {
     formData.append('artwork_name', context.artworkName);
+  }
+  if (context?.labelFile) {
+    formData.append('label_image', context.labelFile);
   }
 
   const lang = getLanguage();

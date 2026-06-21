@@ -69,7 +69,6 @@ type ExploreSessionViewProps = {
   streamingVisitResponse?: string;
   userId: string;
   goalGalleryInputRef: React.RefObject<HTMLInputElement | null>;
-  goalCameraInputRef: React.RefObject<HTMLInputElement | null>;
   preparedSessionItems: Array<{
     id: string;
     previewUrl: string;
@@ -98,6 +97,7 @@ type ExploreSessionViewProps = {
   onSaveSessionTitle: (title: string) => Promise<void>;
   onSessionGoalInputChange: (value: string) => void;
   onSubmitGoal: (goal: string) => void;
+  onOpenSessionCapture: () => void;
   onPreparedSessionMessageChange: (value: string) => void;
   onOpenLibraryPicker: () => void;
   onRemovePreparedSessionItem: (entryId: string) => void;
@@ -242,7 +242,6 @@ export default function ExploreSessionView({
   streamingVisitResponse,
   userId,
   goalGalleryInputRef,
-  goalCameraInputRef,
   preparedSessionItems,
   preparedSessionMessage,
   isSubmittingPreparedSession,
@@ -261,6 +260,7 @@ export default function ExploreSessionView({
   onSaveSessionTitle,
   onSessionGoalInputChange,
   onSubmitGoal,
+  onOpenSessionCapture,
   onPreparedSessionMessageChange,
   onOpenLibraryPicker,
   onRemovePreparedSessionItem,
@@ -514,14 +514,6 @@ export default function ExploreSessionView({
                   className="hidden"
                   onChange={(event) => onFileUpload(event, 'gallery')}
                 />
-                <input
-                  ref={goalCameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture={/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'environment' : undefined}
-                  className="hidden"
-                  onChange={(event) => onFileUpload(event, 'camera')}
-                />
                 <div className="mt-5 flex flex-wrap justify-center gap-3">
                   <button
                     onClick={onOpenLibraryPicker}
@@ -541,7 +533,7 @@ export default function ExploreSessionView({
                     Upload artworks
                   </button>
                   <button
-                    onClick={() => goalCameraInputRef.current?.click()}
+                    onClick={onOpenSessionCapture}
                     className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[13px] font-medium"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

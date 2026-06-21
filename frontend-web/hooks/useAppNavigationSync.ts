@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent } from 'react';
 import type { SmartCollection } from '../api/artworks';
 import {
+  buildCaptureHistoryState,
   buildRootHistoryState,
   getInitialNavigationState,
   stateToPath,
@@ -17,11 +18,14 @@ type UseAppNavigationSyncOptions = {
   artistPageContext: ArtistPageContext | null;
   movementPageContext: SmartCollection | null;
   artworkDetailContext: ArtworkDetailContext | null;
+  captureState: { key: number; hasUnsavedCaptures: boolean } | null;
   interpretingItem: { id: string } | null;
   onRestoreArtworkFromHistory: (artworkId: string, context: ArtworkDetailContext) => void;
   onSetArtistPageContext: (context: ArtistPageContext | null) => void;
   onSetMovementPageContext: (context: SmartCollection | null) => void;
   onSetArtworkDetailContext: (context: ArtworkDetailContext | null) => void;
+  onSetCaptureState: (state: { key: number; hasUnsavedCaptures: boolean } | null) => void;
+  onRequestLeaveCapture: () => boolean;
   onSetActiveTab: (tab: AppTab) => void;
   onSetCollectTab: (tab: CollectTab) => void;
   onSetInterpretingItem: (value: null) => void;
@@ -33,11 +37,14 @@ export function useAppNavigationSync({
   artistPageContext,
   movementPageContext,
   artworkDetailContext,
+  captureState,
   interpretingItem,
   onRestoreArtworkFromHistory,
   onSetArtistPageContext,
   onSetMovementPageContext,
   onSetArtworkDetailContext,
+  onSetCaptureState,
+  onRequestLeaveCapture,
   onSetActiveTab,
   onSetCollectTab,
   onSetInterpretingItem,
@@ -45,7 +52,27 @@ export function useAppNavigationSync({
   const handlePopState = useEffectEvent(() => {
     const historyState = window.history.state as NavigationHistoryState | null;
 
+    if (captureState && historyState?.view !== 'capture') {
+      const canLeave = onRequestLeaveCapture();
+      if (!canLeave) {
+        window.history.pushState(buildCaptureHistoryState(activeTab, collectTab), '', '/capture');
+        return;
+      }
+    }
+
+    if (historyState?.view === 'capture') {
+      onSetInterpretingItem(null);
+      onSetArtworkDetailContext(null);
+      onSetArtistPageContext(null);
+      onSetMovementPageContext(null);
+      onSetActiveTab(historyState.activeTab);
+      onSetCollectTab(historyState.collectTab);
+      onSetCaptureState(captureState || { key: Date.now(), hasUnsavedCaptures: false });
+      return;
+    }
+
     if (historyState?.view === 'artwork') {
+      onSetCaptureState(null);
       onSetArtistPageContext(null);
       onSetMovementPageContext(null);
       onRestoreArtworkFromHistory(historyState.artworkId, historyState.artworkContext);
@@ -53,6 +80,7 @@ export function useAppNavigationSync({
     }
 
     if (historyState?.view === 'artist') {
+      onSetCaptureState(null);
       onSetInterpretingItem(null);
       onSetArtworkDetailContext(null);
       onSetMovementPageContext(null);
@@ -62,6 +90,7 @@ export function useAppNavigationSync({
 
     onSetInterpretingItem(null);
     onSetArtworkDetailContext(null);
+    onSetCaptureState(null);
 
     const initialState = getInitialNavigationState(window.location.pathname);
 
@@ -80,7 +109,7 @@ export function useAppNavigationSync({
   }, [handlePopState]);
 
   useEffect(() => {
-    if (artistPageContext || movementPageContext || interpretingItem) {
+    if (artistPageContext || movementPageContext || interpretingItem || captureState) {
       return;
     }
 
@@ -100,5 +129,6 @@ export function useAppNavigationSync({
     movementPageContext,
     interpretingItem,
     artworkDetailContext,
+    captureState,
   ]);
 }

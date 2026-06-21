@@ -5,7 +5,7 @@ All business logic, prompt loading, and request construction is handled by AISer
 
 from google import genai
 from google.genai import types
-from typing import Optional, Any, AsyncGenerator, Dict
+from typing import Optional, Any, AsyncGenerator, Dict, List
 from PIL import Image
 import io
 from app.services.ai_client_interface import AIClientInterface
@@ -42,6 +42,16 @@ class GeminiAPIClient(AIClientInterface):
         """Pass image bytes directly for Gemini"""
         return image_bytes
 
+    @staticmethod
+    def _build_image_parts(image_data: Any) -> List[types.Part]:
+        payloads = image_data if isinstance(image_data, list) else [image_data]
+        parts: List[types.Part] = []
+        for data in payloads:
+            if not data:
+                continue
+            parts.append(types.Part.from_bytes(data=data, mime_type="image/jpeg"))
+        return parts
+
     async def call_with_image_and_text(
         self,
         prompt: str,
@@ -57,8 +67,8 @@ class GeminiAPIClient(AIClientInterface):
             response = await self.client.aio.models.generate_content(
                 model=self.model_name,
                 contents=[
-                    prompt, 
-                    types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
+                    prompt,
+                    *self._build_image_parts(image_data),
                 ],
                 config=types.GenerateContentConfig(
                     temperature=temperature,
@@ -225,8 +235,8 @@ class GeminiAPIClient(AIClientInterface):
             response = await self.client.aio.models.generate_content_stream(
                 model=self.model_name,
                 contents=[
-                    prompt, 
-                    types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
+                    prompt,
+                    *self._build_image_parts(image_data),
                 ],
                 config=types.GenerateContentConfig(
                     temperature=temperature,

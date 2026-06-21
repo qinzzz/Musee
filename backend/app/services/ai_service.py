@@ -207,6 +207,22 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
                 continue
         return prepared or None
 
+    @staticmethod
+    def inject_supporting_label_context(prompt: str, has_label_image: bool) -> str:
+        """Explain the multi-image contract when an artwork label is present."""
+        if not has_label_image:
+            return prompt
+
+        return (
+            "You will receive two images in this order:\n"
+            "1. The artwork itself.\n"
+            "2. A museum/gallery label for that artwork.\n\n"
+            "Use the artwork image as the primary source of truth. Use the label image only as supporting evidence "
+            "to refine the artist, title, date, medium, museum, and context. If the label is unreadable, partial, "
+            "or conflicts with the artwork image, say so through cautious field choices and do not invent details.\n\n"
+            f"{prompt}"
+        )
+
     async def summarize_session_narrative(
         self,
         previous_narrative: Optional[str],
@@ -244,6 +260,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
     async def identify_artist(
         self,
         image_bytes: bytes,
+        label_image_bytes: Optional[bytes] = None,
         identity: str = "default",
         language: Optional[str] = None,
         session_context: Optional[Dict[str, Any]] = None,
@@ -264,14 +281,20 @@ Return ONLY the updated narrative text.{language_instruction}"""
         Returns:
             str: Complete artist identification analysis
         """
-        # Prepare image in provider-specific format
-        image_data = self.ai_client.prepare_image(image_bytes)
+        image_payloads = [image_bytes]
+        if label_image_bytes:
+            image_payloads.append(label_image_bytes)
+        prepared_images = self.prepare_image_batch(image_payloads)
+        image_data: Any
+        if not prepared_images:
+            image_data = self.ai_client.prepare_image(image_bytes)
+        elif len(prepared_images) == 1:
+            image_data = prepared_images[0]
+        else:
+            image_data = prepared_images
 
         # Load prompt
         prompt = get_artist_identification_prompt_v2(identity, language=language)
-
-        if session_context:
-            prompt = self.inject_session_context(prompt, session_context)
 
         if artist_name or artwork_name:
             prompt = get_known_artwork_analysis_prompt_v2(
@@ -280,6 +303,11 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 identity=identity,
                 language=language,
             )
+
+        prompt = self.inject_supporting_label_context(prompt, has_label_image=label_image_bytes is not None)
+
+        if session_context:
+            prompt = self.inject_session_context(prompt, session_context)
 
         # Prepend Vision hint when available
         if vision_hint:
@@ -300,6 +328,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
     async def identify_artist_stream(
         self,
         image_bytes: bytes,
+        label_image_bytes: Optional[bytes] = None,
         identity: str = "default",
         language: Optional[str] = None,
         session_context: Optional[Dict[str, Any]] = None,
@@ -313,8 +342,17 @@ Return ONLY the updated narrative text.{language_instruction}"""
         session_context param retained for signature compatibility but no longer injected —
         contextual commentary belongs in the exhibition chat, not the artwork card.
         """
-        # Prepare image in provider-specific format
-        image_data = self.ai_client.prepare_image(image_bytes)
+        image_payloads = [image_bytes]
+        if label_image_bytes:
+            image_payloads.append(label_image_bytes)
+        prepared_images = self.prepare_image_batch(image_payloads)
+        image_data: Any
+        if not prepared_images:
+            image_data = self.ai_client.prepare_image(image_bytes)
+        elif len(prepared_images) == 1:
+            image_data = prepared_images[0]
+        else:
+            image_data = prepared_images
 
         # Load prompt
         prompt = get_artist_identification_prompt_v2(identity, language=language)
@@ -326,6 +364,8 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 identity=identity,
                 language=language,
             )
+
+        prompt = self.inject_supporting_label_context(prompt, has_label_image=label_image_bytes is not None)
 
         # Prepend Vision hint when available
         if vision_hint:

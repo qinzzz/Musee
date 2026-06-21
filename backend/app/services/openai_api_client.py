@@ -40,6 +40,22 @@ class OpenAIAPIClient(AIClientInterface):
         """Prepare image as base64 string for OpenAI"""
         return base64.b64encode(image_bytes).decode('utf-8')
 
+    @staticmethod
+    def _build_image_parts(image_data: Any) -> List[Dict[str, Any]]:
+        payloads = image_data if isinstance(image_data, list) else [image_data]
+        parts: List[Dict[str, Any]] = []
+        for data in payloads:
+            if not data:
+                continue
+            parts.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{data}",
+                    "detail": "high"
+                }
+            })
+        return parts
+
     async def call_with_image_and_text(
         self,
         prompt: str,
@@ -57,15 +73,7 @@ class OpenAIAPIClient(AIClientInterface):
                     {"role": "system", "content": prompt},
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_data}",
-                                    "detail": "high"
-                                }
-                            }
-                        ]
+                        "content": self._build_image_parts(image_data) or "Please proceed."
                     }
                 ],
                 **self._get_common_params()
@@ -193,15 +201,7 @@ class OpenAIAPIClient(AIClientInterface):
                     {"role": "system", "content": prompt},
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_data}",
-                                    "detail": "high"
-                                }
-                            }
-                        ]
+                        "content": self._build_image_parts(image_data) or "Please proceed."
                     }
                 ],
                 stream=True,

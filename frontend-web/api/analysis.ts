@@ -220,12 +220,14 @@ export async function analyzeArtworkFromExisting(
   context?: {
     artistName?: string;
     artworkName?: string;
+    labelFile?: File | null;
   },
 ): Promise<ArtworkAnalysisResult> {
   const formData = new FormData();
   formData.append('artwork_id', artworkId);
   if (context?.artistName) formData.append('artist_name', context.artistName);
   if (context?.artworkName) formData.append('artwork_name', context.artworkName);
+  if (context?.labelFile) formData.append('label_image', context.labelFile);
 
   const lang = getLanguage();
   if (lang) formData.append('language', lang);

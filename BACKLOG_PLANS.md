@@ -428,6 +428,53 @@ Status: deferred but important
 The app currently mixes:
 
 - authenticated user flows backed by JWTs
+
+
+## 9. Capture Photo Quality Improvement
+
+Status: deferred for later product / architecture pass
+
+### Problem
+
+The current session capture page uses a live browser camera stream (`getUserMedia`) and grabs cropped frames from the video feed. That enables the custom drag-to-crop interaction, but it does not use the device's native still-photo pipeline.
+
+As a result:
+
+- captured artwork quality is lower than a native camera photo
+- artwork labels are especially vulnerable to blur / low detail
+- EXIF metadata such as timestamp and GPS is not preserved in the captured crop
+
+### Goal
+
+Improve artwork and label image quality without losing the core capture workflow.
+
+### Recommended direction
+
+Move from:
+
+- live video crop first
+
+to:
+
+- native or browser-managed still photo capture first
+- crop artwork / label regions from the higher-resolution still image afterward
+
+### Why this is likely better
+
+- higher-resolution source image for both artwork and label
+- better OCR / multimodal reading of museum labels
+- less analysis failure caused by blurry text
+- more future-proof if the capture flow later supports multiple artwork / label crops from one shot
+
+### Product tradeoff
+
+The current live crop interaction feels immediate, but it sacrifices image fidelity. A photo-first flow adds one more step, yet should produce meaningfully better analysis quality.
+
+### Notes
+
+- This should be treated as a product + technical architecture decision, not just a camera implementation detail.
+- If revisited, evaluate whether mobile web should use a native camera capture entry (`capture=\"environment\"`) before presenting the crop UI.
+- The current live-stream approach remains acceptable for MVP interaction testing, but it is not the ideal long-term quality path if label reading becomes important.
 - anonymous / local-device flows backed by frontend-generated `user_id`
 
 As a result, route-level authorization is enforced inconsistently. Some endpoints verify the JWT subject against `user_id`, while others rely mainly on the request-supplied `user_id` itself.
@@ -471,3 +518,55 @@ The future model should:
 
 - The current branch includes a narrow local guard fix for the new session bootstrap endpoints.
 - That local fix does not resolve the broader architectural weakness in anonymous identity handling.
+
+
+## 10. Dimension Enrichment Background Job Cleanup
+
+Status: deferred but important
+
+### Problem
+
+The main artwork capture / upload / analyze flow succeeds, but the follow-up background job that scores artwork entities on taste dimensions can fail independently due to provider/configuration drift.
+
+Observed symptom:
+
+- artwork upload succeeds
+- artwork analysis succeeds
+- a later background warning appears for dimension analysis
+
+This makes the product behavior harder to reason about because one part of the system is healthy while a secondary enrichment path silently degrades.
+
+### What this job is for
+
+This background job scores each recognized artwork entity on taste-oriented dimensions such as:
+
+- figurative vs abstract
+- emotive vs conceptual
+- serene vs intense
+- classical vs avant-garde
+- playful vs serious
+
+Those scores are used for later taste-profile, archetype, and recommendation features. They are not required for basic artwork identification.
+
+### Current issue
+
+The dimension enrichment path currently uses a separate OpenAI-specific client path and can fail even when the app's main analysis provider is configured differently. That creates avoidable provider mismatch and credential fragility.
+
+### Goal
+
+Make secondary enrichment jobs behave consistently with the app's provider configuration and fail more transparently when they are non-critical.
+
+### Recommended direction
+
+1. Audit the dimension-analysis background job and its provider selection.
+2. Remove hardcoded or provider-specific assumptions that can drift from the main analysis pipeline.
+3. Decide whether this job should:
+   - use the same provider abstraction as the main artwork analysis
+   - or be explicitly disabled when the required provider credentials are missing
+4. Improve observability so non-blocking enrichment failures are clearly separated from core analysis failures.
+
+### Product expectation
+
+- core artwork analysis should remain successful even if this job fails
+- users should not lose the main capture/analyze experience because of this enrichment path
+- taste-profile features should degrade gracefully until dimension enrichment is healthy again
