@@ -37,7 +37,8 @@ export interface ArtistEntity {
 }
 
 export type ArtworkClassification = 'unsorted' | 'love' | 'respect' | 'not_for_me';
-export type ArtworkAnalysisStatus = 'pending' | 'analyzing' | 'failed' | 'analyzed';
+export type ArtworkAnalysisStatus = 'pending' | 'analyzing' | 'reidentifying' | 'failed' | 'analyzed';
+export type ArtworkDeleteStatus = 'pending';
 
 export interface SessionLink {
   id?: string;
@@ -78,6 +79,7 @@ export interface GalleryItem {
   classification?: ArtworkClassification;
   analysisStatus?: ArtworkAnalysisStatus;
   analysisError?: string;
+  deleteStatus?: ArtworkDeleteStatus;
   syncStatus?: 'pending' | 'synced' | 'failed';
   isDeletedPlaceholder?: boolean;
 }

@@ -35,6 +35,7 @@ import {
 } from './api/collections';
 import GalleryCard from './components/GalleryCard';
 import VisitStack from './components/VisitStack';
+import IdentifyAgainModal, { type IdentifyAgainValues } from './components/IdentifyAgainModal';
 import InterpretationModal from './components/InterpretationModal';
 import EmptyWall from './components/EmptyWall';
 import TopographyView from './components/TopographyView';
@@ -1001,6 +1002,15 @@ const App: React.FC = () => {
 
   const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'community'>('metadata');
   const [artworkHeaderEditToken, setArtworkHeaderEditToken] = useState(0);
+  const [showHeaderIdentifyAgainModal, setShowHeaderIdentifyAgainModal] = useState(false);
+  const [headerIdentifyAgainValues, setHeaderIdentifyAgainValues] = useState<IdentifyAgainValues>({
+    artist: '',
+    title: '',
+    additionalClue: '',
+  });
+  const [headerIdentifyAgainError, setHeaderIdentifyAgainError] = useState<string | null>(null);
+  const [isHeaderIdentifyingAgain, setIsHeaderIdentifyingAgain] = useState(false);
+  const [pendingDeletedSessionIds, setPendingDeletedSessionIds] = useState<Set<string>>(new Set());
 
   const [visit, setVisit] = useState<Visit>({
     id: 'initial-' + Math.random().toString(36).substring(7),
@@ -1852,6 +1862,15 @@ const App: React.FC = () => {
     });
   }, [updateSavedArtworkInState]);
 
+  const removeArtworkLocally = React.useCallback((itemId: string) => {
+    setItems((prev) => prev.filter((item) => item.id !== itemId));
+    setVisit((prev) => ({
+      ...prev,
+      itemIds: prev.itemIds.filter((id) => id !== itemId),
+    }));
+    setInterpretingItem((prev) => (prev?.id === itemId ? null : prev));
+  }, [setItems, setVisit, setInterpretingItem]);
+
   const applyArtworkAnalysisResult = React.useCallback((
     itemId: string,
     analysis: ArtworkAnalysisResult,
@@ -2564,18 +2583,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleRefreshAnalysis = async (overrides?: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => {
+  const handleIdentifyAgain = async (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => {
     if (!interpretingItem?.artworkId) return;
     const targetItem = interpretingItem;
     updateSavedArtworkInState(targetItem.id, {
       isAnalyzing: true,
-      analysisStatus: 'analyzing',
+      analysisStatus: 'reidentifying',
       analysisError: undefined,
     });
     try {
       const result = await analyzeArtworkFromExisting(targetItem.artworkId, {
-        artistName: overrides?.artistName,
-        artworkName: overrides?.artworkName,
+        artistName: hints?.artistName,
+        artworkName: hints?.artworkName,
+        additionalClue: hints?.additionalClue,
       });
       applyArtworkAnalysisResult(targetItem.id, result, {
         referenceUrls: result.reference_urls || [],
@@ -2586,26 +2606,90 @@ const App: React.FC = () => {
         }
       }).catch(() => {});
     } catch (error) {
-      console.error('Failed to refresh analysis:', error);
-      markArtworkAnalysisFailed(targetItem.id, 'Refresh failed.');
+      console.error('Failed to identify artwork again:', error);
+      markArtworkAnalysisFailed(targetItem.id, 'Identify again failed.');
       throw error;
     }
   };
 
-  const confirmDeleteItem = async (id: string) => {
+  const openHeaderIdentifyAgainModal = () => {
+    if (!interpretingItem || interpretingItem.isAnalyzing || interpretingItem.deleteStatus === 'pending') return;
+    setHeaderIdentifyAgainValues({
+      artist: interpretingItem.artistName || '',
+      title: interpretingItem.artworkName || '',
+      additionalClue: '',
+    });
+    setHeaderIdentifyAgainError(null);
+    setShowHeaderIdentifyAgainModal(true);
+  };
+
+  const closeHeaderIdentifyAgainModal = () => {
+    if (isHeaderIdentifyingAgain) return;
+    setShowHeaderIdentifyAgainModal(false);
+    setHeaderIdentifyAgainError(null);
+  };
+
+  const submitHeaderIdentifyAgain = async () => {
+    if (!interpretingItem?.artworkId || isHeaderIdentifyingAgain) return;
+
+    const artistName = headerIdentifyAgainValues.artist.trim();
+    const artworkName = headerIdentifyAgainValues.title.trim();
+    const additionalClue = headerIdentifyAgainValues.additionalClue.trim();
+
+    if (!artistName && !artworkName && !additionalClue) {
+      setHeaderIdentifyAgainError('Enter at least one clue to continue.');
+      return;
+    }
+
     try {
-      const itemToDelete = items.find(item => item.id === id);
-      if (itemToDelete?.artworkId) {
-        await deleteArtwork(itemToDelete.artworkId, USER_ID);
-      }
-      setItems(prev => prev.filter(item => item.id !== id));
-      if (interpretingItem?.id === id) setInterpretingItem(null);
+      setIsHeaderIdentifyingAgain(true);
+      setHeaderIdentifyAgainError(null);
+      setShowHeaderIdentifyAgainModal(false);
+      await handleIdentifyAgain({
+        artistName: artistName || undefined,
+        artworkName: artworkName || undefined,
+        additionalClue: additionalClue || undefined,
+      });
+    } catch (error) {
+      console.error('Failed to identify artwork again from header:', error);
+      setHeaderIdentifyAgainError('Could not identify the artwork again.');
+    } finally {
+      setIsHeaderIdentifyingAgain(false);
+    }
+  };
+
+  useEffect(() => {
+    if (interpretingItem) return;
+    setShowHeaderIdentifyAgainModal(false);
+    setHeaderIdentifyAgainError(null);
+    setIsHeaderIdentifyingAgain(false);
+  }, [interpretingItem]);
+
+  const confirmDeleteItem = async (id: string) => {
+    const itemToDelete = items.find(item => item.id === id);
+    if (!itemToDelete) {
+      setDeleteConfirmation(null);
+      return;
+    }
+
+    const deleteTargetId = itemToDelete.artworkId || itemToDelete.id;
+    setDeleteConfirmation(null);
+    setInterpretingItem((prev) => (prev?.id === id ? null : prev));
+    updateSavedArtworkInState(id, {
+      deleteStatus: 'pending',
+    });
+
+    try {
+      await deleteArtwork(deleteTargetId, USER_ID);
+      removeArtworkLocally(id);
       showToast('Artwork deleted', 'success');
       console.log(`Successfully deleted artwork: ${id}`);
     } catch (error) {
       console.error("Failed to delete artwork:", error);
-    } finally {
-      setDeleteConfirmation(null);
+      updateSavedArtworkInState(id, {
+        deleteStatus: undefined,
+      });
+      showToast('Could not delete artwork', 'info');
     }
   };
 
@@ -2700,9 +2784,38 @@ const App: React.FC = () => {
       setInterpretingItem(prev => prev ? updateSessionLinkForItem(prev, sessionId, () => null) : prev);
     }
     setFilteredVisitId(prev => (prev === sessionId ? null : prev));
+    setPendingDeletedSessionIds(prev => {
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
   };
 
   const confirmDeleteSession = async (sessionId: string) => {
+    const isCurrentlyViewedSession = activeTab === 'newSession' && activeVisitSummary?.id === sessionId;
+
+    setDeleteConfirmation(null);
+    setOpenVisitMenuId(null);
+    setPendingDeletedSessionIds(prev => {
+      const next = new Set(prev);
+      next.add(sessionId);
+      return next;
+    });
+
+    if (isCurrentlyViewedSession) {
+      setActiveTab('newSession');
+      setFilteredVisitId(null);
+      setIsComposingNewSession(true);
+      resetPreparedSessionState();
+      setVisit({
+        id: '',
+        itemIds: [],
+        globalConversation: [],
+      });
+      setInterpretingItem(null);
+      setArtworkDetailContext(null);
+    }
+
     try {
       try {
         await deleteSession(sessionId, sessionUserId);
@@ -2718,9 +2831,12 @@ const App: React.FC = () => {
       console.log(`Successfully deleted session: ${sessionId}`);
     } catch (error) {
       console.error("Failed to delete session:", error);
+      setPendingDeletedSessionIds(prev => {
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
       showToast('Could not delete session', 'info');
-    } finally {
-      setDeleteConfirmation(null);
     }
   };
 
@@ -2828,17 +2944,23 @@ const App: React.FC = () => {
       isActive ? sidebarNavItemActiveClassName : sidebarNavItemInactiveClassName
     }`;
 
-  const renderVisitSummaryCard = (summary: VisitSummary) => (
+  const renderVisitSummaryCard = (summary: VisitSummary) => {
+    const isPendingDelete = pendingDeletedSessionIds.has(summary.id);
+
+    return (
     <div
       key={summary.id}
-      className={`relative w-full rounded-[20px] p-1 ${
+      className={`relative w-full rounded-[20px] p-1 transition-opacity ${
         activeVisitSummary?.id === summary.id && activeTab === 'newSession'
           ? 'bg-[var(--color-bg-tertiary)] text-neutral-900 shadow-sm ring-1 ring-neutral-200'
           : 'text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-900 font-medium'
-      }`}
+      } ${isPendingDelete ? 'cursor-default opacity-45' : ''}`}
     >
       <button
-        onClick={() => handleSelectVisitSummary(summary.id)}
+        onClick={() => {
+          if (isPendingDelete) return;
+          handleSelectVisitSummary(summary.id);
+        }}
         className="w-full rounded-[16px] px-4 py-2 pr-12 text-left"
       >
         <div className="flex min-w-0 flex-col gap-0.5">
@@ -2873,7 +2995,7 @@ const App: React.FC = () => {
           </p>
         </div>
       </button>
-      {editingVisitId !== summary.id && (
+      {editingVisitId !== summary.id && !isPendingDelete && (
         <DropdownMenu
           open={openVisitMenuId === summary.id}
           onOpenChange={(open) => setOpenVisitMenuId(open ? summary.id : null)}
@@ -2904,8 +3026,7 @@ const App: React.FC = () => {
           >
             <DropdownMenuItem
               className="gap-2 font-medium"
-              onSelect={(event) => {
-                event.preventDefault();
+              onSelect={() => {
                 setOpenVisitMenuId(null);
                 handleStartRenameVisit(summary.id, summary.title);
               }}
@@ -2919,8 +3040,7 @@ const App: React.FC = () => {
             <DropdownMenuItem
               destructive
               className="gap-2 font-medium"
-              onSelect={(event) => {
-                event.preventDefault();
+              onSelect={() => {
                 setOpenVisitMenuId(null);
                 handleDeleteSession(summary.id);
               }}
@@ -2934,13 +3054,15 @@ const App: React.FC = () => {
         </DropdownMenu>
       )}
     </div>
-  );
+    );
+  };
 
   const artworkHeaderActions = interpretingItem?.artworkId ? (
     <ArtworkActionsMenu
-      disabled={Boolean(interpretingItem.isAnalyzing)}
-      onEdit={!interpretingItem.isAnalyzing ? () => setArtworkHeaderEditToken(token => token + 1) : undefined}
-      onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
+      disabled={Boolean(interpretingItem.isAnalyzing || interpretingItem.deleteStatus === 'pending')}
+      onEdit={!interpretingItem.isAnalyzing && interpretingItem.deleteStatus !== 'pending' ? () => setArtworkHeaderEditToken(token => token + 1) : undefined}
+      onIdentifyAgain={!interpretingItem.isAnalyzing && interpretingItem.deleteStatus !== 'pending' ? openHeaderIdentifyAgainModal : undefined}
+      onDelete={interpretingItem.deleteStatus !== 'pending' ? () => setDeleteConfirmation({ type: 'item', id: interpretingItem.id }) : undefined}
       buttonClassName="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-200/50 hover:text-neutral-900 active:text-neutral-900"
       iconClassName="h-[18px] w-[18px]"
     />
@@ -3618,7 +3740,7 @@ const App: React.FC = () => {
                   onDeleteArtwork={(itemId) => setDeleteConfirmation({ type: 'item', id: itemId })}
                   onNavigateInterpretation={handleNavigateInterpretation}
                   onInterpretationRightModeChange={setInterpretationRightMode}
-                  onRefreshAnalysis={handleRefreshAnalysis}
+                  onIdentifyAgain={handleIdentifyAgain}
                   onOpenArtistFromInterpretation={(artistEntityId, artworkId, artistName) => {
                     if (!interpretingItem) return;
                     openArtistDetail({
@@ -3717,7 +3839,7 @@ const App: React.FC = () => {
                   onDeleteArtwork={(itemId) => setDeleteConfirmation({ type: 'item', id: itemId })}
                   onNavigateInterpretation={handleNavigateInterpretation}
                   onInterpretationRightModeChange={setInterpretationRightMode}
-                  onRefreshAnalysis={handleRefreshAnalysis}
+                  onIdentifyAgain={handleIdentifyAgain}
                   onNavigateToArtistFromInterpretation={(artistEntityId, artworkId, artistName) => {
                     if (!interpretingItem) return;
                     openArtistDetail({
@@ -3796,7 +3918,7 @@ const App: React.FC = () => {
             onNavigate={handleNavigateInterpretation}
             rightMode={interpretationRightMode}
             onRightModeChange={setInterpretationRightMode}
-            onRefreshAnalysis={handleRefreshAnalysis}
+            onIdentifyAgain={handleIdentifyAgain}
             userId={currentUser?.user_id || USER_ID}
             onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
               openArtistDetail({
@@ -3815,6 +3937,19 @@ const App: React.FC = () => {
             navigationContextLabel={artworkDetailContext?.parentLabel || 'Artwork Set'}
           />
         )}
+
+        <IdentifyAgainModal
+          open={showHeaderIdentifyAgainModal}
+          values={headerIdentifyAgainValues}
+          error={headerIdentifyAgainError}
+          isSubmitting={isHeaderIdentifyingAgain}
+          onValuesChange={(values) => {
+            setHeaderIdentifyAgainValues(values);
+            if (headerIdentifyAgainError) setHeaderIdentifyAgainError(null);
+          }}
+          onClose={closeHeaderIdentifyAgainModal}
+          onSubmit={() => void submitHeaderIdentifyAgain()}
+        />
 
         {deleteConfirmation && (
           <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-6">

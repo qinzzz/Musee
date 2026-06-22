@@ -86,7 +86,7 @@ type ExploreSessionViewProps = {
   onDeleteArtwork: (itemId: string) => void;
   onNavigateInterpretation: (direction: 'prev' | 'next') => void;
   onInterpretationRightModeChange: (mode: 'metadata' | 'community') => void;
-  onRefreshAnalysis: () => Promise<void>;
+  onIdentifyAgain: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
   onOpenArtistFromInterpretation: (
     artistEntityId: string,
     artworkId: string,
@@ -253,7 +253,7 @@ export default function ExploreSessionView({
   onDeleteArtwork,
   onNavigateInterpretation,
   onInterpretationRightModeChange,
-  onRefreshAnalysis,
+  onIdentifyAgain,
   onOpenArtistFromInterpretation,
   onOpenSessionFromInterpretation,
   onSaveExistingGoal,
@@ -364,7 +364,7 @@ export default function ExploreSessionView({
             onNavigate={onNavigateInterpretation}
             rightMode={interpretationRightMode}
             onRightModeChange={onInterpretationRightModeChange}
-            onRefreshAnalysis={onRefreshAnalysis}
+            onIdentifyAgain={onIdentifyAgain}
             userId={userId}
             onNavigateToArtist={onOpenArtistFromInterpretation}
             onNavigateToSession={onOpenSessionFromInterpretation}
@@ -571,10 +571,16 @@ export default function ExploreSessionView({
                     style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}
                   >
                     {thumbnailEntries.map((entry) => (
+                        (() => {
+                          const isPendingDelete = entry.item.deleteStatus === 'pending';
+                          return (
                         <button
                           key={entry.id}
-                          onClick={() => onOpenSessionArtwork(entry.item)}
-                          className="relative shrink-0 group overflow-hidden"
+                          onClick={() => {
+                            if (isPendingDelete) return;
+                            onOpenSessionArtwork(entry.item);
+                          }}
+                          className={`relative shrink-0 group overflow-hidden ${isPendingDelete ? 'cursor-default opacity-45' : ''}`}
                           style={{
                             height: collapsed ? '68px' : '38vh',
                             width: collapsed ? '68px' : '420px',
@@ -588,11 +594,11 @@ export default function ExploreSessionView({
                           <img
                             src={entry.item.url}
                             alt={entry.item.artworkName || 'Artwork'}
-                            className="w-full h-full object-cover"
+                            className={`w-full h-full object-cover ${isPendingDelete ? 'saturate-[0.7]' : ''}`}
                           />
                           <div
-                            className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                            style={{ opacity: collapsed ? 0 : undefined }}
+                            className={`absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/60 to-transparent transition-opacity duration-300 ${isPendingDelete ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}
+                            style={{ opacity: collapsed || isPendingDelete ? 0 : undefined }}
                           >
                             <p className="text-white text-[12px] font-medium truncate">
                               {entry.item.artworkName || 'Untitled'}
@@ -613,6 +619,8 @@ export default function ExploreSessionView({
                             </div>
                           )}
                         </button>
+                          );
+                        })()
                       ))}
                     <div className="shrink-0 w-2 sm:w-4" />
                   </div>
@@ -649,14 +657,15 @@ export default function ExploreSessionView({
                               <button
                                 key={item.id}
                                 onClick={() => {
-                                  if (item.isDeletedPlaceholder) return;
+                                  if (item.isDeletedPlaceholder || item.deleteStatus === 'pending') return;
                                   onOpenSessionArtwork(item);
                                 }}
                                 className={`group relative shrink-0 overflow-hidden rounded-[24px] bg-white text-left shadow-sm transition-shadow ${
-                                  item.isDeletedPlaceholder ? 'cursor-default' : 'hover:shadow-md'
+                                  item.isDeletedPlaceholder || item.deleteStatus === 'pending' ? 'cursor-default' : 'hover:shadow-md'
                                 }`}
                                 style={{
                                   width: entry.items.length === 1 ? '200px' : '160px',
+                                  opacity: item.deleteStatus === 'pending' ? 0.45 : 1,
                                 }}
                               >
                                 <div className="relative aspect-square">
@@ -668,7 +677,7 @@ export default function ExploreSessionView({
                                     <img
                                       src={item.url}
                                       alt={item.artworkName || 'Artwork'}
-                                      className="h-full w-full object-cover"
+                                      className={`h-full w-full object-cover ${item.deleteStatus === 'pending' ? 'saturate-[0.7]' : ''}`}
                                     />
                                   )}
                                   {item.isAnalyzing && (
@@ -682,7 +691,7 @@ export default function ExploreSessionView({
                                   )}
                                 </div>
                                 {!item.isDeletedPlaceholder && (
-                                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent px-3 py-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                  <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent px-3 py-3 transition-opacity duration-200 ${item.deleteStatus === 'pending' ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
                                     <p className="truncate text-[12px] font-medium text-white">
                                       {item.isAnalyzing ? 'Analyzing…' : (item.artworkName || 'Untitled')}
                                     </p>

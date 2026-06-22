@@ -474,6 +474,7 @@ export async function analyzeArtworkFromExisting(
   context?: {
     artistName?: string;
     artworkName?: string;
+    additionalClue?: string;
     labelFile?: File | null;
   }
 ): Promise<ArtworkAnalysisResult> {
@@ -484,6 +485,9 @@ export async function analyzeArtworkFromExisting(
   }
   if (context?.artworkName) {
     formData.append('artwork_name', context.artworkName);
+  }
+  if (context?.additionalClue) {
+    formData.append('additional_clue', context.additionalClue);
   }
   if (context?.labelFile) {
     formData.append('label_image', context.labelFile);

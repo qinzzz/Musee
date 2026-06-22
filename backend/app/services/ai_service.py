@@ -9,7 +9,6 @@ import json
 from app.models.artwork import AIProvider
 from app.utils.prompt_loader import (
     get_artist_identification_prompt_v2,
-    get_known_artwork_analysis_prompt_v2,
     get_artwork_bite_prompt_v2,
     get_suggest_topics_prompt_v2,
     get_visit_chat_prompt,
@@ -223,6 +222,35 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
             f"{prompt}"
         )
 
+    @staticmethod
+    def inject_identification_hints(
+        prompt: str,
+        artist_name: Optional[str] = None,
+        artwork_name: Optional[str] = None,
+        additional_clue: Optional[str] = None,
+    ) -> str:
+        """Append user-provided identify-again hints as advisory evidence, not overrides."""
+        hints = []
+        if artist_name and artist_name.strip():
+            hints.append(f"- Artist name hint: {artist_name.strip()}")
+        if artwork_name and artwork_name.strip():
+            hints.append(f"- Artwork title hint: {artwork_name.strip()}")
+        if additional_clue and additional_clue.strip():
+            hints.append(f"- Additional clue: {additional_clue.strip()}")
+
+        if not hints:
+            return prompt
+
+        hint_block = "\n".join(hints)
+        return (
+            "User-provided identification hints:\n"
+            f"{hint_block}\n\n"
+            "Use these hints as guidance only, not as ground truth. The image remains the primary evidence. "
+            "If the hints conflict with the visual evidence, prefer the visually supported answer. "
+            "Do not force a match only because a hint was provided.\n\n"
+            f"{prompt}"
+        )
+
     async def summarize_session_narrative(
         self,
         previous_narrative: Optional[str],
@@ -267,6 +295,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         vision_hint: Optional[str] = None,
         artist_name: Optional[str] = None,
         artwork_name: Optional[str] = None,
+        additional_clue: Optional[str] = None,
     ) -> str:
         """
         Identify the artist and artwork details (non-streaming)
@@ -295,14 +324,12 @@ Return ONLY the updated narrative text.{language_instruction}"""
 
         # Load prompt
         prompt = get_artist_identification_prompt_v2(identity, language=language)
-
-        if artist_name or artwork_name:
-            prompt = get_known_artwork_analysis_prompt_v2(
-                artist_name=artist_name or "Unknown Artist",
-                artwork_name=artwork_name or "Untitled",
-                identity=identity,
-                language=language,
-            )
+        prompt = self.inject_identification_hints(
+            prompt,
+            artist_name=artist_name,
+            artwork_name=artwork_name,
+            additional_clue=additional_clue,
+        )
 
         prompt = self.inject_supporting_label_context(prompt, has_label_image=label_image_bytes is not None)
 
@@ -336,6 +363,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         vision_hint: Optional[str] = None,
         artist_name: Optional[str] = None,
         artwork_name: Optional[str] = None,
+        additional_clue: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
         """
         Stream identify the artist and artwork details.
@@ -356,14 +384,12 @@ Return ONLY the updated narrative text.{language_instruction}"""
 
         # Load prompt
         prompt = get_artist_identification_prompt_v2(identity, language=language)
-
-        if artist_name or artwork_name:
-            prompt = get_known_artwork_analysis_prompt_v2(
-                artist_name=artist_name or "Unknown Artist",
-                artwork_name=artwork_name or "Untitled",
-                identity=identity,
-                language=language,
-            )
+        prompt = self.inject_identification_hints(
+            prompt,
+            artist_name=artist_name,
+            artwork_name=artwork_name,
+            additional_clue=additional_clue,
+        )
 
         prompt = self.inject_supporting_label_context(prompt, has_label_image=label_image_bytes is not None)
 

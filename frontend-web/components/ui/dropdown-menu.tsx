@@ -35,7 +35,7 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      'flex w-full cursor-default select-none items-center rounded-xl px-3 py-2.5 text-[12px] text-neutral-700 outline-none transition-colors focus:bg-neutral-50',
+      'flex w-full cursor-pointer select-none items-center rounded-xl px-3 py-2.5 text-[12px] text-neutral-700 outline-none transition-colors focus:bg-neutral-50',
       destructive && 'text-red-600 focus:bg-red-50',
       className
     )}
@@ -54,7 +54,7 @@ const DropdownMenuRadioItem = React.forwardRef<
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-default select-none items-center rounded-xl px-3 py-2.5 pr-8 text-[12px] text-neutral-700 outline-none transition-colors focus:bg-neutral-50',
+      'relative flex w-full cursor-pointer select-none items-center rounded-xl px-3 py-2.5 pr-8 text-[12px] text-neutral-700 outline-none transition-colors focus:bg-neutral-50',
       className
     )}
     {...props}

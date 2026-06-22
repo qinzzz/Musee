@@ -35,7 +35,7 @@ type CollectViewProps = {
   onDeleteArtwork: (itemId: string) => void;
   onNavigateInterpretation: (direction: 'prev' | 'next') => void;
   onInterpretationRightModeChange: (mode: 'metadata' | 'community') => void;
-  onRefreshAnalysis: () => Promise<void>;
+  onIdentifyAgain: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
   onNavigateToArtistFromInterpretation: (
     artistEntityId: string,
     artworkId: string,
@@ -78,7 +78,7 @@ export default function CollectView({
   onDeleteArtwork,
   onNavigateInterpretation,
   onInterpretationRightModeChange,
-  onRefreshAnalysis,
+  onIdentifyAgain,
   onNavigateToArtistFromInterpretation,
   onNavigateToSessionFromInterpretation,
   onCollectTabChange,
@@ -114,7 +114,7 @@ export default function CollectView({
             onNavigate={onNavigateInterpretation}
             rightMode={interpretationRightMode}
             onRightModeChange={onInterpretationRightModeChange}
-            onRefreshAnalysis={onRefreshAnalysis}
+            onIdentifyAgain={onIdentifyAgain}
             userId={userId}
             onNavigateToArtist={onNavigateToArtistFromInterpretation}
             onNavigateToSession={onNavigateToSessionFromInterpretation}

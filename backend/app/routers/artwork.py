@@ -1941,18 +1941,6 @@ def _parse_identify_result(
     }
 
 
-def _apply_authoritative_identity(
-    parsed_result: Dict[str, Any],
-    explicit_artist_name: Optional[str],
-    explicit_artwork_name: Optional[str],
-) -> Dict[str, Any]:
-    result = dict(parsed_result)
-    if explicit_artist_name and explicit_artist_name.strip():
-        result["artist_name"] = explicit_artist_name.strip()
-    if explicit_artwork_name and explicit_artwork_name.strip():
-        result["artwork_name"] = explicit_artwork_name.strip()
-    return result
-
 async def _resolve_image_bytes(image: Optional[UploadFile], photo_uri: Optional[str]) -> bytes:
     """Load image bytes from an uploaded file or URI, raising 400 if neither works."""
     image_bytes = None
@@ -3007,6 +2995,7 @@ async def analyze_artwork_unified(
     artwork_id: Optional[str] = Form(None),
     artist_name: Optional[str] = Form(None),
     artwork_name: Optional[str] = Form(None),
+    additional_clue: Optional[str] = Form(None),
     model: Optional[AIProvider] = Form(None),
     identity: Optional[str] = Form("default"),
     language: Optional[str] = Form(None),
@@ -3130,6 +3119,7 @@ async def analyze_artwork_unified(
             vision_hint=vision_hint,
             artist_name=artist_name,
             artwork_name=artwork_name,
+            additional_clue=additional_clue,
         )
     except Exception as exc:
         if existing_artwork:
@@ -3142,7 +3132,6 @@ async def analyze_artwork_unified(
     fallback_artist = existing_artwork.artist_name if existing_artwork and existing_artwork.artist_name else "Unknown Artist"
     fallback_title = existing_artwork.artwork_name if existing_artwork and existing_artwork.artwork_name else "Untitled"
     parsed_result = _parse_identify_result(analysis_text, fallback_artist=fallback_artist, fallback_title=fallback_title)
-    parsed_result = _apply_authoritative_identity(parsed_result, artist_name, artwork_name)
 
     linked_artist_entity_id = existing_artwork.artist_entity_id if existing_artwork else None
 
