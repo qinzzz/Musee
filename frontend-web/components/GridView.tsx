@@ -50,10 +50,16 @@ const GridView: React.FC<Props> = ({
       <div className={`px-4 pt-4 sm:px-8 md:px-0 md:pt-0 ${hasSelectionOverlay ? 'pb-28' : 'pb-4'}`}>
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-4">
           {displayItems.map(item => (
+            (() => {
+              const isPendingDelete = item.deleteStatus === 'pending';
+              const isSelected = selectedIds.includes(item.id);
+
+              return (
             <div
               key={item.id}
-              className="group relative aspect-square cursor-pointer rounded bg-neutral-100"
+              className={`group relative aspect-square rounded bg-neutral-100 transition-opacity ${isPendingDelete ? 'cursor-default opacity-45' : 'cursor-pointer'}`}
               onClick={() => {
+                if (isPendingDelete) return;
                 if (Date.now() < suppressInterpretUntilRef.current) {
                   return;
                 }
@@ -65,17 +71,19 @@ const GridView: React.FC<Props> = ({
               }}
             >
               <div className="absolute inset-0 overflow-hidden rounded">
-              {/* Spinner sits behind the img; visible when img hides on error or while analyzing */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-5 h-5 border-2 border-neutral-200 border-t-neutral-400 rounded-full animate-spin" />
-              </div>
+              {/* Spinner only shows while analysis is ongoing */}
+              {item.isAnalyzing && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-neutral-200 border-t-neutral-400 rounded-full animate-spin" />
+                </div>
+              )}
               <img
                 src={item.url}
                 alt={item.artworkName || ''}
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                className={`relative w-full h-full object-cover transition-all duration-300 group-hover:scale-105 ${item.isAnalyzing ? 'blur-sm opacity-50' : ''} ${selectedIds.includes(item.id) ? 'ring-2 ring-offset-[-2px] ring-neutral-900' : ''}`}
+                className={`relative w-full h-full object-cover transition-all duration-300 ${isPendingDelete ? 'saturate-[0.7]' : 'group-hover:scale-105'} ${item.isAnalyzing ? 'blur-sm opacity-50' : ''} ${isSelected ? 'ring-2 ring-offset-[-2px] ring-neutral-900' : ''}`}
               />
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-1.5">
+              <div className={`absolute inset-0 bg-black/30 transition-opacity duration-200 flex flex-col justify-end p-1.5 ${isPendingDelete ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
                 {item.artworkName && (
                   <p className="text-white text-[12px] font-medium leading-tight truncate">{item.artworkName}</p>
                 )}
@@ -85,15 +93,16 @@ const GridView: React.FC<Props> = ({
               </div>
               </div>
               <Checkbox
-                checked={selectedIds.includes(item.id)}
+                checked={isSelected}
                 onClick={(e) => {
+                  if (isPendingDelete) return;
                   e.stopPropagation();
                   onToggleSelection(item.id);
                 }}
-                className={`absolute top-2 left-2 z-20 ${!selectedIds.includes(item.id) && !isSelectionMode ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}
+                className={`absolute top-2 left-2 z-20 ${isPendingDelete ? 'pointer-events-none opacity-0' : (!isSelected && !isSelectionMode ? 'opacity-0 group-hover:opacity-100' : 'opacity-100')}`}
                 aria-label={selectedIds.includes(item.id) ? 'Deselect artwork' : 'Select artwork'}
               />
-              {!isSelectionMode && (
+              {!isSelectionMode && !isPendingDelete && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
@@ -117,9 +126,7 @@ const GridView: React.FC<Props> = ({
                   >
                     <DropdownMenuItem
                       destructive
-                      onSelect={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
+                      onSelect={() => {
                         suppressInterpret(400);
                         onDelete(item.id);
                       }}
@@ -130,6 +137,8 @@ const GridView: React.FC<Props> = ({
                 </DropdownMenu>
               )}
             </div>
+              );
+            })()
           ))}
         </div>
         {displayItems.length === 0 && !isAnalyzing && (

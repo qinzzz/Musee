@@ -304,11 +304,17 @@ const OrganizeView: React.FC<Props> = ({
   }, [collectTab, savedLayout]);
 
   useEffect(() => {
-    const searchableIds = new Set(searchedSavedItems.map((item) => item.id));
+    const searchableIds = new Set(
+      searchedSavedItems
+        .filter((item) => item.deleteStatus !== 'pending')
+        .map((item) => item.id)
+    );
     setSelectedArtworkIds((prev) => prev.filter((id) => searchableIds.has(id)));
   }, [searchedSavedItems]);
 
   const toggleArtworkSelection = (itemId: string) => {
+    const target = items.find((item) => item.id === itemId);
+    if (target?.deleteStatus === 'pending') return;
     setSelectedArtworkIds((prev) => (
       prev.includes(itemId)
         ? prev.filter((id) => id !== itemId)
@@ -602,10 +608,13 @@ const OrganizeView: React.FC<Props> = ({
                             {group.items.map(item => (
                               <div
                                 key={item.id}
-                                className="group relative aspect-square cursor-pointer overflow-hidden rounded bg-neutral-100 hover:opacity-90 transition-opacity"
-                                onClick={() => onInterpret(item, { items: group.items, label: group.label })}
+                                className={`group relative aspect-square overflow-hidden rounded bg-neutral-100 transition-opacity ${item.deleteStatus === 'pending' ? 'cursor-default opacity-45' : 'cursor-pointer hover:opacity-90'}`}
+                                onClick={() => {
+                                  if (item.deleteStatus === 'pending') return;
+                                  onInterpret(item, { items: group.items, label: group.label });
+                                }}
                               >
-                                <img src={item.url} alt="" className="w-full h-full object-cover" />
+                                <img src={item.url} alt="" className={`w-full h-full object-cover ${item.deleteStatus === 'pending' ? 'saturate-[0.7]' : ''}`} />
                               </div>
                             ))}
                           </div>
@@ -818,10 +827,13 @@ const OrganizeView: React.FC<Props> = ({
                       {searchedBoardDetailItems.map(item => (
                         <div
                           key={item.id}
-                          className="aspect-square cursor-pointer overflow-hidden rounded bg-neutral-100 hover:opacity-90 transition-opacity"
-                          onClick={() => onInterpret(item, { items: searchedBoardDetailItems, label: boardDetailName })}
+                          className={`aspect-square overflow-hidden rounded bg-neutral-100 transition-opacity ${item.deleteStatus === 'pending' ? 'cursor-default opacity-45' : 'cursor-pointer hover:opacity-90'}`}
+                          onClick={() => {
+                            if (item.deleteStatus === 'pending') return;
+                            onInterpret(item, { items: searchedBoardDetailItems, label: boardDetailName });
+                          }}
                         >
-                          <img src={item.url} alt="" className="w-full h-full object-cover" />
+                          <img src={item.url} alt="" className={`w-full h-full object-cover ${item.deleteStatus === 'pending' ? 'saturate-[0.7]' : ''}`} />
                         </div>
                       ))}
                     </div>

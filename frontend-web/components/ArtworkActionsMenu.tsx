@@ -4,6 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 type Props = {
   disabled?: boolean;
   onEdit?: () => void;
+  onIdentifyAgain?: () => void;
   onDelete?: () => void;
   buttonClassName?: string;
   iconClassName?: string;
@@ -12,11 +13,12 @@ type Props = {
 const ArtworkActionsMenu: React.FC<Props> = ({
   disabled,
   onEdit,
+  onIdentifyAgain,
   onDelete,
   buttonClassName = 'w-9 h-9 flex items-center justify-center text-neutral-500 hover:text-neutral-900 active:text-neutral-900 transition-colors',
   iconClassName = 'w-[18px] h-[18px]',
 }) => {
-  if (!onEdit && !onDelete) return null;
+  if (!onEdit && !onIdentifyAgain && !onDelete) return null;
 
   return (
     <DropdownMenu>
@@ -42,9 +44,7 @@ const ArtworkActionsMenu: React.FC<Props> = ({
       >
         {onEdit && (
           <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
+            onSelect={() => {
               onEdit();
             }}
           >
@@ -56,12 +56,28 @@ const ArtworkActionsMenu: React.FC<Props> = ({
             </div>
           </DropdownMenuItem>
         )}
+        {onIdentifyAgain && (
+          <DropdownMenuItem
+            onSelect={() => {
+              onIdentifyAgain();
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 3H5a2 2 0 0 0-2 2v4" />
+                <path d="M15 21h4a2 2 0 0 0 2-2v-4" />
+                <path d="M21 9V5a2 2 0 0 0-2-2h-4" />
+                <path d="M3 15v4a2 2 0 0 0 2 2h4" />
+                <path d="M8 12a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" />
+              </svg>
+              <span>Identify again</span>
+            </div>
+          </DropdownMenuItem>
+        )}
         {onDelete && (
           <DropdownMenuItem
             destructive
-            onSelect={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
+            onSelect={() => {
               onDelete();
             }}
           >

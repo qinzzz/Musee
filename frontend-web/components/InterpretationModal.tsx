@@ -7,6 +7,8 @@ import { updateArtwork, fetchAndPersistInsights } from '../api/artworks';
 import { getTagExplanation, suggestTopics, fetchCommunity, publishComment, deleteCommunityComment, type CommunityData } from '../api/chat';
 import ArtworkClassificationChip from './ArtworkClassificationChip';
 import ArtworkActionsMenu from './ArtworkActionsMenu';
+import IdentifyAgainModal from './IdentifyAgainModal';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 interface Props {
   item: {
@@ -40,7 +42,7 @@ interface Props {
   onNavigate?: (direction: 'prev' | 'next') => void;
   rightMode: 'metadata' | 'community';
   onRightModeChange: (mode: 'metadata' | 'community') => void;
-  onRefreshAnalysis?: (overrides?: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => Promise<void>;
+  onIdentifyAgain?: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
   onDelete?: () => void;
   userId?: string;
   onNavigateToArtist?: (artistEntityId: string | undefined, artworkId: string | undefined, artistName: string | undefined) => void;
@@ -171,8 +173,8 @@ const Insight: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onRefreshAnalysis, onDelete, userId, onNavigateToArtist, onNavigateToSession, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
-  const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false);
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onIdentifyAgain, onDelete, userId, onNavigateToArtist, onNavigateToSession, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
+  const [isIdentifyingAgain, setIsIdentifyingAgain] = useState(false);
   const [insights, setInsights] = useState<Array<{ title: string; text: string }>>([]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [community, setCommunity] = useState<CommunityData | null>(null);
@@ -195,9 +197,18 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
   const [editTags, setEditTags] = useState<string[]>(item.keywords || []);
   const [tagInput, setTagInput] = useState('');
   const [isSavingField, setIsSavingField] = useState(false);
+  const [showIdentifyAgainModal, setShowIdentifyAgainModal] = useState(false);
+  const [identifyAgainError, setIdentifyAgainError] = useState<string | null>(null);
+  const [isFailureAlertDismissed, setIsFailureAlertDismissed] = useState(false);
+  const [identifyAgainValues, setIdentifyAgainValues] = useState({
+    artist: item.artistName || '',
+    title: item.artworkName || '',
+    additionalClue: '',
+  });
   const originalValuesRef = useRef(editValues);
   const originalTagsRef = useRef<string[]>(item.keywords || []);
   const firstEditInputRef = useRef<HTMLInputElement>(null);
+  const lastHandledEditTokenRef = useRef<number>(0);
 
   const displayLocation = React.useMemo(() => {
     if (!item.location) return null;
@@ -414,10 +425,15 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
   }, [item.sessionLinks, item.sessionTitle, item.visitId]);
   const navigationIndex = allVisitItems?.findIndex(i => i.id === item.id) ?? -1;
   const currentClassification = item.classification || 'unsorted';
-  const hasResolvedIdentity = Boolean(displayArtist || displayTitle || displayDate || displayMedium);
+  const isInitialIdentifying = Boolean(item.isAnalyzing && item.analysisStatus !== 'reidentifying');
+  const isReidentifying = Boolean(item.isAnalyzing && item.analysisStatus === 'reidentifying');
+  const shouldHideInitialIdentityPlaceholders = isInitialIdentifying && item.analysisStatus !== 'analyzed';
+  const visibleArtist = shouldHideInitialIdentityPlaceholders ? '' : displayArtist;
+  const visibleTitle = shouldHideInitialIdentityPlaceholders ? '' : displayTitle;
+  const visibleDate = shouldHideInitialIdentityPlaceholders ? '' : displayDate;
+  const visibleMedium = shouldHideInitialIdentityPlaceholders ? '' : displayMedium;
+  const hasResolvedIdentity = Boolean(visibleArtist || visibleTitle || visibleDate || visibleMedium);
   const hasExistingDerivedContent = Boolean(item.description || (item.insights ?? []).length > 0);
-  const isInitialPanelLoading = Boolean(item.isAnalyzing && !hasResolvedIdentity && !hasExistingDerivedContent);
-  const isRefreshingDerivedContent = Boolean(item.isAnalyzing && (hasResolvedIdentity || hasExistingDerivedContent));
   const hasNavigationFooter = Boolean(allVisitItems && allVisitItems.length > 1 && onNavigate && navigationIndex >= 0);
   const previousArtwork = navigationIndex >= 0 && allVisitItems && allVisitItems.length > 1
     ? allVisitItems[(navigationIndex - 1 + allVisitItems.length) % allVisitItems.length]
@@ -430,6 +446,40 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
   useEffect(() => {
     if (isEditing) firstEditInputRef.current?.focus();
   }, [isEditing]);
+
+  useEffect(() => {
+    setIdentifyAgainValues({
+      artist: item.artistName || '',
+      title: item.artworkName || '',
+      additionalClue: '',
+    });
+    setIdentifyAgainError(null);
+    setShowIdentifyAgainModal(false);
+    setIsIdentifyingAgain(false);
+  }, [item.id, item.artistName, item.artworkName]);
+
+  useEffect(() => {
+    setIsFailureAlertDismissed(false);
+  }, [item.id, item.analysisStatus, item.streamingText]);
+
+  useEffect(() => {
+    if (isEditing) return;
+    const nextValues = {
+      artist: item.artistName || '',
+      title: item.artworkName || '',
+      date: item.date || '',
+      medium: item.medium || '',
+    };
+    setEditValues(nextValues);
+    originalValuesRef.current = nextValues;
+  }, [item.artistName, item.artworkName, item.date, item.medium, isEditing]);
+
+  useEffect(() => {
+    if (isEditing) return;
+    const nextTags = item.keywords || [];
+    setEditTags(nextTags);
+    originalTagsRef.current = nextTags;
+  }, [item.keywords, isEditing]);
 
   const startEditing = () => {
     if (item.isAnalyzing || !item.artworkId) return;
@@ -447,11 +497,13 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
 
   useEffect(() => {
     if (!editRequestToken) return;
+    if (editRequestToken === lastHandledEditTokenRef.current) return;
+    lastHandledEditTokenRef.current = editRequestToken;
     startEditing();
   }, [editRequestToken]);
 
-  const saveAllFields = async (refreshAfterSave = false) => {
-    if (!item.artworkId || isSavingField || (refreshAfterSave && isRefreshingAnalysis)) return;
+  const saveAllFields = async () => {
+    if (!item.artworkId || isSavingField) return;
     const finalTags = tagInput.trim()
       ? [...editTags, tagInput.trim().startsWith('#') ? tagInput.trim() : `#${tagInput.trim()}`]
       : editTags;
@@ -470,25 +522,44 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
     if (Object.keys(apiUpdates).length === 0) return;
     try {
       setIsSavingField(true);
-      if (refreshAfterSave) setIsRefreshingAnalysis(true);
       await updateArtwork(item.artworkId, apiUpdates);
       const metaUpdate: any = { ...apiUpdates };
       if (tagsChanged) metaUpdate.keywords = finalTags;
       onUpdateMetadata?.(item.id, metaUpdate);
-      if (refreshAfterSave && onRefreshAnalysis) {
-        await onRefreshAnalysis({
-          artistName: editValues.artist.trim(),
-          artworkName: editValues.title.trim(),
-          date: editValues.date.trim(),
-          medium: editValues.medium.trim(),
-          keywords: finalTags,
-        });
-      }
     } catch (e) {
       console.error('Failed to save metadata:', e);
     } finally {
       setIsSavingField(false);
-      setIsRefreshingAnalysis(false);
+    }
+  };
+
+  const hasIdentifyAgainInput = Boolean(
+    identifyAgainValues.artist.trim() ||
+    identifyAgainValues.title.trim() ||
+    identifyAgainValues.additionalClue.trim()
+  );
+
+  const submitIdentifyAgain = async () => {
+    if (!item.artworkId || !onIdentifyAgain || isIdentifyingAgain) return;
+    if (!hasIdentifyAgainInput) {
+      setIdentifyAgainError('Enter at least one clue to continue.');
+      return;
+    }
+
+    try {
+      setIsIdentifyingAgain(true);
+      setIdentifyAgainError(null);
+      setShowIdentifyAgainModal(false);
+      await onIdentifyAgain({
+        artistName: identifyAgainValues.artist.trim() || undefined,
+        artworkName: identifyAgainValues.title.trim() || undefined,
+        additionalClue: identifyAgainValues.additionalClue.trim() || undefined,
+      });
+    } catch (error) {
+      console.error('Failed to identify artwork again:', error);
+      setIdentifyAgainError('Could not identify the artwork again.');
+    } finally {
+      setIsIdentifyingAgain(false);
     }
   };
 
@@ -545,6 +616,12 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
     <ArtworkActionsMenu
       disabled={item.isAnalyzing}
       onEdit={!item.isAnalyzing ? () => startEditing() : undefined}
+      onIdentifyAgain={!item.isAnalyzing && onIdentifyAgain ? () => {
+        window.requestAnimationFrame(() => {
+          setShowIdentifyAgainModal(true);
+          setIdentifyAgainError(null);
+        });
+      } : undefined}
       onDelete={onDelete}
     />
   ) : null;
@@ -693,20 +770,11 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                 )}
                 {isEditing && (
                   <button
-                    onClick={() => saveAllFields(true)}
-                    disabled={isSavingField || isRefreshingAnalysis}
+                    onClick={() => saveAllFields()}
+                    disabled={isSavingField}
                     className="text-[11px] text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
                   >
-                    {isRefreshingAnalysis ? 'Refreshing…' : 'Save and Refresh Analysis'}
-                  </button>
-                )}
-                {isEditing && (
-                  <button
-                    onClick={() => saveAllFields(false)}
-                    disabled={isSavingField || isRefreshingAnalysis}
-                    className="text-[11px] text-neutral-900 border border-neutral-300 px-3 py-1.5 rounded-full hover:bg-neutral-900 hover:text-white hover:border-neutral-900 transition-all disabled:opacity-40"
-                  >
-                    {isSavingField && !isRefreshingAnalysis ? 'Saving…' : 'Save'}
+                    {isSavingField ? 'Saving…' : 'Save'}
                   </button>
                 )}
                 {overflowMenu}
@@ -810,27 +878,50 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
               <div className={`sm:flex-1 sm:overflow-y-auto sm:min-h-0 p-5 sm:p-7 space-y-5 sm:space-y-7 ${hasNavigationFooter ? 'pb-28 sm:pb-32' : 'pb-20 sm:pb-7'}`}>
 
                 {/* Error state */}
-                {!item.isAnalyzing && item.analysisStatus === 'failed' && item.streamingText && (
-                  <div className="rounded-xl border border-red-200 bg-red-50/80 p-4">
-                    <p className="text-[9px] tracking-[0.3em] uppercase text-red-600 font-bold mb-2">Analysis failed</p>
-                    <p className="text-[13px] text-red-800 leading-relaxed">{item.streamingText}</p>
-                  </div>
+                {!item.isAnalyzing && item.analysisStatus === 'failed' && item.streamingText && !isFailureAlertDismissed && (
+                  <Alert className="rounded-xl border-red-200 bg-red-50/80 px-4 py-3 text-red-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <AlertTitle className="text-[10px] font-bold uppercase tracking-[0.24em] text-red-600">
+                          Analysis failed
+                        </AlertTitle>
+                        <AlertDescription className="mt-2 text-[13px] leading-relaxed text-red-800">
+                          {item.streamingText}
+                        </AlertDescription>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsFailureAlertDismissed(true)}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-red-400 transition-colors hover:bg-red-100 hover:text-red-700"
+                        aria-label="Dismiss analysis error"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    </div>
+                  </Alert>
                 )}
 
-                {isInitialPanelLoading && (
-                  <div className="min-h-[16rem] flex flex-col items-center justify-center text-center gap-4">
-                    <div className="w-10 h-10 border-t-2 border-neutral-800 rounded-full animate-spin"></div>
-                    <div className="space-y-1.5">
-                      <p className="text-[10px] tracking-[0.3em] uppercase text-neutral-500 font-bold">Analyzing artwork</p>
-                      <p className="text-[13px] text-neutral-400">Generating title, artist, and interpretation.</p>
+                {isInitialIdentifying && !isEditing && (
+                  <Alert className="flex items-start gap-3 rounded-xl px-3 py-3">
+                    <div className="mt-0.5 w-3.5 h-3.5 border-t-[1.5px] border-neutral-700 rounded-full animate-spin shrink-0" />
+                    <div className="min-w-0">
+                      <AlertTitle className="text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-500">
+                        Identifying artwork
+                      </AlertTitle>
+                      <AlertDescription className="mt-1 text-[12px] text-neutral-500">
+                        Generating title, artist, and interpretation.
+                      </AlertDescription>
                     </div>
-                  </div>
+                  </Alert>
                 )}
 
                 {/* Metadata — compact horizontal strip in view mode, vertical inputs in edit mode */}
-                {!isInitialPanelLoading && isEditing ? (
+                {isEditing ? (
                   <div className="space-y-4">
-                    {displayArtist && (
+                    {visibleArtist && (
                       <div>
                         <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-1.5">Artist</p>
                         <input
@@ -842,7 +933,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                         />
                       </div>
                     )}
-                    {displayTitle && (
+                    {visibleTitle && (
                       <div>
                         <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold mb-1.5">Title</p>
                         <input
@@ -854,7 +945,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                       </div>
                     )}
                     <div className="flex gap-6">
-                      {displayDate && (
+                      {visibleDate && (
                         <div>
                           <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1.5 font-bold">Date</p>
                           <input
@@ -866,7 +957,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                           />
                         </div>
                       )}
-                      {displayMedium && (
+                      {visibleMedium && (
                         <div>
                           <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 mb-1.5 font-bold">Medium</p>
                           <input
@@ -880,36 +971,36 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                       )}
                     </div>
                   </div>
-                ) : !isInitialPanelLoading && (displayArtist || displayTitle || displayDate || displayMedium) ? (
+                ) : (visibleArtist || visibleTitle || visibleDate || visibleMedium) ? (
                   <div className="space-y-3 min-w-0">
                     <div className="min-w-0">
-                      {displayTitle && (
+                      {visibleTitle && (
                         <div className="text-[20px] sm:text-[24px] text-neutral-700 leading-tight break-words">
-                          {editValues.title || displayTitle}
+                          {editValues.title || visibleTitle}
                         </div>
                       )}
                       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-neutral-400">
-                        {displayArtist && (
+                        {visibleArtist && (
                           <span
                             className="text-[15px] sm:text-[17px] font-medium text-neutral-900 tracking-tight"
                             style={(item.artistEntityId || item.artworkId) ? { cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 } : undefined}
                             onClick={(item.artistEntityId || item.artworkId) ? (e) => { e.stopPropagation(); onNavigateToArtist?.(item.artistEntityId, item.artworkId, item.artistName); } : undefined}
                           >
-                            {editValues.artist || displayArtist}
+                            {editValues.artist || visibleArtist}
                           </span>
                         )}
-                        {displayDate && (
+                        {visibleDate && (
                           <>
-                            {displayArtist && <span className="text-neutral-300">·</span>}
+                            {visibleArtist && <span className="text-neutral-300">·</span>}
                             <span>
-                              {editValues.date ? formatDisplayDate(editValues.date) : formatDisplayDate(displayDate)}
+                              {editValues.date ? formatDisplayDate(editValues.date) : formatDisplayDate(visibleDate)}
                             </span>
                           </>
                         )}
-                        {displayMedium && (
+                        {visibleMedium && (
                           <>
-                            {(displayArtist || displayDate) && <span className="text-neutral-300">·</span>}
-                            <span>{editValues.medium || displayMedium}</span>
+                            {(visibleArtist || visibleDate) && <span className="text-neutral-300">·</span>}
+                            <span>{editValues.medium || visibleMedium}</span>
                           </>
                         )}
                       </div>
@@ -925,7 +1016,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                 ) : null}
 
                 {/* Tags — scrollable row between metadata and description */}
-                {!isInitialPanelLoading && !item.isAnalyzing && (editTags.length > 0 || isEditing) && (
+                {!item.isAnalyzing && (editTags.length > 0 || isEditing) && (
                   <div>
                     {isEditing ? (
                       <div className="flex flex-wrap gap-2 items-center">
@@ -969,7 +1060,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                   </div>
                 )}
 
-                {!isInitialPanelLoading && sessionMemberships.length > 0 && (
+                {sessionMemberships.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-400 font-bold">
                       {sessionMemberships.length === 1 ? 'Session' : 'Sessions'}
@@ -990,11 +1081,18 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                   </div>
                 )}
 
-                {isRefreshingDerivedContent && !isEditing && (
-                  <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50/80 px-3 py-2">
-                    <div className="w-3.5 h-3.5 border-t-[1.5px] border-neutral-700 rounded-full animate-spin shrink-0"></div>
-                    <span className="text-[10px] tracking-[0.24em] uppercase text-neutral-500 font-bold">Refreshing analysis…</span>
-                  </div>
+                {isReidentifying && !isEditing && (
+                  <Alert className="flex items-start gap-3 rounded-xl px-3 py-3">
+                    <div className="mt-0.5 w-3.5 h-3.5 border-t-[1.5px] border-neutral-700 rounded-full animate-spin shrink-0" />
+                    <div className="min-w-0">
+                      <AlertTitle className="text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-500">
+                        Re-identifying artwork
+                      </AlertTitle>
+                      <AlertDescription className="mt-1 text-[12px] text-neutral-500">
+                        Reassessing the artwork with the latest information.
+                      </AlertDescription>
+                    </div>
+                  </Alert>
                 )}
 
                 {displayDescription && (
@@ -1176,6 +1274,24 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
           </div>,
           document.body,
         )}
+
+      <IdentifyAgainModal
+        open={showIdentifyAgainModal}
+        values={identifyAgainValues}
+        error={identifyAgainError}
+        isSubmitting={isIdentifyingAgain}
+        onValuesChange={(values) => {
+          setIdentifyAgainValues(values);
+          if (identifyAgainError) setIdentifyAgainError(null);
+        }}
+        onClose={() => {
+          if (!isIdentifyingAgain) {
+            setShowIdentifyAgainModal(false);
+            setIdentifyAgainError(null);
+          }
+        }}
+        onSubmit={() => void submitIdentifyAgain()}
+      />
     </>
   );
 };

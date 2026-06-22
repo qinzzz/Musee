@@ -15,11 +15,15 @@ interface Props {
 
 const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, onRetry, size = 'normal' }) => {
   const { url } = item;
+  const isPendingDelete = item.deleteStatus === 'pending';
 
   return (
     <div
-      className={`relative h-full min-w-[200px] flex items-center justify-center transition-all duration-500 group cursor-pointer hover:scale-[1.01] ${size === 'large' ? 'p-8 sm:p-12' : 'p-4'}`}
-      onClick={onInterpret}
+      className={`relative h-full min-w-[200px] flex items-center justify-center transition-all duration-500 group ${isPendingDelete ? 'cursor-default opacity-45' : 'cursor-pointer hover:scale-[1.01]'} ${size === 'large' ? 'p-8 sm:p-12' : 'p-4'}`}
+      onClick={() => {
+        if (isPendingDelete) return;
+        onInterpret();
+      }}
     >
       {/* Image — natural aspect ratio, fills strip height */}
       <img
@@ -29,7 +33,7 @@ const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, o
           size === 'large' ? 'max-h-[65vh] sm:max-h-[60vh]' : 'max-h-[52dvh] sm:max-h-[50vh]'
         } w-auto object-contain block max-w-[80vw] transition-all duration-700 mx-auto rounded-[8px] shadow-2xl`}
         style={{ 
-          filter: isActive ? 'none' : size === 'large' ? 'saturate(0.4) blur(1px)' : 'saturate(0.1)',
+          filter: isPendingDelete ? 'saturate(0.7)' : (isActive ? 'none' : size === 'large' ? 'saturate(0.4) blur(1px)' : 'saturate(0.1)'),
           opacity: isActive ? 1 : size === 'large' ? 0.6 : 1
         }}
       />
@@ -63,7 +67,7 @@ const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, o
       )}
 
       {/* Hover overlay */}
-      {!item.isAnalyzing && (
+      {!item.isAnalyzing && !isPendingDelete && (
         <InteractionOverlay
           isVisible={true}
           className="opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
@@ -73,7 +77,7 @@ const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, o
       )}
 
       {/* Delete button — only on active, reveals on hover */}
-      {onDelete && isActive && (
+      {onDelete && isActive && !isPendingDelete && (
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
           className={`absolute w-8 h-8 rounded-full bg-white/90 hover:bg-white text-neutral-400 hover:text-neutral-900 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 z-30 border border-neutral-200 shadow-xl ${
