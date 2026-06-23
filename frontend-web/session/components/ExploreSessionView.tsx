@@ -1,36 +1,10 @@
 import React from 'react';
-import CanvasHeader from './CanvasHeader';
-import InterpretationModal from './InterpretationModal';
-import { GalleryItem, Message, ArtworkClassification } from '../types';
-import type { ArtistPageContext, ArtworkDetailContext } from '../lib/appNavigation';
-
-type VisitSummaryLike = {
-  id: string;
-  title: string;
-  location: string | null;
-  items: GalleryItem[];
-};
-
-type VisitStreamMessage = Message & {
-  id: string;
-  createdAt: number;
-  type?: 'text' | 'artwork_capture' | 'artwork_card';
-  artworkId?: string;
-};
-
-type VisitStreamEntry =
-  | {
-      id: string;
-      createdAt: number;
-      type: 'artwork';
-      item: GalleryItem;
-    }
-  | {
-      id: string;
-      createdAt: number;
-      type: 'message';
-      message: VisitStreamMessage;
-    };
+import CanvasHeader from '../../components/CanvasHeader';
+import InterpretationModal from '../../components/InterpretationModal';
+import { GalleryItem, ArtworkClassification } from '../../types';
+import type { ArtistPageContext, ArtworkDetailContext } from '../../lib/appNavigation';
+import { SUPPORTED_UPLOAD_ACCEPT } from '../../lib/uploadValidation';
+import type { ActiveVisitStreamEntry, VisitStreamMessage, VisitSummary } from '../types';
 
 type GroupedVisitStreamEntry =
   | {
@@ -54,8 +28,8 @@ type InterpretationItem = GalleryItem & {
 };
 
 type ExploreSessionViewProps = {
-  activeVisitSummary: VisitSummaryLike;
-  activeVisitStream: VisitStreamEntry[];
+  activeVisitSummary: VisitSummary;
+  activeVisitStream: ActiveVisitStreamEntry[];
   interpretingItem: InterpretationItem | null;
   artworkHeaderActions: React.ReactNode;
   artworkHeaderEditToken: number;
@@ -87,6 +61,7 @@ type ExploreSessionViewProps = {
   onNavigateInterpretation: (direction: 'prev' | 'next') => void;
   onInterpretationRightModeChange: (mode: 'metadata' | 'community') => void;
   onIdentifyAgain: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
+  onRetryAnalysis: (item: GalleryItem) => Promise<void>;
   onOpenArtistFromInterpretation: (
     artistEntityId: string,
     artworkId: string,
@@ -254,6 +229,7 @@ export default function ExploreSessionView({
   onNavigateInterpretation,
   onInterpretationRightModeChange,
   onIdentifyAgain,
+  onRetryAnalysis,
   onOpenArtistFromInterpretation,
   onOpenSessionFromInterpretation,
   onSaveExistingGoal,
@@ -365,6 +341,7 @@ export default function ExploreSessionView({
             rightMode={interpretationRightMode}
             onRightModeChange={onInterpretationRightModeChange}
             onIdentifyAgain={onIdentifyAgain}
+            onRetryAnalysis={() => onRetryAnalysis(interpretingItem)}
             userId={userId}
             onNavigateToArtist={onOpenArtistFromInterpretation}
             onNavigateToSession={onOpenSessionFromInterpretation}
@@ -509,7 +486,7 @@ export default function ExploreSessionView({
                 <input
                   ref={goalGalleryInputRef}
                   type="file"
-                  accept="image/*"
+                  accept={SUPPORTED_UPLOAD_ACCEPT}
                   multiple
                   className="hidden"
                   onChange={(event) => onFileUpload(event, 'gallery')}
@@ -553,7 +530,7 @@ export default function ExploreSessionView({
               const ease = '0.5s cubic-bezier(0.68, -0.25, 0.27, 1.25)';
               const vh = window.innerHeight / 100;
               const thumbnailEntries = activeVisitStream.filter(
-                (entry): entry is Extract<VisitStreamEntry, { type: 'artwork' }> =>
+                (entry): entry is Extract<ActiveVisitStreamEntry, { type: 'artwork' }> =>
                   entry.type === 'artwork' && !entry.item.isDeletedPlaceholder,
               );
 

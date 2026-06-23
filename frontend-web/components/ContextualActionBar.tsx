@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { GalleryItem } from '../types';
+import { SUPPORTED_UPLOAD_ACCEPT } from '../lib/uploadValidation';
 
 export type ActionBarMode = 'session';
 
@@ -49,7 +50,7 @@ const ContextualActionBar: React.FC<Props> = ({
       <input
         ref={galleryInputRef}
         type="file"
-        accept="image/*"
+        accept={SUPPORTED_UPLOAD_ACCEPT}
         multiple
         className="hidden"
         onChange={(e) => onUpload(e, 'gallery')}

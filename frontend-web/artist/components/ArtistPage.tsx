@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ArtistEntity, GalleryItem } from '../types';
-import { fetchArtistProfile, fetchArtistArtworks, resolveImageUrl, backfillArtworkArtist } from '../api/artworks';
-import CanvasHeader from './CanvasHeader';
+import { ArtistEntity, GalleryItem } from '../../types';
+import { fetchArtistProfile, fetchArtistArtworks, resolveImageUrl, backfillArtworkArtist } from '../../api/artworks';
+import CanvasHeader from '../../components/CanvasHeader';
 
 interface Props {
   artistEntityId?: string;

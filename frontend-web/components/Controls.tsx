@@ -1,5 +1,6 @@
 
 import React, { useRef, useState } from 'react';
+import { SUPPORTED_UPLOAD_ACCEPT } from '../lib/uploadValidation';
 
 interface Props {
   onUpload: (e: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
@@ -32,8 +33,8 @@ const Controls: React.FC<Props> = ({ onUpload, isAnalyzing }) => {
       style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)', right: '1.25rem' }}
     >
       {/* Hidden file inputs */}
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCameraChange} disabled={isAnalyzing} />
-      <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleGalleryChange} disabled={isAnalyzing} />
+      <input ref={cameraInputRef} type="file" accept={SUPPORTED_UPLOAD_ACCEPT} capture="environment" className="hidden" onChange={handleCameraChange} disabled={isAnalyzing} />
+      <input ref={galleryInputRef} type="file" accept={SUPPORTED_UPLOAD_ACCEPT} multiple className="hidden" onChange={handleGalleryChange} disabled={isAnalyzing} />
 
       {/* Tap-outside backdrop */}
       {open && <div className="fixed inset-0 z-[-1]" onClick={() => setOpen(false)} />}

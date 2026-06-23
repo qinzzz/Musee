@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent } from 'react';
-import type { SmartCollection } from '../api/artworks';
+import type { SmartCollection } from '../../api/artworks';
 import {
   buildCaptureHistoryState,
   buildRootHistoryState,
@@ -10,7 +10,8 @@ import {
   type ArtworkDetailContext,
   type CollectTab,
   type NavigationHistoryState,
-} from '../lib/appNavigation';
+} from '../../lib/appNavigation';
+import type { CaptureState } from './useCaptureNavigation';
 
 type UseAppNavigationSyncOptions = {
   activeTab: AppTab;
@@ -18,13 +19,13 @@ type UseAppNavigationSyncOptions = {
   artistPageContext: ArtistPageContext | null;
   movementPageContext: SmartCollection | null;
   artworkDetailContext: ArtworkDetailContext | null;
-  captureState: { key: number; hasUnsavedCaptures: boolean } | null;
+  captureState: CaptureState;
   interpretingItem: { id: string } | null;
   onRestoreArtworkFromHistory: (artworkId: string, context: ArtworkDetailContext) => void;
   onSetArtistPageContext: (context: ArtistPageContext | null) => void;
   onSetMovementPageContext: (context: SmartCollection | null) => void;
   onSetArtworkDetailContext: (context: ArtworkDetailContext | null) => void;
-  onSetCaptureState: (state: { key: number; hasUnsavedCaptures: boolean } | null) => void;
+  onSetCaptureState: (state: CaptureState) => void;
   onRequestLeaveCapture: () => boolean;
   onSetActiveTab: (tab: AppTab) => void;
   onSetCollectTab: (tab: CollectTab) => void;

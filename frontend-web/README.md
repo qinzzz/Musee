@@ -58,13 +58,37 @@ The app will be available at `http://localhost:5173`.
 ### 4. Project Structure
 ```
 frontend-web/
-├── components/          # Reusable UI components
+├── app-shell/           # App shell navigation, history coordination, and shell-level UI
+│   ├── components/
+│   └── hooks/
+├── artist/              # Artist domain: artist pages, artist data hooks, and artist-specific UI
+│   ├── components/
+│   └── hooks/
+├── artwork/             # Artwork domain: library state, analysis helpers, and artwork-specific hooks
+│   ├── hooks/
+│   ├── lib/
+│   └── types.ts
+├── artwork-ingest/      # Shared upload/capture ingest flow, metadata, and location helpers
+│   ├── hooks/
+│   ├── lib/
+│   └── types.ts
+├── boards/              # Board domain: board state, CRUD orchestration, and board-specific hooks
+│   ├── hooks/
+│   └── types.ts
+├── capture/             # Camera capture feature UI and interactions
+│   └── components/
+├── session/             # Session domain: API, hooks, helpers, and views
+│   ├── api/
+│   ├── hooks/
+│   ├── lib/
+│   └── components/
+├── components/          # Shared or cross-domain UI components
 │   ├── InterpretationModal.tsx
 │   ├── GalleryCard.tsx
 │   └── TopographyView.tsx
 ├── types.ts             # Global TS interfaces
-├── apiService.ts        # Backend communication layer
-├── App.tsx              # Main orchestrator
+├── apiService.ts        # Legacy backend communication layer
+├── App.tsx              # App shell and top-level orchestration
 └── index.css            # Global design tokens
 ```
 

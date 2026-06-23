@@ -2,7 +2,7 @@
 
 ## 1. Automated Testing Plan
 
-Status: deferred for now
+Status: planned after targeted frontend cleanup
 
 ### Goal
 
@@ -31,11 +31,92 @@ Start with flows that are:
 
 ### Proposed rollout
 
-1. Add stable test selectors to core UI elements.
-2. Choose the frontend/browser/backend testing toolchain.
-3. Implement only a small first suite of high-value tests.
-4. Run targeted tests locally during development.
-5. Run the core suite automatically before merge / in CI.
+1. Extract the most fragile logic out of `frontend-web/App.tsx` so test ownership is clearer.
+2. Add stable test selectors to core UI elements.
+3. Choose the frontend/browser/backend testing toolchain.
+4. Implement only a small first suite of high-value tests.
+5. Run targeted tests locally during development.
+6. Run the core suite automatically before merge / in CI.
+
+### Cleanup-first decision
+
+Before setting up the frontend test stack, do a targeted cleanup pass focused on testability.
+
+Reason:
+
+- `frontend-web/App.tsx` has become a large orchestration file with too many responsibilities
+- the first tests would otherwise be broader, more brittle, and harder to maintain
+- the goal is not a full rewrite, but cleaner seams around the logic we most want to protect
+
+### Frontend cleanup roadmap
+
+#### Phase 1: cleanup for testability
+
+Extract the highest-risk logic first:
+
+1. `useSessionActions`
+   - session rename
+   - optimistic session delete
+   - current-session delete routing
+2. `useArtworkActions`
+   - retry analysis
+   - identify again
+   - optimistic artwork delete
+   - artwork analysis success / failure state updates
+3. upload / capture helpers
+   - EXIF parsing
+   - image normalization / transcoding
+   - museum / geolocation resolution
+4. `useArtworkUploadFlow`
+   - upload placeholders
+   - raw upload persistence
+   - analysis trigger
+   - upload commentary trigger
+
+#### Phase 2: testing foundation
+
+After the extraction above:
+
+- add frontend test setup under `frontend-web/`
+- use `Vitest` + React Testing Library + `MSW`
+- keep backend tests on `pytest`
+
+Suggested frontend structure:
+
+- `frontend-web/vitest.config.ts`
+- `frontend-web/setupTests.ts`
+- `frontend-web/test/server.ts`
+- `frontend-web/test/handlers.ts`
+- `frontend-web/test/factories.ts`
+- `frontend-web/test/features/`
+
+#### Phase 3: first frontend tests
+
+Start with a very small, high-value suite:
+
+1. session delete optimistic flow
+2. artwork delete optimistic flow
+3. identify-again modal flow
+4. initial identification loading-state behavior
+
+#### Phase 4: broader UI cleanup
+
+After the first tests are in place:
+
+- extract sidebar / session list rendering from `App.tsx`
+- extract user menu / settings modal rendering
+- extract shared root modals
+
+### Target long-term structure
+
+The intended ownership model is:
+
+- `App.tsx` as application shell and top-level wiring
+- `hooks/` for orchestration and stateful behavior
+- `lib/` for pure helpers and domain rules
+- `components/` for view rendering
+
+The goal is to make new features, bug fixes, and tests attach to smaller units instead of the root component.
 
 ### Candidate first tests
 
@@ -58,6 +139,26 @@ Start with flows that are:
 - For frontend flow tests, trigger behavior through the real FE.
 - Mock the backend/network response rather than relying on a live backend for every test.
 - Use selectors such as `data-testid` so tests can reliably find important UI elements.
+
+### Deferred backend testing
+
+For now, the formal PR gate should stay frontend-focused.
+
+Reason:
+
+- recent cleanup and new seams are primarily on the frontend
+- the backend still needs structural cleanup before a broad automated gate will be stable and maintainable
+
+Backend testing is not dropped. It is deferred until backend cleanup makes the boundaries clearer.
+
+When that cleanup happens, add backend PR-gate coverage for:
+
+- session CRUD
+- session messages
+- artwork upload / analyze / reanalyze / delete
+- collections CRUD
+- auth / ownership checks
+- quota enforcement
 
 
 ## 2. Session / Artwork Bootstrap Cache

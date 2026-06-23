@@ -3,19 +3,16 @@ import {
   fetchUserArtworks,
   resolveImageUrl,
   updateArtworkClassification,
-} from '../api/artworks';
-import type { ArtworkClassification, GalleryItem, SessionLink, TagCoordinate } from '../types';
-import type { ArtworkDetailContext } from '../lib/appNavigation';
+} from '../../api/artworks';
+import type { ArtworkClassification, GalleryItem, SessionLink, TagCoordinate } from '../../types';
+import type { ArtworkDetailContext } from '../../lib/appNavigation';
 import {
   readArtworkBootstrapCache,
   writeArtworkBootstrapCache,
   type ArtworkBootstrapCacheItem,
-} from '../lib/bootstrapCache';
-
-export type InterpretingItem = GalleryItem & {
-  allVisitItems?: GalleryItem[];
-  is_liked?: boolean;
-};
+} from '../../lib/bootstrapCache';
+import { parseAnalysis } from '../lib/analysisText';
+import type { InterpretingItem } from '../types';
 
 type UseArtworkLibraryOptions = {
   userId: string;
@@ -23,26 +20,6 @@ type UseArtworkLibraryOptions = {
   onMissingArtworkFromHistory?: () => void;
   onArtworkDetailContextChange?: (context: ArtworkDetailContext | null) => void;
   onTagPositionsLoaded?: (updater: (prev: Record<string, TagCoordinate>) => Record<string, TagCoordinate>) => void;
-};
-
-const parseAnalysis = (text: string | null): string => {
-  if (!text) return '';
-
-  const trimmed = text.trim();
-  const dateMatch = trimmed.match(/^Date:\s*(.+)$/im);
-  const mediumMatch = trimmed.match(/^Medium:\s*(.+)$/im);
-
-  let cleaned = trimmed
-    .replace(/^Date:\s*.+$/gim, '')
-    .replace(/^Medium:\s*.+$/gim, '')
-    .replace(/^Analysis:\s*/i, '')
-    .trim();
-
-  if (!cleaned && (dateMatch || mediumMatch)) {
-    cleaned = trimmed;
-  }
-
-  return cleaned;
 };
 
 function getServerItemKeys(item: GalleryItem): string[] {

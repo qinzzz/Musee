@@ -1,6 +1,7 @@
 import React from 'react';
 import type { SmartCollection } from '../api/artworks';
-import type { Album, ArtworkClassification, GalleryItem, Visit } from '../types';
+import type { ArtworkClassification, GalleryItem, Visit } from '../types';
+import type { Board } from '../boards/types';
 import type { ArtworkDetailContext, CollectTab } from '../lib/appNavigation';
 import CanvasHeader from './CanvasHeader';
 import InterpretationModal from './InterpretationModal';
@@ -20,7 +21,7 @@ type CollectViewProps = {
   filteredVisitId: string | null;
   isAnalyzing: boolean;
   likedIds: Set<string>;
-  albums: Album[];
+  boards: Board[];
   boardsLoading: boolean;
   userId: string;
   collectTab: CollectTab;
@@ -36,6 +37,7 @@ type CollectViewProps = {
   onNavigateInterpretation: (direction: 'prev' | 'next') => void;
   onInterpretationRightModeChange: (mode: 'metadata' | 'community') => void;
   onIdentifyAgain: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
+  onRetryAnalysis: (item: GalleryItem) => Promise<void>;
   onNavigateToArtistFromInterpretation: (
     artistEntityId: string,
     artworkId: string,
@@ -43,8 +45,8 @@ type CollectViewProps = {
   ) => void;
   onNavigateToSessionFromInterpretation: (sessionId: string) => void;
   onCollectTabChange: (tab: CollectTab) => void;
-  onCreateBoard: (name: string, itemIds?: string[]) => Promise<Album>;
-  onRenameBoard: (boardId: string, name: string) => Promise<Album>;
+  onCreateBoard: (name: string, itemIds?: string[]) => Promise<Board>;
+  onRenameBoard: (boardId: string, name: string) => Promise<Board>;
   onDeleteBoard: (boardId: string) => Promise<void>;
   onAddItemsToBoard: (boardId: string, itemIds: string[]) => Promise<void>;
   onOpenArtist: (artistEntityId: string, artistName: string) => void;
@@ -63,7 +65,7 @@ export default function CollectView({
   filteredVisitId,
   isAnalyzing,
   likedIds,
-  albums,
+  boards,
   boardsLoading,
   userId,
   collectTab,
@@ -79,6 +81,7 @@ export default function CollectView({
   onNavigateInterpretation,
   onInterpretationRightModeChange,
   onIdentifyAgain,
+  onRetryAnalysis,
   onNavigateToArtistFromInterpretation,
   onNavigateToSessionFromInterpretation,
   onCollectTabChange,
@@ -115,6 +118,7 @@ export default function CollectView({
             rightMode={interpretationRightMode}
             onRightModeChange={onInterpretationRightModeChange}
             onIdentifyAgain={onIdentifyAgain}
+            onRetryAnalysis={() => onRetryAnalysis(interpretingItem)}
             userId={userId}
             onNavigateToArtist={onNavigateToArtistFromInterpretation}
             onNavigateToSession={onNavigateToSessionFromInterpretation}
@@ -137,7 +141,7 @@ export default function CollectView({
         filteredVisitId={filteredVisitId}
         isAnalyzing={isAnalyzing}
         likedIds={likedIds}
-        albums={albums}
+        boards={boards}
         boardsLoading={boardsLoading}
         userId={userId}
         collectTab={collectTab}

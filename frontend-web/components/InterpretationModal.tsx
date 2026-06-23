@@ -43,6 +43,7 @@ interface Props {
   rightMode: 'metadata' | 'community';
   onRightModeChange: (mode: 'metadata' | 'community') => void;
   onIdentifyAgain?: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
+  onRetryAnalysis?: () => Promise<void> | void;
   onDelete?: () => void;
   userId?: string;
   onNavigateToArtist?: (artistEntityId: string | undefined, artworkId: string | undefined, artistName: string | undefined) => void;
@@ -173,7 +174,7 @@ const Insight: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onIdentifyAgain, onDelete, userId, onNavigateToArtist, onNavigateToSession, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onIdentifyAgain, onRetryAnalysis, onDelete, userId, onNavigateToArtist, onNavigateToSession, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
   const [isIdentifyingAgain, setIsIdentifyingAgain] = useState(false);
   const [insights, setInsights] = useState<Array<{ title: string; text: string }>>([]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -200,6 +201,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
   const [showIdentifyAgainModal, setShowIdentifyAgainModal] = useState(false);
   const [identifyAgainError, setIdentifyAgainError] = useState<string | null>(null);
   const [isFailureAlertDismissed, setIsFailureAlertDismissed] = useState(false);
+  const [isRetryingAnalysis, setIsRetryingAnalysis] = useState(false);
   const [identifyAgainValues, setIdentifyAgainValues] = useState({
     artist: item.artistName || '',
     title: item.artworkName || '',
@@ -209,6 +211,11 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
   const originalTagsRef = useRef<string[]>(item.keywords || []);
   const firstEditInputRef = useRef<HTMLInputElement>(null);
   const lastHandledEditTokenRef = useRef<number>(0);
+  const canRetryAnalysis = Boolean(
+    onRetryAnalysis &&
+    item.analysisStatus === 'failed' &&
+    item.streamingText !== 'Identify again failed.',
+  );
 
   const displayLocation = React.useMemo(() => {
     if (!item.location) return null;
@@ -888,6 +895,27 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                         <AlertDescription className="mt-2 text-[13px] leading-relaxed text-red-800">
                           {item.streamingText}
                         </AlertDescription>
+                        {canRetryAnalysis ? (
+                          <div className="mt-3">
+                            <button
+                              type="button"
+                              disabled={isRetryingAnalysis}
+                              onClick={async () => {
+                                if (!onRetryAnalysis || isRetryingAnalysis) return;
+                                setIsRetryingAnalysis(true);
+                                try {
+                                  await onRetryAnalysis();
+                                  setIsFailureAlertDismissed(false);
+                                } finally {
+                                  setIsRetryingAnalysis(false);
+                                }
+                              }}
+                              className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-[12px] font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                       <button
                         type="button"

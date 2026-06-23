@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { GalleryItem } from '../types';
-import { fetchUserArtists, type ArtistRow } from '../api/artworks';
+import type { GalleryItem } from '../../types';
+import { fetchUserArtists, type ArtistRow } from '../../api/artworks';
 
 type CacheEntry = {
   data: ArtistRow[];
