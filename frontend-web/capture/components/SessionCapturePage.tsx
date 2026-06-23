@@ -36,11 +36,11 @@ type CameraState = 'loading' | 'ready' | 'denied' | 'error';
 const MIN_CAPTURE_SIZE = 24;
 const MOBILE_EDGE_GESTURE_GUTTER = 28;
 
-function clamp(value: number, min: number, max: number): number {
+export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function buildRect(start: DragPoint, end: DragPoint): DragRect {
+export function buildRect(start: DragPoint, end: DragPoint): DragRect {
   return {
     x: Math.min(start.x, end.x),
     y: Math.min(start.y, end.y),
@@ -49,7 +49,7 @@ function buildRect(start: DragPoint, end: DragPoint): DragRect {
   };
 }
 
-function getDisplayedVideoRect(
+export function getDisplayedVideoRect(
   stageWidth: number,
   stageHeight: number,
   videoWidth: number,
@@ -104,7 +104,7 @@ function getDisplayedVideoRect(
   };
 }
 
-function isPointInsideRect(point: DragPoint, rect: DragRect): boolean {
+export function isPointInsideRect(point: DragPoint, rect: DragRect): boolean {
   return (
     point.x >= rect.x &&
     point.x <= rect.x + rect.width &&
@@ -113,14 +113,14 @@ function isPointInsideRect(point: DragPoint, rect: DragRect): boolean {
   );
 }
 
-function clampPointToRect(point: DragPoint, rect: DragRect): DragPoint {
+export function clampPointToRect(point: DragPoint, rect: DragRect): DragPoint {
   return {
     x: clamp(point.x, rect.x, rect.x + rect.width),
     y: clamp(point.y, rect.y, rect.y + rect.height),
   };
 }
 
-function insetRect(rect: DragRect, insetX: number): DragRect {
+export function insetRect(rect: DragRect, insetX: number): DragRect {
   const widthInset = Math.min(insetX, rect.width / 2);
   return {
     x: rect.x + widthInset,

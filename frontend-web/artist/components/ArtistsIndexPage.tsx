@@ -1,5 +1,5 @@
 import React from 'react';
-import { type ArtistRow } from '../api/artworks';
+import { type ArtistRow } from '../../api/artworks';
 import { useUserArtists } from '../hooks/useUserArtists';
 
 interface Props {

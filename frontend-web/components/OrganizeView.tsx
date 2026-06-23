@@ -1,14 +1,16 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { GalleryItem, Visit, Album, ArtworkClassification } from '../types';
+import { GalleryItem, Visit, ArtworkClassification } from '../types';
 import { type ArtistRow, type SmartCollection } from '../api/artworks';
+import type { Board } from '../boards/types';
 import GridView from './GridView';
 import CreateBoardModal from './CreateBoardModal';
 import ConfirmBoardDeleteModal from './ConfirmBoardDeleteModal';
 import CollectionGridSkeleton from './CollectionGridSkeleton';
 import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { buildArtistInvalidationKey, useUserArtists } from '../hooks/useUserArtists';
+import { buildArtistInvalidationKey, useUserArtists } from '../artist/hooks/useUserArtists';
+import { SUPPORTED_UPLOAD_ACCEPT } from '../lib/uploadValidation';
 
 const OverflowDotsIcon: React.FC<{ className?: string }> = ({ className = 'h-3.5 w-3.5' }) => (
   <svg viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
@@ -114,13 +116,13 @@ interface Props {
   filteredVisitId: string | null;
   isAnalyzing: boolean;
   likedIds?: Set<string>;
-  albums?: Album[];
+  boards?: Board[];
   boardsLoading?: boolean;
   userId?: string | null;
   collectTab: CollectTab;
   onCollectTabChange: (tab: CollectTab) => void;
-  onCreateBoard: (name: string, itemIds?: string[]) => Promise<Album>;
-  onRenameBoard: (boardId: string, name: string) => Promise<Album>;
+  onCreateBoard: (name: string, itemIds?: string[]) => Promise<Board>;
+  onRenameBoard: (boardId: string, name: string) => Promise<Board>;
   onDeleteBoard: (boardId: string) => Promise<void>;
   onAddItemsToBoard: (boardId: string, itemIds: string[]) => Promise<void>;
   onOpenArtist: (artistEntityId: string, artistName: string) => void;
@@ -134,7 +136,7 @@ const OrganizeView: React.FC<Props> = ({
   topBarLeftSlot,
   onFileUpload,
   items, visit, filteredVisitId, isAnalyzing,
-  likedIds, albums, boardsLoading, userId,
+  likedIds, boards, boardsLoading, userId,
   collectTab, onCollectTabChange,
   onCreateBoard,
   onRenameBoard,
@@ -152,14 +154,14 @@ const OrganizeView: React.FC<Props> = ({
   const [isSubmittingBoard, setIsSubmittingBoard] = useState(false);
   const [createBoardRequest, setCreateBoardRequest] = useState<{
     itemIds?: string[];
-    onCreated?: (board: Album) => void;
+    onCreated?: (board: Board) => void;
   } | null>(null);
-  const [renameBoardTarget, setRenameBoardTarget] = useState<Album | null>(null);
-  const [deleteBoardTarget, setDeleteBoardTarget] = useState<Album | null>(null);
+  const [renameBoardTarget, setRenameBoardTarget] = useState<Board | null>(null);
+  const [deleteBoardTarget, setDeleteBoardTarget] = useState<Board | null>(null);
   const [selectedArtworkIds, setSelectedArtworkIds] = useState<string[]>([]);
   const [isApplyingBoard, setIsApplyingBoard] = useState(false);
   const collectionUploadInputRef = useRef<HTMLInputElement>(null);
-  const boards = albums || [];
+  const resolvedBoards = boards || [];
   const showCollectionUpload = true;
 
   const likedItems = useMemo(() => items.filter(i => likedIds?.has(i.id)), [items, likedIds]);
@@ -228,9 +230,9 @@ const OrganizeView: React.FC<Props> = ({
   const boardDetailItems = useMemo(() => {
     if (!selectedBoard) return [];
     if (selectedBoard === 'liked') return likedItems;
-    const album = boards.find(a => a.id === selectedBoard);
+    const album = resolvedBoards.find(a => a.id === selectedBoard);
     return album ? items.filter(i => album.itemIds.includes(i.id)) : [];
-  }, [selectedBoard, likedItems, boards, items]);
+  }, [selectedBoard, likedItems, resolvedBoards, items]);
 
   const searchedBoardDetailItems = useMemo(() => {
     if (!normalizedCollectionSearch) return boardDetailItems;
@@ -252,8 +254,8 @@ const OrganizeView: React.FC<Props> = ({
   const boardDetailName = useMemo(() => {
     if (!selectedBoard) return '';
     if (selectedBoard === 'liked') return 'Liked';
-    return boards.find(a => a.id === selectedBoard)?.name ?? '';
-  }, [selectedBoard, boards]);
+    return resolvedBoards.find(a => a.id === selectedBoard)?.name ?? '';
+  }, [selectedBoard, resolvedBoards]);
   const unsortedCount = useMemo(
     () => items.filter(item => (item.classification || 'unsorted') === 'unsorted').length,
     [items],
@@ -274,9 +276,9 @@ const OrganizeView: React.FC<Props> = ({
     items.filter(i => i.artistEntityId === artistId).slice(0, 4).map(i => i.url);
 
   const searchedBoards = useMemo(() => {
-    if (!normalizedCollectionSearch) return boards;
-    return boards.filter((board) => board.name.toLowerCase().includes(normalizedCollectionSearch));
-  }, [boards, normalizedCollectionSearch]);
+    if (!normalizedCollectionSearch) return resolvedBoards;
+    return resolvedBoards.filter((board) => board.name.toLowerCase().includes(normalizedCollectionSearch));
+  }, [resolvedBoards, normalizedCollectionSearch]);
 
   const searchedArtists = useMemo(() => {
     if (!normalizedCollectionSearch) return artists;
@@ -372,7 +374,7 @@ const OrganizeView: React.FC<Props> = ({
     }
   };
 
-  const openCreateBoardModal = (options?: { itemIds?: string[]; onCreated?: (board: Album) => void }) => {
+  const openCreateBoardModal = (options?: { itemIds?: string[]; onCreated?: (board: Board) => void }) => {
     setNewBoardName('');
     setCreateBoardRequest({
       itemIds: options?.itemIds,
@@ -402,7 +404,7 @@ const OrganizeView: React.FC<Props> = ({
     }
   };
 
-  const openRenameBoardModal = (board: Album) => {
+  const openRenameBoardModal = (board: Board) => {
     setCreateBoardRequest(null);
     setRenameBoardTarget(board);
     setNewBoardName(board.name);
@@ -414,7 +416,7 @@ const OrganizeView: React.FC<Props> = ({
     setNewBoardName('');
   };
 
-  const handleDeleteBoard = async (board: Album) => {
+  const handleDeleteBoard = async (board: Board) => {
     try {
       setIsSubmittingBoard(true);
       await onDeleteBoard(board.id);
@@ -434,7 +436,7 @@ const OrganizeView: React.FC<Props> = ({
       <input
         ref={collectionUploadInputRef}
         type="file"
-        accept="image/*"
+        accept={SUPPORTED_UPLOAD_ACCEPT}
         multiple
         className="hidden"
         onChange={(event) => onFileUpload(event, 'gallery')}
@@ -586,7 +588,7 @@ const OrganizeView: React.FC<Props> = ({
                   visit={visit}
                   filteredVisitId={filteredVisitId}
                   isAnalyzing={isAnalyzing}
-                  boards={boards}
+                  boards={resolvedBoards}
                   selectedIds={selectedArtworkIds}
                   hasSelectionOverlay={selectedArtworkIds.length > 0}
                   onToggleSelection={toggleArtworkSelection}
@@ -663,7 +665,7 @@ const OrganizeView: React.FC<Props> = ({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="min-w-[180px]">
-                        {boards.map((board) => (
+                        {resolvedBoards.map((board) => (
                           <DropdownMenuItem
                             key={board.id}
                             onSelect={(event) => {
@@ -674,7 +676,7 @@ const OrganizeView: React.FC<Props> = ({
                             {board.name}
                           </DropdownMenuItem>
                         ))}
-                        {boards.length > 0 && <div className="my-1 h-px bg-neutral-100" />}
+                        {resolvedBoards.length > 0 && <div className="my-1 h-px bg-neutral-100" />}
                         <DropdownMenuItem
                           onSelect={(event) => {
                             event.preventDefault();
@@ -727,7 +729,7 @@ const OrganizeView: React.FC<Props> = ({
 
                 {boardsLoading ? (
                   <CollectionGridSkeleton />
-                ) : likedItems.length === 0 && boards.length === 0 ? (
+                ) : likedItems.length === 0 && resolvedBoards.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-48 gap-2">
                     <p className="text-[12px] text-neutral-300">No boards yet</p>
                     <p className="text-[11px] text-neutral-400">Create a board to start curating your collection.</p>

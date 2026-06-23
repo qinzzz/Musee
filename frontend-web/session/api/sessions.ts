@@ -1,5 +1,5 @@
-import { API_BASE_URL, fetchWithTimeout } from './core';
-import type { GalleryItem } from '../types';
+import { API_BASE_URL, fetchWithTimeout } from '../../api/core';
+import type { GalleryItem } from '../../types';
 
 export interface SessionRecord {
   id: string;
