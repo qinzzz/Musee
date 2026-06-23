@@ -249,7 +249,6 @@ const App: React.FC = () => {
   };
 
   const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'community'>('metadata');
-
   const [visit, setVisit] = useState<Visit>({
     id: 'initial-' + Math.random().toString(36).substring(7),
     itemIds: [],
@@ -489,7 +488,6 @@ const App: React.FC = () => {
     onOpenSessionSummary: openSessionSummary,
     onCloseVisitMenu: () => setOpenVisitMenuId(null),
   });
-
   const artworkHeaderActions = interpretingItem?.artworkId ? (
     <ArtworkActionsMenu
       disabled={Boolean(interpretingItem.isAnalyzing || interpretingItem.deleteStatus === 'pending')}
@@ -759,7 +757,6 @@ const App: React.FC = () => {
           onClose={closeHeaderIdentifyAgainModal}
           onSubmit={() => void submitHeaderIdentifyAgain()}
         />
-
         <AppConfirmationLayer
           deleteConfirmation={deleteConfirmation}
           pendingDeleteVisitSummary={pendingDeleteVisitSummary}
