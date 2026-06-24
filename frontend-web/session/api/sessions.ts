@@ -23,6 +23,18 @@ export interface SessionMessagePayload {
   created_at?: number;
 }
 
+export interface StartSessionWithMessagePayload {
+  session_id?: string;
+  title?: string;
+  message: SessionMessagePayload;
+}
+
+export interface StartSessionWithArtworksPayload {
+  session_id?: string;
+  title?: string;
+  artwork_ids: string[];
+}
+
 export async function fetchSessionMessages(sessionId: string): Promise<SessionMessagePayload[]> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/messages`, { timeout: 10000 });
   if (!response.ok) return [];
@@ -53,6 +65,20 @@ export async function appendSessionMessages(sessionId: string, messages: Session
     body: JSON.stringify(messages),
     timeout: 10000,
   }).catch(() => {});
+}
+
+export async function startSessionWithMessage(userId: string, payload: StartSessionWithMessagePayload): Promise<any> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/start-with-message?user_id=${encodeURIComponent(userId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    timeout: 10000,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+  return response.json();
 }
 
 export async function deleteSession(sessionId: string, userId: string): Promise<any> {
@@ -87,6 +113,19 @@ export async function createSession(userId: string, sessionId?: string, title?: 
       session_id: sessionId,
       title,
     }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function startSessionWithArtworks(userId: string, payload: StartSessionWithArtworksPayload): Promise<any> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/start-with-artworks?user_id=${encodeURIComponent(userId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const errorText = await response.text();

@@ -26,6 +26,19 @@ export default defineConfig(() => ({
     environment: 'jsdom',
     globals: true,
     setupFiles: './setupTests.ts',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary'],
+      reportsDirectory: './coverage',
+      exclude: [
+        'dist/**',
+        'node_modules/**',
+        'coverage/**',
+        '**/*.test.{ts,tsx}',
+        '**/*.d.ts',
+        'setupTests.ts',
+      ],
+    },
   },
   resolve: {
     alias: {

@@ -618,6 +618,53 @@ The future model should:
 ### Notes
 
 - The current branch includes a narrow local guard fix for the new session bootstrap endpoints.
+
+
+## 10. Session Terminology Rename Cleanup
+
+Status: deferred until current backend / frontend cleanup passes settle
+
+### Problem
+
+The product is now clearly centered on `sessions`, but parts of the codebase still use older `visit` terminology:
+
+- backend route/module names such as `visit_chat`
+- frontend state names such as `visitStreams`
+- types such as `VisitDraft`, `VisitSummary`, and `VisitStreamMessage`
+- helper/function names such as `visitChatStream`
+
+This naming drift makes the architecture harder to read because the active product concept and the code vocabulary no longer match.
+
+### Goal
+
+Align backend and frontend naming with the current product model so session reflection, session messaging, and session state all use one coherent language.
+
+### Design intention
+
+The rename should:
+
+- make `session` the default domain term
+- reserve `visit` only if it still means something distinct product-wise
+- reduce cognitive overhead when reading backend/frontend boundaries
+- make future cleanup and test writing more straightforward
+
+### Recommended direction
+
+1. Rename code symbols first:
+   - `visit_chat.py` -> `session_chat.py`
+   - `VisitChatRequest` -> `SessionChatRequest`
+   - `visitStreams` -> `sessionStreams`
+   - `VisitDraft` / `VisitSummary` / `VisitStreamMessage` -> session-oriented names where appropriate
+2. Keep API behavior stable during the symbol-rename pass.
+3. Decide separately whether the external HTTP paths should also be renamed:
+   - `/api/visit/chat`
+   - `/api/visit/chat-stream`
+4. Remove or verify any truly stale curator/exhibition UI remnants during the same review.
+
+### Notes
+
+- This is not just cosmetic. The stale terminology now obscures real architecture boundaries.
+- The current backend visit-chat endpoints are still active through the session reflection / commentary flow, so this is a rename cleanup, not dead-code removal by default.
 - That local fix does not resolve the broader architectural weakness in anonymous identity handling.
 
 

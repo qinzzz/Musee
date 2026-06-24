@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:pr": "npm run test:run && npm run build"
   },
   "dependencies": {
@@ -33,6 +34,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "jsdom": "^24.1.3",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",

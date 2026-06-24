@@ -8,7 +8,7 @@ interface Props {
   mode: ActionBarMode;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   onOpenSessionCapture: () => void;
-  onInquiry?: (text: string) => void;
+  onInquiry?: (text: string) => Promise<boolean>;
   onLike?: () => void;
   onCollect?: () => void;
   onDelete?: () => void;
@@ -37,12 +37,14 @@ const ContextualActionBar: React.FC<Props> = ({
   const [text, setText] = useState('');
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  const submit = (e?: React.FormEvent) => {
+  const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const value = text.trim();
     if (!value) return;
-    onInquiry?.(value);
-    setText('');
+    const didSubmit = await onInquiry?.(value);
+    if (didSubmit !== false) {
+      setText('');
+    }
   };
 
   return (

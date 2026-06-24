@@ -36,8 +36,7 @@ _TEST_ENGINE = create_engine(
 
 # Patch connection.py before the app imports it
 import app.database.connection as _conn_mod  # type: ignore
-_conn_mod.engine = _TEST_ENGINE
-_conn_mod.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_TEST_ENGINE)
+_conn_mod.configure_session_factory(_TEST_ENGINE)
 
 from app.database.connection import Base, get_db, SessionLocal  # noqa: E402
 from app.main import app  # noqa: E402

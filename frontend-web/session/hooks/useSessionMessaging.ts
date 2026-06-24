@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { visitChatStream } from '../../api/chat';
 import type { GalleryItem, Visit } from '../../types';
-import { appendSessionMessages, createSession } from '../api/sessions';
+import { appendSessionMessages, createSession, startSessionWithMessage } from '../api/sessions';
 import { buildUploadCommentaryPrompt } from '../lib/commentary';
 import { itemBelongsToSession } from '../lib/sessionLinks';
 import { serializeVisitHistory } from '../lib/visitMessaging';
@@ -156,26 +156,15 @@ export function useSessionMessaging({
     visitSummaries,
   ]);
 
-  const sendVisitInquiryToSession = useCallback((
+  const streamVisitInquiryResponse = useCallback((
     targetVisitId: string,
     text: string,
     visitItemsOverride?: GalleryItem[],
-    options?: { persistUserMessage?: boolean },
+    historyOverride?: VisitStreamMessage[],
   ) => {
-    const existingMessages = visitStreams[targetVisitId] || [];
-    if (options?.persistUserMessage !== false) {
-      const createdAt = Date.now();
-      const userMsg: VisitStreamMessage = {
-        id: `visit-msg-${createdAt}`,
-        role: 'user',
-        text,
-        createdAt,
-      };
-      appendVisitMessages(targetVisitId, [userMsg]);
-    }
-
     setStreamingVisitResponses((prev) => ({ ...prev, [targetVisitId]: '' }));
 
+    const existingMessages = historyOverride || visitStreams[targetVisitId] || [];
     const visitItems = visitItemsOverride
       || (activeVisitSummary?.id === targetVisitId
         ? activeVisitSummary.items
@@ -225,6 +214,34 @@ export function useSessionMessaging({
     appendVisitMessages,
     items,
     setStreamingVisitResponses,
+    visitStreams,
+  ]);
+
+  const sendVisitInquiryToSession = useCallback((
+    targetVisitId: string,
+    text: string,
+    visitItemsOverride?: GalleryItem[],
+    options?: { persistUserMessage?: boolean },
+  ) => {
+    const existingMessages = visitStreams[targetVisitId] || [];
+    let nextHistory = existingMessages;
+
+    if (options?.persistUserMessage !== false) {
+      const createdAt = Date.now();
+      const userMsg: VisitStreamMessage = {
+        id: `visit-msg-${createdAt}`,
+        role: 'user',
+        text,
+        createdAt,
+      };
+      appendVisitMessages(targetVisitId, [userMsg]);
+      nextHistory = [...existingMessages, userMsg];
+    }
+
+    streamVisitInquiryResponse(targetVisitId, text, visitItemsOverride, nextHistory);
+  }, [
+    appendVisitMessages,
+    streamVisitInquiryResponse,
     visitStreams,
   ]);
 
@@ -284,23 +301,52 @@ export function useSessionMessaging({
     const shouldPersistSession = !targetSummary || targetSummary.items.length === 0;
 
     if (shouldPersistSession) {
+      const createdAt = Date.now();
+      const userMsg: VisitStreamMessage = {
+        id: `visit-msg-${createdAt}`,
+        role: 'user',
+        text,
+        createdAt,
+      };
+
       try {
-        await ensureSessionRecord(targetVisitId);
+        await startSessionWithMessage(sessionUserId, {
+          session_id: targetVisitId,
+          title: targetSummary?.title || defaultVisitTitle,
+          message: {
+            id: userMsg.id,
+            role: 'user',
+            type: 'text',
+            content: text,
+            created_at: createdAt,
+          },
+        });
+        refreshPersistedSessions();
+        appendVisitMessages(targetVisitId, [userMsg]);
+        streamVisitInquiryResponse(targetVisitId, text, undefined, [...(visitStreams[targetVisitId] || []), userMsg]);
       } catch (error) {
-        console.error('Failed to create session before reflection:', error);
-        showToast('Could not start session', 'info');
-        return;
+        console.error('Failed to commit first session message:', error);
+        showToast('Couldn’t send your first message. Try again.', 'info');
+        return false;
       }
+      return true;
     }
 
     sendVisitInquiryToSession(targetVisitId, text);
+    return true;
   }, [
     activeVisitSummary?.id,
+    appendVisitMessages,
     createVisitDraft,
+    defaultVisitTitle,
     ensureSessionRecord,
     isComposingNewSession,
+    refreshPersistedSessions,
+    sessionUserId,
     sendVisitInquiryToSession,
     showToast,
+    streamVisitInquiryResponse,
+    visitStreams,
     visitSummaries,
   ]);
 
