@@ -7,18 +7,15 @@ import type { PreparedSessionUploadEntry, PreparedUploadSessionContext } from '.
 import type { PendingSessionArtwork, VisitDraft, VisitStreamMessage } from '../types';
 
 const {
-  mockAttachArtworksToSession,
   mockBuildPreparedSessionFallbackPrompt,
-  mockCreateSession,
+  mockStartSessionWithArtworks,
 } = vi.hoisted(() => ({
-  mockAttachArtworksToSession: vi.fn(),
   mockBuildPreparedSessionFallbackPrompt: vi.fn(),
-  mockCreateSession: vi.fn(),
+  mockStartSessionWithArtworks: vi.fn(),
 }));
 
 vi.mock('../api/sessions', () => ({
-  attachArtworksToSession: mockAttachArtworksToSession,
-  createSession: mockCreateSession,
+  startSessionWithArtworks: mockStartSessionWithArtworks,
 }));
 
 vi.mock('../lib/preparedSession', () => ({
@@ -127,13 +124,12 @@ function renderUseSessionStartFlow(options: HarnessOptions = {}) {
 describe('useSessionStartFlow', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    mockCreateSession.mockResolvedValue({
+    mockStartSessionWithArtworks.mockResolvedValue({
       session: {
         id: 'session-1',
         title: 'Untitled Session',
       },
     });
-    mockAttachArtworksToSession.mockResolvedValue({ inserted: 1, artworks: [] });
     mockBuildPreparedSessionFallbackPrompt.mockReturnValue('fallback prompt');
   });
 
@@ -142,7 +138,7 @@ describe('useSessionStartFlow', () => {
     vi.clearAllMocks();
   });
 
-  it('creates a session, ingests uploads, and sends the fallback prompt with resolved items', async () => {
+  it('starts a persisted session from library artworks, ingests uploads, and sends the fallback prompt with resolved items', async () => {
     const libraryItem = createGalleryItem({ id: 'library-1', artworkId: 'artwork-library-1' });
     const uploadedResolvedItem = createGalleryItem({ id: 'upload-1', artworkId: 'artwork-upload-1' });
 
@@ -178,8 +174,11 @@ describe('useSessionStartFlow', () => {
       await result.current.api.submitPreparedSession();
     });
 
-    expect(mockCreateSession).toHaveBeenCalledWith('user-1', undefined, 'Untitled Session');
-    expect(mockAttachArtworksToSession).toHaveBeenCalledWith('session-1', 'user-1', ['artwork-library-1']);
+    expect(mockStartSessionWithArtworks).toHaveBeenCalledWith('user-1', {
+      session_id: expect.stringMatching(/^visit_/),
+      title: 'Untitled Session',
+      artwork_ids: ['artwork-library-1'],
+    });
     expect(spies.ingestPreparedUploads).toHaveBeenCalledWith(
       [
         expect.objectContaining({
@@ -226,8 +225,7 @@ describe('useSessionStartFlow', () => {
     expect(result.current.state.isSubmittingPreparedSession).toBe(false);
   });
 
-  it('shows a toast and clears the submitting state when session creation fails', async () => {
-    mockCreateSession.mockRejectedValue(new Error('network down'));
+  it('shows a toast and clears the submitting state when upload-only start produces no persisted artwork', async () => {
 
     const pendingSessionArtworks: PendingSessionArtwork[] = [
       {
@@ -246,16 +244,59 @@ describe('useSessionStartFlow', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { result, spies } = renderUseSessionStartFlow({
       pendingSessionArtworks,
+      ingestPreparedUploads: vi.fn().mockResolvedValue([]),
     });
 
     await act(async () => {
       await result.current.api.submitPreparedSession();
     });
 
-    expect(spies.showToast).toHaveBeenCalledWith('Could not start session from selected artworks.', 'info');
-    expect(spies.ingestPreparedUploads).not.toHaveBeenCalled();
+    expect(spies.showToast).toHaveBeenCalledWith('Couldn’t save the first artwork. Try again.', 'info');
+    expect(spies.ingestPreparedUploads).toHaveBeenCalledTimes(1);
+    expect(spies.setVisitDrafts).not.toHaveBeenCalled();
+    expect(spies.resetPreparedSessionState).not.toHaveBeenCalled();
     expect(result.current.state.isSubmittingPreparedSession).toBe(false);
 
     consoleErrorSpy.mockRestore();
+  });
+
+  it('uses upload ingest as the first persisted commit when the draft only contains uploads', async () => {
+    const uploadedResolvedItem = createGalleryItem({ id: 'upload-1', artworkId: 'artwork-upload-1' });
+    const pendingSessionArtworks: PendingSessionArtwork[] = [
+      {
+        id: 'entry-upload',
+        kind: 'upload',
+        file: createFile(),
+        previewUrl: 'blob://upload',
+        mode: 'gallery',
+        timestamp: Date.now(),
+        photoTime: 'Jun 23, 2026',
+        label: 'Upload',
+        sublabel: 'Gallery',
+      },
+    ];
+
+    const ingestPreparedUploads = vi.fn().mockResolvedValue([uploadedResolvedItem]);
+    const { result, spies } = renderUseSessionStartFlow({
+      pendingSessionArtworks,
+      ingestPreparedUploads,
+    });
+
+    await act(async () => {
+      await result.current.api.submitPreparedSession();
+    });
+
+    expect(mockStartSessionWithArtworks).not.toHaveBeenCalled();
+    expect(spies.ingestPreparedUploads).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: 'entry-upload', kind: 'upload' })],
+      expect.objectContaining({
+        sessionId: expect.stringMatching(/^visit_/),
+        sessionTitle: 'Untitled Session',
+        getSequenceNumber: expect.any(Function),
+      }),
+    );
+    expect(spies.refreshPersistedSessions).toHaveBeenCalledTimes(1);
+    expect(spies.setVisitDrafts).toHaveBeenCalled();
+    expect(result.current.state.isSubmittingPreparedSession).toBe(false);
   });
 });

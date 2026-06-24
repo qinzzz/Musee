@@ -2,7 +2,7 @@ import { startTransition, useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { PreparedSessionUploadEntry, PreparedUploadSessionContext } from '../../artwork-ingest/types';
 import type { GalleryItem, Visit } from '../../types';
-import { attachArtworksToSession, createSession } from '../api/sessions';
+import { startSessionWithArtworks } from '../api/sessions';
 import { buildPreparedSessionFallbackPrompt } from '../lib/preparedSession';
 import { updateSessionLinkForItem } from '../lib/sessionLinks';
 import type { PendingSessionArtwork, VisitDraft, VisitStreamMessage } from '../types';
@@ -69,12 +69,6 @@ export function useSessionStartFlow({
     setIsSubmittingPreparedSession(true);
 
     try {
-      const created = await createSession(sessionUserId, undefined, defaultVisitTitle);
-      refreshPersistedSessions();
-      const sessionId = created?.session?.id as string;
-      const sessionTitle = created?.session?.title || defaultVisitTitle;
-      const now = Date.now();
-
       const libraryEntries = pendingSessionArtworks.filter(
         (entry): entry is Extract<PendingSessionArtwork, { kind: 'library' }> => entry.kind === 'library',
       );
@@ -82,23 +76,30 @@ export function useSessionStartFlow({
         (entry): entry is Extract<PendingSessionArtwork, { kind: 'upload' }> => entry.kind === 'upload',
       );
 
-      if (libraryEntries.length > 0) {
-        await attachArtworksToSession(
-          sessionId,
-          sessionUserId,
-          libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id),
-        );
-        refreshPersistedSessions();
-      }
+      let sessionId = `visit_${Math.random().toString(36).substring(2, 11)}`;
+      let sessionTitle = defaultVisitTitle;
+      let hasPersistedInitialCommit = false;
 
-      setVisitDrafts((prev) => [
-        { id: sessionId, title: sessionTitle, createdAt: now, updatedAt: now },
-        ...prev.filter((draft) => draft.id !== sessionId),
-      ]);
+      if (libraryEntries.length > 0) {
+        const started = await startSessionWithArtworks(
+          sessionUserId,
+          {
+            session_id: sessionId,
+            title: defaultVisitTitle,
+            artwork_ids: libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id),
+          },
+        );
+        sessionId = started?.session?.id || sessionId;
+        sessionTitle = started?.session?.title || defaultVisitTitle;
+        refreshPersistedSessions();
+        hasPersistedInitialCommit = true;
+      }
 
       const getSequenceNumber = (entryId: string) => pendingSessionArtworks.findIndex((entry) => entry.id === entryId);
 
+      const resolvedSessionItems: GalleryItem[] = [];
       const libraryStreamMessages: VisitStreamMessage[] = [];
+      const now = Date.now();
       let streamCursor = now;
       setItems((prev) => prev.map((item) => {
         const matchingEntry = libraryEntries.find((entry) => entry.artwork.id === item.id);
@@ -123,23 +124,14 @@ export function useSessionStartFlow({
       if (libraryStreamMessages.length > 0) {
         appendVisitMessages(sessionId, libraryStreamMessages);
       }
-
-      setActiveTab('newSession');
-      setFilteredVisitId(sessionId);
-      setIsComposingNewSession(false);
-      setVisit({ id: sessionId, itemIds: [], globalConversation: [] });
-      startTransition(() => {
-        resetPreparedSessionState();
-      });
-
-      const resolvedSessionItems: GalleryItem[] = libraryEntries.map((entry, index) =>
+      resolvedSessionItems.push(...libraryEntries.map((entry, index) =>
         updateSessionLinkForItem(entry.artwork, sessionId, () => ({
           sessionId,
           sessionTitle,
           sequenceNumber: index,
           source: 'library',
         })),
-      );
+      ));
 
       if (uploadEntries.length > 0) {
         const resolvedUploads = await ingestPreparedUploads(uploadEntries, {
@@ -148,7 +140,28 @@ export function useSessionStartFlow({
           getSequenceNumber,
         });
         resolvedSessionItems.push(...resolvedUploads);
+        if (resolvedUploads.length > 0) {
+          hasPersistedInitialCommit = true;
+          refreshPersistedSessions();
+        }
       }
+
+      if (!hasPersistedInitialCommit || resolvedSessionItems.length === 0) {
+        showToast('Couldn’t save the first artwork. Try again.', 'info');
+        return;
+      }
+
+      setVisitDrafts((prev) => [
+        { id: sessionId, title: sessionTitle, createdAt: now, updatedAt: now },
+        ...prev.filter((draft) => draft.id !== sessionId),
+      ]);
+      setActiveTab('newSession');
+      setFilteredVisitId(sessionId);
+      setIsComposingNewSession(false);
+      setVisit({ id: sessionId, itemIds: resolvedSessionItems.map((item) => item.id), globalConversation: [] });
+      startTransition(() => {
+        resetPreparedSessionState();
+      });
 
       if (newSessionDraftMessage.trim()) {
         window.setTimeout(() => {
@@ -173,6 +186,7 @@ export function useSessionStartFlow({
   }, [
     appendVisitMessages,
     defaultVisitTitle,
+    ingestPreparedUploads,
     isSubmittingPreparedSession,
     newSessionDraftMessage,
     pendingSessionArtworks,
@@ -188,7 +202,6 @@ export function useSessionStartFlow({
     setVisit,
     setVisitDrafts,
     showToast,
-    ingestPreparedUploads,
   ]);
 
   return {

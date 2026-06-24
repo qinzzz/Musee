@@ -1,256 +1,182 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+import logging
+import os
+import re
+import sys
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
-import logging
-import sys
-import os
 
 from app.config.settings import settings
-from app.routers import artwork, users, collection, tag, auth
+from app.database.bootstrap import initialize_database
+from app.routers import admin_maintenance, artwork_identify, artwork_ingest, artwork_library, artwork_metadata, artwork_mutations, artwork_utilities, auth, collection, tag, taste_profile, users, visit_chat
+from app.routers import sessions as sessions_router
 
-# Configure logging to work with uvicorn
-# This ensures all Python logs are visible in uvicorn output
-# Use INFO level to avoid verbose debug logs from third-party libraries
-log_level = logging.INFO
-logging.basicConfig(
-    level=log_level,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ],
-    force=True  # Override any existing configuration
-)
 
-# Set log level for uvicorn access logs
-logging.getLogger("uvicorn.access").setLevel(log_level)
-logging.getLogger("uvicorn.error").setLevel(log_level)
+def configure_logging() -> logging.Logger:
+    log_level = logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[logging.StreamHandler(sys.stdout)],
+        force=True,
+    )
+    logging.getLogger("uvicorn.access").setLevel(log_level)
+    logging.getLogger("uvicorn.error").setLevel(log_level)
+    logging.getLogger("python_multipart.multipart").setLevel(logging.WARNING)
+    logging.getLogger("PIL.TiffImagePlugin").setLevel(logging.WARNING)
+    logging.getLogger("openai._base_client").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    return logging.getLogger(__name__)
 
-# Suppress verbose debug logs from third-party libraries
-logging.getLogger("python_multipart.multipart").setLevel(logging.WARNING)
-logging.getLogger("PIL.TiffImagePlugin").setLevel(logging.WARNING)
-logging.getLogger("openai._base_client").setLevel(logging.WARNING)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-# Get logger for this module
-logger = logging.getLogger(__name__)
+logger = configure_logging()
 
-# Log AI model override configuration at startup
-if settings.ai_provider:
-    logger.info(f"AI_PROVIDER is set to: {settings.ai_provider}")
-else:
-    logger.info("AI_PROVIDER is not set (using default provider)")
 
-if settings.ai_model_override:
-    logger.info(f"AI_MODEL_OVERRIDE is set to: {settings.ai_model_override}")
-else:
-    logger.info("AI_MODEL_OVERRIDE is not set (using default models)")
+def log_runtime_configuration() -> None:
+    if settings.ai_provider:
+        logger.info("AI_PROVIDER is set to: %s", settings.ai_provider)
+    else:
+        logger.info("AI_PROVIDER is not set (using default provider)")
 
-# Log OpenAI reasoning and verbosity configuration at startup
-if settings.openai_reasoning_effort:
-    logger.info(f"OPENAI_REASONING_EFFORT is set to: {settings.openai_reasoning_effort}")
-if settings.openai_verbosity:
-    logger.info(f"OPENAI_VERBOSITY is set to: {settings.openai_verbosity}")
+    if settings.ai_model_override:
+        logger.info("AI_MODEL_OVERRIDE is set to: %s", settings.ai_model_override)
+    else:
+        logger.info("AI_MODEL_OVERRIDE is not set (using default models)")
 
-# Log environment and database configuration
-logger.info(f"=" * 50)
-logger.info(f"ENVIRONMENT: {settings.env.upper()}")
-if settings.use_database:
-    db_url = settings.effective_database_url
-    # Mask password in URL for logging
-    import re
-    masked_url = re.sub(r'://([^:]+):([^@]+)@', r'://\1:****@', db_url)
-    logger.info(f"DATABASE: {masked_url}")
-logger.info(f"STORAGE: {settings.storage_type}")
-logger.info("Token: Vercel Blob read-write token configured" if settings.blob_read_write_token else "Token not found. Using local filesystem")
-logger.info(f"=" * 50)
+    if settings.openai_reasoning_effort:
+        logger.info("OPENAI_REASONING_EFFORT is set to: %s", settings.openai_reasoning_effort)
+    if settings.openai_verbosity:
+        logger.info("OPENAI_VERBOSITY is set to: %s", settings.openai_verbosity)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+    logger.info("%s", "=" * 50)
+    logger.info("ENVIRONMENT: %s", settings.env.upper())
     if settings.use_database:
-        from app.database.connection import engine, Base
-        from sqlalchemy import text
-        Base.metadata.create_all(bind=engine)
-        _is_sqlite = "sqlite" in str(engine.url)
-        if not _is_sqlite:
-            with engine.connect() as _conn:
-                _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS skill_stats JSONB"))
-                _conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'free'"))
-                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS reference_urls JSONB"))
-                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS artwork_entity_id VARCHAR"))
-                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS artist_entity_id VARCHAR"))
-                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS insights JSONB"))
-                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS classification VARCHAR(20) NOT NULL DEFAULT 'unsorted'"))
-                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS classification_updated_at TIMESTAMP"))
-                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_status VARCHAR(20) NOT NULL DEFAULT 'analyzed'"))
-                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_error TEXT"))
-                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_attempted_at TIMESTAMP"))
-                _conn.execute(text("ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_completed_at TIMESTAMP"))
-                _conn.execute(text("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_title VARCHAR"))
-                _conn.execute(text("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS system_title VARCHAR"))
-                _conn.execute(text("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS title_state VARCHAR(20) NOT NULL DEFAULT 'draft'"))
-                _conn.execute(text("""
-                    UPDATE saved_artworks
-                    SET analysis_status = CASE
-                        WHEN COALESCE(analysis_status, '') = '' AND analysis IS NOT NULL THEN 'analyzed'
-                        WHEN COALESCE(analysis_status, '') = '' THEN 'pending'
-                        ELSE analysis_status
-                    END
-                """))
-                _conn.execute(text("""
-                    UPDATE sessions
-                    SET system_title = COALESCE(NULLIF(system_title, ''), NULLIF(title, ''), 'Untitled Session')
-                    WHERE COALESCE(system_title, '') = ''
-                """))
-                _conn.execute(text("""
-                    UPDATE sessions
-                    SET title = COALESCE(NULLIF(user_title, ''), NULLIF(system_title, ''), NULLIF(title, ''), 'Untitled Session')
-                    WHERE COALESCE(title, '') = ''
-                       OR title IS DISTINCT FROM COALESCE(NULLIF(user_title, ''), NULLIF(system_title, ''), NULLIF(title, ''), 'Untitled Session')
-                """))
-                _conn.execute(text("""
-                    UPDATE sessions
-                    SET title_state = CASE
-                        WHEN COALESCE(NULLIF(user_title, ''), '') <> '' THEN 'user_locked'
-                        WHEN COALESCE(NULLIF(system_title, ''), 'Untitled Session') = 'Untitled Session' THEN 'draft'
-                        ELSE 'auto'
-                    END
-                    WHERE COALESCE(title_state, '') = ''
-                       OR title_state NOT IN ('draft', 'auto', 'user_locked')
-                """))
-                _conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS skill_events (
-                        id SERIAL PRIMARY KEY,
-                        user_id VARCHAR NOT NULL,
-                        artwork_id VARCHAR,
-                        skill_name VARCHAR NOT NULL,
-                        event_type VARCHAR NOT NULL,
-                        created_at TIMESTAMP DEFAULT NOW()
-                    )
-                """))
-                _conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS taste_profiles (
-                        user_id VARCHAR PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
-                        status VARCHAR(20) NOT NULL DEFAULT 'not_ready',
-                        eligible_count INTEGER NOT NULL DEFAULT 0,
-                        required_count INTEGER NOT NULL DEFAULT 5,
-                        love_count INTEGER NOT NULL DEFAULT 0,
-                        reject_count INTEGER NOT NULL DEFAULT 0,
-                        respect_count INTEGER NOT NULL DEFAULT 0,
-                        is_outdated INTEGER NOT NULL DEFAULT 0,
-                        generated_at TIMESTAMP NULL,
-                        outdated_at TIMESTAMP NULL,
-                        love_vector JSONB NULL,
-                        reject_vector JSONB NULL,
-                        taste_vector JSONB NULL,
-                        source_artwork_ids JSONB NULL,
-                        narrative_summary TEXT NULL,
-                        created_at TIMESTAMP DEFAULT NOW(),
-                        updated_at TIMESTAMP DEFAULT NOW()
-                    )
-                """))
-                _conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS session_artworks (
-                        id VARCHAR PRIMARY KEY,
-                        session_id VARCHAR NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-                        artwork_id VARCHAR NOT NULL REFERENCES saved_artworks(id) ON DELETE CASCADE,
-                        sequence_number INTEGER NOT NULL DEFAULT 0,
-                        source VARCHAR(20) NOT NULL DEFAULT 'library',
-                        created_at TIMESTAMP DEFAULT NOW(),
-                        CONSTRAINT uq_session_artwork UNIQUE (session_id, artwork_id)
-                    )
-                """))
-                _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_session_artworks_session_sequence ON session_artworks(session_id, sequence_number)"))
-                _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_session_artworks_artwork_id ON session_artworks(artwork_id)"))
-                _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_user_id ON saved_artworks(user_id)"))
-                _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_saved_artworks_device_id ON saved_artworks(device_id)"))
-                _conn.commit()
-        logger.info("Database initialized and migrations applied")
-    yield
+        masked_url = re.sub(r"://([^:]+):([^@]+)@", r"://\1:****@", settings.effective_database_url)
+        logger.info("DATABASE: %s", masked_url)
+    logger.info("STORAGE: %s", settings.storage_type)
+    logger.info(
+        "Token: Vercel Blob read-write token configured"
+        if settings.blob_read_write_token
+        else "Token not found. Using local filesystem"
+    )
+    logger.info("%s", "=" * 50)
 
-# Initialize FastAPI app
-app = FastAPI(
-    title="Musee API",
-    description="Stateless backend API for Musee artwork analysis application",
-    version="1.0.0",
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None,
-    lifespan=lifespan,
-)
 
-allowed_origins = [
-    "https://musee-web.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://localhost:5173",
-]
+def create_lifespan():
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if settings.use_database:
+            from app.database.connection import Base, engine
 
-allowed_origin_regex = (
-    r"^https?://("
-    r"localhost|127\.0\.0\.1|"
-    r"192\.168\.\d{1,3}\.\d{1,3}|"
-    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
-    r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}"
-    r")(:\d+)?$"
-)
+            initialize_database(engine, Base)
+        yield
 
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_origin_regex=allowed_origin_regex,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+    return lifespan
 
-# Include routers
-app.include_router(artwork.router, prefix="/api", tags=["artwork"])
-app.include_router(users.router, prefix="/api", tags=["users"])
-app.include_router(collection.router, prefix="/api", tags=["collection"])
-app.include_router(tag.router, prefix="/api", tags=["tag"])
-app.include_router(auth.router, prefix="/api", tags=["auth"])
 
-# Mount uploads directory for serving stored images (web clients)
-# Only if NOT in production, as Vercel has a read-only filesystem
-if settings.env.lower() != "prod":
+def configure_cors(app: FastAPI) -> None:
+    allowed_origins = [
+        "https://musee-web.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:5173",
+    ]
+    allowed_origin_regex = (
+        r"^https?://("
+        r"localhost|127\.0\.0\.1|"
+        r"192\.168\.\d{1,3}\.\d{1,3}|"
+        r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+        r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}"
+        r")(:\d+)?$"
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_origin_regex=allowed_origin_regex,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
+
+
+def register_routers(app: FastAPI) -> None:
+    app.include_router(artwork_identify.router, prefix="/api", tags=["artwork-identify"])
+    app.include_router(artwork_utilities.router, prefix="/api", tags=["artwork-utilities"])
+    app.include_router(artwork_mutations.router, prefix="/api", tags=["artwork-mutations"])
+    app.include_router(artwork_metadata.router, prefix="/api", tags=["artwork-metadata"])
+    app.include_router(admin_maintenance.router, prefix="/api", tags=["admin-maintenance"])
+    app.include_router(artwork_ingest.router, prefix="/api", tags=["artwork-ingest"])
+    app.include_router(artwork_library.router, prefix="/api", tags=["artwork-library"])
+    app.include_router(taste_profile.router, prefix="/api", tags=["taste-profile"])
+    app.include_router(visit_chat.router, prefix="/api", tags=["visit-chat"])
+    app.include_router(users.router, prefix="/api", tags=["users"])
+    app.include_router(collection.router, prefix="/api", tags=["collection"])
+    app.include_router(tag.router, prefix="/api", tags=["tag"])
+    app.include_router(auth.router, prefix="/api", tags=["auth"])
+    app.include_router(sessions_router.router, prefix="/api", tags=["sessions"])
+
+
+def mount_uploads_dir(app: FastAPI) -> None:
+    if settings.env.lower() == "prod":
+        logger.info("Skipping uploads directory initialization in production environment (read-only filesystem)")
+        return
+
     uploads_path = os.path.join(os.getcwd(), settings.uploads_dir)
     os.makedirs(uploads_path, exist_ok=True)
     app.mount(f"/{settings.uploads_dir}", StaticFiles(directory=uploads_path), name="uploads")
-    logger.info(f"Mounted uploads directory: {uploads_path}")
-else:
-    logger.info("Skipping uploads directory initialization in production environment (read-only filesystem)")
+    logger.info("Mounted uploads directory: %s", uploads_path)
 
 
-@app.get("/")
-async def root():
-    return {
-        "message": "Welcome to Musee API",
-        "version": "1.0.0",
-        "docs": "/docs" if settings.debug else "Documentation disabled in production"
-    }
+def create_app() -> FastAPI:
+    log_runtime_configuration()
+    app = FastAPI(
+        title="Musee API",
+        description="Stateless backend API for Musee artwork analysis application",
+        version="1.0.0",
+        docs_url="/docs" if settings.debug else None,
+        redoc_url="/redoc" if settings.debug else None,
+        lifespan=create_lifespan(),
+    )
+
+    configure_cors(app)
+    register_routers(app)
+    mount_uploads_dir(app)
+
+    @app.get("/")
+    async def root():
+        return {
+            "message": "Welcome to Musee API",
+            "version": "1.0.0",
+            "docs": "/docs" if settings.debug else "Documentation disabled in production",
+        }
+
+    @app.get("/health")
+    async def health_check():
+        return {
+            "status": "healthy",
+            "ai_provider": settings.ai_provider,
+            "database_enabled": settings.use_database,
+        }
+
+    return app
 
 
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "ai_provider": settings.ai_provider,
-        "database_enabled": settings.use_database
-    }
+app = create_app()
 
 
 if __name__ == "__main__":
-    logger.info(f"Starting Musee API server on {settings.host}:{settings.port}")
+    logger.info("Starting Musee API server on %s:%s", settings.host, settings.port)
     uvicorn.run(
         "main:app",
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
-        log_config=None  # Use our custom logging configuration
+        log_config=None,
     )

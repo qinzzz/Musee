@@ -1,26 +1,36 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 from app.config.settings import settings
 
-# Create database engine
-effective_url = settings.effective_database_url
-_is_sqlite = "sqlite" in effective_url
-_engine_kwargs: dict = {
-    "connect_args": {"check_same_thread": False} if _is_sqlite else {},
-    "pool_pre_ping": not _is_sqlite,
-    "pool_recycle": 300 if not _is_sqlite else -1,
-}
-if not _is_sqlite:
-    _engine_kwargs["pool_size"] = 20
-    _engine_kwargs["max_overflow"] = 10
-engine = create_engine(effective_url, **_engine_kwargs)
-
-# Create SessionLocal class
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create Base class for models
 Base = declarative_base()
+
+
+def build_engine(database_url: str | None = None):
+    effective_url = database_url or settings.effective_database_url
+    is_sqlite = "sqlite" in effective_url
+    engine_kwargs: dict = {
+        "connect_args": {"check_same_thread": False} if is_sqlite else {},
+        "pool_pre_ping": not is_sqlite,
+        "pool_recycle": 300 if not is_sqlite else -1,
+    }
+    if not is_sqlite:
+        engine_kwargs["pool_size"] = 20
+        engine_kwargs["max_overflow"] = 10
+    return create_engine(effective_url, **engine_kwargs)
+
+
+def build_session_local(bind_engine):
+    return sessionmaker(autocommit=False, autoflush=False, bind=bind_engine)
+
+
+engine = build_engine()
+SessionLocal = build_session_local(engine)
+
+
+def configure_session_factory(bind_engine) -> None:
+    global engine, SessionLocal
+    engine = bind_engine
+    SessionLocal = build_session_local(bind_engine)
 
 
 def get_db():

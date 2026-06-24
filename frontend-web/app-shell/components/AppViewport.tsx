@@ -99,7 +99,7 @@ type ViewportMutationProps = {
   handleIdentifyAgain: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
   handleRetryAnalysis: (item: GalleryItem) => Promise<void>;
   setSessionGoals: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  ensureSessionRecord: (sessionId: string) => Promise<any>;
+  isPersistedSessionId: (sessionId: string) => boolean;
   refreshPersistedSessions: () => void;
   saveVisitTitle: (visitId: string, nextTitle: string) => Promise<void>;
   showToast: (message: string, type?: 'info' | 'success', action?: { label: string; onClick: () => void }) => void;
@@ -119,7 +119,7 @@ type ViewportMutationProps = {
   handleDeleteItem: (id: string) => void;
   setIsUnsortedFlowOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleToggleLike: (id: string) => void;
-  handleVisitInquiry: (text: string) => void;
+  handleVisitInquiry: (text: string) => Promise<boolean>;
 };
 
 type Props = {
@@ -198,7 +198,7 @@ export default function AppViewport({
     handleIdentifyAgain,
     handleRetryAnalysis,
     setSessionGoals,
-    ensureSessionRecord,
+    isPersistedSessionId,
     refreshPersistedSessions,
     saveVisitTitle,
     showToast,
@@ -321,9 +321,11 @@ export default function AppViewport({
               onSaveExistingGoal={(newGoal) => {
                 const sid = activeVisitSummary.id;
                 setSessionGoals(prev => ({ ...prev, [sid]: newGoal }));
-                ensureSessionRecord(sid)
-                  .then(async (res) => {
-                    await onSaveSessionGoal(res?.session?.id || sid, newGoal);
+                if (!isPersistedSessionId(sid)) {
+                  return;
+                }
+                onSaveSessionGoal(sid, newGoal)
+                  .then(() => {
                     refreshPersistedSessions();
                   })
                   .catch(() => {});
@@ -342,9 +344,11 @@ export default function AppViewport({
                 setSessionGoalInput('');
                 setSessionGoals(prev => ({ ...prev, [sid]: goal }));
                 setSessionGoalDismissed(prev => new Set([...prev, sid]));
-                ensureSessionRecord(sid)
-                  .then(async (res) => {
-                    await onSaveSessionGoal(res?.session?.id || sid, goal);
+                if (!isPersistedSessionId(sid)) {
+                  return;
+                }
+                onSaveSessionGoal(sid, goal)
+                  .then(() => {
                     refreshPersistedSessions();
                   })
                   .catch(() => {});

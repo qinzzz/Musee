@@ -2,8 +2,12 @@
 
 import pytest
 from fastapi import HTTPException
-from app.routers.artwork import check_artwork_quota, get_quota, TIER_ARTWORK_LIMIT
-from app.database.models import User, SavedArtwork, Session as SessionModel
+from app.services.artwork_background_service import (
+    TIER_ARTWORK_LIMIT,
+    check_artwork_quota,
+    get_quota,
+)
+from app.database.models import User, SavedArtwork
 
 
 def _make_user(db, tier="free", uid="u1"):
@@ -14,16 +18,12 @@ def _make_user(db, tier="free", uid="u1"):
 
 
 def _add_artworks(db, user_id, count):
-    sess = SessionModel(id=f"sess-{user_id}", user_id=user_id, title="test")
-    db.add(sess)
-    db.flush()
     for i in range(count):
         db.add(SavedArtwork(
             photo_uri=f"r2://img{i}",
             artist_name="Test Artist",
             artwork_name=f"Work {i}",
             user_id=user_id,
-            session_id=sess.id,
         ))
     db.commit()
 
