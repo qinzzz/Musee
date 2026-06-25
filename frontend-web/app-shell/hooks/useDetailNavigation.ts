@@ -12,7 +12,7 @@ import {
   type NavigationHistoryState,
 } from '../../lib/appNavigation';
 import type { GalleryItem } from '../../types';
-import type { InterpretingItem } from '../../artwork/types';
+import type { ArtworkDetailSelection } from '../../artwork/types';
 
 type UseDetailNavigationOptions = {
   activeTab: AppTab;
@@ -21,8 +21,8 @@ type UseDetailNavigationOptions = {
   setMovementPageContext: Dispatch<SetStateAction<SmartCollection | null>>;
   artworkDetailContext: ArtworkDetailContext | null;
   setArtworkDetailContext: Dispatch<SetStateAction<ArtworkDetailContext | null>>;
-  buildInterpretingItem: (item: GalleryItem, allItems?: GalleryItem[]) => InterpretingItem;
-  setInterpretingItem: Dispatch<SetStateAction<InterpretingItem | null>>;
+  buildArtworkDetailSelection: (item: GalleryItem, allItems?: GalleryItem[]) => ArtworkDetailSelection;
+  setArtworkDetailSelection: Dispatch<SetStateAction<ArtworkDetailSelection | null>>;
   setArtworkHeaderEditToken: Dispatch<SetStateAction<number>>;
   setActiveTab: Dispatch<SetStateAction<AppTab>>;
   setCollectTab: Dispatch<SetStateAction<CollectTab>>;
@@ -35,8 +35,8 @@ export function useDetailNavigation({
   setMovementPageContext,
   artworkDetailContext,
   setArtworkDetailContext,
-  buildInterpretingItem,
-  setInterpretingItem,
+  buildArtworkDetailSelection,
+  setArtworkDetailSelection,
   setArtworkHeaderEditToken,
   setActiveTab,
   setCollectTab,
@@ -44,16 +44,16 @@ export function useDetailNavigation({
   const clearShellOverlays = useCallback(() => {
     setArtistPageContext(null);
     setMovementPageContext(null);
-    setInterpretingItem(null);
+    setArtworkDetailSelection(null);
     setArtworkDetailContext(null);
-  }, [setArtistPageContext, setArtworkDetailContext, setInterpretingItem, setMovementPageContext]);
+  }, [setArtistPageContext, setArtworkDetailContext, setArtworkDetailSelection, setMovementPageContext]);
 
   const openArtworkDetail = useCallback((item: GalleryItem, context: ArtworkDetailContext, allItems?: GalleryItem[]) => {
     setArtworkHeaderEditToken(0);
     setMovementPageContext(null);
     setArtistPageContext(null);
     setArtworkDetailContext(context);
-    setInterpretingItem(buildInterpretingItem(item, allItems));
+    setArtworkDetailSelection(buildArtworkDetailSelection(item, allItems));
     window.history.pushState(
       {
         view: 'artwork',
@@ -65,7 +65,7 @@ export function useDetailNavigation({
       '',
       context.basePath,
     );
-  }, [activeTab, buildInterpretingItem, collectTab, setArtistPageContext, setArtworkDetailContext, setArtworkHeaderEditToken, setInterpretingItem, setMovementPageContext]);
+  }, [activeTab, buildArtworkDetailSelection, collectTab, setArtistPageContext, setArtworkDetailContext, setArtworkDetailSelection, setArtworkHeaderEditToken, setMovementPageContext]);
 
   const openArtistDetail = useCallback((context: ArtistPageContext) => {
     const slugSource = context.artistName || context.artistEntityId;
@@ -90,7 +90,7 @@ export function useDetailNavigation({
       return;
     }
 
-    setInterpretingItem(null);
+    setArtworkDetailSelection(null);
     setArtworkDetailContext(null);
 
     if (artworkDetailContext?.returnToArtistContext) {
@@ -113,7 +113,7 @@ export function useDetailNavigation({
       '',
       artworkDetailContext?.basePath || stateToPath(activeTab, collectTab),
     );
-  }, [activeTab, artworkDetailContext, collectTab, setArtistPageContext, setArtworkDetailContext, setArtworkHeaderEditToken, setInterpretingItem]);
+  }, [activeTab, artworkDetailContext, collectTab, setArtistPageContext, setArtworkDetailContext, setArtworkDetailSelection, setArtworkHeaderEditToken]);
 
   const closeArtistDetail = useCallback(() => {
     if (window.history.state?.view === 'artist') {
@@ -153,9 +153,9 @@ export function useDetailNavigation({
   const openMovementPage = useCallback((collection: SmartCollection) => {
     setArtistPageContext(null);
     setMovementPageContext(collection);
-    setInterpretingItem(null);
+    setArtworkDetailSelection(null);
     setArtworkDetailContext(null);
-  }, [setArtistPageContext, setArtworkDetailContext, setInterpretingItem, setMovementPageContext]);
+  }, [setArtistPageContext, setArtworkDetailContext, setArtworkDetailSelection, setMovementPageContext]);
 
   const closeMovementPage = useCallback(() => {
     setMovementPageContext(null);

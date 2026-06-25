@@ -2,7 +2,7 @@
 
 ## 1. Automated Testing Plan
 
-Status: planned after targeted frontend cleanup
+Status: foundational pass completed; expand incrementally
 
 ### Goal
 
@@ -29,83 +29,59 @@ Start with flows that are:
 - frequently used
 - already known to be fragile
 
-### Proposed rollout
+### Implementation outcome
 
-1. Extract the most fragile logic out of `frontend-web/App.tsx` so test ownership is clearer.
-2. Add stable test selectors to core UI elements.
-3. Choose the frontend/browser/backend testing toolchain.
-4. Implement only a small first suite of high-value tests.
-5. Run targeted tests locally during development.
-6. Run the core suite automatically before merge / in CI.
+This backlog item is no longer just planned. The first practical testing foundation is now in place:
 
-### Cleanup-first decision
+- frontend critical-path tests were added with `Vitest` + React Testing Library
+- backend targeted tests were added with `pytest`
+- frontend coverage tooling was added
+- backend coverage tooling was added
+- GitHub Actions CI now runs:
+  - backend tests with coverage
+  - frontend tests with coverage
+  - frontend production build
 
-Before setting up the frontend test stack, do a targeted cleanup pass focused on testability.
+Current baseline:
 
-Reason:
+- frontend coverage exists but is still intentionally selective
+- backend coverage exists and is broader than before, but still focused on the cleaned seams first
 
-- `frontend-web/App.tsx` has become a large orchestration file with too many responsibilities
-- the first tests would otherwise be broader, more brittle, and harder to maintain
-- the goal is not a full rewrite, but cleaner seams around the logic we most want to protect
+### What changed structurally
 
-### Frontend cleanup roadmap
+The cleanup-first decision was correct. Before broadening tests, the app was split into clearer ownership seams such as:
 
-#### Phase 1: cleanup for testability
+- `app-shell/`
+- `session/`
+- `artwork/`
+- `artwork-ingest/`
+- `capture/`
 
-Extract the highest-risk logic first:
+On the backend, the previous monolithic artwork router was split into smaller router/service modules so tests could attach to narrower surfaces.
 
-1. `useSessionActions`
-   - session rename
-   - optimistic session delete
-   - current-session delete routing
-2. `useArtworkActions`
-   - retry analysis
-   - identify again
-   - optimistic artwork delete
-   - artwork analysis success / failure state updates
-3. upload / capture helpers
-   - EXIF parsing
-   - image normalization / transcoding
-   - museum / geolocation resolution
-4. `useArtworkUploadFlow`
-   - upload placeholders
-   - raw upload persistence
-   - analysis trigger
-   - upload commentary trigger
+### Current covered areas
 
-#### Phase 2: testing foundation
+The current automated suite now protects several high-risk flows, including:
 
-After the extraction above:
+- session start orchestration
+- session messaging / commentary flow
+- session delete behavior
+- app-shell navigation behavior
+- artwork ingest orchestration
+- artwork analysis / reanalysis state behavior
+- board hooks
+- backend session routes / services
+- backend artwork ingest / mutation / utility routes
+- backend visit/session chat and taste-profile paths
 
-- add frontend test setup under `frontend-web/`
-- use `Vitest` + React Testing Library + `MSW`
-- keep backend tests on `pytest`
+### What remains
 
-Suggested frontend structure:
+This item is not fully “done” in the long-term sense. The remaining work is:
 
-- `frontend-web/vitest.config.ts`
-- `frontend-web/setupTests.ts`
-- `frontend-web/test/server.ts`
-- `frontend-web/test/handlers.ts`
-- `frontend-web/test/factories.ts`
-- `frontend-web/test/features/`
-
-#### Phase 3: first frontend tests
-
-Start with a very small, high-value suite:
-
-1. session delete optimistic flow
-2. artwork delete optimistic flow
-3. identify-again modal flow
-4. initial identification loading-state behavior
-
-#### Phase 4: broader UI cleanup
-
-After the first tests are in place:
-
-- extract sidebar / session list rendering from `App.tsx`
-- extract user menu / settings modal rendering
-- extract shared root modals
+1. add more pure-helper tests around newer extracted modules
+2. expand frontend coverage to a few more critical UI flows
+3. add stable backend integration coverage for more routes once backend cleanup settles further
+4. decide whether to enforce coverage thresholds in CI
 
 ### Target long-term structure
 
@@ -140,25 +116,14 @@ The goal is to make new features, bug fixes, and tests attach to smaller units i
 - Mock the backend/network response rather than relying on a live backend for every test.
 - Use selectors such as `data-testid` so tests can reliably find important UI elements.
 
-### Deferred backend testing
+### Remaining backend testing gaps
 
-For now, the formal PR gate should stay frontend-focused.
+Backend testing is no longer deferred in absolute terms, but broader backend coverage is still deferred. The next backend PR-gate candidates are:
 
-Reason:
-
-- recent cleanup and new seams are primarily on the frontend
-- the backend still needs structural cleanup before a broad automated gate will be stable and maintainable
-
-Backend testing is not dropped. It is deferred until backend cleanup makes the boundaries clearer.
-
-When that cleanup happens, add backend PR-gate coverage for:
-
-- session CRUD
-- session messages
-- artwork upload / analyze / reanalyze / delete
 - collections CRUD
 - auth / ownership checks
-- quota enforcement
+- more provider-independent AI-path tests
+- more integration-style persistence checks where the cleaned service boundaries are now stable
 
 
 ## 2. Session / Artwork Bootstrap Cache
@@ -192,7 +157,7 @@ Make session rehydration feel coherent by restoring lightweight artwork/session 
 - resolved image URL
 - artist name
 - artwork title
-- session/visit id
+- session id
 - session title
 - timestamp
 - classification
@@ -208,8 +173,8 @@ Create a small persistence layer, for example:
 
 Use it from:
 
-- `frontend-web/hooks/useArtworkLibrary.ts`
-- `frontend-web/hooks/useVisits.ts`
+- `frontend-web/artwork/hooks/useArtworkLibrary.ts`
+- `frontend-web/session/hooks/useVisits.ts`
 
 ### Reconciliation rules
 
@@ -239,7 +204,7 @@ The lightweight bootstrap cache has been implemented as a warm-start layer so ar
 
 The app should not restore only one half of the session experience. Either:
 
-- restore both artwork context and visit/reflection context together
+- restore both artwork context and session/reflection context together
 
 or
 
@@ -250,7 +215,7 @@ The implemented direction is coherent, lightweight bootstrap hydration with back
 
 ## 3. Unified Session Titling Pipeline (MVP)
 
-Status: planned next
+Status: completed
 
 ### Goal
 
@@ -350,6 +315,19 @@ Prefer titles in roughly this order:
 4. Keep frontend display logic simple and predictable.
 5. Add explicit rename-lock behavior.
 
+### Implementation outcome
+
+The unified MVP session titling pipeline has now been implemented:
+
+- new sessions start from one canonical default: `Untitled Session`
+- backend stores:
+  - `user_title`
+  - `system_title`
+  - `title_state`
+- backend owns automatic title resolution
+- manual rename locks future automatic title display changes
+- frontend now treats backend title fields as the source of truth instead of inventing a competing title policy
+
 
 ## 4. LLM-Assisted Session Title Suggestions
 
@@ -382,7 +360,7 @@ If added later, LLM titling should be:
 
 ## 5. Optimistic Artwork Delete UX
 
-Status: planned
+Status: completed
 
 ### Goal
 
@@ -445,6 +423,16 @@ The flow should be:
 
 - This should be implemented consistently across grid, collection, session, and artwork-detail entry points.
 - Pending-delete items should not be selectable for other actions while deletion is in flight.
+
+### Implementation outcome
+
+The guarded optimistic delete behavior has been implemented:
+
+- confirmation modal dismisses immediately on confirm
+- artwork enters a pending-delete state locally
+- pending-delete artwork becomes dimmed and non-interactive
+- success removes the artwork fully
+- failure restores the artwork and surfaces an error toast
 
 
 ## 6. Artist Detail Loading Cleanup
@@ -529,6 +517,48 @@ Status: deferred but important
 The app currently mixes:
 
 - authenticated user flows backed by JWTs
+- anonymous / local-device flows backed by frontend-generated `user_id`
+
+As a result, route-level authorization is enforced inconsistently. Some endpoints verify the JWT subject against `user_id`, while others rely mainly on the request-supplied `user_id` itself.
+
+This makes the system easy to extend incorrectly and leaves the backend too trusting of client-provided identity in anonymous-style flows.
+
+### Goal
+
+Define one clear, scalable identity and authorization model so new endpoints cannot accidentally weaken access control.
+
+### Design intention
+
+The future model should:
+
+- separate authenticated and anonymous behavior explicitly
+- centralize authorization checks instead of repeating ad hoc route logic
+- avoid treating client-supplied `user_id` as a trusted identity primitive
+- make it obvious which routes are public, anonymous-scoped, or authenticated
+
+### Questions to resolve
+
+1. Should session and artwork data remain available in anonymous mode?
+2. If yes, what server-side primitive owns anonymous identity:
+   - signed anonymous token
+   - device/session cookie
+   - temporary server-issued guest account
+3. Which routes should require authenticated identity versus guest identity versus no identity?
+4. How should anonymous data migrate when a guest user signs in?
+
+### Recommended direction
+
+1. Inventory all routes that currently rely on `user_id` query params.
+2. Classify each route as:
+   - authenticated-only
+   - guest-scoped
+   - public
+3. Introduce one shared authorization layer per class.
+4. Remove route-by-route trust in raw client-provided `user_id`.
+
+### Notes
+
+- Narrow local guard fixes have been made in a few places, but they do not resolve the broader architectural weakness in anonymous identity handling.
 
 
 ## 9. Capture Photo Quality Improvement
@@ -576,48 +606,6 @@ The current live crop interaction feels immediate, but it sacrifices image fidel
 - This should be treated as a product + technical architecture decision, not just a camera implementation detail.
 - If revisited, evaluate whether mobile web should use a native camera capture entry (`capture=\"environment\"`) before presenting the crop UI.
 - The current live-stream approach remains acceptable for MVP interaction testing, but it is not the ideal long-term quality path if label reading becomes important.
-- anonymous / local-device flows backed by frontend-generated `user_id`
-
-As a result, route-level authorization is enforced inconsistently. Some endpoints verify the JWT subject against `user_id`, while others rely mainly on the request-supplied `user_id` itself.
-
-This makes the system easy to extend incorrectly and leaves the backend too trusting of client-provided identity in anonymous-style flows.
-
-### Goal
-
-Define one clear, scalable identity and authorization model so new endpoints cannot accidentally weaken access control.
-
-### Design intention
-
-The future model should:
-
-- separate authenticated and anonymous behavior explicitly
-- centralize authorization checks instead of repeating ad hoc route logic
-- avoid treating client-supplied `user_id` as a trusted identity primitive
-- make it obvious which routes are public, anonymous-scoped, or authenticated
-
-### Questions to resolve
-
-1. Should session and artwork data remain available in anonymous mode?
-2. If yes, what server-side primitive owns anonymous identity:
-   - signed anonymous token
-   - device/session cookie
-   - temporary server-issued guest account
-3. Which routes should require authenticated identity versus guest identity versus no identity?
-4. How should anonymous data migrate when a guest user signs in?
-
-### Recommended direction
-
-1. Inventory all routes that currently rely on `user_id` query params.
-2. Classify each route as:
-   - authenticated-only
-   - guest-scoped
-   - public
-3. Introduce one shared authorization layer per class.
-4. Remove route-by-route trust in raw client-provided `user_id`.
-
-### Notes
-
-- The current branch includes a narrow local guard fix for the new session bootstrap endpoints.
 
 
 ## 10. Session Terminology Rename Cleanup
@@ -665,10 +653,9 @@ The rename should:
 
 - This is not just cosmetic. The stale terminology now obscures real architecture boundaries.
 - The current backend visit-chat endpoints are still active through the session reflection / commentary flow, so this is a rename cleanup, not dead-code removal by default.
-- That local fix does not resolve the broader architectural weakness in anonymous identity handling.
 
 
-## 10. Dimension Enrichment Background Job Cleanup
+## 11. Dimension Enrichment Background Job Cleanup
 
 Status: deferred but important
 

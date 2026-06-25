@@ -84,10 +84,17 @@ export function useAppShellNavigation({
   const [recentsOpen, setRecentsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+  const closeFloatingShellMenus = () => {
+    setRecentsOpen(false);
+    setUserMenuOpen(false);
+    onCloseVisitMenu();
+  };
+
   useEffect(() => {
     const syncSidebarForViewport = () => {
       const isDesktop = window.innerWidth >= 768;
       setIsDesktopViewport(isDesktop);
+      closeFloatingShellMenus();
       setSidebarOpen(isDesktop);
     };
 
@@ -99,7 +106,7 @@ export function useAppShellNavigation({
 
   const handleSwitchTopLevelTab = (tabId: AppTab) => {
     onSetActiveTab(tabId);
-    setRecentsOpen(false);
+    closeFloatingShellMenus();
 
     if (tabId === 'newSession') {
       onEnterBlankSession();
@@ -117,8 +124,7 @@ export function useAppShellNavigation({
 
     onOpenSessionSummary(summaryId);
     clearShellOverlays();
-    onCloseVisitMenu();
-    setRecentsOpen(false);
+    closeFloatingShellMenus();
 
     if (!isDesktopViewport) {
       setSidebarOpen(false);
@@ -136,20 +142,24 @@ export function useAppShellNavigation({
   }, [activeTab, isNewSessionEntryActive]);
 
   const openSidebar = () => {
+    closeFloatingShellMenus();
     setSidebarOpen(true);
   };
 
   const closeMobileSidebar = () => {
     if (!isDesktopViewport) {
+      closeFloatingShellMenus();
       setSidebarOpen(false);
     }
   };
 
   const expandSidebar = () => {
+    closeFloatingShellMenus();
     setSidebarCollapsed(false);
   };
 
   const collapseSidebar = () => {
+    closeFloatingShellMenus();
     if (!isDesktopViewport) {
       setSidebarOpen(false);
       return;

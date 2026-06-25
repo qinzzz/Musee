@@ -5,15 +5,17 @@ interface CollectionResponse {
   id: string;
   name: string;
   description?: string | null;
+  artwork_ids?: string[];
   artworks?: Array<{ id: string }>;
 }
 
 function mapCollectionToAlbum(collection: CollectionResponse): Album {
+  const itemIds = collection.artwork_ids ?? (collection.artworks || []).map((artwork) => artwork.id);
   return {
     id: collection.id,
     name: collection.name,
     description: collection.description ?? null,
-    itemIds: (collection.artworks || []).map((artwork) => artwork.id),
+    itemIds,
   };
 }
 

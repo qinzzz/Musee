@@ -78,6 +78,7 @@ function renderAppViewport(options: {
         profileRefreshKey: 0,
       }}
       state={{
+        artworksLoaded: true,
         sessionCaptureState: null,
         artistPageContext: null,
         movementPageContext: null,

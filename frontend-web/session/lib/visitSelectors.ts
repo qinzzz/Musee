@@ -72,6 +72,7 @@ export function parseDisplayDate(dateStr: string): string {
 type BuildVisitSummariesOptions = {
   items: GalleryItem[];
   persistedSessions: SessionRecord[];
+  persistedSessionsHydrated: boolean;
   visitDrafts: VisitDraft[];
   defaultVisitTitle: string;
   visitSearch: string;
@@ -80,6 +81,7 @@ type BuildVisitSummariesOptions = {
 export function buildVisitSummaries({
   items,
   persistedSessions,
+  persistedSessionsHydrated,
   visitDrafts,
   defaultVisitTitle,
   visitSearch,
@@ -118,13 +120,22 @@ export function buildVisitSummaries({
     const firstItem = sortedItems[0];
     const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
     const linkedTitle = latestItem?.sessionLinks?.find((link) => link.sessionId === id)?.sessionTitle;
-    const title = persistedSession?.title || linkedTitle || latestItem?.sessionTitle || draft?.title || location || defaultVisitTitle;
+    const resolvedTitle =
+      persistedSession?.title ||
+      linkedTitle ||
+      latestItem?.sessionTitle ||
+      draft?.title ||
+      location ||
+      null;
+    const titlePending = !persistedSessionsHydrated && !resolvedTitle;
+    const title = resolvedTitle || defaultVisitTitle;
     const lastArtworkTimestamp = latestItem ? getVisitItemTimestamp(latestItem) : 0;
     const updatedAt = Math.max(draft?.updatedAt || 0, persistedUpdatedAt, lastArtworkTimestamp);
 
     summaries.push({
       id,
       title,
+      titlePending,
       location,
       artworkCount: sortedItems.length,
       updatedAt: updatedAt || Date.now(),
@@ -142,6 +153,7 @@ export function buildVisitSummaries({
     summaries.push({
       id: session.id,
       title: session.title || draft?.title || defaultVisitTitle,
+      titlePending: false,
       location: null,
       artworkCount: 0,
       updatedAt: Math.max(persistedUpdatedAt, draft?.updatedAt || 0),
@@ -156,6 +168,7 @@ export function buildVisitSummaries({
     summaries.push({
       id: draft.id,
       title: draft.title || defaultVisitTitle,
+      titlePending: false,
       location: null,
       artworkCount: 0,
       updatedAt: draft.updatedAt,

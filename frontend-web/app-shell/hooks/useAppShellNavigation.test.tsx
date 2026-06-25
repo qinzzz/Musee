@@ -75,6 +75,70 @@ describe('useAppShellNavigation', () => {
     expect(result.current.sidebarOpen).toBe(false);
   });
 
+  it('closes floating shell menus when opening the mobile sidebar', () => {
+    const onCloseVisitMenu = vi.fn();
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 390,
+    });
+
+    const { result } = renderHook(() => useAppShellNavigation({
+      activeTab: 'collect',
+      isComposingNewSession: false,
+      editingVisitId: null,
+      clearShellOverlays: vi.fn(),
+      onSetActiveTab: vi.fn(),
+      onEnterBlankSession: vi.fn(),
+      onOpenSessionSummary: vi.fn(),
+      onCloseVisitMenu,
+    }));
+
+    act(() => {
+      result.current.setRecentsOpen(true);
+      result.current.setUserMenuOpen(true);
+      result.current.openSidebar();
+    });
+
+    expect(onCloseVisitMenu).toHaveBeenCalledTimes(1);
+    expect(result.current.recentsOpen).toBe(false);
+    expect(result.current.userMenuOpen).toBe(false);
+    expect(result.current.sidebarOpen).toBe(true);
+  });
+
+  it('closes floating shell menus when closing the mobile sidebar', () => {
+    const onCloseVisitMenu = vi.fn();
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 390,
+    });
+
+    const { result } = renderHook(() => useAppShellNavigation({
+      activeTab: 'collect',
+      isComposingNewSession: false,
+      editingVisitId: null,
+      clearShellOverlays: vi.fn(),
+      onSetActiveTab: vi.fn(),
+      onEnterBlankSession: vi.fn(),
+      onOpenSessionSummary: vi.fn(),
+      onCloseVisitMenu,
+    }));
+
+    act(() => {
+      result.current.setRecentsOpen(true);
+      result.current.setUserMenuOpen(true);
+      result.current.closeMobileSidebar();
+    });
+
+    expect(onCloseVisitMenu).toHaveBeenCalledTimes(1);
+    expect(result.current.recentsOpen).toBe(false);
+    expect(result.current.userMenuOpen).toBe(false);
+    expect(result.current.sidebarOpen).toBe(false);
+  });
+
   it('marks the new session entry active only while composing a fresh session', () => {
     const { result } = renderHook(() => useAppShellNavigation({
       activeTab: 'newSession',

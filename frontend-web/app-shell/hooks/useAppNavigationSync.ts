@@ -29,7 +29,7 @@ type UseAppNavigationSyncOptions = {
   onRequestLeaveCapture: () => boolean;
   onSetActiveTab: (tab: AppTab) => void;
   onSetCollectTab: (tab: CollectTab) => void;
-  onSetInterpretingItem: (value: null) => void;
+  onClearArtworkDetailSelection: () => void;
 };
 
 export function useAppNavigationSync({
@@ -48,7 +48,7 @@ export function useAppNavigationSync({
   onRequestLeaveCapture,
   onSetActiveTab,
   onSetCollectTab,
-  onSetInterpretingItem,
+  onClearArtworkDetailSelection,
 }: UseAppNavigationSyncOptions): void {
   const handlePopState = useEffectEvent(() => {
     const historyState = window.history.state as NavigationHistoryState | null;
@@ -62,7 +62,7 @@ export function useAppNavigationSync({
     }
 
     if (historyState?.view === 'capture') {
-      onSetInterpretingItem(null);
+      onClearArtworkDetailSelection();
       onSetArtworkDetailContext(null);
       onSetArtistPageContext(null);
       onSetMovementPageContext(null);
@@ -82,14 +82,14 @@ export function useAppNavigationSync({
 
     if (historyState?.view === 'artist') {
       onSetCaptureState(null);
-      onSetInterpretingItem(null);
+      onClearArtworkDetailSelection();
       onSetArtworkDetailContext(null);
       onSetMovementPageContext(null);
       onSetArtistPageContext(historyState.artistContext);
       return;
     }
 
-    onSetInterpretingItem(null);
+    onClearArtworkDetailSelection();
     onSetArtworkDetailContext(null);
     onSetCaptureState(null);
 

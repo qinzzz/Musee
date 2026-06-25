@@ -17,6 +17,7 @@ export type VisitDraft = {
 export type VisitSummary = {
   id: string;
   title: string;
+  titlePending?: boolean;
   location: string | null;
   artworkCount: number;
   updatedAt: number;

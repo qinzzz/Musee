@@ -1,3 +1,5 @@
+import { getApiTimingHeaders, logApiTiming } from './performance';
+
 function resolveApiBaseUrl(): string {
   const configured = import.meta.env.VITE_API_URL;
   if (configured) {
@@ -30,13 +32,42 @@ async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestIni
     headers.set('Authorization', `Bearer ${token}`);
   }
 
+  const method = (options.method || 'GET').toUpperCase();
+  const resourceLabel = typeof resource === 'string'
+    ? resource
+    : resource instanceof URL
+      ? resource.toString()
+      : String(resource);
+  const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
   try {
     const response = await fetch(resource, {
       ...options,
       headers,
       signal: controller.signal,
     });
+
+    const durationMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - start;
+    const { serverTiming, responseTime } = getApiTimingHeaders(response);
+    logApiTiming({
+      method,
+      resource: resourceLabel,
+      durationMs,
+      status: response.status,
+      serverTiming,
+      responseTime,
+    });
+
     return response;
+  } catch (error) {
+    const durationMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - start;
+    logApiTiming({
+      method,
+      resource: resourceLabel,
+      durationMs,
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+    });
+    throw error;
   } finally {
     clearTimeout(id);
   }

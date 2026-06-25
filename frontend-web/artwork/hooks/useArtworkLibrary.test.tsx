@@ -189,8 +189,11 @@ describe('useArtworkLibrary', () => {
       expect(result.current.items).toHaveLength(2);
     });
 
-    const built = result.current.buildInterpretingItem(result.current.items[0]);
-    expect(built.allVisitItems).toHaveLength(2);
+    const selection = result.current.buildArtworkDetailSelection(result.current.items[0], result.current.items);
+    expect(selection).toEqual({
+      artworkId: 'server-1',
+      navigationItemIds: ['server-1', 'server-2'],
+    });
 
     act(() => {
       result.current.restoreArtworkFromHistory('server-1', {
@@ -268,7 +271,7 @@ describe('useArtworkLibrary', () => {
     });
 
     act(() => {
-      result.current.setInterpretingItem(result.current.buildInterpretingItem(result.current.items[0]));
+      result.current.setArtworkDetailSelection(result.current.buildArtworkDetailSelection(result.current.items[0]));
       result.current.updateItemMetadata('server-1', {
         artistName: 'Updated Artist',
         artworkName: 'Updated Work',
@@ -286,5 +289,39 @@ describe('useArtworkLibrary', () => {
       artworkName: 'Updated Work',
       date: '1910',
     });
+  });
+
+  it('derives the latest navigation cohort for the open artwork from live items state', async () => {
+    mockFetchUserArtworks.mockResolvedValue({
+      items: [
+        createServerRecord({ id: 'server-1' }),
+        createServerRecord({ id: 'server-2', artwork_name: 'Second Work' }),
+      ],
+    });
+
+    const { result } = renderHook(() => useArtworkLibrary({
+      userId: 'user-1',
+      showToast: vi.fn(),
+    }));
+
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(2);
+    });
+
+    act(() => {
+      result.current.setArtworkDetailSelection(
+        result.current.buildArtworkDetailSelection(result.current.items[0], result.current.items),
+      );
+    });
+
+    expect(result.current.interpretingItem?.allVisitItems?.[1].artworkName).toBe('Second Work');
+
+    act(() => {
+      result.current.setItems((prev) => prev.map((item) => (
+        item.id === 'server-2' ? { ...item, artworkName: 'Updated Second Work' } : item
+      )));
+    });
+
+    expect(result.current.interpretingItem?.allVisitItems?.[1].artworkName).toBe('Updated Second Work');
   });
 });

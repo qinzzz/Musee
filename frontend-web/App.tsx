@@ -136,8 +136,9 @@ const App: React.FC = () => {
     artworksLoaded,
     profileRefreshKey,
     interpretingItem,
-    setInterpretingItem,
-    buildInterpretingItem,
+    artworkDetailSelection,
+    setArtworkDetailSelection,
+    buildArtworkDetailSelection,
     restoreArtworkFromHistory,
     handleUpdateClassification,
     updateItemMetadata,
@@ -165,8 +166,8 @@ const App: React.FC = () => {
     setMovementPageContext,
     artworkDetailContext,
     setArtworkDetailContext,
-    buildInterpretingItem,
-    setInterpretingItem,
+    buildArtworkDetailSelection,
+    setArtworkDetailSelection,
     setArtworkHeaderEditToken,
     setActiveTab,
     setCollectTab,
@@ -195,7 +196,7 @@ const App: React.FC = () => {
     collectTab,
     artworkDetailContext,
     interpretingItem,
-    setInterpretingItem,
+    setArtworkDetailSelection,
   });
 
   useAppNavigationSync({
@@ -214,7 +215,7 @@ const App: React.FC = () => {
     onRequestLeaveCapture: handleRequestLeaveSessionCapture,
     onSetActiveTab: setActiveTab,
     onSetCollectTab: setCollectTab,
-    onSetInterpretingItem: setInterpretingItem,
+    onClearArtworkDetailSelection: () => setArtworkDetailSelection(null),
   });
 
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -286,7 +287,6 @@ const App: React.FC = () => {
     visitStreamEndRef,
     setItems,
     setVisit,
-    setInterpretingItem,
     setDeleteConfirmation,
     setActiveTab,
     clearShellOverlays,
@@ -367,8 +367,8 @@ const App: React.FC = () => {
       ...prev,
       itemIds: prev.itemIds.filter((id) => id !== itemId),
     }));
-    setInterpretingItem((prev) => (prev?.id === itemId ? null : prev));
-  }, [setItems, setVisit, setInterpretingItem]);
+    setArtworkDetailSelection((prev) => (prev?.artworkId === itemId ? null : prev));
+  }, [setArtworkDetailSelection, setItems, setVisit]);
 
   const {
     updateSavedArtworkInState,
@@ -388,7 +388,8 @@ const App: React.FC = () => {
     setPendingSessionArtworks,
     setItems,
     setVisit,
-    setInterpretingItem,
+    artworkDetailSelection,
+    setArtworkDetailSelection,
     setTagPositions,
     setVisitDrafts,
     setIsAnalyzing,
@@ -444,7 +445,7 @@ const App: React.FC = () => {
 
     const deleteTargetId = itemToDelete.artworkId || itemToDelete.id;
     setDeleteConfirmation(null);
-    setInterpretingItem((prev) => (prev?.id === id ? null : prev));
+    setArtworkDetailSelection((prev) => (prev?.artworkId === id ? null : prev));
     updateSavedArtworkInState(id, {
       deleteStatus: 'pending',
     });
@@ -552,6 +553,7 @@ const App: React.FC = () => {
   };
 
   const viewportState = {
+    artworksLoaded,
     sessionCaptureState,
     artistPageContext,
     movementPageContext,

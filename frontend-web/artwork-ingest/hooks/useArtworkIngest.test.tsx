@@ -4,7 +4,6 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { useArtworkIngest } from './useArtworkIngest';
 import type { GalleryItem, TagCoordinate, Visit } from '../../types';
 import type { PendingSessionArtwork, VisitDraft, VisitStreamMessage } from '../../session/types';
-import type { InterpretingItem } from '../../artwork/types';
 
 const {
   mockAnalyzeArtworkFromExisting,
@@ -66,6 +65,16 @@ type HarnessOptions = {
   visitStreams?: Record<string, VisitStreamMessage[]>;
 };
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function createFile(name = 'artwork.jpg', type = 'image/jpeg') {
   return new File(['file-data'], name, { type, lastModified: 1710000000000 });
 }
@@ -120,7 +129,10 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
     );
     const [items, setItems] = React.useState<GalleryItem[]>(options.items ?? []);
     const [visit, setVisit] = React.useState<Visit>({ id: 'initial', itemIds: [], globalConversation: [] });
-    const [interpretingItem, setInterpretingItem] = React.useState<InterpretingItem | null>(null);
+    const [artworkDetailSelection, setArtworkDetailSelection] = React.useState<{
+      artworkId: string;
+      navigationItemIds?: string[];
+    } | null>(null);
     const [tagPositions, setTagPositions] = React.useState<Record<string, TagCoordinate>>({});
     const [visitDrafts, setVisitDrafts] = React.useState<VisitDraft[]>([]);
     const [isAnalyzing, setIsAnalyzing] = React.useState(false);
@@ -137,7 +149,8 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       setPendingSessionArtworks,
       setItems,
       setVisit,
-      setInterpretingItem,
+      artworkDetailSelection,
+      setArtworkDetailSelection,
       setTagPositions,
       setVisitDrafts,
       setIsAnalyzing,
@@ -156,11 +169,14 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
         pendingSessionArtworks,
         items,
         visit,
-        interpretingItem,
+        artworkDetailSelection,
         tagPositions,
         visitDrafts,
         isAnalyzing,
         filteredVisitId,
+      },
+      actions: {
+        setArtworkDetailSelection,
       },
     };
   });
@@ -343,6 +359,51 @@ describe('useArtworkIngest', () => {
     );
     expect(mockAnalyzeArtworkFromExisting).toHaveBeenCalledWith('saved-1', {
       labelFile: label,
+    });
+  });
+
+  it('remaps the open artwork detail selection from placeholder id to persisted id', async () => {
+    const deferredAnalysis = createDeferred<ReturnType<typeof createAnalysis>>();
+    mockSaveArtworkUpload.mockResolvedValue(createSavedUpload());
+    mockAnalyzeArtworkFromExisting.mockReturnValue(deferredAnalysis.promise);
+
+    const { result } = renderUseArtworkIngest({
+      activeTab: 'collect',
+      isComposingNewSession: false,
+      items: [],
+    });
+
+    let uploadPromise!: Promise<void>;
+    act(() => {
+      uploadPromise = result.current.api.processArtworkFiles([createFile('selection.jpg')], 'gallery');
+    });
+
+    await waitFor(() => {
+      expect(result.current.state.items).toHaveLength(1);
+      expect(result.current.state.items[0].analysisStatus).toBe('pending');
+    });
+
+    const placeholderId = result.current.state.items[0].id;
+
+    act(() => {
+      result.current.actions.setArtworkDetailSelection({
+        artworkId: placeholderId,
+        navigationItemIds: [placeholderId],
+      });
+    });
+
+    deferredAnalysis.resolve(createAnalysis());
+    await act(async () => {
+      await uploadPromise;
+    });
+
+    await waitFor(() => {
+      expect(result.current.state.artworkDetailSelection).toEqual({
+        artworkId: 'saved-1',
+        navigationItemIds: ['saved-1'],
+      });
+      expect(result.current.state.items[0].id).toBe('saved-1');
+      expect(result.current.state.items[0].analysisStatus).toBe('analyzed');
     });
   });
 });

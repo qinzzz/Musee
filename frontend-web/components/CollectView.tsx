@@ -16,6 +16,7 @@ type CollectViewProps = {
   headerLeftSlot?: React.ReactNode;
   topLevelLeftSlot?: React.ReactNode;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
+  artworksLoaded: boolean;
   items: GalleryItem[];
   visit: Visit;
   filteredVisitId: string | null;
@@ -60,6 +61,7 @@ export default function CollectView({
   headerLeftSlot,
   topLevelLeftSlot,
   onFileUpload,
+  artworksLoaded,
   items,
   visit,
   filteredVisitId,
@@ -136,6 +138,7 @@ export default function CollectView({
       <OrganizeView
         topBarLeftSlot={topLevelLeftSlot}
         onFileUpload={onFileUpload}
+        artworksLoaded={artworksLoaded}
         items={items}
         visit={visit}
         filteredVisitId={filteredVisitId}

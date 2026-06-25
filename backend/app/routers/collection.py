@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload, load_only
 from typing import List, Optional
 import logging
 
@@ -9,6 +9,27 @@ from app.models.collection import CollectionCreate, CollectionUpdate
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _collection_with_artwork_ids_query(db: Session):
+    return db.query(Collection).options(
+        selectinload(Collection.artworks).load_only(SavedArtwork.id)
+    )
+
+
+def _serialize_collection(collection: Collection) -> dict:
+    artwork_ids = [artwork.id for artwork in collection.artworks] if collection.artworks else []
+    return {
+        "id": collection.id,
+        "name": collection.name,
+        "description": collection.description,
+        "user_id": collection.user_id,
+        "artwork_count": len(artwork_ids),
+        "artwork_ids": artwork_ids,
+        "artworks": [{"id": artwork_id} for artwork_id in artwork_ids],
+        "created_at": collection.created_at.isoformat() if collection.created_at else None,
+        "updated_at": collection.updated_at.isoformat() if collection.updated_at else None,
+    }
 
 
 @router.post("/collections")
@@ -35,8 +56,8 @@ async def create_collection(request: CollectionCreate, db: Session = Depends(get
             db_collection.artworks = artworks
 
         db.commit()
-        db.refresh(db_collection)
-        return db_collection.to_dict(include_artworks=True)
+        persisted = _collection_with_artwork_ids_query(db).filter(Collection.id == db_collection.id).first()
+        return _serialize_collection(persisted)
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to create collection: {str(e)}")
@@ -47,17 +68,15 @@ async def create_collection(request: CollectionCreate, db: Session = Depends(get
 async def get_collections(user_id: str, db: Session = Depends(get_db)):
     """Get all collections for a user"""
     try:
-        from sqlalchemy.orm import selectinload
-        collections = db.query(Collection).options(selectinload(Collection.artworks)).filter(Collection.user_id == user_id).order_by(Collection.created_at.desc()).all()
+        collections = (
+            _collection_with_artwork_ids_query(db)
+            .filter(Collection.user_id == user_id)
+            .order_by(Collection.created_at.desc())
+            .all()
+        )
         
         logger.info(f"Retrieved {len(collections)} collections for user {user_id}")
-        
-        results = []
-        for c in collections:
-            d = c.to_dict(include_artworks=True)
-            results.append(d)
-            
-        return results
+        return [_serialize_collection(collection) for collection in collections]
     except Exception as e:
         logger.error(f"Failed to get collections: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get collections: {str(e)}")
@@ -67,11 +86,10 @@ async def get_collections(user_id: str, db: Session = Depends(get_db)):
 async def get_collection(collection_id: str, db: Session = Depends(get_db)):
     """Get a specific collection with artworks"""
     try:
-        from sqlalchemy.orm import selectinload
-        collection = db.query(Collection).options(selectinload(Collection.artworks)).filter(Collection.id == collection_id).first()
+        collection = _collection_with_artwork_ids_query(db).filter(Collection.id == collection_id).first()
         if not collection:
             raise HTTPException(status_code=404, detail="Collection not found")
-        return collection.to_dict(include_artworks=True)
+        return _serialize_collection(collection)
     except HTTPException:
         raise
     except Exception as e:
@@ -97,8 +115,8 @@ async def update_collection(collection_id: str, request: CollectionUpdate, db: S
             collection.artworks = artworks
 
         db.commit()
-        db.refresh(collection)
-        return collection.to_dict(include_artworks=True)
+        persisted = _collection_with_artwork_ids_query(db).filter(Collection.id == collection.id).first()
+        return _serialize_collection(persisted)
     except HTTPException:
         raise
     except Exception as e:

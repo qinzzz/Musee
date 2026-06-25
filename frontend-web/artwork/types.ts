@@ -1,5 +1,11 @@
 import type { GalleryItem } from '../types';
 
+export type ArtworkDetailSelection = {
+  artworkId: string;
+  navigationItemIds?: string[];
+  is_liked?: boolean;
+};
+
 export type InterpretingItem = GalleryItem & {
   allVisitItems?: GalleryItem[];
   is_liked?: boolean;

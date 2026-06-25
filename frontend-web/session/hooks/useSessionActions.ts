@@ -3,7 +3,6 @@ import type { Dispatch, SetStateAction } from 'react';
 import { deleteSession, type SessionRecord, updateSession } from '../api/sessions';
 import type { GalleryItem, Visit } from '../../types';
 import type { VisitDraft, VisitStreamMessage, VisitSummary } from '../types';
-import type { InterpretingItem } from '../../artwork/types';
 import { itemBelongsToSession, updateSessionLinkForItem } from '../lib/sessionLinks';
 
 type DeleteConfirmation = { id: string; type: 'item' | 'session' } | null;
@@ -16,7 +15,6 @@ type UseSessionActionsOptions = {
   visitSummaries: VisitSummary[];
   persistedSessions: SessionRecord[];
   editingVisitTitle: string;
-  interpretingItem: InterpretingItem | null;
   showToast: ShowToast;
   refreshPersistedSessions: () => void;
   resetPreparedSessionState: () => void;
@@ -26,7 +24,6 @@ type UseSessionActionsOptions = {
   setVisitStreams: Dispatch<SetStateAction<Record<string, VisitStreamMessage[]>>>;
   setStreamingVisitResponses: Dispatch<SetStateAction<Record<string, string>>>;
   setVisit: Dispatch<SetStateAction<Visit>>;
-  setInterpretingItem: Dispatch<SetStateAction<InterpretingItem | null>>;
   setFilteredVisitId: Dispatch<SetStateAction<string | null>>;
   setPendingDeletedSessionIds: Dispatch<SetStateAction<Set<string>>>;
   setOpenVisitMenuId: Dispatch<SetStateAction<string | null>>;
@@ -42,7 +39,6 @@ export function useSessionActions({
   visitSummaries,
   persistedSessions,
   editingVisitTitle,
-  interpretingItem,
   showToast,
   refreshPersistedSessions,
   resetPreparedSessionState,
@@ -52,7 +48,6 @@ export function useSessionActions({
   setVisitStreams,
   setStreamingVisitResponses,
   setVisit,
-  setInterpretingItem,
   setFilteredVisitId,
   setPendingDeletedSessionIds,
   setOpenVisitMenuId,
@@ -165,9 +160,6 @@ export function useSessionActions({
     setVisit((prev) => (
       prev.id === sessionId ? { ...prev, id: '', itemIds: [], globalConversation: [] } : prev
     ));
-    if (interpretingItem && itemBelongsToSession(interpretingItem, sessionId)) {
-      setInterpretingItem((prev) => (prev ? updateSessionLinkForItem(prev, sessionId, () => null) : prev));
-    }
     setFilteredVisitId((prev) => (prev === sessionId ? null : prev));
     setPendingDeletedSessionIds((prev) => {
       const next = new Set(prev);
@@ -175,9 +167,7 @@ export function useSessionActions({
       return next;
     });
   }, [
-    interpretingItem,
     setFilteredVisitId,
-    setInterpretingItem,
     setItems,
     setPendingDeletedSessionIds,
     setStreamingVisitResponses,
