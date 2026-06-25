@@ -40,7 +40,7 @@ describe('useArtworkDetailPager', () => {
       ...items[0],
       allVisitItems: items,
     };
-    const setInterpretingItem = vi.fn();
+    const setArtworkDetailSelection = vi.fn();
 
     const { result } = renderHook(() => useArtworkDetailPager({
       activeTab: 'collect',
@@ -50,7 +50,7 @@ describe('useArtworkDetailPager', () => {
         basePath: '/saved',
       },
       interpretingItem,
-      setInterpretingItem,
+      setArtworkDetailSelection,
     }));
 
     window.history.pushState({ view: 'artwork' }, '', '/saved');
@@ -59,9 +59,9 @@ describe('useArtworkDetailPager', () => {
       result.current.navigateInterpretation('next');
     });
 
-    expect(setInterpretingItem).toHaveBeenCalledWith({
-      ...items[1],
-      allVisitItems: items,
+    expect(setArtworkDetailSelection).toHaveBeenCalledWith({
+      artworkId: 'a2',
+      navigationItemIds: ['a1', 'a2', 'a3'],
     });
     expect(replaceStateSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -74,21 +74,21 @@ describe('useArtworkDetailPager', () => {
   });
 
   it('does nothing when there is no neighboring artwork set', () => {
-    const setInterpretingItem = vi.fn();
+    const setArtworkDetailSelection = vi.fn();
 
     const { result } = renderHook(() => useArtworkDetailPager({
       activeTab: 'collect',
       collectTab: 'saved',
       artworkDetailContext: null,
       interpretingItem: createItem('solo'),
-      setInterpretingItem,
+      setArtworkDetailSelection,
     }));
 
     act(() => {
       result.current.navigateInterpretation('next');
     });
 
-    expect(setInterpretingItem).not.toHaveBeenCalled();
+    expect(setArtworkDetailSelection).not.toHaveBeenCalled();
     expect(replaceStateSpy).not.toHaveBeenCalled();
   });
 });

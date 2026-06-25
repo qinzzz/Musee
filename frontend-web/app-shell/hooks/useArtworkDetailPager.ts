@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { InterpretingItem } from '../../artwork/types';
+import type { ArtworkDetailSelection, InterpretingItem } from '../../artwork/types';
 import type {
   AppTab,
   ArtworkDetailContext,
@@ -13,7 +13,7 @@ type UseArtworkDetailPagerOptions = {
   collectTab: CollectTab;
   artworkDetailContext: ArtworkDetailContext | null;
   interpretingItem: InterpretingItem | null;
-  setInterpretingItem: Dispatch<SetStateAction<InterpretingItem | null>>;
+  setArtworkDetailSelection: Dispatch<SetStateAction<ArtworkDetailSelection | null>>;
 };
 
 export function useArtworkDetailPager({
@@ -21,7 +21,7 @@ export function useArtworkDetailPager({
   collectTab,
   artworkDetailContext,
   interpretingItem,
-  setInterpretingItem,
+  setArtworkDetailSelection,
 }: UseArtworkDetailPagerOptions) {
   const navigateInterpretation = useCallback((direction: 'prev' | 'next') => {
     if (!interpretingItem || !interpretingItem.allVisitItems || interpretingItem.allVisitItems.length <= 1) return;
@@ -36,9 +36,9 @@ export function useArtworkDetailPager({
       : (currentIndex - 1 + allItems.length) % allItems.length;
 
     const nextItem = allItems[nextIndex];
-    setInterpretingItem({
-      ...nextItem,
-      allVisitItems: allItems,
+    setArtworkDetailSelection({
+      artworkId: nextItem.id,
+      navigationItemIds: allItems.map((item) => item.id),
     });
 
     if (artworkDetailContext && window.history.state?.view === 'artwork') {
@@ -54,7 +54,7 @@ export function useArtworkDetailPager({
         artworkDetailContext.basePath,
       );
     }
-  }, [activeTab, artworkDetailContext, collectTab, interpretingItem, setInterpretingItem]);
+  }, [activeTab, artworkDetailContext, collectTab, interpretingItem, setArtworkDetailSelection]);
 
   return {
     navigateInterpretation,

@@ -111,6 +111,7 @@ type ActiveFilter = 'all' | ArtworkClassification;
 interface Props {
   topBarLeftSlot?: React.ReactNode;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
+  artworksLoaded: boolean;
   items: GalleryItem[];
   visit: Visit;
   filteredVisitId: string | null;
@@ -135,6 +136,7 @@ interface Props {
 const OrganizeView: React.FC<Props> = ({
   topBarLeftSlot,
   onFileUpload,
+  artworksLoaded,
   items, visit, filteredVisitId, isAnalyzing,
   likedIds, boards, boardsLoading, userId,
   collectTab, onCollectTabChange,
@@ -191,7 +193,6 @@ const OrganizeView: React.FC<Props> = ({
     userId,
     invalidationKey: artistInvalidationKey,
     enabled: collectTab === 'artists',
-    prefetch: Boolean(userId && items.length > 0),
   });
 
   const filteredItems = useMemo(() => {
@@ -267,6 +268,10 @@ const OrganizeView: React.FC<Props> = ({
     if (activeFilter === 'not_for_me') return 'Not for Me';
     return 'Unsorted';
   }, [activeFilter]);
+
+  const showSavedEmptyOverlay =
+    searchedSavedItems.length === 0 && (Boolean(normalizedCollectionSearch) || activeFilter !== 'all');
+  const showSavedLoadingSkeleton = !artworksLoaded && items.length === 0;
 
   const getCoverImages = (itemIds: string[]) =>
     itemIds.slice(0, 4).map(id => items.find(i => i.id === id)?.url).filter(Boolean) as string[];
@@ -582,7 +587,11 @@ const OrganizeView: React.FC<Props> = ({
             </div>
 
             <div className="relative">
-              {savedLayout === 'grid' ? (
+              {showSavedLoadingSkeleton ? (
+                <div className="px-4 pt-4 pb-32 sm:px-8 md:px-0">
+                  <CollectionGridSkeleton />
+                </div>
+              ) : savedLayout === 'grid' ? (
                 <GridView
                   items={searchedSavedItems}
                   visit={visit}
@@ -627,7 +636,7 @@ const OrganizeView: React.FC<Props> = ({
                 </div>
               )}
 
-              {searchedSavedItems.length === 0 && (
+              {artworksLoaded && showSavedEmptyOverlay && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <p className="text-[12px] text-neutral-300">
                     {normalizedCollectionSearch

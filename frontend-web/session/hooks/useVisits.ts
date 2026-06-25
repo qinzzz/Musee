@@ -70,6 +70,7 @@ export function useVisits({
     }
   });
   const [persistedSessions, setPersistedSessions] = useState<SessionRecord[]>([]);
+  const [persistedSessionsHydrated, setPersistedSessionsHydrated] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(visitDraftsStorageKey, JSON.stringify(visitDrafts));
@@ -90,11 +91,13 @@ export function useVisits({
       .then((sessions) => {
         if (!cancelled) {
           setPersistedSessions(sessions);
+          setPersistedSessionsHydrated(true);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setPersistedSessions([]);
+          setPersistedSessionsHydrated(true);
         }
       });
 
@@ -104,6 +107,8 @@ export function useVisits({
   };
 
   useEffect(() => {
+    setPersistedSessions([]);
+    setPersistedSessionsHydrated(false);
     return refreshPersistedSessions();
   }, [userId]);
 
@@ -111,11 +116,12 @@ export function useVisits({
     return buildVisitSummaries({
       items,
       persistedSessions,
+      persistedSessionsHydrated,
       visitDrafts,
       defaultVisitTitle,
       visitSearch,
     });
-  }, [defaultVisitTitle, items, persistedSessions, visitDrafts, visitSearch]);
+  }, [defaultVisitTitle, items, persistedSessions, persistedSessionsHydrated, visitDrafts, visitSearch]);
 
   const activeVisitSummary = useMemo(() => {
     if (isComposingNewSession) {
@@ -178,6 +184,7 @@ export function useVisits({
     sessionGoals,
     setSessionGoals,
     persistedSessions,
+    persistedSessionsHydrated,
     visitSummaries,
     activeVisitSummary,
     pendingDeleteVisitSummary,

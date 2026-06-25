@@ -2,7 +2,6 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionActions } from './useSessionActions';
 import type { GalleryItem, Visit } from '../../types';
-import type { InterpretingItem } from '../../artwork/types';
 import type { SessionRecord } from '../api/sessions';
 import type { VisitDraft, VisitStreamMessage, VisitSummary } from '../types';
 
@@ -45,7 +44,6 @@ type HarnessOptions = {
   visitSummaries?: VisitSummary[];
   persistedSessions?: SessionRecord[];
   editingVisitTitle?: string;
-  interpretingItem?: InterpretingItem | null;
   isViewingSession?: (sessionId: string) => boolean;
 };
 
@@ -58,7 +56,6 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
   const setVisitStreams = vi.fn();
   const setStreamingVisitResponses = vi.fn();
   const setVisit = vi.fn();
-  const setInterpretingItem = vi.fn();
   const setFilteredVisitId = vi.fn();
   const setPendingDeletedSessionIds = vi.fn();
   const setOpenVisitMenuId = vi.fn();
@@ -73,7 +70,6 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
     visitSummaries: options.visitSummaries ?? [createVisitSummary()],
     persistedSessions: options.persistedSessions ?? [createPersistedSession()],
     editingVisitTitle: options.editingVisitTitle ?? 'Renamed Session',
-    interpretingItem: options.interpretingItem ?? null,
     showToast,
     refreshPersistedSessions,
     resetPreparedSessionState,
@@ -83,7 +79,6 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
     setVisitStreams,
     setStreamingVisitResponses,
     setVisit,
-    setInterpretingItem,
     setFilteredVisitId,
     setPendingDeletedSessionIds,
     setOpenVisitMenuId,
@@ -104,7 +99,6 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
       setVisitStreams,
       setStreamingVisitResponses,
       setVisit,
-      setInterpretingItem,
       setFilteredVisitId,
       setPendingDeletedSessionIds,
       setOpenVisitMenuId,

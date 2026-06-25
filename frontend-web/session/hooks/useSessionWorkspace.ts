@@ -34,7 +34,6 @@ type UseSessionWorkspaceOptions = {
   visitStreamEndRef: RefObject<HTMLDivElement | null>;
   setItems: Dispatch<SetStateAction<GalleryItem[]>>;
   setVisit: Dispatch<SetStateAction<Visit>>;
-  setInterpretingItem: Dispatch<SetStateAction<InterpretingItem | null>>;
   setDeleteConfirmation: Dispatch<SetStateAction<DeleteConfirmation>>;
   setActiveTab: Dispatch<SetStateAction<AppTab>>;
   clearShellOverlays: () => void;
@@ -59,7 +58,6 @@ export function useSessionWorkspace({
   visitStreamEndRef,
   setItems,
   setVisit,
-  setInterpretingItem,
   setDeleteConfirmation,
   setActiveTab,
   clearShellOverlays,
@@ -152,6 +150,7 @@ export function useSessionWorkspace({
   ]);
 
   useEffect(() => {
+    if (activeTab !== 'newSession') return;
     if (visitStreamScrollRef.current) visitStreamScrollRef.current.scrollTop = 0;
     if (!visits.activeVisitSummary?.id) return;
     const sessionId = visits.activeVisitSummary.id;
@@ -174,7 +173,7 @@ export function useSessionWorkspace({
         return { ...prev, [sessionId]: [...existing, ...newMsgs].sort((a, b) => a.createdAt - b.createdAt) };
       });
     }).catch(() => {});
-  }, [visitStreamScrollRef, visits.activeVisitSummary?.id, visits.setVisitStreams]);
+  }, [activeTab, visitStreamScrollRef, visits.activeVisitSummary?.id, visits.setVisitStreams]);
 
   useEffect(() => {
     if (!visits.editingVisitId || !renameInputRef.current) return;
@@ -188,7 +187,6 @@ export function useSessionWorkspace({
     visitSummaries: visits.visitSummaries,
     persistedSessions: visits.persistedSessions,
     editingVisitTitle: visits.editingVisitTitle,
-    interpretingItem,
     showToast,
     refreshPersistedSessions: visits.refreshPersistedSessions,
     resetPreparedSessionState: prepared.resetPreparedSessionState,
@@ -198,7 +196,6 @@ export function useSessionWorkspace({
     setVisitStreams: visits.setVisitStreams,
     setStreamingVisitResponses: visits.setStreamingVisitResponses,
     setVisit,
-    setInterpretingItem,
     setFilteredVisitId: visits.setFilteredVisitId,
     setPendingDeletedSessionIds,
     setOpenVisitMenuId: visits.setOpenVisitMenuId,

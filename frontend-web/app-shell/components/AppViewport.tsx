@@ -44,6 +44,7 @@ type ShellViewportProps = {
 };
 
 type ViewportStateProps = {
+  artworksLoaded: boolean;
   sessionCaptureState: CaptureState;
   artistPageContext: ArtistPageContext | null;
   movementPageContext: SmartCollection | null;
@@ -145,6 +146,7 @@ export default function AppViewport({
     profileRefreshKey,
   } = shell;
   const {
+    artworksLoaded,
     sessionCaptureState,
     artistPageContext,
     movementPageContext,
@@ -385,6 +387,7 @@ export default function AppViewport({
               headerLeftSlot={headerMenuButton}
               topLevelLeftSlot={collectionFloatingMenuButton}
               onFileUpload={handleFileUpload}
+              artworksLoaded={artworksLoaded}
               items={items}
               visit={visit}
               filteredVisitId={filteredVisitId}

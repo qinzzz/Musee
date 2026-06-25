@@ -140,7 +140,6 @@ function renderUseSessionWorkspace(options?: {
 
   const setItems = vi.fn();
   const setVisit = vi.fn();
-  const setInterpretingItem = vi.fn();
   const setDeleteConfirmation = vi.fn();
   const setActiveTab = vi.fn();
   const clearShellOverlays = vi.fn();
@@ -170,7 +169,6 @@ function renderUseSessionWorkspace(options?: {
     visitStreamEndRef: { current: visitStreamEnd },
     setItems,
     setVisit,
-    setInterpretingItem,
     setDeleteConfirmation,
     setActiveTab,
     clearShellOverlays,
@@ -188,7 +186,6 @@ function renderUseSessionWorkspace(options?: {
     spies: {
       setItems,
       setVisit,
-      setInterpretingItem,
       setDeleteConfirmation,
       setActiveTab,
       clearShellOverlays,
@@ -306,6 +303,16 @@ describe('useSessionWorkspace', () => {
       id: 'existing',
       text: 'existing',
       createdAt: 200,
+    });
+  });
+
+  it('does not fetch session messages outside the session workspace tab', async () => {
+    renderUseSessionWorkspace({
+      activeTab: 'collect',
+    });
+
+    await waitFor(() => {
+      expect(mockFetchSessionMessages).not.toHaveBeenCalled();
     });
   });
 });

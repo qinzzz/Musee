@@ -71,6 +71,13 @@ const SessionListSkeleton: React.FC<{ compact?: boolean }> = ({ compact = false 
   </div>
 );
 
+const SessionTitleSkeleton: React.FC<{ summaryId: string }> = ({ summaryId }) => (
+  <div
+    data-testid={`visit-title-skeleton-${summaryId}`}
+    className="h-4 w-28 animate-pulse rounded-full bg-neutral-200/80"
+  />
+);
+
 const sidebarNavItemSharedClassName =
   'h-11 rounded-2xl ring-1 ring-transparent transition-colors';
 const sidebarNavItemActiveClassName =
@@ -167,7 +174,11 @@ const AppSidebar: React.FC<Props> = ({
                 className="w-full rounded-md bg-white/90 px-2 py-1 text-[13px] leading-tight text-neutral-900 outline-none ring-1 ring-neutral-200 focus:ring-2 focus:ring-neutral-400"
               />
             ) : (
-              <p className="truncate text-[13px] leading-tight">{summary.title}</p>
+              summary.titlePending ? (
+                <SessionTitleSkeleton summaryId={summary.id} />
+              ) : (
+                <p className="truncate text-[13px] leading-tight">{summary.title}</p>
+              )
             )}
             <p
               className={`mt-1 truncate font-mono text-[10px] font-semibold leading-none tracking-wide ${

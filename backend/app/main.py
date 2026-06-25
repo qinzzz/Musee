@@ -11,6 +11,7 @@ import uvicorn
 
 from app.config.settings import settings
 from app.database.bootstrap import initialize_database
+from app.middleware.request_timing import add_request_timing_middleware
 from app.routers import admin_maintenance, artwork_identify, artwork_ingest, artwork_library, artwork_metadata, artwork_mutations, artwork_utilities, auth, collection, tag, taste_profile, users, visit_chat
 from app.routers import sessions as sessions_router
 
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
     )
 
     configure_cors(app)
+    add_request_timing_middleware(app)
     register_routers(app)
     mount_uploads_dir(app)
 

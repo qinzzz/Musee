@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchUserArtworks,
   resolveImageUrl,
@@ -12,7 +12,7 @@ import {
   type ArtworkBootstrapCacheItem,
 } from '../../lib/bootstrapCache';
 import { parseAnalysis } from '../lib/analysisText';
-import type { InterpretingItem } from '../types';
+import type { ArtworkDetailSelection, InterpretingItem } from '../types';
 
 type UseArtworkLibraryOptions = {
   userId: string;
@@ -201,6 +201,29 @@ function seedTagPositionsFromItems(
   });
 }
 
+function resolveInterpretingNavigationItems(
+  sourceItem: GalleryItem,
+  items: GalleryItem[],
+  navigationItemIds?: string[],
+): GalleryItem[] {
+  if (navigationItemIds && navigationItemIds.length > 0) {
+    const itemsById = new Map(items.map((item) => [item.id, item] as const));
+    const resolved = navigationItemIds
+      .map((itemId) => itemsById.get(itemId))
+      .filter((item): item is GalleryItem => Boolean(item));
+
+    if (resolved.length > 0) {
+      return resolved;
+    }
+  }
+
+  if (sourceItem.visitId) {
+    return items.filter((entry) => entry.visitId === sourceItem.visitId);
+  }
+
+  return [sourceItem];
+}
+
 export function useArtworkLibrary({
   userId,
   showToast,
@@ -214,7 +237,7 @@ export function useArtworkLibrary({
   });
   const [artworksLoaded, setArtworksLoaded] = useState(false);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
-  const [interpretingItem, setInterpretingItem] = useState<InterpretingItem | null>(null);
+  const [artworkDetailSelection, setArtworkDetailSelection] = useState<ArtworkDetailSelection | null>(null);
   const tagPositionsLoadedRef = useRef(onTagPositionsLoaded);
 
   useEffect(() => {
@@ -263,25 +286,41 @@ export function useArtworkLibrary({
     writeArtworkBootstrapCache(userId, cacheableItems);
   }, [items, userId]);
 
-  const buildInterpretingItem = (item: GalleryItem, allItems?: GalleryItem[]): InterpretingItem => {
-    const resolvedItems = allItems ?? (item.visitId ? items.filter((entry) => entry.visitId === item.visitId) : [item]);
+  const interpretingItem = useMemo<InterpretingItem | null>(() => {
+    if (!artworkDetailSelection) return null;
+
+    const sourceItem = items.find((item) => (
+      item.id === artworkDetailSelection.artworkId || item.artworkId === artworkDetailSelection.artworkId
+    ));
+
+    if (!sourceItem) return null;
+
     return {
-      ...item,
-      visitId: item.visitId,
-      allVisitItems: resolvedItems,
+      ...sourceItem,
+      allVisitItems: resolveInterpretingNavigationItems(
+        sourceItem,
+        items,
+        artworkDetailSelection.navigationItemIds,
+      ),
+      is_liked: artworkDetailSelection.is_liked,
     };
-  };
+  }, [artworkDetailSelection, items]);
+
+  const buildArtworkDetailSelection = (item: GalleryItem, allItems?: GalleryItem[]): ArtworkDetailSelection => ({
+    artworkId: item.id,
+    navigationItemIds: allItems?.map((entry) => entry.id),
+  });
 
   const restoreArtworkFromHistory = (artworkId: string, context: ArtworkDetailContext) => {
     const sourceItem = items.find((item) => item.id === artworkId || item.artworkId === artworkId);
     if (!sourceItem) {
-      setInterpretingItem(null);
+      setArtworkDetailSelection(null);
       onArtworkDetailContextChange?.(null);
       onMissingArtworkFromHistory?.();
       return;
     }
     onArtworkDetailContextChange?.(context);
-    setInterpretingItem(buildInterpretingItem(sourceItem));
+    setArtworkDetailSelection(buildArtworkDetailSelection(sourceItem));
   };
 
   const handleUpdateClassification = async (itemId: string, classification: ArtworkClassification) => {
@@ -289,7 +328,6 @@ export function useArtworkLibrary({
     if (previous === classification) return;
 
     setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, classification } : item));
-    setInterpretingItem((prev) => prev?.id === itemId ? { ...prev, classification } : prev);
     setProfileRefreshKey((prev) => prev + 1);
 
     try {
@@ -297,7 +335,6 @@ export function useArtworkLibrary({
     } catch (error) {
       console.error('Failed to update artwork classification:', error);
       setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, classification: previous } : item));
-      setInterpretingItem((prev) => prev?.id === itemId ? { ...prev, classification: previous } : prev);
       setProfileRefreshKey((prev) => prev + 1);
       showToast('Could not update artwork classification', 'info');
       throw error;
@@ -315,7 +352,6 @@ export function useArtworkLibrary({
     },
   ) => {
     setItems((prev) => prev.map((item) => item.id === id ? { ...item, ...updates } : item));
-    setInterpretingItem((prev) => prev?.id === id ? { ...prev, ...updates } : prev);
   };
 
   return {
@@ -324,8 +360,9 @@ export function useArtworkLibrary({
     artworksLoaded,
     profileRefreshKey,
     interpretingItem,
-    setInterpretingItem,
-    buildInterpretingItem,
+    artworkDetailSelection,
+    setArtworkDetailSelection,
+    buildArtworkDetailSelection,
     restoreArtworkFromHistory,
     handleUpdateClassification,
     updateItemMetadata,

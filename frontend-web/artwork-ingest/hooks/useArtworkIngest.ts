@@ -30,7 +30,7 @@ import type {
   PreparedSessionUploadEntry,
   PreparedUploadSessionContext,
 } from '../types';
-import type { InterpretingItem } from '../../artwork/types';
+import type { ArtworkDetailSelection } from '../../artwork/types';
 
 type ToastType = 'info' | 'success';
 
@@ -45,7 +45,8 @@ type UseArtworkIngestOptions = {
   setPendingSessionArtworks: Dispatch<SetStateAction<PendingSessionArtwork[]>>;
   setItems: Dispatch<SetStateAction<GalleryItem[]>>;
   setVisit: Dispatch<SetStateAction<Visit>>;
-  setInterpretingItem: Dispatch<SetStateAction<InterpretingItem | null>>;
+  artworkDetailSelection: ArtworkDetailSelection | null;
+  setArtworkDetailSelection: Dispatch<SetStateAction<ArtworkDetailSelection | null>>;
   setTagPositions: Dispatch<SetStateAction<Record<string, TagCoordinate>>>;
   setVisitDrafts: Dispatch<SetStateAction<VisitDraft[]>>;
   setIsAnalyzing: Dispatch<SetStateAction<boolean>>;
@@ -126,7 +127,8 @@ export function useArtworkIngest({
   setPendingSessionArtworks,
   setItems,
   setVisit,
-  setInterpretingItem,
+  artworkDetailSelection,
+  setArtworkDetailSelection,
   setTagPositions,
   setVisitDrafts,
   setIsAnalyzing,
@@ -149,11 +151,7 @@ export function useArtworkIngest({
       if (item.id !== targetId && item.artworkId !== targetId) return item;
       return { ...item, ...updates };
     }));
-    setInterpretingItem((prev) => {
-      if (!prev || (prev.id !== targetId && prev.artworkId !== targetId)) return prev;
-      return { ...prev, ...updates };
-    });
-  }, [setItems, setInterpretingItem]);
+  }, [setItems]);
 
   const markArtworkAnalysisFailed = useCallback((
     itemId: string,
@@ -220,8 +218,8 @@ export function useArtworkIngest({
       ...prev,
       itemIds: prev.itemIds.filter((id) => id !== placeholderId),
     }));
-    setInterpretingItem((prev) => (prev?.id === placeholderId ? null : prev));
-  }, [setItems, setVisit, setInterpretingItem]);
+    setArtworkDetailSelection((prev) => (prev?.artworkId === placeholderId ? null : prev));
+  }, [setArtworkDetailSelection, setItems, setVisit]);
 
   const persistRawArtwork = useCallback(async (options: {
     file: File;
@@ -276,9 +274,20 @@ export function useArtworkIngest({
       ...prev,
       itemIds: prev.itemIds.map((id) => (id === placeholder.id ? persistedItem.id : id)),
     }));
-    setInterpretingItem((prev) => (prev?.id === placeholder.id ? reconciled : prev));
+    if (artworkDetailSelection?.artworkId === placeholder.id) {
+      setArtworkDetailSelection((prev) => {
+        if (!prev || prev.artworkId !== placeholder.id) return prev;
+        return {
+          ...prev,
+          artworkId: persistedItem.id,
+          navigationItemIds: prev.navigationItemIds?.map((id) => (
+            id === placeholder.id ? persistedItem.id : id
+          )),
+        };
+      });
+    }
     return reconciled;
-  }, [setItems, setVisit, setInterpretingItem]);
+  }, [artworkDetailSelection?.artworkId, setArtworkDetailSelection, setItems, setVisit]);
 
   const ensureVisitDraft = useCallback((visitId: string) => {
     const now = Date.now();

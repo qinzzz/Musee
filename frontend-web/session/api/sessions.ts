@@ -35,6 +35,8 @@ export interface StartSessionWithArtworksPayload {
   artwork_ids: string[];
 }
 
+const inFlightSessionListRequests = new Map<string, Promise<SessionRecord[]>>();
+
 export async function fetchSessionMessages(sessionId: string): Promise<SessionMessagePayload[]> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/messages`, { timeout: 10000 });
   if (!response.ok) return [];
@@ -52,9 +54,25 @@ export async function setSessionGoal(sessionId: string, goal: string): Promise<v
 }
 
 export async function fetchSessions(userId: string): Promise<SessionRecord[]> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions?user_id=${encodeURIComponent(userId)}`, { timeout: 10000 });
-  if (!response.ok) return [];
-  return response.json();
+  const existing = inFlightSessionListRequests.get(userId);
+  if (existing) {
+    return existing;
+  }
+
+  const request = fetchWithTimeout(
+    `${API_BASE_URL}/sessions?user_id=${encodeURIComponent(userId)}`,
+    { timeout: 10000 },
+  )
+    .then(async (response) => {
+      if (!response.ok) return [];
+      return response.json();
+    })
+    .finally(() => {
+      inFlightSessionListRequests.delete(userId);
+    });
+
+  inFlightSessionListRequests.set(userId, request);
+  return request;
 }
 
 export async function appendSessionMessages(sessionId: string, messages: SessionMessagePayload[]): Promise<void> {
