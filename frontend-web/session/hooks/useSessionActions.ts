@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { deleteSession, type SessionRecord, updateSession } from '../api/sessions';
 import type { GalleryItem, Visit } from '../../types';
-import type { VisitDraft, VisitStreamMessage, VisitSummary } from '../types';
+import type { SessionDraft, SessionStreamMessage, SessionSummary } from '../types';
 import { itemBelongsToSession, updateSessionLinkForItem } from '../lib/sessionLinks';
 
 type DeleteConfirmation = { id: string; type: 'item' | 'session' } | null;
@@ -10,149 +10,134 @@ type ToastType = 'info' | 'success';
 type ShowToast = (message: string, type?: ToastType) => void;
 
 type UseSessionActionsOptions = {
-  defaultVisitTitle: string;
+  defaultSessionTitle: string;
   sessionUserId: string;
-  visitSummaries: VisitSummary[];
+  sessionSummaries: SessionSummary[];
   persistedSessions: SessionRecord[];
-  editingVisitTitle: string;
+  editingSessionTitle: string;
   showToast: ShowToast;
   refreshPersistedSessions: () => void;
   resetPreparedSessionState: () => void;
   isViewingSession: (sessionId: string) => boolean;
   setItems: Dispatch<SetStateAction<GalleryItem[]>>;
-  setVisitDrafts: Dispatch<SetStateAction<VisitDraft[]>>;
-  setVisitStreams: Dispatch<SetStateAction<Record<string, VisitStreamMessage[]>>>;
-  setStreamingVisitResponses: Dispatch<SetStateAction<Record<string, string>>>;
+  setSessionDrafts: Dispatch<SetStateAction<SessionDraft[]>>;
+  setSessionStreams: Dispatch<SetStateAction<Record<string, SessionStreamMessage[]>>>;
+  setStreamingSessionResponses: Dispatch<SetStateAction<Record<string, string>>>;
   setVisit: Dispatch<SetStateAction<Visit>>;
-  setFilteredVisitId: Dispatch<SetStateAction<string | null>>;
+  setFilteredSessionId: Dispatch<SetStateAction<string | null>>;
   setPendingDeletedSessionIds: Dispatch<SetStateAction<Set<string>>>;
-  setOpenVisitMenuId: Dispatch<SetStateAction<string | null>>;
+  setOpenSessionMenuId: Dispatch<SetStateAction<string | null>>;
   setDeleteConfirmation: Dispatch<SetStateAction<DeleteConfirmation>>;
-  setEditingVisitId: Dispatch<SetStateAction<string | null>>;
-  setEditingVisitTitle: Dispatch<SetStateAction<string>>;
+  setEditingSessionId: Dispatch<SetStateAction<string | null>>;
+  setEditingSessionTitle: Dispatch<SetStateAction<string>>;
   resetCurrentSessionView: () => void;
 };
 
 export function useSessionActions({
-  defaultVisitTitle,
+  defaultSessionTitle,
   sessionUserId,
-  visitSummaries,
+  sessionSummaries,
   persistedSessions,
-  editingVisitTitle,
+  editingSessionTitle,
   showToast,
   refreshPersistedSessions,
   resetPreparedSessionState,
   isViewingSession,
   setItems,
-  setVisitDrafts,
-  setVisitStreams,
-  setStreamingVisitResponses,
+  setSessionDrafts,
+  setSessionStreams,
+  setStreamingSessionResponses,
   setVisit,
-  setFilteredVisitId,
+  setFilteredSessionId,
   setPendingDeletedSessionIds,
-  setOpenVisitMenuId,
+  setOpenSessionMenuId,
   setDeleteConfirmation,
-  setEditingVisitId,
-  setEditingVisitTitle,
+  setEditingSessionId,
+  setEditingSessionTitle,
   resetCurrentSessionView,
 }: UseSessionActionsOptions) {
   const handleDeleteSession = useCallback((sessionId: string) => {
-    setOpenVisitMenuId(null);
+    setOpenSessionMenuId(null);
     setDeleteConfirmation({ id: sessionId, type: 'session' });
-  }, [setDeleteConfirmation, setOpenVisitMenuId]);
+  }, [setDeleteConfirmation, setOpenSessionMenuId]);
 
-  const handleStartRenameVisit = useCallback((visitId: string, currentTitle: string) => {
-    setOpenVisitMenuId(null);
-    setEditingVisitId(visitId);
-    setEditingVisitTitle(currentTitle);
-  }, [setEditingVisitId, setEditingVisitTitle, setOpenVisitMenuId]);
+  const handleStartRenameSession = useCallback((sessionId: string, currentTitle: string) => {
+    setOpenSessionMenuId(null);
+    setEditingSessionId(sessionId);
+    setEditingSessionTitle(currentTitle);
+  }, [setEditingSessionId, setEditingSessionTitle, setOpenSessionMenuId]);
 
-  const saveVisitTitle = useCallback(async (visitId: string, nextTitle: string) => {
-    const trimmedTitle = nextTitle.trim() || defaultVisitTitle;
-    const currentSummary = visitSummaries.find((summary) => summary.id === visitId);
-    const isPersistedSession = persistedSessions.some((session) => session.id === visitId);
+  const saveSessionTitle = useCallback(async (sessionId: string, nextTitle: string) => {
+    const trimmedTitle = nextTitle.trim() || defaultSessionTitle;
+    const currentSummary = sessionSummaries.find((summary) => summary.id === sessionId);
+    const isPersistedSession = persistedSessions.some((session) => session.id === sessionId);
 
     if (!currentSummary || trimmedTitle === currentSummary.title) {
       return;
     }
 
     if (isPersistedSession) {
-      await updateSession(visitId, sessionUserId, trimmedTitle);
+      await updateSession(sessionId, sessionUserId, trimmedTitle);
       refreshPersistedSessions();
     }
 
-    if (currentSummary.items.length > 0) {
-      setItems((prev) => prev.map((item) => (
-        itemBelongsToSession(item, visitId)
-          ? updateSessionLinkForItem(item, visitId, (existing) => ({
-              sessionId: visitId,
-              sessionTitle: trimmedTitle,
-              sequenceNumber: existing?.sequenceNumber,
-              source: existing?.source,
-              createdAt: existing?.createdAt,
-            }))
-          : item
-      )));
-    }
-
-    setVisitDrafts((prev) => {
+    setSessionDrafts((prev) => {
       const now = Date.now();
-      const existingDraft = prev.find((draft) => draft.id === visitId);
+      const existingDraft = prev.find((draft) => draft.id === sessionId);
       if (existingDraft) {
         return prev.map((draft) =>
-          draft.id === visitId ? { ...draft, title: trimmedTitle, updatedAt: now } : draft,
+          draft.id === sessionId ? { ...draft, title: trimmedTitle, updatedAt: now } : draft,
         );
       }
-      return [{ id: visitId, title: trimmedTitle, createdAt: now, updatedAt: now }, ...prev];
+      return [{ id: sessionId, title: trimmedTitle, createdAt: now, updatedAt: now }, ...prev];
     });
   }, [
-    defaultVisitTitle,
+    defaultSessionTitle,
     persistedSessions,
     refreshPersistedSessions,
     sessionUserId,
-    setItems,
-    setVisitDrafts,
-    visitSummaries,
+    setSessionDrafts,
+    sessionSummaries,
   ]);
 
-  const commitVisitRename = useCallback(async (visitId: string) => {
-    if (!visitSummaries.find((summary) => summary.id === visitId)) {
-      setEditingVisitId(null);
-      setEditingVisitTitle('');
+  const commitSessionRename = useCallback(async (sessionId: string) => {
+    if (!sessionSummaries.find((summary) => summary.id === sessionId)) {
+      setEditingSessionId(null);
+      setEditingSessionTitle('');
       return;
     }
 
     try {
-      await saveVisitTitle(visitId, editingVisitTitle);
+      await saveSessionTitle(sessionId, editingSessionTitle);
     } catch (error) {
-      console.error('Failed to rename visit:', error);
+      console.error('Failed to rename session:', error);
       showToast('Could not rename session', 'info');
     } finally {
-      setEditingVisitId(null);
-      setEditingVisitTitle('');
+      setEditingSessionId(null);
+      setEditingSessionTitle('');
     }
   }, [
-    editingVisitTitle,
-    saveVisitTitle,
-    setEditingVisitId,
-    setEditingVisitTitle,
+    editingSessionTitle,
+    saveSessionTitle,
+    setEditingSessionId,
+    setEditingSessionTitle,
     showToast,
-    visitSummaries,
+    sessionSummaries,
   ]);
 
-  const removeVisitLocally = useCallback((sessionId: string) => {
+  const removeSessionLocally = useCallback((sessionId: string) => {
     setItems((prev) => prev.map((item) => (
       itemBelongsToSession(item, sessionId)
         ? updateSessionLinkForItem(item, sessionId, () => null)
         : item
     )));
-    setVisitDrafts((prev) => prev.filter((draft) => draft.id !== sessionId));
-    setVisitStreams((prev) => {
+    setSessionDrafts((prev) => prev.filter((draft) => draft.id !== sessionId));
+    setSessionStreams((prev) => {
       const next = { ...prev };
       delete next[sessionId];
       return next;
     });
-    setStreamingVisitResponses((prev) => {
+    setStreamingSessionResponses((prev) => {
       const next = { ...prev };
       delete next[sessionId];
       return next;
@@ -160,27 +145,27 @@ export function useSessionActions({
     setVisit((prev) => (
       prev.id === sessionId ? { ...prev, id: '', itemIds: [], globalConversation: [] } : prev
     ));
-    setFilteredVisitId((prev) => (prev === sessionId ? null : prev));
+    setFilteredSessionId((prev) => (prev === sessionId ? null : prev));
     setPendingDeletedSessionIds((prev) => {
       const next = new Set(prev);
       next.delete(sessionId);
       return next;
     });
   }, [
-    setFilteredVisitId,
+    setFilteredSessionId,
     setItems,
     setPendingDeletedSessionIds,
-    setStreamingVisitResponses,
+    setStreamingSessionResponses,
     setVisit,
-    setVisitDrafts,
-    setVisitStreams,
+    setSessionDrafts,
+    setSessionStreams,
   ]);
 
   const confirmDeleteSession = useCallback(async (sessionId: string) => {
     const isCurrentlyViewedSession = isViewingSession(sessionId);
 
     setDeleteConfirmation(null);
-    setOpenVisitMenuId(null);
+    setOpenSessionMenuId(null);
     setPendingDeletedSessionIds((prev) => {
       const next = new Set(prev);
       next.add(sessionId);
@@ -201,7 +186,7 @@ export function useSessionActions({
           throw error;
         }
       }
-      removeVisitLocally(sessionId);
+      removeSessionLocally(sessionId);
       refreshPersistedSessions();
       showToast('Session deleted. Artworks stayed in your library.', 'success');
       console.log(`Successfully deleted session: ${sessionId}`);
@@ -217,21 +202,21 @@ export function useSessionActions({
   }, [
     isViewingSession,
     refreshPersistedSessions,
-    removeVisitLocally,
+    removeSessionLocally,
     resetCurrentSessionView,
     resetPreparedSessionState,
     sessionUserId,
     setDeleteConfirmation,
-    setOpenVisitMenuId,
+    setOpenSessionMenuId,
     setPendingDeletedSessionIds,
     showToast,
   ]);
 
   return {
     handleDeleteSession,
-    handleStartRenameVisit,
-    saveVisitTitle,
-    commitVisitRename,
+    handleStartRenameSession,
+    saveSessionTitle,
+    commitSessionRename,
     confirmDeleteSession,
   };
 }

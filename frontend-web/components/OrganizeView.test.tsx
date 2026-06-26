@@ -58,7 +58,7 @@ function renderOrganizeView(props: Partial<React.ComponentProps<typeof OrganizeV
       artworksLoaded={true}
       items={[]}
       visit={visit}
-      filteredVisitId={null}
+      filteredSessionId={null}
       isAnalyzing={false}
       likedIds={new Set()}
       boards={[]}

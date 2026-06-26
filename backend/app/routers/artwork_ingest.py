@@ -247,7 +247,6 @@ async def analyze_artwork_unified(
             "artwork_id": str(existing_artwork.id),
             "reference_urls": vision_ref_urls,
             "artist_entity_id": linked_artist_entity_id,
-            "session_title": existing_artwork.to_dict().get("session_title"),
             "model_used": ai_provider.value,
             "analysis_status": existing_artwork.analysis_status,
             "analysis_error": existing_artwork.analysis_error,

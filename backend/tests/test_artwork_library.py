@@ -1,4 +1,8 @@
-from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionMessage, User
+from fastapi.testclient import TestClient
+
+from app.main import app
+from app.routers import artwork_library as artwork_library_router
+from app.database.models import ArtistEntity, SavedArtwork, Session as SessionModel, SessionArtwork, SessionMessage, User
 
 
 def test_get_artworks_returns_user_items(client, db):
@@ -15,7 +19,7 @@ def test_get_artworks_returns_user_items(client, db):
     assert {item["id"] for item in payload["items"]} == {"art-1", "art-2"}
 
 
-def test_delete_artwork_removes_empty_session(client, db):
+def test_delete_artwork_keeps_session_after_last_artwork_is_removed(client, db):
     db.add(User(user_id="delete-user", device_id="delete-user"))
     db.add(SessionModel(id="sess-delete", user_id="delete-user", title="Visit"))
     db.add(SavedArtwork(id="art-delete", user_id="delete-user", photo_uri="r2://delete", artist_name="A", artwork_name="W"))
@@ -27,7 +31,9 @@ def test_delete_artwork_removes_empty_session(client, db):
 
     assert response.status_code == 200
     assert db.query(SavedArtwork).filter(SavedArtwork.id == "art-delete").first() is None
-    assert db.query(SessionModel).filter(SessionModel.id == "sess-delete").first() is None
+    session = db.query(SessionModel).filter(SessionModel.id == "sess-delete").first()
+    assert session is not None
+    assert session.title == "Untitled Session"
 
 
 def test_delete_artwork_keeps_session_with_text_messages(client, db):
@@ -105,3 +111,64 @@ def test_batch_delete_artworks_keeps_session_with_text_messages(client, db):
     assert response.status_code == 200
     assert db.query(SavedArtwork).filter(SavedArtwork.id == "art-batch-keep").first() is None
     assert db.query(SessionModel).filter(SessionModel.id == "sess-batch-keep").first() is not None
+
+
+def test_backfill_artwork_artist_marks_unknown_artist_as_analyzed(client, db):
+    db.add(User(user_id="unknown-artist-user", device_id="unknown-artist-user"))
+    db.add(
+        SavedArtwork(
+            id="art-unknown-artist",
+            user_id="unknown-artist-user",
+            photo_uri="r2://unknown-artist",
+            artist_name="Unknown Artist",
+            artwork_name="Untitled",
+            analysis_status="failed",
+            analysis_error="previous error",
+        )
+    )
+    db.commit()
+
+    response = client.post("/api/artworks/art-unknown-artist/artist")
+
+    assert response.status_code == 200
+    assert response.json() == {"artist_entity_id": None}
+
+    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == "art-unknown-artist").first()
+    assert artwork is not None
+    assert artwork.analysis_status == "analyzed"
+    assert artwork.analysis_error is None
+    assert artwork.analysis_completed_at is not None
+
+
+def test_backfill_artwork_artist_marks_failure_when_bio_enrichment_raises(monkeypatch, db):
+    db.add(User(user_id="bio-fail-user", device_id="bio-fail-user"))
+    db.add(
+        SavedArtwork(
+            id="art-bio-fail",
+            user_id="bio-fail-user",
+            photo_uri="r2://bio-fail",
+            artist_name="Frank Stella",
+            artwork_name="Untitled",
+            analysis_status="analyzed",
+        )
+    )
+    db.commit()
+
+    async def failing_do_artist_bio(_artist_entity_id: str):
+        raise RuntimeError("bio generation failed")
+
+    monkeypatch.setattr(artwork_library_router, "do_artist_bio", failing_do_artist_bio)
+
+    with TestClient(app, raise_server_exceptions=False) as failing_client:
+        response = failing_client.post("/api/artworks/art-bio-fail/artist")
+
+    assert response.status_code == 500
+
+    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == "art-bio-fail").first()
+    assert artwork is not None
+    assert artwork.analysis_status == "failed"
+    assert artwork.analysis_error == "bio generation failed"
+    assert artwork.analysis_completed_at is not None
+
+    entity = db.query(ArtistEntity).filter(ArtistEntity.canonical_name == "frank stella").first()
+    assert entity is not None

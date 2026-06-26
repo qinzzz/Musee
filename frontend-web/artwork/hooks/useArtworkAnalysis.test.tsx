@@ -43,7 +43,6 @@ function createAnalysis(overrides: Partial<Record<string, unknown>> = {}) {
     photo_uri: 'https://example.com/art.jpg',
     location: undefined,
     photo_time: 'Jun 1, 2026',
-    session_title: undefined,
     reference_urls: [],
     artist_entity_id: 'artist-1',
     ...overrides,
@@ -67,8 +66,7 @@ function createItem(overrides: Partial<GalleryItem> = {}): InterpretingItem {
     conversation: [],
     artistName: 'Unknown Artist',
     artworkName: 'Untitled',
-    sessionTitle: 'Current Session',
-    sessionLinks: [{ sessionId: 'visit-1', sessionTitle: 'Current Session' }],
+    sessionLinks: [{ sessionId: 'visit-1' }],
     ...overrides,
   };
 }
@@ -132,7 +130,6 @@ describe('useArtworkAnalysis', () => {
       artist_name: 'Claude Monet',
       artwork_id: 'artwork-1',
     }), {
-      sessionTitle: 'Current Session',
       sessionLinks: item.sessionLinks,
     });
     await waitFor(() => {

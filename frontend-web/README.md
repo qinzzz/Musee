@@ -14,10 +14,10 @@ The Musee web client is designed for visual immersion and high-speed interaction
 
 ### API Services
 
-- **`apiService.ts`**: The central communication hub.
-    - **Standard Analysis**: Used for fast, parallel batch uploads.
-    - **Streaming Analysis**: Uses Server-Sent Events (SSE) for real-time consultation with the AI Curator.
-    - **Persistence**: Automatically manages browser-specific `localStorage` User IDs.
+- **`api/` + `session/api/`**: Modular API layers grouped by domain.
+    - **Artwork / collection APIs** live under `api/`.
+    - **Session-specific APIs** live under `session/api/`.
+    - **Streaming analysis / chat** is handled through focused per-domain modules instead of a single shared file.
 
 ## Key Features
 
@@ -87,7 +87,8 @@ frontend-web/
 │   ├── GalleryCard.tsx
 │   └── TopographyView.tsx
 ├── types.ts             # Global TS interfaces
-├── apiService.ts        # Legacy backend communication layer
+├── api/                # Shared backend API modules
+├── session/api/        # Session-specific API modules
 ├── App.tsx              # App shell and top-level orchestration
 └── index.css            # Global design tokens
 ```

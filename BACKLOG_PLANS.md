@@ -1,5 +1,146 @@
 # Backlog Plans
 
+## 0. Frontend Artwork State Model Cleanup
+
+Status: deferred
+
+### Problem
+
+`GalleryItem` has become an overloaded frontend artwork object. It currently mixes:
+
+- persisted artwork data from the backend
+- session membership/display context
+- ingest / sync / analysis process state
+- modal/navigation convenience fields
+- legacy naming carried forward from earlier product shapes
+
+That makes the object harder to reason about, easier to misuse, and more expensive to evolve cleanly.
+
+### Why this matters
+
+This is now a structural readability and correctness issue, not just naming polish. As more artwork flows were extracted, the oversized shared object became a hidden dependency surface across session, collection, capture, and artwork detail features.
+
+### Recommended direction
+
+- keep `sessionLinks` as the canonical membership source
+- stop reintroducing legacy session fields onto runtime artwork state
+- split the current shape into clearer layers over time:
+  - persisted artwork record shape
+  - client-side artwork process state
+  - optional view-model / detail-selection state
+- consider renaming `GalleryItem` later to an artwork-centric name once the split is far enough along
+
+### Scope for a later pass
+
+1. audit which fields are truly backend-backed vs client-only
+2. separate transient UI/process flags from persisted artwork data
+3. reduce cross-feature coupling on the shared object
+4. rename legacy artwork/session terminology where the new boundaries are stable
+
+## 0.1 Session Event Layer
+
+Status: deferred
+
+### Problem
+
+The current session model mixes three different concerns:
+
+- session membership (`session_artworks`)
+- session chronology (`session_messages`)
+- frontend stream reconstruction heuristics
+
+This is good enough for the current MVP, but it is not a clean long-term model for repeated artwork appearances, multi-artwork actions, or event-first session playback.
+
+### Current limitation
+
+Right now:
+
+- `session_artworks` correctly answers which artworks belong to a session
+- `session_messages` partially acts like an event log
+- the frontend still reconstructs the stream partly from unique session artworks instead of from explicit events
+
+Because of that, the same artwork appearing multiple times in one session is not modeled cleanly in the rendered stream.
+
+### Design goal
+
+Introduce a proper session event layer so the product can chronologically reconstruct what happened in a session without overloading artwork membership or frontend heuristics.
+
+### Recommended model
+
+Keep:
+
+- `sessions` as the session container
+- `session_artworks` as canonical unique membership
+
+Add later:
+
+- `session_events`
+  - event-level chronology
+  - event type
+  - role
+  - optional text payload
+  - metadata payload
+  - created / ordered position
+
+- `session_event_artworks`
+  - join table between events and artworks
+  - supports one event referencing multiple artworks
+  - supports one artwork appearing in multiple events
+
+### Important design principle
+
+Events should not be anchored to the `session_artworks` row itself.
+
+Instead:
+
+- `session_artworks` answers “is this artwork part of the session?”
+- `session_events` answers “what happened in the session, and when?”
+
+That separation is necessary if:
+
+- the same artwork appears multiple times in one session
+- one action references multiple artworks
+- the session stream needs to be replayed faithfully
+
+### Suggested event types for the first pass
+
+Start small:
+
+- `message`
+- `artwork_input`
+- `artwork_result`
+
+Exact source such as `library`, `upload`, or `camera` can stay in event metadata rather than exploding the event type list too early.
+
+### Example target behavior
+
+If a user:
+
+1. uploads artwork A
+2. later uploads artwork A again
+
+Then:
+
+- `session_artworks` still contains one unique membership row for A
+- `session_events` contains two distinct chronology events
+- the session stream can render both appearances in order
+
+### Migration shape
+
+1. introduce backend event tables
+2. write new session actions to the event layer
+3. migrate frontend session stream to be event-first
+4. keep `session_artworks` as membership truth
+5. gradually retire the current mixed message / artwork reconstruction path
+
+### Why this matters
+
+This is not only a product feature enabler. It is also a structural cleanup that reduces ambiguity between:
+
+- membership
+- chronology
+- rendered session UI
+
 ## 1. Automated Testing Plan
 
 Status: foundational pass completed; expand incrementally

@@ -114,7 +114,7 @@ interface Props {
   artworksLoaded: boolean;
   items: GalleryItem[];
   visit: Visit;
-  filteredVisitId: string | null;
+  filteredSessionId: string | null;
   isAnalyzing: boolean;
   likedIds?: Set<string>;
   boards?: Board[];
@@ -137,7 +137,7 @@ const OrganizeView: React.FC<Props> = ({
   topBarLeftSlot,
   onFileUpload,
   artworksLoaded,
-  items, visit, filteredVisitId, isAnalyzing,
+  items, visit, filteredSessionId, isAnalyzing,
   likedIds, boards, boardsLoading, userId,
   collectTab, onCollectTabChange,
   onCreateBoard,
@@ -595,7 +595,7 @@ const OrganizeView: React.FC<Props> = ({
                 <GridView
                   items={searchedSavedItems}
                   visit={visit}
-                  filteredVisitId={filteredVisitId}
+                  filteredSessionId={filteredSessionId}
                   isAnalyzing={isAnalyzing}
                   boards={resolvedBoards}
                   selectedIds={selectedArtworkIds}

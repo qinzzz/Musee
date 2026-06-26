@@ -10,9 +10,9 @@ from fastapi.responses import StreamingResponse
 from app.models.artwork import AIProvider
 from app.services.ai_service import AIServiceFactory
 from app.services.artwork_analysis_service import determine_ai_provider
-from app.services.visit_chat_service import (
-    VisitChatRequest,
-    build_visit_items_payload,
+from app.services.session_chat_service import (
+    SessionChatRequest,
+    build_session_chat_items_payload,
     load_bootstrap_image_bytes,
 )
 
@@ -20,9 +20,10 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.post("/session/chat")
 @router.post("/visit/chat")
-async def visit_chat(
-    request: VisitChatRequest = Body(...),
+async def session_chat(
+    request: SessionChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
 ):
     ai_provider = determine_ai_provider(model)
@@ -33,8 +34,8 @@ async def visit_chat(
     )
 
     try:
-        response_text = await ai_service.visit_chat(
-            items=build_visit_items_payload(request.items),
+        response_text = await ai_service.session_chat(
+            items=build_session_chat_items_payload(request.items),
             history=request.conversation_history,
             new_message=request.new_message,
             image_bytes_list=image_bytes_list,
@@ -45,9 +46,10 @@ async def visit_chat(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.post("/session/chat-stream")
 @router.post("/visit/chat-stream")
-async def visit_chat_stream(
-    request: VisitChatRequest = Body(...),
+async def stream_session_chat(
+    request: SessionChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
 ):
     ai_provider = determine_ai_provider(model)
@@ -60,8 +62,8 @@ async def visit_chat_stream(
     async def event_generator():
         full_text = ""
         try:
-            async for chunk in ai_service.visit_chat_stream(
-                items=build_visit_items_payload(request.items),
+            async for chunk in ai_service.stream_session_chat(
+                items=build_session_chat_items_payload(request.items),
                 history=request.conversation_history,
                 new_message=request.new_message,
                 image_bytes_list=image_bytes_list,
@@ -82,3 +84,8 @@ async def visit_chat_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# Backward-compat aliases for older imports/tests.
+visit_chat = session_chat
+visit_chat_stream = stream_session_chat

@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import AppViewport from './AppViewport';
-import type { VisitSummary } from '../../session/types';
+import type { SessionSummary } from '../../session/types';
 
 vi.mock('../../capture/components/SessionCapturePage', () => ({
   default: () => <div>capture</div>,
@@ -44,7 +44,7 @@ vi.mock('../../session/components/ExploreSessionView', () => ({
   ),
 }));
 
-function createVisitSummary(overrides: Partial<VisitSummary> = {}): VisitSummary {
+function createSessionSummary(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
     id: 'visit-1',
     title: 'Untitled Session',
@@ -83,8 +83,8 @@ function renderAppViewport(options: {
         artistPageContext: null,
         movementPageContext: null,
         isComposingNewSession: false,
-        activeVisitSummary: createVisitSummary(),
-        activeVisitStream: [],
+        activeSessionSummary: createSessionSummary(),
+        activeSessionStream: [],
         interpretingItem: null,
         artworkHeaderActions: null,
         artworkHeaderEditToken: 0,
@@ -93,16 +93,16 @@ function renderAppViewport(options: {
         sessionGoalInput: 'Draft goal',
         sessionGoals: {},
         sessionGoalDismissed: new Set<string>(),
-        streamingVisitResponses: {},
+        streamingSessionResponses: {},
         goalGalleryInputRef: { current: null },
         pendingSessionArtworks: [],
         newSessionDraftMessage: '',
         isSubmittingPreparedSession: false,
-        visitStreamScrollRef: { current: null },
-        visitStreamEndRef: { current: null },
+        sessionStreamScrollRef: { current: null },
+        sessionStreamEndRef: { current: null },
         items: [],
         visit: { id: '', itemIds: [], globalConversation: [] },
-        filteredVisitId: 'visit-1',
+        filteredSessionId: 'visit-1',
         isAnalyzing: false,
         likedIds: new Set<string>(),
         boards: [],
@@ -118,7 +118,7 @@ function renderAppViewport(options: {
         closeMovementPage: vi.fn(),
         closeArtworkDetail: vi.fn(),
         openArtistDetail: vi.fn(),
-        handleSelectVisitSummary: vi.fn(),
+        handleSelectSessionSummary: vi.fn(),
         openSessionCapturePage: vi.fn(),
         setCollectTab: vi.fn(),
         openMovementPage: vi.fn(),
@@ -134,9 +134,9 @@ function renderAppViewport(options: {
         setSessionGoals,
         isPersistedSessionId: options.isPersistedSessionId ?? (() => false),
         refreshPersistedSessions,
-        saveVisitTitle: vi.fn(),
+        saveSessionTitle: vi.fn(),
         showToast: vi.fn(),
-        createVisitDraft: vi.fn(() => 'visit-1'),
+        createSessionDraft: vi.fn(() => 'visit-1'),
         setSessionGoalInput,
         onSaveSessionGoal,
         setSessionGoalDismissed,
@@ -152,7 +152,7 @@ function renderAppViewport(options: {
         handleDeleteItem: vi.fn(),
         setIsUnsortedFlowOpen: vi.fn(),
         handleToggleLike: vi.fn(),
-        handleVisitInquiry: vi.fn().mockResolvedValue(true),
+        handleSessionInquiry: vi.fn().mockResolvedValue(true),
       }}
     />,
   );

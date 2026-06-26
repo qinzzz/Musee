@@ -35,7 +35,8 @@ npm run dev                   # Vite dev server (port 3000)
 
 **Frontend-web**:
 - `App.tsx` — Main entry: corridor/topography views, gallery state, OAuth, settings panel
-- `apiService.ts` — All API calls, SSE streaming, auth helpers, language param injection
+- `api/*.ts` — Shared frontend API modules for analysis, artworks, collections, chat, and auth-adjacent helpers
+- `session/api/sessions.ts` — Session-specific frontend API calls
 - `components/InterpretationModal.tsx` — Full artwork interpretation + chat
 - `components/ExhibitionHall.tsx` — Curator conversation (multi-artwork context)
 - `components/GalleryCard.tsx` — Individual artwork card

@@ -63,10 +63,10 @@ export function useBoards({ userId, showToast }: UseBoardsOptions) {
     if (!targetBoard) return;
 
     const nextItemIds = Array.from(new Set([...targetBoard.itemIds, ...itemIds]));
-    const updatedBoard = await updateCollection(boardId, { artworkIds: nextItemIds });
+    const updatedBoard = await updateCollection(userId, boardId, { artworkIds: nextItemIds });
     setBoards((prev) => prev.map((board) => (board.id === boardId ? updatedBoard : board)));
     showToast(`Added ${itemIds.length} ${itemIds.length === 1 ? 'artwork' : 'artworks'} to ${updatedBoard.name}`, 'success');
-  }, [boards, showToast]);
+  }, [boards, showToast, userId]);
 
   const createBoard = useCallback(async (name: string, itemIds: string[] = []) => {
     const created = await createCollection(userId, name, itemIds);
@@ -76,17 +76,17 @@ export function useBoards({ userId, showToast }: UseBoardsOptions) {
   }, [showToast, userId]);
 
   const renameBoard = useCallback(async (boardId: string, name: string) => {
-    const updated = await updateCollection(boardId, { name });
+    const updated = await updateCollection(userId, boardId, { name });
     setBoards((prev) => prev.map((board) => (board.id === boardId ? updated : board)));
     return updated;
-  }, []);
+  }, [userId]);
 
   const deleteBoard = useCallback(async (boardId: string) => {
     const targetBoard = boards.find((board) => board.id === boardId);
-    await deleteCollection(boardId);
+    await deleteCollection(userId, boardId);
     setBoards((prev) => prev.filter((board) => board.id !== boardId));
     showToast(`Deleted board "${targetBoard?.name || 'Untitled'}"`, 'success');
-  }, [boards, showToast]);
+  }, [boards, showToast, userId]);
 
   return {
     boards,

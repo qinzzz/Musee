@@ -2,18 +2,18 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionMessaging } from './useSessionMessaging';
 import type { GalleryItem, Visit } from '../../types';
-import type { VisitDraft, VisitStreamMessage, VisitSummary } from '../types';
+import type { SessionStreamMessage, SessionSummary } from '../types';
 
 const {
   mockAppendSessionMessages,
   mockCreateSession,
   mockStartSessionWithMessage,
-  mockVisitChatStream,
+  mockStreamSessionChat,
 } = vi.hoisted(() => ({
   mockAppendSessionMessages: vi.fn(),
   mockCreateSession: vi.fn(),
   mockStartSessionWithMessage: vi.fn(),
-  mockVisitChatStream: vi.fn(),
+  mockStreamSessionChat: vi.fn(),
 }));
 
 vi.mock('../api/sessions', () => ({
@@ -23,10 +23,10 @@ vi.mock('../api/sessions', () => ({
 }));
 
 vi.mock('../../api/chat', () => ({
-  visitChatStream: mockVisitChatStream,
+  streamSessionChat: mockStreamSessionChat,
 }));
 
-function createVisitSummary(overrides: Partial<VisitSummary> = {}): VisitSummary {
+function createSessionSummary(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
     id: 'visit-1',
     title: 'Untitled Session',
@@ -40,38 +40,38 @@ function createVisitSummary(overrides: Partial<VisitSummary> = {}): VisitSummary
 }
 
 function renderUseSessionMessaging(options: {
-  activeVisitSummary?: VisitSummary | null;
-  filteredVisitId?: string | null;
+  activeSessionSummary?: SessionSummary | null;
+  filteredSessionId?: string | null;
   isComposingNewSession?: boolean;
-  visitSummaries?: VisitSummary[];
-  visitStreams?: Record<string, VisitStreamMessage[]>;
+  sessionSummaries?: SessionSummary[];
+  sessionStreams?: Record<string, SessionStreamMessage[]>;
 } = {}) {
   const refreshPersistedSessions = vi.fn();
-  const setVisitDrafts = vi.fn();
-  const setFilteredVisitId = vi.fn();
+  const setSessionDrafts = vi.fn();
+  const setFilteredSessionId = vi.fn();
   const setIsComposingNewSession = vi.fn();
   const setVisit = vi.fn();
-  const setVisitStreams = vi.fn();
-  const setStreamingVisitResponses = vi.fn();
+  const setSessionStreams = vi.fn();
+  const setStreamingSessionResponses = vi.fn();
   const showToast = vi.fn();
 
   const hook = renderHook(() => useSessionMessaging({
-    defaultVisitTitle: 'Untitled Session',
+    defaultSessionTitle: 'Untitled Session',
     sessionUserId: 'user-1',
-    filteredVisitId: options.filteredVisitId ?? null,
+    filteredSessionId: options.filteredSessionId ?? null,
     isComposingNewSession: options.isComposingNewSession ?? true,
     items: [] as GalleryItem[],
-    visitStreams: options.visitStreams ?? {},
+    sessionStreams: options.sessionStreams ?? {},
     sessionGoals: {},
-    visitSummaries: options.visitSummaries ?? [],
-    activeVisitSummary: options.activeVisitSummary ?? null,
+    sessionSummaries: options.sessionSummaries ?? [],
+    activeSessionSummary: options.activeSessionSummary ?? null,
     refreshPersistedSessions,
-    setVisitDrafts,
-    setFilteredVisitId,
+    setSessionDrafts,
+    setFilteredSessionId,
     setIsComposingNewSession,
     setVisit,
-    setVisitStreams,
-    setStreamingVisitResponses,
+    setSessionStreams,
+    setStreamingSessionResponses,
     showToast,
   }));
 
@@ -79,12 +79,12 @@ function renderUseSessionMessaging(options: {
     ...hook,
     spies: {
       refreshPersistedSessions,
-      setVisitDrafts,
-      setFilteredVisitId,
+      setSessionDrafts,
+      setFilteredSessionId,
       setIsComposingNewSession,
       setVisit,
-      setVisitStreams,
-      setStreamingVisitResponses,
+      setSessionStreams,
+      setStreamingSessionResponses,
       showToast,
     },
   };
@@ -96,11 +96,11 @@ describe('useSessionMessaging', () => {
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockAppendSessionMessages.mockResolvedValue(undefined);
-    mockCreateSession.mockResolvedValue({ session: { id: 'visit-1' } });
-    mockStartSessionWithMessage.mockResolvedValue({ inserted: 1, session: { id: 'visit-1', title: 'Untitled Session' } });
-    mockVisitChatStream.mockImplementation((
+    mockCreateSession.mockResolvedValue({ session: { id: 'session-1' } });
+    mockStartSessionWithMessage.mockResolvedValue({ inserted: 1, session: { id: 'session-1', title: 'Untitled Session' } });
+    mockStreamSessionChat.mockImplementation((
       _items: GalleryItem[],
-      _history: VisitStreamMessage[],
+      _history: SessionStreamMessage[],
       _text: string,
       _onChunk: (chunk: string) => void,
       onComplete: (fullResponse: string) => void,
@@ -119,12 +119,12 @@ describe('useSessionMessaging', () => {
     let didSubmit = false;
 
     await act(async () => {
-      didSubmit = await result.current.handleVisitInquiry('Hello there');
+      didSubmit = await result.current.handleSessionInquiry('Hello there');
     });
 
     expect(didSubmit).toBe(true);
     expect(mockStartSessionWithMessage).toHaveBeenCalledWith('user-1', {
-      session_id: expect.stringMatching(/^visit_/),
+      session_id: expect.stringMatching(/^session_/),
       title: 'Untitled Session',
       message: expect.objectContaining({
         role: 'user',
@@ -134,7 +134,7 @@ describe('useSessionMessaging', () => {
     });
     expect(spies.refreshPersistedSessions).toHaveBeenCalled();
     expect(mockAppendSessionMessages).toHaveBeenCalled();
-    expect(mockVisitChatStream).toHaveBeenCalledTimes(1);
+    expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the draft intact when the first-message commit fails', async () => {
@@ -143,12 +143,12 @@ describe('useSessionMessaging', () => {
     let didSubmit = true;
 
     await act(async () => {
-      didSubmit = await result.current.handleVisitInquiry('Hello there');
+      didSubmit = await result.current.handleSessionInquiry('Hello there');
     });
 
     expect(didSubmit).toBe(false);
     expect(spies.showToast).toHaveBeenCalledWith('Couldn’t send your first message. Try again.', 'info');
     expect(mockAppendSessionMessages).not.toHaveBeenCalled();
-    expect(mockVisitChatStream).not.toHaveBeenCalled();
+    expect(mockStreamSessionChat).not.toHaveBeenCalled();
   });
 });

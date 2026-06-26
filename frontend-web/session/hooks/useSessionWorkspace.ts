@@ -5,14 +5,13 @@ import { usePreparedSessionStaging } from './usePreparedSessionStaging';
 import { useSessionActions } from './useSessionActions';
 import { useSessionMessaging } from './useSessionMessaging';
 import { useSessionStartFlow } from './useSessionStartFlow';
-import { useVisits } from './useVisits';
+import { useSessionState } from './useSessionState';
 import type { GalleryItem, Visit } from '../../types';
 import type { InterpretingItem } from '../../artwork/types';
 import type { PreparedSessionUploadEntry, PreparedUploadSessionContext } from '../../artwork-ingest/types';
 import type {
   PendingSessionArtwork,
-  VisitDraft,
-  VisitStreamMessage,
+  SessionStreamMessage,
 } from '../types';
 
 type DeleteConfirmation = { id: string; type: 'item' | 'session' } | null;
@@ -25,13 +24,13 @@ type UseSessionWorkspaceOptions = {
   items: GalleryItem[];
   artworksLoaded: boolean;
   deleteConfirmation: DeleteConfirmation;
-  defaultVisitTitle: string;
+  defaultSessionTitle: string;
   initialIsComposingNewSession: boolean;
   activeTab: AppTab;
   interpretingItem: InterpretingItem | null;
   renameInputRef: RefObject<HTMLInputElement | null>;
-  visitStreamScrollRef: RefObject<HTMLDivElement | null>;
-  visitStreamEndRef: RefObject<HTMLDivElement | null>;
+  sessionStreamScrollRef: RefObject<HTMLDivElement | null>;
+  sessionStreamEndRef: RefObject<HTMLDivElement | null>;
   setItems: Dispatch<SetStateAction<GalleryItem[]>>;
   setVisit: Dispatch<SetStateAction<Visit>>;
   setDeleteConfirmation: Dispatch<SetStateAction<DeleteConfirmation>>;
@@ -49,13 +48,13 @@ export function useSessionWorkspace({
   items,
   artworksLoaded,
   deleteConfirmation,
-  defaultVisitTitle,
+  defaultSessionTitle,
   initialIsComposingNewSession,
   activeTab,
   interpretingItem,
   renameInputRef,
-  visitStreamScrollRef,
-  visitStreamEndRef,
+  sessionStreamScrollRef,
+  sessionStreamEndRef,
   setItems,
   setVisit,
   setDeleteConfirmation,
@@ -67,15 +66,15 @@ export function useSessionWorkspace({
   const [pendingDeletedSessionIds, setPendingDeletedSessionIds] = useState<Set<string>>(new Set());
   const resetPreparedSessionStateRef = useRef<() => void>(() => {});
 
-  const visits = useVisits({
+  const sessionState = useSessionState({
     userId,
     items,
     artworksLoaded,
     deleteConfirmation,
-    defaultVisitTitle,
+    defaultSessionTitle,
     initialIsComposingNewSession,
-    visitDraftsStorageKey: 'musee_visit_drafts',
-    visitStreamsStorageKey: 'musee_visit_streams',
+    sessionDraftsStorageKey: 'musee_session_drafts',
+    sessionStreamsStorageKey: 'musee_session_streams',
     sessionGoalsStorageKey: 'musee_session_goals',
   });
 
@@ -87,29 +86,29 @@ export function useSessionWorkspace({
   resetPreparedSessionStateRef.current = prepared.resetPreparedSessionState;
 
   const messaging = useSessionMessaging({
-    defaultVisitTitle,
+    defaultSessionTitle,
     sessionUserId: userId,
-    filteredVisitId: visits.filteredVisitId,
-    isComposingNewSession: visits.isComposingNewSession,
+    filteredSessionId: sessionState.filteredSessionId,
+    isComposingNewSession: sessionState.isComposingNewSession,
     items,
-    visitStreams: visits.visitStreams,
-    sessionGoals: visits.sessionGoals,
-    visitSummaries: visits.visitSummaries,
-    activeVisitSummary: visits.activeVisitSummary,
-    refreshPersistedSessions: visits.refreshPersistedSessions,
-    setVisitDrafts: visits.setVisitDrafts,
-    setFilteredVisitId: visits.setFilteredVisitId,
-    setIsComposingNewSession: visits.setIsComposingNewSession,
+    sessionStreams: sessionState.sessionStreams,
+    sessionGoals: sessionState.sessionGoals,
+    sessionSummaries: sessionState.sessionSummaries,
+    activeSessionSummary: sessionState.activeSessionSummary,
+    refreshPersistedSessions: sessionState.refreshPersistedSessions,
+    setSessionDrafts: sessionState.setSessionDrafts,
+    setFilteredSessionId: sessionState.setFilteredSessionId,
+    setIsComposingNewSession: sessionState.setIsComposingNewSession,
     setVisit,
-    setVisitStreams: visits.setVisitStreams,
-    setStreamingVisitResponses: visits.setStreamingVisitResponses,
+    setSessionStreams: sessionState.setSessionStreams,
+    setStreamingSessionResponses: sessionState.setStreamingSessionResponses,
     showToast,
   });
 
   const enterBlankSession = useCallback(() => {
     setActiveTab('newSession');
-    visits.setFilteredVisitId(null);
-    visits.setIsComposingNewSession(true);
+    sessionState.setFilteredSessionId(null);
+    sessionState.setIsComposingNewSession(true);
     prepared.resetPreparedSessionState();
     setVisit({
       id: '',
@@ -120,52 +119,52 @@ export function useSessionWorkspace({
     prepared,
     setActiveTab,
     setVisit,
-    visits,
+    sessionState,
   ]);
 
   const openSessionSummary = useCallback((summaryId: string) => {
     setActiveTab('newSession');
-    visits.setFilteredVisitId(summaryId);
-    visits.setIsComposingNewSession(false);
+    sessionState.setFilteredSessionId(summaryId);
+    sessionState.setIsComposingNewSession(false);
     prepared.resetPreparedSessionState();
   }, [
     prepared,
     setActiveTab,
-    visits,
+    sessionState,
   ]);
 
   useEffect(() => {
-    if (activeTab !== 'newSession' || interpretingItem || !visitStreamEndRef.current || !visits.activeVisitSummary) return;
+    if (activeTab !== 'newSession' || interpretingItem || !sessionStreamEndRef.current || !sessionState.activeSessionSummary) return;
 
     requestAnimationFrame(() => {
-      visitStreamEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      sessionStreamEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     });
   }, [
     activeTab,
     interpretingItem,
-    visitStreamEndRef,
-    visits.activeVisitSummary?.id,
-    visits.activeVisitStream.length,
-    visits.activeVisitSummary ? visits.streamingVisitResponses[visits.activeVisitSummary.id] : '',
+    sessionStreamEndRef,
+    sessionState.activeSessionSummary?.id,
+    sessionState.activeSessionStream.length,
+    sessionState.activeSessionSummary ? sessionState.streamingSessionResponses[sessionState.activeSessionSummary.id] : '',
   ]);
 
   useEffect(() => {
     if (activeTab !== 'newSession') return;
-    if (visitStreamScrollRef.current) visitStreamScrollRef.current.scrollTop = 0;
-    if (!visits.activeVisitSummary?.id) return;
-    const sessionId = visits.activeVisitSummary.id;
+    if (sessionStreamScrollRef.current) sessionStreamScrollRef.current.scrollTop = 0;
+    if (!sessionState.activeSessionSummary?.id) return;
+    const sessionId = sessionState.activeSessionSummary.id;
     fetchSessionMessages(sessionId).then(dbMessages => {
       if (!dbMessages.length) return;
-      visits.setVisitStreams(prev => {
+      sessionState.setSessionStreams(prev => {
         const existing = prev[sessionId] || [];
         const existingIds = new Set(existing.map(m => m.id));
-        const newMsgs: VisitStreamMessage[] = dbMessages
+        const newMsgs: SessionStreamMessage[] = dbMessages
           .filter(m => !existingIds.has(m.id || ''))
           .map(m => ({
             id: m.id || `db-${Date.now()}-${Math.random()}`,
             role: m.role as 'user' | 'model',
             text: m.content || '',
-            type: (m.type || 'text') as VisitStreamMessage['type'],
+            type: (m.type || 'text') as SessionStreamMessage['type'],
             artworkId: m.artwork_id || undefined,
             createdAt: m.created_at ? new Date(m.created_at as unknown as string).getTime() : Date.now(),
           }));
@@ -173,39 +172,39 @@ export function useSessionWorkspace({
         return { ...prev, [sessionId]: [...existing, ...newMsgs].sort((a, b) => a.createdAt - b.createdAt) };
       });
     }).catch(() => {});
-  }, [activeTab, visitStreamScrollRef, visits.activeVisitSummary?.id, visits.setVisitStreams]);
+  }, [activeTab, sessionStreamScrollRef, sessionState.activeSessionSummary?.id, sessionState.setSessionStreams]);
 
   useEffect(() => {
-    if (!visits.editingVisitId || !renameInputRef.current) return;
+    if (!sessionState.editingSessionId || !renameInputRef.current) return;
     renameInputRef.current.focus();
     renameInputRef.current.select();
-  }, [renameInputRef, visits.editingVisitId]);
+  }, [renameInputRef, sessionState.editingSessionId]);
 
   const sessionActions = useSessionActions({
-    defaultVisitTitle,
+    defaultSessionTitle,
     sessionUserId: userId,
-    visitSummaries: visits.visitSummaries,
-    persistedSessions: visits.persistedSessions,
-    editingVisitTitle: visits.editingVisitTitle,
+    sessionSummaries: sessionState.sessionSummaries,
+    persistedSessions: sessionState.persistedSessions,
+    editingSessionTitle: sessionState.editingSessionTitle,
     showToast,
-    refreshPersistedSessions: visits.refreshPersistedSessions,
+    refreshPersistedSessions: sessionState.refreshPersistedSessions,
     resetPreparedSessionState: prepared.resetPreparedSessionState,
-    isViewingSession: (sessionId) => activeTab === 'newSession' && visits.activeVisitSummary?.id === sessionId,
+    isViewingSession: (sessionId) => activeTab === 'newSession' && sessionState.activeSessionSummary?.id === sessionId,
     setItems,
-    setVisitDrafts: visits.setVisitDrafts,
-    setVisitStreams: visits.setVisitStreams,
-    setStreamingVisitResponses: visits.setStreamingVisitResponses,
+    setSessionDrafts: sessionState.setSessionDrafts,
+    setSessionStreams: sessionState.setSessionStreams,
+    setStreamingSessionResponses: sessionState.setStreamingSessionResponses,
     setVisit,
-    setFilteredVisitId: visits.setFilteredVisitId,
+    setFilteredSessionId: sessionState.setFilteredSessionId,
     setPendingDeletedSessionIds,
-    setOpenVisitMenuId: visits.setOpenVisitMenuId,
+    setOpenSessionMenuId: sessionState.setOpenSessionMenuId,
     setDeleteConfirmation,
-    setEditingVisitId: visits.setEditingVisitId,
-    setEditingVisitTitle: visits.setEditingVisitTitle,
+    setEditingSessionId: sessionState.setEditingSessionId,
+    setEditingSessionTitle: sessionState.setEditingSessionTitle,
     resetCurrentSessionView: () => {
       setActiveTab('newSession');
-      visits.setFilteredVisitId(null);
-      visits.setIsComposingNewSession(true);
+      sessionState.setFilteredSessionId(null);
+      sessionState.setIsComposingNewSession(true);
       setVisit({
         id: '',
         itemIds: [],
@@ -217,38 +216,38 @@ export function useSessionWorkspace({
   });
 
   const submitPreparedSessionFlow = useSessionStartFlow({
-    defaultVisitTitle,
+    defaultSessionTitle,
     sessionUserId: userId,
     pendingSessionArtworks: prepared.pendingSessionArtworks,
     newSessionDraftMessage: prepared.newSessionDraftMessage,
     isSubmittingPreparedSession: prepared.isSubmittingPreparedSession,
     setIsSubmittingPreparedSession: prepared.setIsSubmittingPreparedSession,
-    refreshPersistedSessions: visits.refreshPersistedSessions,
-    setVisitDrafts: visits.setVisitDrafts,
+    refreshPersistedSessions: sessionState.refreshPersistedSessions,
+    setSessionDrafts: sessionState.setSessionDrafts,
     setItems,
     setActiveTab,
-    setFilteredVisitId: visits.setFilteredVisitId,
-    setIsComposingNewSession: visits.setIsComposingNewSession,
+    setFilteredSessionId: sessionState.setFilteredSessionId,
+    setIsComposingNewSession: sessionState.setIsComposingNewSession,
     setVisit,
     resetPreparedSessionState: prepared.resetPreparedSessionState,
-    appendVisitMessages: messaging.appendVisitMessages,
+    appendSessionMessages: messaging.appendSessionMessages,
     ingestPreparedUploads,
-    sendVisitInquiryToSession: messaging.sendVisitInquiryToSession,
+    sendSessionInquiryToSession: messaging.sendSessionInquiryToSession,
     showToast,
   });
 
-  const recentVisitSummaries = useMemo(() => visits.visitSummaries.slice(0, 10), [visits.visitSummaries]);
-  const sessionsLoading = !artworksLoaded && visits.visitSummaries.length === 0;
+  const recentSessionSummaries = useMemo(() => sessionState.sessionSummaries.slice(0, 10), [sessionState.sessionSummaries]);
+  const sessionsLoading = !artworksLoaded && sessionState.sessionSummaries.length === 0;
 
   return {
     userId,
-    visits,
+    sessionState,
     prepared,
     messaging,
     sessionActions,
     submitPreparedSession: submitPreparedSessionFlow.submitPreparedSession,
     pendingDeletedSessionIds,
-    recentVisitSummaries,
+    recentSessionSummaries,
     sessionsLoading,
     enterBlankSession,
     openSessionSummary,

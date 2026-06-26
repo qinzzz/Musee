@@ -5,7 +5,7 @@ import type { GalleryItem, Visit } from '../../types';
 import { startSessionWithArtworks } from '../api/sessions';
 import { buildPreparedSessionFallbackPrompt } from '../lib/preparedSession';
 import { updateSessionLinkForItem } from '../lib/sessionLinks';
-import type { PendingSessionArtwork, VisitDraft, VisitStreamMessage } from '../types';
+import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../types';
 
 type ToastType = 'info' | 'success';
 type ShowToast = (message: string, type?: ToastType) => void;
@@ -13,52 +13,52 @@ type ShowToast = (message: string, type?: ToastType) => void;
 type AppTab = 'newSession' | 'collect' | 'profile' | 'learn';
 
 type UseSessionStartFlowOptions = {
-  defaultVisitTitle: string;
+  defaultSessionTitle: string;
   sessionUserId: string;
   pendingSessionArtworks: PendingSessionArtwork[];
   newSessionDraftMessage: string;
   isSubmittingPreparedSession: boolean;
   setIsSubmittingPreparedSession: Dispatch<SetStateAction<boolean>>;
   refreshPersistedSessions: () => void;
-  setVisitDrafts: Dispatch<SetStateAction<VisitDraft[]>>;
+  setSessionDrafts: Dispatch<SetStateAction<SessionDraft[]>>;
   setItems: Dispatch<SetStateAction<GalleryItem[]>>;
   setActiveTab: Dispatch<SetStateAction<AppTab>>;
-  setFilteredVisitId: Dispatch<SetStateAction<string | null>>;
+  setFilteredSessionId: Dispatch<SetStateAction<string | null>>;
   setIsComposingNewSession: Dispatch<SetStateAction<boolean>>;
   setVisit: Dispatch<SetStateAction<Visit>>;
   resetPreparedSessionState: () => void;
-  appendVisitMessages: (visitId: string, newMessages: VisitStreamMessage[]) => void;
+  appendSessionMessages: (sessionId: string, newMessages: SessionStreamMessage[]) => void;
   ingestPreparedUploads: (
     uploadEntries: PreparedSessionUploadEntry[],
     context: PreparedUploadSessionContext,
   ) => Promise<GalleryItem[]>;
-  sendVisitInquiryToSession: (
-    targetVisitId: string,
+  sendSessionInquiryToSession: (
+    targetSessionId: string,
     text: string,
-    visitItemsOverride?: GalleryItem[],
+    sessionItemsOverride?: GalleryItem[],
     options?: { persistUserMessage?: boolean },
   ) => void;
   showToast: ShowToast;
 };
 
 export function useSessionStartFlow({
-  defaultVisitTitle,
+  defaultSessionTitle,
   sessionUserId,
   pendingSessionArtworks,
   newSessionDraftMessage,
   isSubmittingPreparedSession,
   setIsSubmittingPreparedSession,
   refreshPersistedSessions,
-  setVisitDrafts,
+  setSessionDrafts,
   setItems,
   setActiveTab,
-  setFilteredVisitId,
+  setFilteredSessionId,
   setIsComposingNewSession,
   setVisit,
   resetPreparedSessionState,
-  appendVisitMessages,
+  appendSessionMessages,
   ingestPreparedUploads,
-  sendVisitInquiryToSession,
+  sendSessionInquiryToSession,
   showToast,
 }: UseSessionStartFlowOptions) {
   const submitPreparedSession = useCallback(async () => {
@@ -76,8 +76,8 @@ export function useSessionStartFlow({
         (entry): entry is Extract<PendingSessionArtwork, { kind: 'upload' }> => entry.kind === 'upload',
       );
 
-      let sessionId = `visit_${Math.random().toString(36).substring(2, 11)}`;
-      let sessionTitle = defaultVisitTitle;
+      let sessionId = `session_${Math.random().toString(36).substring(2, 11)}`;
+      let sessionTitle = defaultSessionTitle;
       let hasPersistedInitialCommit = false;
 
       if (libraryEntries.length > 0) {
@@ -85,12 +85,12 @@ export function useSessionStartFlow({
           sessionUserId,
           {
             session_id: sessionId,
-            title: defaultVisitTitle,
+            title: defaultSessionTitle,
             artwork_ids: libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id),
           },
         );
         sessionId = started?.session?.id || sessionId;
-        sessionTitle = started?.session?.title || defaultVisitTitle;
+        sessionTitle = started?.session?.title || defaultSessionTitle;
         refreshPersistedSessions();
         hasPersistedInitialCommit = true;
       }
@@ -98,7 +98,7 @@ export function useSessionStartFlow({
       const getSequenceNumber = (entryId: string) => pendingSessionArtworks.findIndex((entry) => entry.id === entryId);
 
       const resolvedSessionItems: GalleryItem[] = [];
-      const libraryStreamMessages: VisitStreamMessage[] = [];
+      const libraryStreamMessages: SessionStreamMessage[] = [];
       const now = Date.now();
       let streamCursor = now;
       setItems((prev) => prev.map((item) => {
@@ -107,7 +107,6 @@ export function useSessionStartFlow({
         const sequenceNumber = getSequenceNumber(matchingEntry.id);
         return updateSessionLinkForItem(item, sessionId, () => ({
           sessionId,
-          sessionTitle,
           sequenceNumber,
           source: 'library',
         }));
@@ -122,12 +121,11 @@ export function useSessionStartFlow({
       });
 
       if (libraryStreamMessages.length > 0) {
-        appendVisitMessages(sessionId, libraryStreamMessages);
+        appendSessionMessages(sessionId, libraryStreamMessages);
       }
       resolvedSessionItems.push(...libraryEntries.map((entry, index) =>
         updateSessionLinkForItem(entry.artwork, sessionId, () => ({
           sessionId,
-          sessionTitle,
           sequenceNumber: index,
           source: 'library',
         })),
@@ -136,7 +134,6 @@ export function useSessionStartFlow({
       if (uploadEntries.length > 0) {
         const resolvedUploads = await ingestPreparedUploads(uploadEntries, {
           sessionId,
-          sessionTitle,
           getSequenceNumber,
         });
         resolvedSessionItems.push(...resolvedUploads);
@@ -151,12 +148,12 @@ export function useSessionStartFlow({
         return;
       }
 
-      setVisitDrafts((prev) => [
+      setSessionDrafts((prev) => [
         { id: sessionId, title: sessionTitle, createdAt: now, updatedAt: now },
         ...prev.filter((draft) => draft.id !== sessionId),
       ]);
       setActiveTab('newSession');
-      setFilteredVisitId(sessionId);
+      setFilteredSessionId(sessionId);
       setIsComposingNewSession(false);
       setVisit({ id: sessionId, itemIds: resolvedSessionItems.map((item) => item.id), globalConversation: [] });
       startTransition(() => {
@@ -165,11 +162,11 @@ export function useSessionStartFlow({
 
       if (newSessionDraftMessage.trim()) {
         window.setTimeout(() => {
-          sendVisitInquiryToSession(sessionId, newSessionDraftMessage.trim(), resolvedSessionItems);
+          sendSessionInquiryToSession(sessionId, newSessionDraftMessage.trim(), resolvedSessionItems);
         }, 0);
       } else {
         window.setTimeout(() => {
-          sendVisitInquiryToSession(
+          sendSessionInquiryToSession(
             sessionId,
             buildPreparedSessionFallbackPrompt(pendingSessionArtworks),
             resolvedSessionItems,
@@ -184,23 +181,23 @@ export function useSessionStartFlow({
       setIsSubmittingPreparedSession(false);
     }
   }, [
-    appendVisitMessages,
-    defaultVisitTitle,
+    appendSessionMessages,
+    defaultSessionTitle,
     ingestPreparedUploads,
     isSubmittingPreparedSession,
     newSessionDraftMessage,
     pendingSessionArtworks,
     refreshPersistedSessions,
     resetPreparedSessionState,
-    sendVisitInquiryToSession,
+    sendSessionInquiryToSession,
     sessionUserId,
     setActiveTab,
-    setFilteredVisitId,
+    setFilteredSessionId,
     setIsComposingNewSession,
     setIsSubmittingPreparedSession,
     setItems,
     setVisit,
-    setVisitDrafts,
+    setSessionDrafts,
     showToast,
   ]);
 

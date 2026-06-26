@@ -1,37 +1,41 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { visitChatStream } from '../../api/chat';
+import { streamSessionChat } from '../../api/chat';
 import type { GalleryItem, Visit } from '../../types';
-import { appendSessionMessages, createSession, startSessionWithMessage } from '../api/sessions';
+import {
+  appendSessionMessages as appendSessionMessagesApi,
+  createSession,
+  startSessionWithMessage,
+} from '../api/sessions';
 import { buildUploadCommentaryPrompt } from '../lib/commentary';
 import { itemBelongsToSession } from '../lib/sessionLinks';
-import { serializeVisitHistory } from '../lib/visitMessaging';
-import type { VisitDraft, VisitStreamMessage, VisitSummary } from '../types';
+import { serializeSessionHistory } from '../lib/sessionHistory';
+import type { SessionDraft, SessionStreamMessage, SessionSummary } from '../types';
 
 type ToastType = 'info' | 'success';
 type ShowToast = (message: string, type?: ToastType) => void;
 
 type UseSessionMessagingOptions = {
-  defaultVisitTitle: string;
+  defaultSessionTitle: string;
   sessionUserId: string;
-  filteredVisitId: string | null;
+  filteredSessionId: string | null;
   isComposingNewSession: boolean;
   items: GalleryItem[];
-  visitStreams: Record<string, VisitStreamMessage[]>;
+  sessionStreams: Record<string, SessionStreamMessage[]>;
   sessionGoals: Record<string, string>;
-  visitSummaries: VisitSummary[];
-  activeVisitSummary: VisitSummary | null;
+  sessionSummaries: SessionSummary[];
+  activeSessionSummary: SessionSummary | null;
   refreshPersistedSessions: () => void;
-  setVisitDrafts: Dispatch<SetStateAction<VisitDraft[]>>;
-  setFilteredVisitId: Dispatch<SetStateAction<string | null>>;
+  setSessionDrafts: Dispatch<SetStateAction<SessionDraft[]>>;
+  setFilteredSessionId: Dispatch<SetStateAction<string | null>>;
   setIsComposingNewSession: Dispatch<SetStateAction<boolean>>;
   setVisit: Dispatch<SetStateAction<Visit>>;
-  setVisitStreams: Dispatch<SetStateAction<Record<string, VisitStreamMessage[]>>>;
-  setStreamingVisitResponses: Dispatch<SetStateAction<Record<string, string>>>;
+  setSessionStreams: Dispatch<SetStateAction<Record<string, SessionStreamMessage[]>>>;
+  setStreamingSessionResponses: Dispatch<SetStateAction<Record<string, string>>>;
   showToast: ShowToast;
 };
 
-const toVisitChatArtwork = (item: GalleryItem) => ({
+const toSessionChatArtwork = (item: GalleryItem) => ({
   id: item.id,
   url: item.url,
   keywords: item.keywords,
@@ -43,88 +47,88 @@ const toVisitChatArtwork = (item: GalleryItem) => ({
 });
 
 export function useSessionMessaging({
-  defaultVisitTitle,
+  defaultSessionTitle,
   sessionUserId,
-  filteredVisitId,
+  filteredSessionId,
   isComposingNewSession,
   items,
-  visitStreams,
+  sessionStreams,
   sessionGoals,
-  visitSummaries,
-  activeVisitSummary,
+  sessionSummaries,
+  activeSessionSummary,
   refreshPersistedSessions,
-  setVisitDrafts,
-  setFilteredVisitId,
+  setSessionDrafts,
+  setFilteredSessionId,
   setIsComposingNewSession,
   setVisit,
-  setVisitStreams,
-  setStreamingVisitResponses,
+  setSessionStreams,
+  setStreamingSessionResponses,
   showToast,
 }: UseSessionMessagingOptions) {
-  const createVisitDraft = useCallback(() => {
+  const createSessionDraft = useCallback(() => {
     const now = Date.now();
-    const newVisit: VisitDraft = {
-      id: `visit_${Math.random().toString(36).substring(2, 11)}`,
-      title: defaultVisitTitle,
+    const newSession: SessionDraft = {
+      id: `session_${Math.random().toString(36).substring(2, 11)}`,
+      title: defaultSessionTitle,
       createdAt: now,
       updatedAt: now,
     };
-    setVisitDrafts((prev) => [newVisit, ...prev.filter((visit) => visit.id !== newVisit.id)]);
-    setFilteredVisitId(newVisit.id);
+    setSessionDrafts((prev) => [newSession, ...prev.filter((session) => session.id !== newSession.id)]);
+    setFilteredSessionId(newSession.id);
     setIsComposingNewSession(false);
     setVisit({
-      id: newVisit.id,
+      id: newSession.id,
       itemIds: [],
       globalConversation: [],
     });
-    return newVisit.id;
+    return newSession.id;
   }, [
-    defaultVisitTitle,
-    setFilteredVisitId,
+    defaultSessionTitle,
+    setFilteredSessionId,
     setIsComposingNewSession,
     setVisit,
-    setVisitDrafts,
+    setSessionDrafts,
   ]);
 
   const ensureSessionRecord = useCallback(async (sessionId: string) => {
-    const summary = visitSummaries.find((visitSummary) => visitSummary.id === sessionId);
-    const response = await createSession(sessionUserId, sessionId, summary?.title || defaultVisitTitle);
+    const summary = sessionSummaries.find((sessionSummary) => sessionSummary.id === sessionId);
+    const response = await createSession(sessionUserId, sessionId, summary?.title || defaultSessionTitle);
     refreshPersistedSessions();
     return response;
   }, [
-    defaultVisitTitle,
+    defaultSessionTitle,
     refreshPersistedSessions,
     sessionUserId,
-    visitSummaries,
+    sessionSummaries,
   ]);
 
   const resolveUploadSession = useCallback(() => {
-    if (filteredVisitId) {
-      return { visitId: filteredVisitId, isNew: false };
+    if (filteredSessionId) {
+      return { sessionId: filteredSessionId, isNew: false };
     }
 
-    const visitId = createVisitDraft();
-    return { visitId, isNew: true };
-  }, [createVisitDraft, filteredVisitId]);
+    const sessionId = createSessionDraft();
+    return { sessionId, isNew: true };
+  }, [createSessionDraft, filteredSessionId]);
 
-  const appendVisitMessages = useCallback((visitId: string, newMessages: VisitStreamMessage[]) => {
-    setVisitStreams((prev) => ({
+  const appendSessionMessages = useCallback((sessionId: string, newMessages: SessionStreamMessage[]) => {
+    setSessionStreams((prev) => ({
       ...prev,
-      [visitId]: [...(prev[visitId] || []), ...newMessages],
+      [sessionId]: [...(prev[sessionId] || []), ...newMessages],
     }));
-    setVisitDrafts((prev) => {
+    setSessionDrafts((prev) => {
       const nextUpdatedAt = newMessages[newMessages.length - 1]?.createdAt || Date.now();
-      const existingDraft = prev.find((draft) => draft.id === visitId);
+      const existingDraft = prev.find((draft) => draft.id === sessionId);
       if (existingDraft) {
         return prev.map((draft) =>
-          draft.id === visitId ? { ...draft, updatedAt: nextUpdatedAt } : draft,
+          draft.id === sessionId ? { ...draft, updatedAt: nextUpdatedAt } : draft,
         );
       }
-      const summary = visitSummaries.find((visitSummary) => visitSummary.id === visitId);
+      const summary = sessionSummaries.find((sessionSummary) => sessionSummary.id === sessionId);
       return [
         {
-          id: visitId,
-          title: summary?.title || defaultVisitTitle,
+          id: sessionId,
+          title: summary?.title || defaultSessionTitle,
           createdAt: nextUpdatedAt,
           updatedAt: nextUpdatedAt,
         },
@@ -132,8 +136,8 @@ export function useSessionMessaging({
       ];
     });
 
-    appendSessionMessages(
-      visitId,
+    appendSessionMessagesApi(
+      sessionId,
       newMessages.map((message) => {
         const isPlaceholder = message.type === 'artwork_capture' || message.type === 'artwork_card';
         return {
@@ -149,161 +153,161 @@ export function useSessionMessaging({
       refreshPersistedSessions();
     });
   }, [
-    defaultVisitTitle,
+    defaultSessionTitle,
     refreshPersistedSessions,
-    setVisitDrafts,
-    setVisitStreams,
-    visitSummaries,
+    setSessionDrafts,
+    setSessionStreams,
+    sessionSummaries,
   ]);
 
-  const streamVisitInquiryResponse = useCallback((
-    targetVisitId: string,
+  const streamSessionInquiryResponse = useCallback((
+    targetSessionId: string,
     text: string,
-    visitItemsOverride?: GalleryItem[],
-    historyOverride?: VisitStreamMessage[],
+    sessionItemsOverride?: GalleryItem[],
+    historyOverride?: SessionStreamMessage[],
   ) => {
-    setStreamingVisitResponses((prev) => ({ ...prev, [targetVisitId]: '' }));
+    setStreamingSessionResponses((prev) => ({ ...prev, [targetSessionId]: '' }));
 
-    const existingMessages = historyOverride || visitStreams[targetVisitId] || [];
-    const visitItems = visitItemsOverride
-      || (activeVisitSummary?.id === targetVisitId
-        ? activeVisitSummary.items
-        : items.filter((item) => itemBelongsToSession(item, targetVisitId)));
+    const existingMessages = historyOverride || sessionStreams[targetSessionId] || [];
+    const sessionItems = sessionItemsOverride
+      || (activeSessionSummary?.id === targetSessionId
+        ? activeSessionSummary.items
+        : items.filter((item) => itemBelongsToSession(item, targetSessionId)));
 
-    visitChatStream(
-      visitItems.map(toVisitChatArtwork),
-      serializeVisitHistory(existingMessages, visitItems),
+    streamSessionChat(
+      sessionItems.map(toSessionChatArtwork),
+      serializeSessionHistory(existingMessages, sessionItems),
       text,
       (chunk) => {
-        setStreamingVisitResponses((prev) => ({
+        setStreamingSessionResponses((prev) => ({
           ...prev,
-          [targetVisitId]: (prev[targetVisitId] || '') + chunk,
+          [targetSessionId]: (prev[targetSessionId] || '') + chunk,
         }));
       },
       (fullResponse) => {
-        const assistantMsg: VisitStreamMessage = {
-          id: `visit-msg-${Date.now()}-assistant`,
+        const assistantMsg: SessionStreamMessage = {
+          id: `session-msg-${Date.now()}-assistant`,
           role: 'model',
           text: fullResponse,
           createdAt: Date.now(),
         };
-        appendVisitMessages(targetVisitId, [assistantMsg]);
-        setStreamingVisitResponses((prev) => {
+        appendSessionMessages(targetSessionId, [assistantMsg]);
+        setStreamingSessionResponses((prev) => {
           const next = { ...prev };
-          delete next[targetVisitId];
+          delete next[targetSessionId];
           return next;
         });
       },
       () => {
-        const assistantMsg: VisitStreamMessage = {
-          id: `visit-msg-${Date.now()}-error`,
+        const assistantMsg: SessionStreamMessage = {
+          id: `session-msg-${Date.now()}-error`,
           role: 'model',
           text: 'Something interrupted the reflection stream. Please try again.',
           createdAt: Date.now(),
         };
-        appendVisitMessages(targetVisitId, [assistantMsg]);
-        setStreamingVisitResponses((prev) => {
+        appendSessionMessages(targetSessionId, [assistantMsg]);
+        setStreamingSessionResponses((prev) => {
           const next = { ...prev };
-          delete next[targetVisitId];
+          delete next[targetSessionId];
           return next;
         });
       },
     );
   }, [
-    activeVisitSummary,
-    appendVisitMessages,
+    activeSessionSummary,
+    appendSessionMessages,
     items,
-    setStreamingVisitResponses,
-    visitStreams,
+    setStreamingSessionResponses,
+    sessionStreams,
   ]);
 
-  const sendVisitInquiryToSession = useCallback((
-    targetVisitId: string,
+  const sendSessionInquiryToSession = useCallback((
+    targetSessionId: string,
     text: string,
-    visitItemsOverride?: GalleryItem[],
+    sessionItemsOverride?: GalleryItem[],
     options?: { persistUserMessage?: boolean },
   ) => {
-    const existingMessages = visitStreams[targetVisitId] || [];
+    const existingMessages = sessionStreams[targetSessionId] || [];
     let nextHistory = existingMessages;
 
     if (options?.persistUserMessage !== false) {
       const createdAt = Date.now();
-      const userMsg: VisitStreamMessage = {
-        id: `visit-msg-${createdAt}`,
+      const userMsg: SessionStreamMessage = {
+        id: `session-msg-${createdAt}`,
         role: 'user',
         text,
         createdAt,
       };
-      appendVisitMessages(targetVisitId, [userMsg]);
+      appendSessionMessages(targetSessionId, [userMsg]);
       nextHistory = [...existingMessages, userMsg];
     }
 
-    streamVisitInquiryResponse(targetVisitId, text, visitItemsOverride, nextHistory);
+    streamSessionInquiryResponse(targetSessionId, text, sessionItemsOverride, nextHistory);
   }, [
-    appendVisitMessages,
-    streamVisitInquiryResponse,
-    visitStreams,
+    appendSessionMessages,
+    streamSessionInquiryResponse,
+    sessionStreams,
   ]);
 
   const triggerUploadCommentary = useCallback((
-    visitId: string,
+    sessionId: string,
     newArtworks: Array<Partial<Pick<GalleryItem, 'artistName' | 'artworkName'>>>,
     sessionItems: GalleryItem[],
-    conversationHistory: VisitStreamMessage[],
+    conversationHistory: SessionStreamMessage[],
   ) => {
-    const trigger = buildUploadCommentaryPrompt(newArtworks, sessionGoals[visitId]);
+    const trigger = buildUploadCommentaryPrompt(newArtworks, sessionGoals[sessionId]);
     if (!trigger) return;
 
-    setStreamingVisitResponses((prev) => ({ ...prev, [visitId]: '' }));
+    setStreamingSessionResponses((prev) => ({ ...prev, [sessionId]: '' }));
 
-    visitChatStream(
-      sessionItems.map(toVisitChatArtwork),
-      serializeVisitHistory(conversationHistory, sessionItems),
+    streamSessionChat(
+      sessionItems.map(toSessionChatArtwork),
+      serializeSessionHistory(conversationHistory, sessionItems),
       trigger,
       (chunk) => {
-        setStreamingVisitResponses((prev) => ({ ...prev, [visitId]: (prev[visitId] || '') + chunk }));
+        setStreamingSessionResponses((prev) => ({ ...prev, [sessionId]: (prev[sessionId] || '') + chunk }));
       },
       (fullResponse) => {
-        const msg: VisitStreamMessage = {
+        const msg: SessionStreamMessage = {
           id: `commentary-${Date.now()}`,
           role: 'model',
           text: fullResponse,
           createdAt: Date.now(),
         };
-        appendVisitMessages(visitId, [msg]);
-        setStreamingVisitResponses((prev) => {
+        appendSessionMessages(sessionId, [msg]);
+        setStreamingSessionResponses((prev) => {
           const next = { ...prev };
-          delete next[visitId];
+          delete next[sessionId];
           return next;
         });
       },
       () => {
-        setStreamingVisitResponses((prev) => {
+        setStreamingSessionResponses((prev) => {
           const next = { ...prev };
-          delete next[visitId];
+          delete next[sessionId];
           return next;
         });
       },
     );
   }, [
-    appendVisitMessages,
+    appendSessionMessages,
     sessionGoals,
-    setStreamingVisitResponses,
+    setStreamingSessionResponses,
   ]);
 
-  const handleVisitInquiry = useCallback(async (text: string) => {
-    let targetVisitId = activeVisitSummary?.id;
-    if (!targetVisitId || isComposingNewSession) {
-      targetVisitId = createVisitDraft();
+  const handleSessionInquiry = useCallback(async (text: string) => {
+    let targetSessionId = activeSessionSummary?.id;
+    if (!targetSessionId || isComposingNewSession) {
+      targetSessionId = createSessionDraft();
     }
 
-    const targetSummary = visitSummaries.find((summary) => summary.id === targetVisitId);
+    const targetSummary = sessionSummaries.find((summary) => summary.id === targetSessionId);
     const shouldPersistSession = !targetSummary || targetSummary.items.length === 0;
 
     if (shouldPersistSession) {
       const createdAt = Date.now();
-      const userMsg: VisitStreamMessage = {
-        id: `visit-msg-${createdAt}`,
+      const userMsg: SessionStreamMessage = {
+        id: `session-msg-${createdAt}`,
         role: 'user',
         text,
         createdAt,
@@ -311,8 +315,8 @@ export function useSessionMessaging({
 
       try {
         await startSessionWithMessage(sessionUserId, {
-          session_id: targetVisitId,
-          title: targetSummary?.title || defaultVisitTitle,
+          session_id: targetSessionId,
+          title: targetSummary?.title || defaultSessionTitle,
           message: {
             id: userMsg.id,
             role: 'user',
@@ -322,8 +326,8 @@ export function useSessionMessaging({
           },
         });
         refreshPersistedSessions();
-        appendVisitMessages(targetVisitId, [userMsg]);
-        streamVisitInquiryResponse(targetVisitId, text, undefined, [...(visitStreams[targetVisitId] || []), userMsg]);
+        appendSessionMessages(targetSessionId, [userMsg]);
+        streamSessionInquiryResponse(targetSessionId, text, undefined, [...(sessionStreams[targetSessionId] || []), userMsg]);
       } catch (error) {
         console.error('Failed to commit first session message:', error);
         showToast('Couldn’t send your first message. Try again.', 'info');
@@ -332,31 +336,31 @@ export function useSessionMessaging({
       return true;
     }
 
-    sendVisitInquiryToSession(targetVisitId, text);
+    sendSessionInquiryToSession(targetSessionId, text);
     return true;
   }, [
-    activeVisitSummary?.id,
-    appendVisitMessages,
-    createVisitDraft,
-    defaultVisitTitle,
+    activeSessionSummary?.id,
+    appendSessionMessages,
+    createSessionDraft,
+    defaultSessionTitle,
     ensureSessionRecord,
     isComposingNewSession,
     refreshPersistedSessions,
     sessionUserId,
-    sendVisitInquiryToSession,
+    sendSessionInquiryToSession,
     showToast,
-    streamVisitInquiryResponse,
-    visitStreams,
-    visitSummaries,
+    streamSessionInquiryResponse,
+    sessionStreams,
+    sessionSummaries,
   ]);
 
   return {
-    createVisitDraft,
+    createSessionDraft,
     ensureSessionRecord,
     resolveUploadSession,
-    appendVisitMessages,
-    sendVisitInquiryToSession,
+    appendSessionMessages,
+    sendSessionInquiryToSession,
     triggerUploadCommentary,
-    handleVisitInquiry,
+    handleSessionInquiry,
   };
 }

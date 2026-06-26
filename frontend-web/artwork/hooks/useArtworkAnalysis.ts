@@ -56,7 +56,6 @@ export function useArtworkAnalysis({
     try {
       const analysis = await analyzeArtworkFromExisting(item.artworkId || item.id);
       applyArtworkAnalysisResult(itemId, analysis, {
-        sessionTitle: analysis.session_title || item.sessionTitle,
         sessionLinks: item.sessionLinks,
       });
       if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {

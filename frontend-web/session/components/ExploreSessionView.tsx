@@ -4,9 +4,9 @@ import InterpretationModal from '../../components/InterpretationModal';
 import { GalleryItem, ArtworkClassification } from '../../types';
 import type { ArtistPageContext, ArtworkDetailContext } from '../../lib/appNavigation';
 import { SUPPORTED_UPLOAD_ACCEPT } from '../../lib/uploadValidation';
-import type { ActiveVisitStreamEntry, VisitStreamMessage, VisitSummary } from '../types';
+import type { ActiveSessionStreamEntry, SessionStreamMessage, SessionSummary } from '../types';
 
-type GroupedVisitStreamEntry =
+type GroupedSessionStreamEntry =
   | {
       type: 'artwork_group';
       id: string;
@@ -17,19 +17,19 @@ type GroupedVisitStreamEntry =
       type: 'message';
       id: string;
       createdAt: number;
-      message: VisitStreamMessage;
+      message: SessionStreamMessage;
     };
 
 type ArtworkEventSource = 'library' | 'upload' | 'camera';
 
 type InterpretationItem = GalleryItem & {
-  allVisitItems?: GalleryItem[];
+  navigationItems?: GalleryItem[];
   is_liked?: boolean;
 };
 
 type ExploreSessionViewProps = {
-  activeVisitSummary: VisitSummary;
-  activeVisitStream: ActiveVisitStreamEntry[];
+  activeSessionSummary: SessionSummary;
+  activeSessionStream: ActiveSessionStreamEntry[];
   interpretingItem: InterpretationItem | null;
   artworkHeaderActions: React.ReactNode;
   artworkHeaderEditToken: number;
@@ -40,8 +40,9 @@ type ExploreSessionViewProps = {
   sessionGoalInput: string;
   sessionGoals: Record<string, string>;
   sessionGoalDismissed: Set<string>;
-  streamingVisitResponse?: string;
+  streamingSessionResponse?: string;
   userId: string;
+  sessionTitleById: Record<string, string>;
   goalGalleryInputRef: React.RefObject<HTMLInputElement | null>;
   preparedSessionItems: Array<{
     id: string;
@@ -52,8 +53,8 @@ type ExploreSessionViewProps = {
   }>;
   preparedSessionMessage: string;
   isSubmittingPreparedSession: boolean;
-  visitStreamScrollRef: React.RefObject<HTMLDivElement | null>;
-  visitStreamEndRef: React.RefObject<HTMLDivElement | null>;
+  sessionStreamScrollRef: React.RefObject<HTMLDivElement | null>;
+  sessionStreamEndRef: React.RefObject<HTMLDivElement | null>;
   onCloseArtworkDetail: () => void;
   onUpdateMetadata: (itemId: string, fields: Partial<GalleryItem>) => void;
   onUpdateClassification: (itemId: string, classification: ArtworkClassification) => Promise<void>;
@@ -202,8 +203,8 @@ function getArtworkGroupLabel(items: GalleryItem[], sessionId: string): string {
 }
 
 export default function ExploreSessionView({
-  activeVisitSummary,
-  activeVisitStream,
+  activeSessionSummary,
+  activeSessionStream,
   interpretingItem,
   artworkHeaderActions,
   artworkHeaderEditToken,
@@ -214,14 +215,15 @@ export default function ExploreSessionView({
   sessionGoalInput,
   sessionGoals,
   sessionGoalDismissed,
-  streamingVisitResponse,
+  streamingSessionResponse,
   userId,
+  sessionTitleById,
   goalGalleryInputRef,
   preparedSessionItems,
   preparedSessionMessage,
   isSubmittingPreparedSession,
-  visitStreamScrollRef,
-  visitStreamEndRef,
+  sessionStreamScrollRef,
+  sessionStreamEndRef,
   onCloseArtworkDetail,
   onUpdateMetadata,
   onUpdateClassification,
@@ -264,10 +266,10 @@ export default function ExploreSessionView({
     textarea.style.height = `${Math.max(textarea.scrollHeight + borderTop + borderBottom, oneLineHeight)}px`;
   }, []);
 
-  const groupedVisitStream = React.useMemo<GroupedVisitStreamEntry[]>(() => {
-    const grouped: GroupedVisitStreamEntry[] = [];
+  const groupedSessionStream = React.useMemo<GroupedSessionStreamEntry[]>(() => {
+    const grouped: GroupedSessionStreamEntry[] = [];
 
-    activeVisitStream.forEach((entry) => {
+    activeSessionStream.forEach((entry) => {
       if (entry.type === 'artwork') {
         const previous = grouped[grouped.length - 1];
         if (previous?.type === 'artwork_group') {
@@ -293,11 +295,11 @@ export default function ExploreSessionView({
     });
 
     return grouped;
-  }, [activeVisitStream]);
+  }, [activeSessionStream]);
 
   React.useEffect(() => {
     setSessionDetailsOpen(false);
-  }, [activeVisitSummary.id]);
+  }, [activeSessionSummary.id]);
 
   React.useLayoutEffect(() => {
     resizeComposerTextarea();
@@ -322,7 +324,7 @@ export default function ExploreSessionView({
     return (
       <>
         <CanvasHeader
-          parentLabel={activeVisitSummary.title}
+          parentLabel={activeSessionSummary.title}
           parentClick={onCloseArtworkDetail}
           childLabel={interpretingItem.artworkName || 'Untitled'}
           leftSlot={headerLeftSlot}
@@ -336,7 +338,7 @@ export default function ExploreSessionView({
             onUpdateMetadata={onUpdateMetadata}
             onUpdateClassification={onUpdateClassification}
             onDelete={() => onDeleteArtwork(interpretingItem.id)}
-            allVisitItems={interpretingItem.allVisitItems}
+            navigationItems={interpretingItem.navigationItems}
             onNavigate={onNavigateInterpretation}
             rightMode={interpretationRightMode}
             onRightModeChange={onInterpretationRightModeChange}
@@ -345,7 +347,8 @@ export default function ExploreSessionView({
             userId={userId}
             onNavigateToArtist={onOpenArtistFromInterpretation}
             onNavigateToSession={onOpenSessionFromInterpretation}
-            navigationContextLabel={artworkDetailContext?.parentLabel || activeVisitSummary.title}
+            sessionTitleById={sessionTitleById}
+            navigationContextLabel={artworkDetailContext?.parentLabel || activeSessionSummary.title}
             editRequestToken={artworkHeaderEditToken}
             isInline={true}
           />
@@ -359,7 +362,7 @@ export default function ExploreSessionView({
       {showSessionHeader ? (
         <CanvasHeader
           parentLabel=""
-          childLabel={activeVisitSummary.title}
+          childLabel={activeSessionSummary.title}
           leftSlot={headerLeftSlot}
           isInline={true}
           onChildClick={() => setSessionDetailsOpen((value) => !value)}
@@ -380,8 +383,8 @@ export default function ExploreSessionView({
           <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-0">
             <div className="pointer-events-auto w-full sm:max-w-[640px]">
               <SessionDetailsPanel
-                title={activeVisitSummary.title}
-                goal={sessionGoals[activeVisitSummary.id] || ''}
+                title={activeSessionSummary.title}
+                goal={sessionGoals[activeSessionSummary.id] || ''}
                 onSaveTitle={onSaveSessionTitle}
                 onSaveGoal={onSaveExistingGoal}
               />
@@ -389,8 +392,8 @@ export default function ExploreSessionView({
           </div>
         ) : null}
 
-        {activeVisitStream.length === 0 ? (
-          sessionGoalDismissed.has(activeVisitSummary.id) ? (
+        {activeSessionStream.length === 0 ? (
+          sessionGoalDismissed.has(activeSessionSummary.id) ? (
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center pb-20 px-6">
               <div className="text-center">
                 <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-tight text-neutral-800 font-sans mb-2">
@@ -525,12 +528,12 @@ export default function ExploreSessionView({
           )
         ) : (
           <>
-            {activeVisitStream.some((entry) => entry.type === 'artwork') && (() => {
+            {activeSessionStream.some((entry) => entry.type === 'artwork') && (() => {
               const collapsed = true;
               const ease = '0.5s cubic-bezier(0.68, -0.25, 0.27, 1.25)';
               const vh = window.innerHeight / 100;
-              const thumbnailEntries = activeVisitStream.filter(
-                (entry): entry is Extract<ActiveVisitStreamEntry, { type: 'artwork' }> =>
+              const thumbnailEntries = activeSessionStream.filter(
+                (entry): entry is Extract<ActiveSessionStreamEntry, { type: 'artwork' }> =>
                   entry.type === 'artwork' && !entry.item.isDeletedPlaceholder,
               );
 
@@ -606,13 +609,13 @@ export default function ExploreSessionView({
             })()}
 
             <div
-              ref={visitStreamScrollRef}
+              ref={sessionStreamScrollRef}
               className="flex-1 overflow-y-auto px-4 sm:px-10 pb-56 pt-3 sm:pt-4"
               onScroll={() => {}}
               style={{ overscrollBehaviorY: 'contain', touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
               <div className="mx-auto w-full max-w-[640px] space-y-3 sm:space-y-4">
-                {groupedVisitStream.map((entry) =>
+                {groupedSessionStream.map((entry) =>
                   entry.type === 'artwork_group' ? (
                     <div key={entry.id} className="space-y-2">
                       <div className="flex justify-end">
@@ -623,7 +626,7 @@ export default function ExploreSessionView({
                             <polyline points="21 15 16 10 5 21" />
                           </svg>
                           <span className="text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
-                            {getArtworkGroupLabel(entry.items, activeVisitSummary.id)}
+                            {getArtworkGroupLabel(entry.items, activeSessionSummary.id)}
                           </span>
                         </div>
                       </div>
@@ -699,22 +702,22 @@ export default function ExploreSessionView({
                     </React.Fragment>
                   ),
                 )}
-                {typeof streamingVisitResponse === 'string' && (
-                  streamingVisitResponse === '' ? (
+                {typeof streamingSessionResponse === 'string' && (
+                  streamingSessionResponse === '' ? (
                     <div className="flex items-center gap-1.5 py-1">
                       <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '0ms' }} />
                       <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '160ms' }} />
                       <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '320ms' }} />
                     </div>
                   ) : (
-                    <div className="text-neutral-700">
+                        <div className="text-neutral-700">
                       <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
-                        {streamingVisitResponse}
+                        {streamingSessionResponse}
                       </p>
                     </div>
                   )
                 )}
-                <div ref={visitStreamEndRef} className="h-24 shrink-0" />
+                <div ref={sessionStreamEndRef} className="h-24 shrink-0" />
               </div>
             </div>
           </>

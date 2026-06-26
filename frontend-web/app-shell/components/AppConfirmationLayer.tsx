@@ -1,5 +1,5 @@
 import React from 'react';
-import type { VisitSummary } from '../../session/types';
+import type { SessionSummary } from '../../session/types';
 
 export type DeleteConfirmationState = {
   id: string;
@@ -8,7 +8,7 @@ export type DeleteConfirmationState = {
 
 type Props = {
   deleteConfirmation: DeleteConfirmationState;
-  pendingDeleteVisitSummary: VisitSummary | null;
+  pendingDeleteSessionSummary: SessionSummary | null;
   showCaptureExitModal: boolean;
   onCloseDeleteConfirmation: () => void;
   onConfirmDeleteItem: (id: string) => void;
@@ -19,7 +19,7 @@ type Props = {
 
 export default function AppConfirmationLayer({
   deleteConfirmation,
-  pendingDeleteVisitSummary,
+  pendingDeleteSessionSummary,
   showCaptureExitModal,
   onCloseDeleteConfirmation,
   onConfirmDeleteItem,
@@ -47,7 +47,7 @@ export default function AppConfirmationLayer({
             <p className="mb-8 text-sm leading-relaxed text-neutral-500">
               {deleteConfirmation.type === 'item'
                 ? 'This will permanently remove this artwork and its curated analysis from your Musee.'
-                : `This will permanently delete ${pendingDeleteVisitSummary?.title || 'this session'} and its reflections from Musee. The ${pendingDeleteVisitSummary?.artworkCount || 0} ${pendingDeleteVisitSummary?.artworkCount === 1 ? 'artwork will stay' : 'artworks will stay'} in your library.`}
+                : `This will permanently delete ${pendingDeleteSessionSummary?.title || 'this session'} and its reflections from Musee. The ${pendingDeleteSessionSummary?.artworkCount || 0} ${pendingDeleteSessionSummary?.artworkCount === 1 ? 'artwork will stay' : 'artworks will stay'} in your library.`}
             </p>
             <div className="flex space-x-3">
               <button

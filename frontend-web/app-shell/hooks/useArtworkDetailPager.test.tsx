@@ -38,7 +38,7 @@ describe('useArtworkDetailPager', () => {
     const items = [createItem('a1'), createItem('a2'), createItem('a3')];
     const interpretingItem: InterpretingItem = {
       ...items[0],
-      allVisitItems: items,
+      navigationItems: items,
     };
     const setArtworkDetailSelection = vi.fn();
 

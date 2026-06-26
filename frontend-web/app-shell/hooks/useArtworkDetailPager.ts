@@ -24,9 +24,9 @@ export function useArtworkDetailPager({
   setArtworkDetailSelection,
 }: UseArtworkDetailPagerOptions) {
   const navigateInterpretation = useCallback((direction: 'prev' | 'next') => {
-    if (!interpretingItem || !interpretingItem.allVisitItems || interpretingItem.allVisitItems.length <= 1) return;
+    if (!interpretingItem || !interpretingItem.navigationItems || interpretingItem.navigationItems.length <= 1) return;
 
-    const allItems = interpretingItem.allVisitItems;
+    const allItems = interpretingItem.navigationItems;
     const currentIndex = allItems.findIndex((item) => item.id === interpretingItem.id);
 
     if (currentIndex === -1) return;

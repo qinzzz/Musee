@@ -47,7 +47,7 @@ export async function suggestTopics(
   return data.suggested_topics || [];
 }
 
-export async function visitChatStream(
+export async function streamSessionChat(
   items: { id: string; url: string; keywords: string[]; artistName?: string; artworkName?: string; description?: string; date?: string; medium?: string }[],
   conversationHistory: Message[],
   newMessage: string,
@@ -83,7 +83,7 @@ export async function visitChatStream(
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(text || `visit/chat-stream failed: ${response.status}`);
+      throw new Error(text || `session chat stream failed: ${response.status}`);
     }
 
     const reader = response.body?.getReader();

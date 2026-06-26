@@ -235,18 +235,20 @@ def compose_prompt(identity_name: str, instruction_name: str, language: str = No
 
 
 @lru_cache(maxsize=1)
-def load_visit_chat_prompt() -> str:
-    return _load_prompt_file(INSTRUCTIONS_DIR / "visit_chat.txt")
+def load_session_chat_prompt() -> str:
+    return _load_prompt_file(INSTRUCTIONS_DIR / "session_chat.txt")
 
 
-def get_visit_chat_prompt(collection_summary: str) -> str:
-    template = _inject_identity(load_visit_chat_prompt(), COMPANION_IDENTITY)
+def get_session_chat_prompt(collection_summary: str) -> str:
+    template = _inject_identity(load_session_chat_prompt(), COMPANION_IDENTITY)
     return template.replace("{collection_summary}", collection_summary)
 
 
 # Backward-compat aliases
-load_exhibition_chat_prompt = load_visit_chat_prompt
-get_exhibition_chat_prompt = get_visit_chat_prompt
+load_visit_chat_prompt = load_session_chat_prompt
+get_visit_chat_prompt = get_session_chat_prompt
+load_exhibition_chat_prompt = load_session_chat_prompt
+get_exhibition_chat_prompt = get_session_chat_prompt
 
 
 def get_artist_identification_prompt_v2(identity: str = "default", language: str = None) -> str:

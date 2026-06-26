@@ -1,20 +1,20 @@
 import type { GalleryItem, Message } from '../types';
 
-export type VisitStreamMessage = Message & {
+export type SessionStreamMessage = Message & {
   id: string;
   createdAt: number;
   type?: 'text' | 'artwork_capture' | 'artwork_card';
   artworkId?: string;
 };
 
-export type VisitDraft = {
+export type SessionDraft = {
   id: string;
   title: string;
   createdAt: number;
   updatedAt: number;
 };
 
-export type VisitSummary = {
+export type SessionSummary = {
   id: string;
   title: string;
   titlePending?: boolean;
@@ -25,7 +25,7 @@ export type VisitSummary = {
   items: GalleryItem[];
 };
 
-export type ActiveVisitStreamEntry =
+export type ActiveSessionStreamEntry =
   | {
       id: string;
       createdAt: number;
@@ -36,7 +36,7 @@ export type ActiveVisitStreamEntry =
       id: string;
       createdAt: number;
       type: 'message';
-      message: VisitStreamMessage;
+      message: SessionStreamMessage;
     };
 
 export type PendingSessionArtwork =

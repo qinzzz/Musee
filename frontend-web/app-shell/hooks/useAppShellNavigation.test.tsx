@@ -12,7 +12,7 @@ describe('useAppShellNavigation', () => {
     const onSetActiveTab = vi.fn();
     const onEnterBlankSession = vi.fn();
     const onOpenSessionSummary = vi.fn();
-    const onCloseVisitMenu = vi.fn();
+    const onCloseSessionMenu = vi.fn();
 
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -23,12 +23,12 @@ describe('useAppShellNavigation', () => {
     const { result } = renderHook(() => useAppShellNavigation({
       activeTab: 'collect',
       isComposingNewSession: false,
-      editingVisitId: null,
+      editingSessionId: null,
       clearShellOverlays,
       onSetActiveTab,
       onEnterBlankSession,
       onOpenSessionSummary,
-      onCloseVisitMenu,
+      onCloseSessionMenu,
     }));
 
     act(() => {
@@ -46,7 +46,7 @@ describe('useAppShellNavigation', () => {
     const onSetActiveTab = vi.fn();
     const onEnterBlankSession = vi.fn();
     const onOpenSessionSummary = vi.fn();
-    const onCloseVisitMenu = vi.fn();
+    const onCloseSessionMenu = vi.fn();
 
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -57,26 +57,26 @@ describe('useAppShellNavigation', () => {
     const { result } = renderHook(() => useAppShellNavigation({
       activeTab: 'newSession',
       isComposingNewSession: true,
-      editingVisitId: null,
+      editingSessionId: null,
       clearShellOverlays,
       onSetActiveTab,
       onEnterBlankSession,
       onOpenSessionSummary,
-      onCloseVisitMenu,
+      onCloseSessionMenu,
     }));
 
     act(() => {
-      result.current.handleSelectVisitSummary('session-1');
+      result.current.handleSelectSessionSummary('session-1');
     });
 
     expect(onOpenSessionSummary).toHaveBeenCalledWith('session-1');
-    expect(onCloseVisitMenu).toHaveBeenCalledTimes(1);
+    expect(onCloseSessionMenu).toHaveBeenCalledTimes(1);
     expect(clearShellOverlays).toHaveBeenCalledTimes(1);
     expect(result.current.sidebarOpen).toBe(false);
   });
 
   it('closes floating shell menus when opening the mobile sidebar', () => {
-    const onCloseVisitMenu = vi.fn();
+    const onCloseSessionMenu = vi.fn();
 
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -87,12 +87,12 @@ describe('useAppShellNavigation', () => {
     const { result } = renderHook(() => useAppShellNavigation({
       activeTab: 'collect',
       isComposingNewSession: false,
-      editingVisitId: null,
+      editingSessionId: null,
       clearShellOverlays: vi.fn(),
       onSetActiveTab: vi.fn(),
       onEnterBlankSession: vi.fn(),
       onOpenSessionSummary: vi.fn(),
-      onCloseVisitMenu,
+      onCloseSessionMenu,
     }));
 
     act(() => {
@@ -101,14 +101,14 @@ describe('useAppShellNavigation', () => {
       result.current.openSidebar();
     });
 
-    expect(onCloseVisitMenu).toHaveBeenCalledTimes(1);
+    expect(onCloseSessionMenu).toHaveBeenCalledTimes(1);
     expect(result.current.recentsOpen).toBe(false);
     expect(result.current.userMenuOpen).toBe(false);
     expect(result.current.sidebarOpen).toBe(true);
   });
 
   it('closes floating shell menus when closing the mobile sidebar', () => {
-    const onCloseVisitMenu = vi.fn();
+    const onCloseSessionMenu = vi.fn();
 
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -119,12 +119,12 @@ describe('useAppShellNavigation', () => {
     const { result } = renderHook(() => useAppShellNavigation({
       activeTab: 'collect',
       isComposingNewSession: false,
-      editingVisitId: null,
+      editingSessionId: null,
       clearShellOverlays: vi.fn(),
       onSetActiveTab: vi.fn(),
       onEnterBlankSession: vi.fn(),
       onOpenSessionSummary: vi.fn(),
-      onCloseVisitMenu,
+      onCloseSessionMenu,
     }));
 
     act(() => {
@@ -133,7 +133,7 @@ describe('useAppShellNavigation', () => {
       result.current.closeMobileSidebar();
     });
 
-    expect(onCloseVisitMenu).toHaveBeenCalledTimes(1);
+    expect(onCloseSessionMenu).toHaveBeenCalledTimes(1);
     expect(result.current.recentsOpen).toBe(false);
     expect(result.current.userMenuOpen).toBe(false);
     expect(result.current.sidebarOpen).toBe(false);
@@ -143,12 +143,12 @@ describe('useAppShellNavigation', () => {
     const { result } = renderHook(() => useAppShellNavigation({
       activeTab: 'newSession',
       isComposingNewSession: true,
-      editingVisitId: null,
+      editingSessionId: null,
       clearShellOverlays: vi.fn(),
       onSetActiveTab: vi.fn(),
       onEnterBlankSession: vi.fn(),
       onOpenSessionSummary: vi.fn(),
-      onCloseVisitMenu: vi.fn(),
+      onCloseSessionMenu: vi.fn(),
     }));
 
     expect(result.current.isNewSessionEntryActive).toBe(true);

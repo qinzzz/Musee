@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload, load_only
 from typing import List, Optional
 import logging
@@ -32,6 +32,38 @@ def _serialize_collection(collection: Collection) -> dict:
     }
 
 
+def _get_owned_collection(db: Session, collection_id: str, user_id: str) -> Collection:
+    collection = db.query(Collection).filter(Collection.id == collection_id).first()
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    if collection.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this collection")
+    return collection
+
+
+def _get_owned_artworks(db: Session, user_id: str, artwork_ids: List[str]) -> List[SavedArtwork]:
+    if not artwork_ids:
+        return []
+
+    artworks = (
+        db.query(SavedArtwork)
+        .filter(
+            SavedArtwork.id.in_(artwork_ids),
+            SavedArtwork.user_id == user_id,
+        )
+        .all()
+    )
+
+    if len(artworks) != len(set(artwork_ids)):
+        raise HTTPException(
+            status_code=400,
+            detail="One or more artworks do not belong to the user",
+        )
+
+    artworks_by_id = {artwork.id: artwork for artwork in artworks}
+    return [artworks_by_id[artwork_id] for artwork_id in artwork_ids if artwork_id in artworks_by_id]
+
+
 @router.post("/collections")
 async def create_collection(request: CollectionCreate, db: Session = Depends(get_db)):
     """Create a new collection"""
@@ -52,12 +84,13 @@ async def create_collection(request: CollectionCreate, db: Session = Depends(get
         db.flush()
 
         if request.artwork_ids:
-            artworks = db.query(SavedArtwork).filter(SavedArtwork.id.in_(request.artwork_ids)).all()
-            db_collection.artworks = artworks
+            db_collection.artworks = _get_owned_artworks(db, request.user_id, request.artwork_ids)
 
         db.commit()
         persisted = _collection_with_artwork_ids_query(db).filter(Collection.id == db_collection.id).first()
         return _serialize_collection(persisted)
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to create collection: {str(e)}")
@@ -98,12 +131,15 @@ async def get_collection(collection_id: str, db: Session = Depends(get_db)):
 
 
 @router.put("/collections/{collection_id}")
-async def update_collection(collection_id: str, request: CollectionUpdate, db: Session = Depends(get_db)):
+async def update_collection(
+    collection_id: str,
+    request: CollectionUpdate,
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
     """Update collection details or artworks"""
     try:
-        collection = db.query(Collection).filter(Collection.id == collection_id).first()
-        if not collection:
-            raise HTTPException(status_code=404, detail="Collection not found")
+        collection = _get_owned_collection(db, collection_id, user_id)
 
         if request.name is not None:
             collection.name = request.name
@@ -111,8 +147,7 @@ async def update_collection(collection_id: str, request: CollectionUpdate, db: S
             collection.description = request.description
         
         if request.artwork_ids is not None:
-            artworks = db.query(SavedArtwork).filter(SavedArtwork.id.in_(request.artwork_ids)).all()
-            collection.artworks = artworks
+            collection.artworks = _get_owned_artworks(db, user_id, request.artwork_ids)
 
         db.commit()
         persisted = _collection_with_artwork_ids_query(db).filter(Collection.id == collection.id).first()
@@ -126,12 +161,14 @@ async def update_collection(collection_id: str, request: CollectionUpdate, db: S
 
 
 @router.delete("/collections/{collection_id}")
-async def delete_collection(collection_id: str, db: Session = Depends(get_db)):
+async def delete_collection(
+    collection_id: str,
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
     """Delete a collection"""
     try:
-        collection = db.query(Collection).filter(Collection.id == collection_id).first()
-        if not collection:
-            raise HTTPException(status_code=404, detail="Collection not found")
+        collection = _get_owned_collection(db, collection_id, user_id)
         
         db.delete(collection)
         db.commit()

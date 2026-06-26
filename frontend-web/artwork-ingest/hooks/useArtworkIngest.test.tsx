@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { useArtworkIngest } from './useArtworkIngest';
 import type { GalleryItem, TagCoordinate, Visit } from '../../types';
-import type { PendingSessionArtwork, VisitDraft, VisitStreamMessage } from '../../session/types';
+import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../../session/types';
 
 const {
   mockAnalyzeArtworkFromExisting,
@@ -62,7 +62,7 @@ type HarnessOptions = {
   isComposingNewSession?: boolean;
   pendingSessionArtworks?: PendingSessionArtwork[];
   items?: GalleryItem[];
-  visitStreams?: Record<string, VisitStreamMessage[]>;
+  sessionStreams?: Record<string, SessionStreamMessage[]>;
 };
 
 function createDeferred<T>() {
@@ -92,7 +92,6 @@ function createAnalysis(overrides: Partial<Parameters<typeof mockAnalyzeArtworkF
     photo_uri: 'https://example.com/image.jpg',
     location: undefined,
     photo_time: 'Jun 1, 2026',
-    session_title: undefined,
     reference_urls: [],
     artist_entity_id: 'artist-1',
     ...overrides,
@@ -107,8 +106,6 @@ function createSavedUpload() {
     artwork_name: 'Untitled',
     location: null,
     photo_time: 'Jun 1, 2026',
-    session_id: null,
-    session_title: null,
     session_links: [],
     analysis_status: 'pending' as const,
     analysis_error: null,
@@ -118,8 +115,8 @@ function createSavedUpload() {
 
 function renderUseArtworkIngest(options: HarnessOptions = {}) {
   const showToast = vi.fn();
-  const resolveUploadSession = vi.fn(() => ({ visitId: 'visit-1', isNew: true }));
-  const appendVisitMessages = vi.fn();
+  const resolveUploadSession = vi.fn(() => ({ sessionId: 'visit-1', isNew: true }));
+  const appendSessionMessages = vi.fn();
   const triggerUploadCommentary = vi.fn();
   const onExitSessionCapture = vi.fn();
 
@@ -134,31 +131,31 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       navigationItemIds?: string[];
     } | null>(null);
     const [tagPositions, setTagPositions] = React.useState<Record<string, TagCoordinate>>({});
-    const [visitDrafts, setVisitDrafts] = React.useState<VisitDraft[]>([]);
+    const [sessionDrafts, setSessionDrafts] = React.useState<SessionDraft[]>([]);
     const [isAnalyzing, setIsAnalyzing] = React.useState(false);
-    const [filteredVisitId, setFilteredVisitId] = React.useState<string | null>(null);
+    const [filteredSessionId, setFilteredSessionId] = React.useState<string | null>(null);
 
     const api = useArtworkIngest({
       userId: 'user-1',
-      defaultVisitTitle: 'Untitled Session',
+      defaultSessionTitle: 'Untitled Session',
       activeTab: options.activeTab ?? 'collect',
       isComposingNewSession: options.isComposingNewSession ?? false,
       pendingSessionArtworks,
       items,
-      visitStreams: options.visitStreams ?? {},
+      sessionStreams: options.sessionStreams ?? {},
       setPendingSessionArtworks,
       setItems,
       setVisit,
       artworkDetailSelection,
       setArtworkDetailSelection,
       setTagPositions,
-      setVisitDrafts,
+      setSessionDrafts,
       setIsAnalyzing,
-      setFilteredVisitId,
+      setFilteredSessionId,
       showToast,
       parseAnalysis: (text) => text ?? '',
       resolveUploadSession,
-      appendVisitMessages,
+      appendSessionMessages,
       triggerUploadCommentary,
       onExitSessionCapture,
     });
@@ -171,9 +168,9 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
         visit,
         artworkDetailSelection,
         tagPositions,
-        visitDrafts,
+        sessionDrafts,
         isAnalyzing,
-        filteredVisitId,
+        filteredSessionId,
       },
       actions: {
         setArtworkDetailSelection,
@@ -186,7 +183,7 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
     spies: {
       showToast,
       resolveUploadSession,
-      appendVisitMessages,
+      appendSessionMessages,
       triggerUploadCommentary,
       onExitSessionCapture,
     },

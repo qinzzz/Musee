@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildVisitSummaries } from './visitSelectors';
+import { buildSessionSummaries } from './sessionSelectors';
 import type { GalleryItem } from '../../types';
 
 function createItem(overrides: Partial<GalleryItem> = {}): GalleryItem {
@@ -18,7 +18,7 @@ function createItem(overrides: Partial<GalleryItem> = {}): GalleryItem {
     timestamp: 100,
     sessionCapturedAt: 100,
     conversation: [],
-    visitId: 'visit-1',
+    sessionLinks: [{ sessionId: 'session-1' }],
     artistName: 'Artist',
     artworkName: 'Work',
     syncStatus: 'synced',
@@ -26,38 +26,38 @@ function createItem(overrides: Partial<GalleryItem> = {}): GalleryItem {
   };
 }
 
-describe('buildVisitSummaries', () => {
+describe('buildSessionSummaries', () => {
   it('marks a session title as pending while persisted session titles are still hydrating', () => {
-    const summaries = buildVisitSummaries({
+    const summaries = buildSessionSummaries({
       items: [createItem()],
       persistedSessions: [],
       persistedSessionsHydrated: false,
-      visitDrafts: [],
-      defaultVisitTitle: 'Untitled Session',
-      visitSearch: '',
+      sessionDrafts: [],
+      defaultSessionTitle: 'Untitled Session',
+      sessionSearch: '',
     });
 
     expect(summaries).toHaveLength(1);
     expect(summaries[0]).toMatchObject({
-      id: 'visit-1',
+      id: 'session-1',
       title: 'Untitled Session',
       titlePending: true,
     });
   });
 
   it('stops marking the title as pending after persisted session hydration completes', () => {
-    const summaries = buildVisitSummaries({
+    const summaries = buildSessionSummaries({
       items: [createItem()],
       persistedSessions: [],
       persistedSessionsHydrated: true,
-      visitDrafts: [],
-      defaultVisitTitle: 'Untitled Session',
-      visitSearch: '',
+      sessionDrafts: [],
+      defaultSessionTitle: 'Untitled Session',
+      sessionSearch: '',
     });
 
     expect(summaries).toHaveLength(1);
     expect(summaries[0]).toMatchObject({
-      id: 'visit-1',
+      id: 'session-1',
       title: 'Untitled Session',
       titlePending: false,
     });

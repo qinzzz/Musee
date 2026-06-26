@@ -74,11 +74,9 @@ function createCacheItem() {
     medium: 'Oil',
     timestamp: 1710000000000,
     sessionCapturedAt: 1710000000000,
-    visitId: 'visit-1',
-    sessionLinks: [{ sessionId: 'visit-1', sessionTitle: 'Visit One' }],
+    sessionLinks: [{ sessionId: 'visit-1' }],
     location: 'SF',
     photoTime: 'Jun 1, 2026',
-    sessionTitle: 'Visit One',
     movement: undefined,
     periodBucket: undefined,
     referenceUrls: [],
@@ -102,9 +100,8 @@ function createServerRecord(overrides: Record<string, unknown> = {}) {
     medium: 'Oil on canvas',
     photo_time: '2026-06-01T00:00:00Z',
     created_at: '2026-06-01T00:00:00Z',
-    session_links: [{ session_id: 'visit-1', session_title: 'Visit One', source: 'upload' }],
+    session_links: [{ session_id: 'visit-1', source: 'upload' }],
     location: { city: 'San Francisco' },
-    session_title: 'Visit One',
     movement: 'Impressionism',
     period_bucket: '1900s',
     reference_urls: [],
@@ -174,7 +171,7 @@ describe('useArtworkLibrary', () => {
     mockFetchUserArtworks.mockResolvedValue({
       items: [
         createServerRecord({ id: 'server-1' }),
-        createServerRecord({ id: 'server-2', session_links: [{ session_id: 'visit-1', session_title: 'Visit One', source: 'camera' }] }),
+        createServerRecord({ id: 'server-2', session_links: [{ session_id: 'visit-1', source: 'camera' }] }),
       ],
     });
 
@@ -207,7 +204,7 @@ describe('useArtworkLibrary', () => {
       basePath: '/saved',
     });
     expect(result.current.interpretingItem?.id).toBe('server-1');
-    expect(result.current.interpretingItem?.allVisitItems).toHaveLength(2);
+    expect(result.current.interpretingItem?.navigationItems).toHaveLength(2);
   });
 
   it('clears interpretation and calls missing callbacks when restoring a missing artwork', async () => {
@@ -314,7 +311,7 @@ describe('useArtworkLibrary', () => {
       );
     });
 
-    expect(result.current.interpretingItem?.allVisitItems?.[1].artworkName).toBe('Second Work');
+    expect(result.current.interpretingItem?.navigationItems?.[1].artworkName).toBe('Second Work');
 
     act(() => {
       result.current.setItems((prev) => prev.map((item) => (
@@ -322,6 +319,6 @@ describe('useArtworkLibrary', () => {
       )));
     });
 
-    expect(result.current.interpretingItem?.allVisitItems?.[1].artworkName).toBe('Updated Second Work');
+    expect(result.current.interpretingItem?.navigationItems?.[1].artworkName).toBe('Updated Second Work');
   });
 });
