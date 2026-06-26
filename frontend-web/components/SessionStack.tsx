@@ -13,7 +13,7 @@ interface Props {
   isActive?: boolean;
 }
 
-const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, onDeleteItem, onDeleteSession, onInterpret, isActive }) => {
+const SessionStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, onDeleteItem, onDeleteSession, onInterpret, isActive }) => {
   if (items.length === 0) return null;
 
   // We show up to 3 cards in the stack visually
@@ -110,4 +110,4 @@ const VisitStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit, o
   );
 };
 
-export default VisitStack;
+export default SessionStack;

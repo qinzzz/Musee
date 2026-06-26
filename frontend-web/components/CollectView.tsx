@@ -8,7 +8,7 @@ import InterpretationModal from './InterpretationModal';
 import OrganizeView from './OrganizeView';
 
 type InterpretationItem = GalleryItem & {
-  allVisitItems?: GalleryItem[];
+  navigationItems?: GalleryItem[];
   is_liked?: boolean;
 };
 
@@ -19,11 +19,12 @@ type CollectViewProps = {
   artworksLoaded: boolean;
   items: GalleryItem[];
   visit: Visit;
-  filteredVisitId: string | null;
+  filteredSessionId: string | null;
   isAnalyzing: boolean;
   likedIds: Set<string>;
   boards: Board[];
   boardsLoading: boolean;
+  sessionTitleById: Record<string, string>;
   userId: string;
   collectTab: CollectTab;
   interpretingItem: InterpretationItem | null;
@@ -64,11 +65,12 @@ export default function CollectView({
   artworksLoaded,
   items,
   visit,
-  filteredVisitId,
+  filteredSessionId,
   isAnalyzing,
   likedIds,
   boards,
   boardsLoading,
+  sessionTitleById,
   userId,
   collectTab,
   interpretingItem,
@@ -115,7 +117,7 @@ export default function CollectView({
             onUpdateMetadata={onUpdateMetadata}
             onUpdateClassification={onUpdateClassification}
             onDelete={() => onDeleteArtwork(interpretingItem.id)}
-            allVisitItems={interpretingItem.allVisitItems}
+            navigationItems={interpretingItem.navigationItems}
             onNavigate={onNavigateInterpretation}
             rightMode={interpretationRightMode}
             onRightModeChange={onInterpretationRightModeChange}
@@ -124,6 +126,7 @@ export default function CollectView({
             userId={userId}
             onNavigateToArtist={onNavigateToArtistFromInterpretation}
             onNavigateToSession={onNavigateToSessionFromInterpretation}
+            sessionTitleById={sessionTitleById}
             navigationContextLabel={artworkDetailContext?.parentLabel || 'All Artworks'}
             editRequestToken={artworkHeaderEditToken}
             isInline={true}
@@ -141,7 +144,7 @@ export default function CollectView({
         artworksLoaded={artworksLoaded}
         items={items}
         visit={visit}
-        filteredVisitId={filteredVisitId}
+        filteredSessionId={filteredSessionId}
         isAnalyzing={isAnalyzing}
         likedIds={likedIds}
         boards={boards}

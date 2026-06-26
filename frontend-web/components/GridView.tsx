@@ -15,7 +15,7 @@ const OverflowDotsIcon: React.FC<{ className?: string }> = ({ className = 'h-3.5
 interface Props {
   items: GalleryItem[];
   visit: Visit;
-  filteredVisitId: string | null;
+  filteredSessionId: string | null;
   isAnalyzing: boolean;
   boards?: Album[];
   selectedIds: string[];
@@ -28,7 +28,7 @@ interface Props {
 const GridView: React.FC<Props> = ({
   items,
   visit,
-  filteredVisitId,
+  filteredSessionId,
   isAnalyzing,
   boards = [],
   selectedIds,

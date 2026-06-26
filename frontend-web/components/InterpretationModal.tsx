@@ -26,8 +26,7 @@ interface Props {
     streamingText?: string;  // Real-time streaming text during analysis
     location?: any;
     photoTime?: string;
-    visitId?: string;
-    sessionTitle?: string;
+    sessionId?: string;
     sessionLinks?: SessionLink[];
     referenceUrls?: import('../types').ReferenceItem[];
     insights?: Array<{ title: string; text: string }>;
@@ -38,7 +37,7 @@ interface Props {
   };
   onClose: () => void;
   onUpdateMetadata?: (id: string, updates: { artistName?: string; artworkName?: string; date?: string; medium?: string; keywords?: string[] }) => void;
-  allVisitItems?: any[];
+  navigationItems?: any[];
   onNavigate?: (direction: 'prev' | 'next') => void;
   rightMode: 'metadata' | 'community';
   onRightModeChange: (mode: 'metadata' | 'community') => void;
@@ -48,6 +47,7 @@ interface Props {
   userId?: string;
   onNavigateToArtist?: (artistEntityId: string | undefined, artworkId: string | undefined, artistName: string | undefined) => void;
   onNavigateToSession?: (sessionId: string) => void;
+  sessionTitleById?: Record<string, string>;
   isInline?: boolean;
   onUpdateClassification?: (itemId: string, classification: ArtworkClassification) => Promise<void>;
   navigationContextLabel?: string;
@@ -174,7 +174,7 @@ const Insight: React.FC<{
 };
 
 
-const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, allVisitItems, onNavigate, rightMode, onRightModeChange, onIdentifyAgain, onRetryAnalysis, onDelete, userId, onNavigateToArtist, onNavigateToSession, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
+const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, navigationItems, onNavigate, rightMode, onRightModeChange, onIdentifyAgain, onRetryAnalysis, onDelete, userId, onNavigateToArtist, onNavigateToSession, sessionTitleById, isInline, onUpdateClassification, navigationContextLabel, editRequestToken }) => {
   const [isIdentifyingAgain, setIsIdentifyingAgain] = useState(false);
   const [insights, setInsights] = useState<Array<{ title: string; text: string }>>([]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -409,28 +409,18 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
   const displayMedium = streamingFields?.medium || item.medium;
   const displayDescription = streamingFields?.description || item.description;
   const sessionMemberships = useMemo(() => {
-    const fallbackTitle = item.sessionTitle?.trim() || 'Untitled Session';
-    const links = item.sessionLinks && item.sessionLinks.length > 0
-      ? item.sessionLinks
-      : (item.visitId
-          ? [{
-              sessionId: item.visitId,
-              sessionTitle: item.sessionTitle,
-            }]
-          : []);
-
     const seen = new Set<string>();
-    return links.reduce<Array<{ sessionId: string; title: string }>>((acc, link) => {
+    return (item.sessionLinks || []).reduce<Array<{ sessionId: string; title: string }>>((acc, link) => {
       if (!link?.sessionId || seen.has(link.sessionId)) return acc;
       seen.add(link.sessionId);
       acc.push({
         sessionId: link.sessionId,
-        title: link.sessionTitle?.trim() || fallbackTitle,
+        title: sessionTitleById?.[link.sessionId]?.trim() || 'Untitled Session',
       });
       return acc;
     }, []);
-  }, [item.sessionLinks, item.sessionTitle, item.visitId]);
-  const navigationIndex = allVisitItems?.findIndex(i => i.id === item.id) ?? -1;
+  }, [item.sessionLinks, sessionTitleById]);
+  const navigationIndex = navigationItems?.findIndex(i => i.id === item.id) ?? -1;
   const currentClassification = item.classification || 'unsorted';
   const isInitialIdentifying = Boolean(item.isAnalyzing && item.analysisStatus !== 'reidentifying');
   const isReidentifying = Boolean(item.isAnalyzing && item.analysisStatus === 'reidentifying');
@@ -441,12 +431,12 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
   const visibleMedium = shouldHideInitialIdentityPlaceholders ? '' : displayMedium;
   const hasResolvedIdentity = Boolean(visibleArtist || visibleTitle || visibleDate || visibleMedium);
   const hasExistingDerivedContent = Boolean(item.description || (item.insights ?? []).length > 0);
-  const hasNavigationFooter = Boolean(allVisitItems && allVisitItems.length > 1 && onNavigate && navigationIndex >= 0);
-  const previousArtwork = navigationIndex >= 0 && allVisitItems && allVisitItems.length > 1
-    ? allVisitItems[(navigationIndex - 1 + allVisitItems.length) % allVisitItems.length]
+  const hasNavigationFooter = Boolean(navigationItems && navigationItems.length > 1 && onNavigate && navigationIndex >= 0);
+  const previousArtwork = navigationIndex >= 0 && navigationItems && navigationItems.length > 1
+    ? navigationItems[(navigationIndex - 1 + navigationItems.length) % navigationItems.length]
     : null;
-  const nextArtwork = navigationIndex >= 0 && allVisitItems && allVisitItems.length > 1
-    ? allVisitItems[(navigationIndex + 1) % allVisitItems.length]
+  const nextArtwork = navigationIndex >= 0 && navigationItems && navigationItems.length > 1
+    ? navigationItems[(navigationIndex + 1) % navigationItems.length]
     : null;
 
   // Focus first input when entering edit mode
@@ -658,9 +648,9 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="19 12 5 12"/><polyline points="12 19 5 12 12 5"/></svg>
               <span className="text-[9px] tracking-[0.2em] uppercase font-bold">Back</span>
-              {allVisitItems && allVisitItems.length > 1 && navigationIndex >= 0 && (
+              {navigationItems && navigationItems.length > 1 && navigationIndex >= 0 && (
                 <span className="text-[8px] font-mono text-neutral-400 tracking-wider">
-                  {navigationIndex + 1}/{allVisitItems.length}
+                  {navigationIndex + 1}/{navigationItems.length}
                 </span>
               )}
             </button>
@@ -1204,7 +1194,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
           </div>
         </div>
 
-        {allVisitItems && allVisitItems.length > 1 && onNavigate && navigationIndex >= 0 && (
+        {navigationItems && navigationItems.length > 1 && onNavigate && navigationIndex >= 0 && (
           <div className="absolute inset-x-0 bottom-0 z-40 hidden sm:block px-6 pb-5">
             <div className="mx-auto flex w-full max-w-[760px] items-center gap-3 rounded-[24px] border border-neutral-200 bg-white/96 px-4 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)] backdrop-blur">
               <button
@@ -1217,7 +1207,7 @@ const InterpretationModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata,
                 </span>
               </button>
               <div className="shrink-0 text-[11px] font-mono tracking-[0.2em] text-neutral-400">
-                {navigationIndex + 1}/{allVisitItems.length}
+                {navigationIndex + 1}/{navigationItems.length}
               </div>
               <button
                 onClick={() => onNavigate('next')}

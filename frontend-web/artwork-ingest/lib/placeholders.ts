@@ -9,7 +9,6 @@ type BasePlaceholderOptions = {
   photoTime: string;
   location?: string;
   sessionId?: string;
-  sessionTitle?: string;
   sequenceNumber?: number;
   mode: IngestMode;
 };
@@ -50,11 +49,8 @@ export function createUploadPlaceholder(options: BasePlaceholderOptions): Galler
     timestamp: options.timestamp,
     sessionCapturedAt: Date.now(),
     conversation: [],
-    visitId: options.sessionId,
-    sessionTitle: options.sessionTitle,
     sessionLinks: buildSessionLink(
       options.sessionId,
-      options.sessionTitle,
       options.sequenceNumber,
       buildSource(options.mode),
     ),
@@ -88,11 +84,8 @@ export function createPersistedUploadItem(
     timestamp: options.timestamp,
     sessionCapturedAt: Date.now(),
     conversation: [],
-    visitId: options.sessionId,
-    sessionTitle: saved.session_title || options.sessionTitle,
     sessionLinks: buildSessionLink(
       options.sessionId,
-      saved.session_title || options.sessionTitle,
       options.sequenceNumber,
       buildSource(options.mode),
     ),

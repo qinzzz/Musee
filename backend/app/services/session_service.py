@@ -256,31 +256,6 @@ def refresh_session_title(db: Session, session: Optional[SessionModel]) -> Optio
     return session
 
 
-def session_has_meaningful_messages(db: Session, session_id: str) -> bool:
-    return (
-        db.query(SessionMessage.id)
-        .filter(
-            SessionMessage.session_id == session_id,
-            SessionMessage.type == "text",
-            SessionMessage.content.isnot(None),
-            SessionMessage.content != "",
-        )
-        .first()
-        is not None
-    )
-
-
-def should_delete_session_after_artwork_removal(db: Session, session_id: str) -> bool:
-    remaining_links = (
-        db.query(SessionArtwork.id)
-        .filter(SessionArtwork.session_id == session_id)
-        .count()
-    )
-    if remaining_links > 0:
-        return False
-    return not session_has_meaningful_messages(db, session_id)
-
-
 def ensure_session_artwork_link(
     db: Session,
     session_id: Optional[str],
@@ -334,10 +309,13 @@ def get_or_create_owned_session(
     user_id: Optional[str],
     session_id: Optional[str],
     requested_title: Optional[str] = None,
+    create_if_missing_id: bool = True,
 ) -> Optional[SessionModel]:
     ensure_user_record(db, user_id)
 
     if not session_id:
+        if not create_if_missing_id:
+            return None
         session_id = f"sess_{uuid_mod.uuid4().hex[:8]}"
 
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -364,6 +342,55 @@ def get_or_create_owned_session(
     db.flush()
     refresh_session_title(db, session)
     return session
+
+
+def attach_artwork_ids_to_session(
+    db: Session,
+    session_record: SessionModel,
+    artwork_ids: List[str],
+    *,
+    source: str = "library",
+) -> int:
+    ordered_artwork_ids: List[str] = []
+    seen_artwork_ids: set[str] = set()
+    for artwork_id in artwork_ids:
+        if not artwork_id or artwork_id in seen_artwork_ids:
+            continue
+        ordered_artwork_ids.append(artwork_id)
+        seen_artwork_ids.add(artwork_id)
+
+    if not ordered_artwork_ids:
+        return 0
+
+    existing_artwork_ids = {
+        artwork_id
+        for (artwork_id,) in (
+            db.query(SessionArtwork.artwork_id)
+            .filter(SessionArtwork.session_id == session_record.id)
+            .all()
+        )
+        if artwork_id
+    }
+    next_sequence_number = (
+        db.query(func.max(SessionArtwork.sequence_number))
+        .filter(SessionArtwork.session_id == session_record.id)
+        .scalar()
+        or 0
+    ) + 1
+
+    inserted = 0
+    for artwork_id in ordered_artwork_ids:
+        if artwork_id in existing_artwork_ids:
+            continue
+        ensure_session_artwork_link(
+            db,
+            session_id=session_record.id,
+            artwork_id=artwork_id,
+            source=source,
+            sequence_number=next_sequence_number + inserted,
+        )
+        inserted += 1
+    return inserted
 
 
 def append_messages_to_session(
@@ -429,34 +456,6 @@ def get_artwork_session_ids(db: Session, artwork_id: str) -> List[str]:
         )
         if session_id
     ]
-
-
-def ensure_user_and_session(
-    db: Session,
-    user_id: Optional[str],
-    session_id: Optional[str],
-) -> Optional[SessionModel]:
-    ensure_user_record(db, user_id)
-
-    if not session_id:
-        return None
-
-    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if session:
-        sync_session_display_title(session)
-        return session
-
-    session = SessionModel(
-        id=session_id,
-        user_id=user_id or "anonymous",
-        title=DEFAULT_SESSION_TITLE,
-        system_title=DEFAULT_SESSION_TITLE,
-        title_state=SESSION_TITLE_STATE_DRAFT,
-    )
-    db.add(session)
-    db.flush()
-    refresh_session_title(db, session)
-    return session
 
 
 def get_session_or_404(db: Session, session_id: str) -> SessionModel:

@@ -13,8 +13,8 @@ from app.database.models import SavedArtwork, Session as SessionModel, SessionAr
 from app.services.session_service import (
     DEFAULT_SESSION_TITLE,
     SESSION_ARTWORK_LIMIT,
+    attach_artwork_ids_to_session,
     append_messages_to_session,
-    ensure_session_artwork_link,
     get_or_create_owned_session,
     get_session_or_404,
     normalize_session_title,
@@ -215,26 +215,12 @@ async def start_session_with_artworks(
         requested_title=request.title,
     )
 
-    current_max_seq = db.query(func.max(SessionArtwork.sequence_number)).filter(
-        SessionArtwork.session_id == session_record.id
-    ).scalar() or 0
-
-    inserted = 0
-    for offset, artwork_id in enumerate(artwork_ids, start=1):
-        existing = db.query(SessionArtwork).filter(
-            SessionArtwork.session_id == session_record.id,
-            SessionArtwork.artwork_id == artwork_id,
-        ).first()
-        if existing:
-            continue
-        ensure_session_artwork_link(
-            db,
-            session_id=session_record.id,
-            artwork_id=artwork_id,
-            source="library",
-            sequence_number=current_max_seq + offset,
-        )
-        inserted += 1
+    inserted = attach_artwork_ids_to_session(
+        db,
+        session_record,
+        artwork_ids,
+        source="library",
+    )
 
     refresh_session_title(db, session_record)
     db.commit()
@@ -283,26 +269,12 @@ async def attach_artworks_to_session(
     if missing_ids:
         raise HTTPException(status_code=404, detail=f"Artwork not found or not owned: {missing_ids[0]}")
 
-    current_max_seq = db.query(func.max(SessionArtwork.sequence_number)).filter(
-        SessionArtwork.session_id == session_id
-    ).scalar() or 0
-
-    inserted = 0
-    for offset, artwork_id in enumerate(artwork_ids, start=1):
-        existing = db.query(SessionArtwork).filter(
-            SessionArtwork.session_id == session_id,
-            SessionArtwork.artwork_id == artwork_id,
-        ).first()
-        if existing:
-            continue
-        ensure_session_artwork_link(
-            db,
-            session_id=session_id,
-            artwork_id=artwork_id,
-            source="library",
-            sequence_number=current_max_seq + offset,
-        )
-        inserted += 1
+    inserted = attach_artwork_ids_to_session(
+        db,
+        session_record,
+        artwork_ids,
+        source="library",
+    )
 
     refresh_session_title(db, session_record)
     db.commit()

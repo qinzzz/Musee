@@ -11,4 +11,4 @@ from . import tag
 from . import auth
 from . import sessions
 from . import taste_profile
-from . import visit_chat
+from . import session_chat

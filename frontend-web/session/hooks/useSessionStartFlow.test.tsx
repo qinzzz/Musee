@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionStartFlow } from './useSessionStartFlow';
 import type { GalleryItem, Visit } from '../../types';
 import type { PreparedSessionUploadEntry, PreparedUploadSessionContext } from '../../artwork-ingest/types';
-import type { PendingSessionArtwork, VisitDraft, VisitStreamMessage } from '../types';
+import type { PendingSessionArtwork } from '../types';
 
 const {
   mockBuildPreparedSessionFallbackPrompt,
@@ -58,15 +58,15 @@ type HarnessOptions = {
 
 function renderUseSessionStartFlow(options: HarnessOptions = {}) {
   const refreshPersistedSessions = vi.fn();
-  const setVisitDrafts = vi.fn();
+  const setSessionDrafts = vi.fn();
   const setItems = vi.fn();
   const setActiveTab = vi.fn();
-  const setFilteredVisitId = vi.fn();
+  const setFilteredSessionId = vi.fn();
   const setIsComposingNewSession = vi.fn();
   const setVisit = vi.fn();
   const resetPreparedSessionState = vi.fn();
-  const appendVisitMessages = vi.fn();
-  const sendVisitInquiryToSession = vi.fn();
+  const appendSessionMessages = vi.fn();
+  const sendSessionInquiryToSession = vi.fn();
   const showToast = vi.fn();
   const ingestPreparedUploads = options.ingestPreparedUploads ?? vi.fn().mockResolvedValue([]);
 
@@ -74,23 +74,23 @@ function renderUseSessionStartFlow(options: HarnessOptions = {}) {
     const [isSubmittingPreparedSession, setIsSubmittingPreparedSession] = React.useState(false);
 
     const api = useSessionStartFlow({
-      defaultVisitTitle: 'Untitled Session',
+      defaultSessionTitle: 'Untitled Session',
       sessionUserId: 'user-1',
       pendingSessionArtworks: options.pendingSessionArtworks ?? [],
       newSessionDraftMessage: options.newSessionDraftMessage ?? '',
       isSubmittingPreparedSession,
       setIsSubmittingPreparedSession,
       refreshPersistedSessions,
-      setVisitDrafts,
+      setSessionDrafts,
       setItems,
       setActiveTab,
-      setFilteredVisitId,
+      setFilteredSessionId,
       setIsComposingNewSession,
       setVisit,
       resetPreparedSessionState,
-      appendVisitMessages,
+      appendSessionMessages,
       ingestPreparedUploads,
-      sendVisitInquiryToSession,
+      sendSessionInquiryToSession,
       showToast,
     });
 
@@ -106,16 +106,16 @@ function renderUseSessionStartFlow(options: HarnessOptions = {}) {
     ...hook,
     spies: {
       refreshPersistedSessions,
-      setVisitDrafts,
+      setSessionDrafts,
       setItems,
       setActiveTab,
-      setFilteredVisitId,
+      setFilteredSessionId,
       setIsComposingNewSession,
       setVisit,
       resetPreparedSessionState,
-      appendVisitMessages,
+      appendSessionMessages,
       ingestPreparedUploads,
-      sendVisitInquiryToSession,
+      sendSessionInquiryToSession,
       showToast,
     },
   };
@@ -175,7 +175,7 @@ describe('useSessionStartFlow', () => {
     });
 
     expect(mockStartSessionWithArtworks).toHaveBeenCalledWith('user-1', {
-      session_id: expect.stringMatching(/^visit_/),
+      session_id: expect.stringMatching(/^session_/),
       title: 'Untitled Session',
       artwork_ids: ['artwork-library-1'],
     });
@@ -188,7 +188,6 @@ describe('useSessionStartFlow', () => {
       ],
       expect.objectContaining({
         sessionId: 'session-1',
-        sessionTitle: 'Untitled Session',
         getSequenceNumber: expect.any(Function),
       }),
     );
@@ -197,7 +196,7 @@ describe('useSessionStartFlow', () => {
     expect(ingestContext.getSequenceNumber('entry-library')).toBe(0);
     expect(ingestContext.getSequenceNumber('entry-upload')).toBe(1);
 
-    expect(spies.appendVisitMessages).toHaveBeenCalledWith(
+    expect(spies.appendSessionMessages).toHaveBeenCalledWith(
       'session-1',
       expect.arrayContaining([
         expect.objectContaining({ type: 'artwork_capture', artworkId: 'artwork-library-1' }),
@@ -205,7 +204,7 @@ describe('useSessionStartFlow', () => {
       ]),
     );
     expect(spies.setActiveTab).toHaveBeenCalledWith('newSession');
-    expect(spies.setFilteredVisitId).toHaveBeenCalledWith('session-1');
+    expect(spies.setFilteredSessionId).toHaveBeenCalledWith('session-1');
     expect(spies.setIsComposingNewSession).toHaveBeenCalledWith(false);
     expect(spies.resetPreparedSessionState).toHaveBeenCalledTimes(1);
 
@@ -213,7 +212,7 @@ describe('useSessionStartFlow', () => {
       vi.runAllTimers();
     });
 
-    expect(spies.sendVisitInquiryToSession).toHaveBeenCalledWith(
+    expect(spies.sendSessionInquiryToSession).toHaveBeenCalledWith(
       'session-1',
       'fallback prompt',
       expect.arrayContaining([
@@ -253,7 +252,7 @@ describe('useSessionStartFlow', () => {
 
     expect(spies.showToast).toHaveBeenCalledWith('Couldn’t save the first artwork. Try again.', 'info');
     expect(spies.ingestPreparedUploads).toHaveBeenCalledTimes(1);
-    expect(spies.setVisitDrafts).not.toHaveBeenCalled();
+    expect(spies.setSessionDrafts).not.toHaveBeenCalled();
     expect(spies.resetPreparedSessionState).not.toHaveBeenCalled();
     expect(result.current.state.isSubmittingPreparedSession).toBe(false);
 
@@ -290,13 +289,12 @@ describe('useSessionStartFlow', () => {
     expect(spies.ingestPreparedUploads).toHaveBeenCalledWith(
       [expect.objectContaining({ id: 'entry-upload', kind: 'upload' })],
       expect.objectContaining({
-        sessionId: expect.stringMatching(/^visit_/),
-        sessionTitle: 'Untitled Session',
+        sessionId: expect.stringMatching(/^session_/),
         getSequenceNumber: expect.any(Function),
       }),
     );
     expect(spies.refreshPersistedSessions).toHaveBeenCalledTimes(1);
-    expect(spies.setVisitDrafts).toHaveBeenCalled();
+    expect(spies.setSessionDrafts).toHaveBeenCalled();
     expect(result.current.state.isSubmittingPreparedSession).toBe(false);
   });
 });

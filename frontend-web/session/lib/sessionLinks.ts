@@ -1,10 +1,18 @@
 import type { GalleryItem, SessionLink } from '../../types';
 
+export function getPrimarySessionLink(item: GalleryItem): SessionLink | undefined {
+  return item.sessionLinks?.[0];
+}
+
+export function getPrimarySessionId(item: GalleryItem): string | undefined {
+  return getPrimarySessionLink(item)?.sessionId;
+}
+
 export function getItemSessionIds(item: GalleryItem): string[] {
   if (item.sessionLinks && item.sessionLinks.length > 0) {
     return item.sessionLinks.map((link) => link.sessionId);
   }
-  return item.visitId ? [item.visitId] : [];
+  return [];
 }
 
 export function itemBelongsToSession(
@@ -26,14 +34,12 @@ export function updateSessionLinkForItem(
 
   if (nextLink === null) {
     const filteredLinks = existingLinks.filter((link) => link.sessionId !== sessionId);
-    if (filteredLinks.length === 0 && item.visitId !== sessionId) {
+    if (filteredLinks.length === 0 && !existingLinks.some((link) => link.sessionId === sessionId)) {
       return item;
     }
     return {
       ...item,
       sessionLinks: filteredLinks.length > 0 ? filteredLinks : undefined,
-      visitId: item.visitId === sessionId ? undefined : item.visitId,
-      sessionTitle: item.visitId === sessionId ? undefined : item.sessionTitle,
     };
   }
 
@@ -46,14 +52,11 @@ export function updateSessionLinkForItem(
   return {
     ...item,
     sessionLinks: existingLinks,
-    visitId: item.visitId || sessionId,
-    sessionTitle: item.sessionTitle || nextLink.sessionTitle,
   };
 }
 
 export function buildSessionLink(
   sessionId: string | undefined,
-  sessionTitle: string | undefined,
   sequenceNumber: number | undefined,
   source: SessionLink['source'],
 ): SessionLink[] | undefined {
@@ -61,7 +64,6 @@ export function buildSessionLink(
   return [
     {
       sessionId,
-      sessionTitle,
       sequenceNumber,
       source,
     },

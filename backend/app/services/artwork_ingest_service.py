@@ -11,7 +11,7 @@ from app.services.artwork_analysis_service import batch_link_tags
 from app.services.session_service import (
     coerce_location_payload as _coerce_location_payload,
     ensure_session_artwork_link as _ensure_session_artwork_link,
-    ensure_user_and_session as _ensure_user_and_session,
+    get_or_create_owned_session as _get_or_create_owned_session,
     refresh_session_title as _refresh_session_title,
 )
 from app.services.artwork_entity_service import upsert_artist_entity, upsert_artwork_entity
@@ -83,7 +83,12 @@ def create_saved_artwork_record_sync(
     sequence_number: Optional[int] = None,
 ) -> str:
     with SessionLocal() as local_db:
-        session = _ensure_user_and_session(local_db, user_id, session_id)
+        session = _get_or_create_owned_session(
+            local_db,
+            user_id=user_id,
+            session_id=session_id,
+            create_if_missing_id=False,
+        )
         artwork = SavedArtwork(
             photo_uri=photo_uri,
             artist_name="Unknown Artist",
@@ -133,7 +138,12 @@ def save_analyzed_artwork_record_sync(
             local_db.add(user)
             local_db.flush()
 
-        session_record = _ensure_user_and_session(local_db, user_id, session_id)
+        session_record = _get_or_create_owned_session(
+            local_db,
+            user_id=user_id,
+            session_id=session_id,
+            create_if_missing_id=False,
+        )
         artwork = SavedArtwork(
             photo_uri=photo_uri,
             artist_name=parsed_result["artist_name"],

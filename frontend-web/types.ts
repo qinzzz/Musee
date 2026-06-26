@@ -43,7 +43,6 @@ export type ArtworkDeleteStatus = 'pending';
 export interface SessionLink {
   id?: string;
   sessionId: string;
-  sessionTitle?: string;
   sequenceNumber?: number;
   source?: 'library' | 'upload' | 'camera';
   createdAt?: string;
@@ -57,7 +56,6 @@ export interface GalleryItem {
   timestamp: number;
   sessionCapturedAt?: number;
   conversation: Message[];
-  visitId?: string;
   sessionLinks?: SessionLink[];
   // Artwork analysis fields from backend
   artistName?: string;
@@ -70,7 +68,6 @@ export interface GalleryItem {
   streamingText?: string;
   location?: any;
   photoTime?: string;
-  sessionTitle?: string;
   movement?: string;
   periodBucket?: string;
   referenceUrls?: ReferenceItem[];

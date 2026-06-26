@@ -1,8 +1,8 @@
 import type { GalleryItem } from '../../types';
-import type { VisitStreamMessage } from '../types';
+import type { SessionStreamMessage } from '../types';
 
-export function serializeVisitHistory(
-  messages: VisitStreamMessage[],
+export function serializeSessionHistory(
+  messages: SessionStreamMessage[],
   items: GalleryItem[],
 ): { role: 'user' | 'model'; text: string }[] {
   const byId = new Map<string, GalleryItem>();

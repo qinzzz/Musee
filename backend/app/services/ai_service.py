@@ -11,7 +11,7 @@ from app.utils.prompt_loader import (
     get_artist_identification_prompt_v2,
     get_artwork_bite_prompt_v2,
     get_suggest_topics_prompt_v2,
-    get_visit_chat_prompt,
+    get_session_chat_prompt,
     get_explore_skill_select_prompt,
     get_explore_observation_prompt,
     get_explore_deepdive_prompt,
@@ -169,15 +169,15 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         return prompt + context_block
 
     @staticmethod
-    def build_visit_prompt(items: List[Dict[str, Any]]) -> str:
-        """System instructions for visit chat.
+    def build_session_chat_prompt(items: List[Dict[str, Any]]) -> str:
+        """System instructions for session chat.
 
         Artwork details are no longer restated here — they flow through the
         conversation history (each capture/card is an inline turn), so listing
         them in the system prompt would be redundant. The `items` arg is kept
         for signature compatibility but intentionally unused.
         """
-        return get_visit_chat_prompt("")
+        return get_session_chat_prompt("")
 
     @staticmethod
     def build_conversation_history(history: Optional[List[Dict[str, str]]]) -> List[ConversationMessage]:
@@ -607,7 +607,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         # Clean and return
         return self.clean_summary_response(response)
 
-    async def visit_chat(
+    async def session_chat(
         self,
         items: list,
         history: list,
@@ -618,7 +618,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         Exhibition curator chat: discuss a collection of works with the user.
         Implements provider-agnostic orchestration similar to other service methods.
         """
-        prompt = self.build_visit_prompt(items)
+        prompt = self.build_session_chat_prompt(items)
         conversation_history = self.build_conversation_history(history)
         image_data = None if history else self.prepare_image_batch(image_bytes_list)
 
@@ -636,7 +636,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 temperature=0.7,
             )
 
-    async def visit_chat_stream(
+    async def stream_session_chat(
         self,
         items: list,
         history: list,
@@ -647,7 +647,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         Stream exhibition curator response token by token.
         Mirrors the non-streaming version but yields incremental chunks.
         """
-        prompt = self.build_visit_prompt(items)
+        prompt = self.build_session_chat_prompt(items)
         conversation_history = self.build_conversation_history(history)
         image_data = None if history else self.prepare_image_batch(image_bytes_list)
 
@@ -665,6 +665,11 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 temperature=0.7,
             ):
                 yield chunk
+
+    # Backward-compat aliases for older call sites.
+    build_visit_prompt = build_session_chat_prompt
+    visit_chat = session_chat
+    visit_chat_stream = stream_session_chat
 
     # ── Interactive Explore mode ──────────────────────────────────────────────
 

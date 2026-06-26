@@ -24,6 +24,5 @@ export type PreparedSessionUploadEntry = Extract<PendingSessionArtwork, { kind: 
 
 export type PreparedUploadSessionContext = {
   sessionId: string;
-  sessionTitle: string;
   getSequenceNumber: (entryId: string) => number;
 };

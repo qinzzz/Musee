@@ -7,7 +7,7 @@ export type ArtworkDetailSelection = {
 };
 
 export type InterpretingItem = GalleryItem & {
-  allVisitItems?: GalleryItem[];
+  navigationItems?: GalleryItem[];
   is_liked?: boolean;
 };
 

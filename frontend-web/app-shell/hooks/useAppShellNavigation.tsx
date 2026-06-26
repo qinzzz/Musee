@@ -12,12 +12,12 @@ type NavigationItem = {
 type UseAppShellNavigationOptions = {
   activeTab: AppTab;
   isComposingNewSession: boolean;
-  editingVisitId: string | null;
+  editingSessionId: string | null;
   clearShellOverlays: () => void;
   onSetActiveTab: (tab: AppTab) => void;
   onEnterBlankSession: () => void;
   onOpenSessionSummary: (summaryId: string) => void;
-  onCloseVisitMenu: () => void;
+  onCloseSessionMenu: () => void;
 };
 
 const SHOW_LEARN_TAB = false;
@@ -71,12 +71,12 @@ if (SHOW_LEARN_TAB) {
 export function useAppShellNavigation({
   activeTab,
   isComposingNewSession,
-  editingVisitId,
+  editingSessionId,
   clearShellOverlays,
   onSetActiveTab,
   onEnterBlankSession,
   onOpenSessionSummary,
-  onCloseVisitMenu,
+  onCloseSessionMenu,
 }: UseAppShellNavigationOptions) {
   const [isDesktopViewport, setIsDesktopViewport] = useState(() => window.innerWidth >= 768);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
@@ -87,7 +87,7 @@ export function useAppShellNavigation({
   const closeFloatingShellMenus = () => {
     setRecentsOpen(false);
     setUserMenuOpen(false);
-    onCloseVisitMenu();
+    onCloseSessionMenu();
   };
 
   useEffect(() => {
@@ -119,8 +119,8 @@ export function useAppShellNavigation({
     }
   };
 
-  const handleSelectVisitSummary = (summaryId: string) => {
-    if (editingVisitId === summaryId) return;
+  const handleSelectSessionSummary = (summaryId: string) => {
+    if (editingSessionId === summaryId) return;
 
     onOpenSessionSummary(summaryId);
     clearShellOverlays();
@@ -179,7 +179,7 @@ export function useAppShellNavigation({
     setUserMenuOpen,
     isNewSessionEntryActive,
     navigationItems,
-    handleSelectVisitSummary,
+    handleSelectSessionSummary,
     openSidebar,
     closeMobileSidebar,
     expandSidebar,

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionActions } from './useSessionActions';
 import type { GalleryItem, Visit } from '../../types';
 import type { SessionRecord } from '../api/sessions';
-import type { VisitDraft, VisitStreamMessage, VisitSummary } from '../types';
+import type { SessionSummary } from '../types';
 
 const {
   mockDeleteSession,
@@ -18,7 +18,7 @@ vi.mock('../api/sessions', () => ({
   updateSession: mockUpdateSession,
 }));
 
-function createVisitSummary(overrides: Partial<VisitSummary> = {}): VisitSummary {
+function createSessionSummary(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
     id: 'session-1',
     title: 'Old Title',
@@ -41,9 +41,9 @@ function createPersistedSession(overrides: Partial<SessionRecord> = {}): Session
 }
 
 type HarnessOptions = {
-  visitSummaries?: VisitSummary[];
+  sessionSummaries?: SessionSummary[];
   persistedSessions?: SessionRecord[];
-  editingVisitTitle?: string;
+  editingSessionTitle?: string;
   isViewingSession?: (sessionId: string) => boolean;
 };
 
@@ -52,39 +52,39 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
   const refreshPersistedSessions = vi.fn();
   const resetPreparedSessionState = vi.fn();
   const setItems = vi.fn();
-  const setVisitDrafts = vi.fn();
-  const setVisitStreams = vi.fn();
-  const setStreamingVisitResponses = vi.fn();
+  const setSessionDrafts = vi.fn();
+  const setSessionStreams = vi.fn();
+  const setStreamingSessionResponses = vi.fn();
   const setVisit = vi.fn();
-  const setFilteredVisitId = vi.fn();
+  const setFilteredSessionId = vi.fn();
   const setPendingDeletedSessionIds = vi.fn();
-  const setOpenVisitMenuId = vi.fn();
+  const setOpenSessionMenuId = vi.fn();
   const setDeleteConfirmation = vi.fn();
-  const setEditingVisitId = vi.fn();
-  const setEditingVisitTitle = vi.fn();
+  const setEditingSessionId = vi.fn();
+  const setEditingSessionTitle = vi.fn();
   const resetCurrentSessionView = vi.fn();
 
   const hook = renderHook(() => useSessionActions({
-    defaultVisitTitle: 'Untitled Session',
+    defaultSessionTitle: 'Untitled Session',
     sessionUserId: 'user-1',
-    visitSummaries: options.visitSummaries ?? [createVisitSummary()],
+    sessionSummaries: options.sessionSummaries ?? [createSessionSummary()],
     persistedSessions: options.persistedSessions ?? [createPersistedSession()],
-    editingVisitTitle: options.editingVisitTitle ?? 'Renamed Session',
+    editingSessionTitle: options.editingSessionTitle ?? 'Renamed Session',
     showToast,
     refreshPersistedSessions,
     resetPreparedSessionState,
     isViewingSession: options.isViewingSession ?? (() => false),
     setItems,
-    setVisitDrafts,
-    setVisitStreams,
-    setStreamingVisitResponses,
+    setSessionDrafts,
+    setSessionStreams,
+    setStreamingSessionResponses,
     setVisit,
-    setFilteredVisitId,
+    setFilteredSessionId,
     setPendingDeletedSessionIds,
-    setOpenVisitMenuId,
+    setOpenSessionMenuId,
     setDeleteConfirmation,
-    setEditingVisitId,
-    setEditingVisitTitle,
+    setEditingSessionId,
+    setEditingSessionTitle,
     resetCurrentSessionView,
   }));
 
@@ -95,16 +95,16 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
       refreshPersistedSessions,
       resetPreparedSessionState,
       setItems,
-      setVisitDrafts,
-      setVisitStreams,
-      setStreamingVisitResponses,
+      setSessionDrafts,
+      setSessionStreams,
+      setStreamingSessionResponses,
       setVisit,
-      setFilteredVisitId,
+      setFilteredSessionId,
       setPendingDeletedSessionIds,
-      setOpenVisitMenuId,
+      setOpenSessionMenuId,
       setDeleteConfirmation,
-      setEditingVisitId,
-      setEditingVisitTitle,
+      setEditingSessionId,
+      setEditingSessionTitle,
       resetCurrentSessionView,
     },
   };
@@ -126,12 +126,12 @@ describe('useSessionActions', () => {
     mockUpdateSession.mockResolvedValue({ ok: true });
 
     const { result, spies } = renderUseSessionActions({
-      visitSummaries: [createVisitSummary({ items: [] })],
+      sessionSummaries: [createSessionSummary({ items: [] })],
       persistedSessions: [createPersistedSession()],
     });
 
     await act(async () => {
-      await result.current.saveVisitTitle('session-1', 'Museum Visit');
+      await result.current.saveSessionTitle('session-1', 'Museum Visit');
     });
 
     expect(mockUpdateSession).toHaveBeenCalledWith('session-1', 'user-1', 'Museum Visit');
@@ -151,7 +151,7 @@ describe('useSessionActions', () => {
     });
 
     expect(spies.setDeleteConfirmation).toHaveBeenCalledWith(null);
-    expect(spies.setOpenVisitMenuId).toHaveBeenCalledWith(null);
+    expect(spies.setOpenSessionMenuId).toHaveBeenCalledWith(null);
     expect(spies.resetPreparedSessionState).toHaveBeenCalledTimes(1);
     expect(spies.resetCurrentSessionView).toHaveBeenCalledTimes(1);
     expect(mockDeleteSession).toHaveBeenCalledWith('session-1', 'user-1');

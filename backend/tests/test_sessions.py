@@ -148,10 +148,10 @@ def test_start_session_with_artworks_does_not_leave_shell_session_on_failure(mon
     db.add(SavedArtwork(id="art-fail-1", user_id="art-fail-user", photo_uri="https://example.com/1.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
     db.commit()
 
-    def failing_link(*_args, **_kwargs):
+    def failing_attach(*_args, **_kwargs):
         raise RuntimeError("link failed")
 
-    monkeypatch.setattr(sessions_router, "ensure_session_artwork_link", failing_link)
+    monkeypatch.setattr(sessions_router, "attach_artwork_ids_to_session", failing_attach)
 
     with TestClient(app, raise_server_exceptions=False) as failing_client:
         response = failing_client.post(

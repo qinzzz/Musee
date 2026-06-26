@@ -10,7 +10,7 @@ import type { ArtworkClassification, GalleryItem, Visit } from '../../types';
 import type { SmartCollection } from '../../api/artworks';
 import type { Board } from '../../boards/types';
 import type { InterpretingItem } from '../../artwork/types';
-import type { ActiveVisitStreamEntry, VisitSummary } from '../../session/types';
+import type { ActiveSessionStreamEntry, SessionSummary } from '../../session/types';
 import type { CaptureState } from '../hooks/useCaptureNavigation';
 
 const CollectView = lazy(() => import('../../components/CollectView'));
@@ -49,8 +49,8 @@ type ViewportStateProps = {
   artistPageContext: ArtistPageContext | null;
   movementPageContext: SmartCollection | null;
   isComposingNewSession: boolean;
-  activeVisitSummary: VisitSummary | null;
-  activeVisitStream: ActiveVisitStreamEntry[];
+  activeSessionSummary: SessionSummary | null;
+  activeSessionStream: ActiveSessionStreamEntry[];
   interpretingItem: InterpretingItem | null;
   artworkHeaderActions: React.ReactNode;
   artworkHeaderEditToken: number;
@@ -59,20 +59,21 @@ type ViewportStateProps = {
   sessionGoalInput: string;
   sessionGoals: Record<string, string>;
   sessionGoalDismissed: Set<string>;
-  streamingVisitResponses: Record<string, string>;
+  streamingSessionResponses: Record<string, string>;
   goalGalleryInputRef: React.RefObject<HTMLInputElement | null>;
   pendingSessionArtworks: PreparedSessionEntry[];
   newSessionDraftMessage: string;
   isSubmittingPreparedSession: boolean;
-  visitStreamScrollRef: React.RefObject<HTMLDivElement | null>;
-  visitStreamEndRef: React.RefObject<HTMLDivElement | null>;
+  sessionStreamScrollRef: React.RefObject<HTMLDivElement | null>;
+  sessionStreamEndRef: React.RefObject<HTMLDivElement | null>;
   items: GalleryItem[];
   visit: Visit;
-  filteredVisitId: string | null;
+  filteredSessionId: string | null;
   isAnalyzing: boolean;
   likedIds: Set<string>;
   boards: Board[];
   boardsLoading: boolean;
+  sessionTitleById: Record<string, string>;
 };
 
 type ViewportNavigationProps = {
@@ -85,7 +86,7 @@ type ViewportNavigationProps = {
   closeMovementPage: () => void;
   closeArtworkDetail: () => void;
   openArtistDetail: (context: ArtistPageContext) => void;
-  handleSelectVisitSummary: (summaryId: string) => void;
+  handleSelectSessionSummary: (summaryId: string) => void;
   openSessionCapturePage: () => void;
   setCollectTab: React.Dispatch<React.SetStateAction<CollectTab>>;
   openMovementPage: (collection: SmartCollection) => void;
@@ -102,9 +103,9 @@ type ViewportMutationProps = {
   setSessionGoals: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   isPersistedSessionId: (sessionId: string) => boolean;
   refreshPersistedSessions: () => void;
-  saveVisitTitle: (visitId: string, nextTitle: string) => Promise<void>;
+  saveSessionTitle: (sessionId: string, nextTitle: string) => Promise<void>;
   showToast: (message: string, type?: 'info' | 'success', action?: { label: string; onClick: () => void }) => void;
-  createVisitDraft: () => string;
+  createSessionDraft: () => string;
   setSessionGoalInput: React.Dispatch<React.SetStateAction<string>>;
   onSaveSessionGoal: (sessionId: string, goal: string) => Promise<void>;
   setSessionGoalDismissed: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -120,7 +121,7 @@ type ViewportMutationProps = {
   handleDeleteItem: (id: string) => void;
   setIsUnsortedFlowOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleToggleLike: (id: string) => void;
-  handleVisitInquiry: (text: string) => Promise<boolean>;
+  handleSessionInquiry: (text: string) => Promise<boolean>;
 };
 
 type Props = {
@@ -151,8 +152,8 @@ export default function AppViewport({
     artistPageContext,
     movementPageContext,
     isComposingNewSession,
-    activeVisitSummary,
-    activeVisitStream,
+    activeSessionSummary,
+    activeSessionStream,
     interpretingItem,
     artworkHeaderActions,
     artworkHeaderEditToken,
@@ -161,20 +162,21 @@ export default function AppViewport({
     sessionGoalInput,
     sessionGoals,
     sessionGoalDismissed,
-    streamingVisitResponses,
+    streamingSessionResponses,
     goalGalleryInputRef,
     pendingSessionArtworks,
     newSessionDraftMessage,
     isSubmittingPreparedSession,
-    visitStreamScrollRef,
-    visitStreamEndRef,
+    sessionStreamScrollRef,
+    sessionStreamEndRef,
     items,
     visit,
-    filteredVisitId,
+    filteredSessionId,
     isAnalyzing,
     likedIds,
     boards,
     boardsLoading,
+    sessionTitleById,
   } = state;
   const {
     closeSessionCapturePage,
@@ -186,7 +188,7 @@ export default function AppViewport({
     closeMovementPage,
     closeArtworkDetail,
     openArtistDetail,
-    handleSelectVisitSummary,
+    handleSelectSessionSummary,
     openSessionCapturePage,
     setCollectTab,
     openMovementPage,
@@ -202,9 +204,9 @@ export default function AppViewport({
     setSessionGoals,
     isPersistedSessionId,
     refreshPersistedSessions,
-    saveVisitTitle,
+    saveSessionTitle,
     showToast,
-    createVisitDraft,
+    createSessionDraft,
     setSessionGoalInput,
     onSaveSessionGoal,
     setSessionGoalDismissed,
@@ -220,7 +222,7 @@ export default function AppViewport({
     handleDeleteItem,
     setIsUnsortedFlowOpen,
     handleToggleLike,
-    handleVisitInquiry,
+    handleSessionInquiry,
   } = actions;
 
   return (
@@ -275,10 +277,10 @@ export default function AppViewport({
             </Suspense>
           </div>
         ) : activeTab === 'newSession' ? (
-          activeVisitSummary ? (
+          activeSessionSummary ? (
             <ExploreSessionView
-              activeVisitSummary={activeVisitSummary}
-              activeVisitStream={activeVisitStream}
+              activeSessionSummary={activeSessionSummary}
+              activeSessionStream={activeSessionStream}
               interpretingItem={interpretingItem}
               artworkHeaderActions={artworkHeaderActions}
               artworkHeaderEditToken={artworkHeaderEditToken}
@@ -289,14 +291,14 @@ export default function AppViewport({
               sessionGoalInput={sessionGoalInput}
               sessionGoals={sessionGoals}
               sessionGoalDismissed={sessionGoalDismissed}
-              streamingVisitResponse={streamingVisitResponses[activeVisitSummary.id]}
+              streamingSessionResponse={streamingSessionResponses[activeSessionSummary.id]}
               userId={userId}
               goalGalleryInputRef={goalGalleryInputRef}
               preparedSessionItems={pendingSessionArtworks}
               preparedSessionMessage={newSessionDraftMessage}
               isSubmittingPreparedSession={isSubmittingPreparedSession}
-              visitStreamScrollRef={visitStreamScrollRef}
-              visitStreamEndRef={visitStreamEndRef}
+              sessionStreamScrollRef={sessionStreamScrollRef}
+              sessionStreamEndRef={sessionStreamEndRef}
               onCloseArtworkDetail={closeArtworkDetail}
               onUpdateMetadata={updateItemMetadata}
               onUpdateClassification={handleUpdateClassification}
@@ -314,14 +316,14 @@ export default function AppViewport({
                   parentLabel: interpretingItem.artworkName || 'Untitled',
                   returnToArtworkId: interpretingItem.id,
                   returnToArtworkContext: artworkDetailContext || {
-                    parentLabel: activeVisitSummary.title,
+                    parentLabel: activeSessionSummary.title,
                     basePath: stateToPath(activeTab, collectTab),
                   },
                 });
               }}
-              onOpenSessionFromInterpretation={handleSelectVisitSummary}
+              onOpenSessionFromInterpretation={handleSelectSessionSummary}
               onSaveExistingGoal={(newGoal) => {
-                const sid = activeVisitSummary.id;
+                const sid = activeSessionSummary.id;
                 setSessionGoals(prev => ({ ...prev, [sid]: newGoal }));
                 if (!isPersistedSessionId(sid)) {
                   return;
@@ -334,15 +336,15 @@ export default function AppViewport({
               }}
               onSaveSessionTitle={async (newTitle) => {
                 try {
-                  await saveVisitTitle(activeVisitSummary.id, newTitle);
+                  await saveSessionTitle(activeSessionSummary.id, newTitle);
                 } catch (error) {
-                  console.error('Failed to rename visit from session header:', error);
+                  console.error('Failed to rename session from session header:', error);
                   showToast('Could not rename session', 'info');
                 }
               }}
               onSessionGoalInputChange={setSessionGoalInput}
               onSubmitGoal={(goal) => {
-                const sid = activeVisitSummary.id || createVisitDraft();
+                const sid = activeSessionSummary.id || createSessionDraft();
                 setSessionGoalInput('');
                 setSessionGoals(prev => ({ ...prev, [sid]: goal }));
                 setSessionGoalDismissed(prev => new Set([...prev, sid]));
@@ -364,8 +366,8 @@ export default function AppViewport({
               onOpenSessionArtwork={(item) =>
                 openArtworkDetail(
                   item,
-                  { parentLabel: activeVisitSummary.title, basePath: stateToPath(activeTab, collectTab) },
-                  activeVisitSummary.items,
+                  { parentLabel: activeSessionSummary.title, basePath: stateToPath(activeTab, collectTab) },
+                  activeSessionSummary.items,
                 )
               }
             />
@@ -378,7 +380,7 @@ export default function AppViewport({
                   </div>
                 </div>
               ) : null}
-              <EmptyWall isVisitMode={false} />
+              <EmptyWall isSessionMode={false} />
             </div>
           )
         ) : activeTab === 'collect' ? (
@@ -390,11 +392,12 @@ export default function AppViewport({
               artworksLoaded={artworksLoaded}
               items={items}
               visit={visit}
-              filteredVisitId={filteredVisitId}
+              filteredSessionId={filteredSessionId}
               isAnalyzing={isAnalyzing}
               likedIds={likedIds}
               boards={boards}
               boardsLoading={boardsLoading}
+              sessionTitleById={sessionTitleById}
               userId={userId}
               collectTab={collectTab}
               interpretingItem={interpretingItem}
@@ -424,7 +427,7 @@ export default function AppViewport({
                   },
                 });
               }}
-              onNavigateToSessionFromInterpretation={handleSelectVisitSummary}
+              onNavigateToSessionFromInterpretation={handleSelectSessionSummary}
               onCollectTabChange={setCollectTab}
               onCreateBoard={createBoard}
               onRenameBoard={renameBoard}
@@ -484,14 +487,14 @@ export default function AppViewport({
           onUpdateMetadata={updateItemMetadata}
           onUpdateClassification={handleUpdateClassification}
           onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
-          allVisitItems={interpretingItem.allVisitItems}
+          navigationItems={interpretingItem.navigationItems}
           onNavigate={handleNavigateInterpretation}
           rightMode={interpretationRightMode}
           onRightModeChange={setInterpretationRightMode}
           onIdentifyAgain={handleIdentifyAgain}
           onRetryAnalysis={() => handleRetryAnalysis(interpretingItem)}
-          userId={userId}
-          onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
+            userId={userId}
+            onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
             openArtistDetail({
               artistEntityId,
               artworkId,
@@ -504,22 +507,23 @@ export default function AppViewport({
               },
             });
           }}
-          onNavigateToSession={handleSelectVisitSummary}
+          onNavigateToSession={handleSelectSessionSummary}
+          sessionTitleById={sessionTitleById}
           navigationContextLabel={artworkDetailContext?.parentLabel || 'Artwork Set'}
         />
       )}
 
       {activeTab === 'newSession' && !sessionCaptureState && !interpretingItem && !(
-        activeVisitSummary &&
-        activeVisitStream.length === 0 &&
-        !sessionGoalDismissed.has(activeVisitSummary.id)
+        activeSessionSummary &&
+        activeSessionStream.length === 0 &&
+        !sessionGoalDismissed.has(activeSessionSummary.id)
       ) && (
         <ContextualActionBar
           mode="session"
           onUpload={handleFileUpload}
           onOpenSessionCapture={openSessionCapturePage}
           isAnalyzing={isAnalyzing}
-          onInquiry={handleVisitInquiry}
+          onInquiry={handleSessionInquiry}
           onLike={() => interpretingItem && handleToggleLike(interpretingItem.id)}
           isLiked={Boolean(interpretingItem && likedIds.has(interpretingItem.id))}
           onDelete={() => interpretingItem && setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
@@ -527,7 +531,7 @@ export default function AppViewport({
           onCommunity={() => setInterpretationRightMode((mode) => (mode === 'community' ? 'metadata' : 'community'))}
           isCommunityActive={interpretationRightMode === 'community'}
           activeItem={interpretingItem as unknown as GalleryItem || undefined}
-          placeholder={activeVisitSummary ? 'Add a reflection, memory, or association...' : 'Start a visit or capture an artwork...'}
+          placeholder={activeSessionSummary ? 'Add a reflection, memory, or association...' : 'Start a visit or capture an artwork...'}
         />
       )}
     </>

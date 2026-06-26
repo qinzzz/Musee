@@ -15,7 +15,6 @@ export interface ArtworkAnalysisResult {
   photo_uri?: string;
   location?: string;
   photo_time?: string;
-  session_title?: string;
   reference_urls?: ReferenceItem[];
   artist_entity_id?: string;
   analysis_status?: 'pending' | 'analyzing' | 'failed' | 'analyzed';
@@ -29,12 +28,9 @@ export interface SavedArtworkUploadResult {
   artwork_name: string;
   location?: string | Record<string, unknown> | null;
   photo_time?: string | null;
-  session_id?: string | null;
-  session_title?: string | null;
   session_links?: Array<{
     id?: string;
     session_id: string;
-    session_title?: string;
     sequence_number?: number;
     source?: 'library' | 'upload' | 'camera';
     created_at?: string;
@@ -170,7 +166,6 @@ export async function analyzeArtwork(
     photo_uri: data.photo_uri,
     location: data.location,
     photo_time: data.photo_time,
-    session_title: data.session_title,
     reference_urls: data.reference_urls || [],
     artist_entity_id: data.artist_entity_id,
     analysis_status: data.analysis_status,
@@ -258,7 +253,6 @@ export async function analyzeArtworkFromExisting(
     photo_uri: data.photo_uri,
     location: data.location,
     photo_time: data.photo_time,
-    session_title: data.session_title,
     reference_urls: data.reference_urls || [],
     artist_entity_id: data.artist_entity_id,
     analysis_status: data.analysis_status,
@@ -358,7 +352,6 @@ export async function analyzeArtworkStream(
               photo_uri: data.photo_uri,
               location: data.location,
               photo_time: data.photo_time,
-              session_title: data.session_title,
               reference_urls: data.reference_urls || [],
               artist_entity_id: data.artist_entity_id,
             });

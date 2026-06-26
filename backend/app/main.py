@@ -12,7 +12,7 @@ import uvicorn
 from app.config.settings import settings
 from app.database.bootstrap import initialize_database
 from app.middleware.request_timing import add_request_timing_middleware
-from app.routers import admin_maintenance, artwork_identify, artwork_ingest, artwork_library, artwork_metadata, artwork_mutations, artwork_utilities, auth, collection, tag, taste_profile, users, visit_chat
+from app.routers import admin_maintenance, artwork_identify, artwork_ingest, artwork_library, artwork_metadata, artwork_mutations, artwork_utilities, auth, collection, session_chat, tag, taste_profile, users
 from app.routers import sessions as sessions_router
 
 
@@ -116,7 +116,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(artwork_ingest.router, prefix="/api", tags=["artwork-ingest"])
     app.include_router(artwork_library.router, prefix="/api", tags=["artwork-library"])
     app.include_router(taste_profile.router, prefix="/api", tags=["taste-profile"])
-    app.include_router(visit_chat.router, prefix="/api", tags=["visit-chat"])
+    app.include_router(session_chat.router, prefix="/api", tags=["session-chat"])
     app.include_router(users.router, prefix="/api", tags=["users"])
     app.include_router(collection.router, prefix="/api", tags=["collection"])
     app.include_router(tag.router, prefix="/api", tags=["tag"])

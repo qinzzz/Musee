@@ -18,13 +18,13 @@ class ExhibitionItem(BaseModel):
     medium: Optional[str] = None
 
 
-class VisitChatRequest(BaseModel):
+class SessionChatRequest(BaseModel):
     items: List[ExhibitionItem]
     conversation_history: List[Dict[str, str]]
     new_message: str
 
 
-def build_visit_items_payload(items: List[ExhibitionItem]) -> List[Dict[str, List[str]]]:
+def build_session_chat_items_payload(items: List[ExhibitionItem]) -> List[Dict[str, List[str]]]:
     return [{"keywords": item.keywords} for item in items]
 
 
@@ -41,3 +41,8 @@ async def load_bootstrap_image_bytes(
         if image_bytes:
             image_bytes_list.append(image_bytes)
     return image_bytes_list
+
+
+# Backward-compat aliases for older imports.
+VisitChatRequest = SessionChatRequest
+build_visit_items_payload = build_session_chat_items_payload

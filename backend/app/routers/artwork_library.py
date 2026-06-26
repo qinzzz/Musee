@@ -17,11 +17,35 @@ from app.services.artwork_enrichment_service import do_artist_bio
 from app.services.session_service import (
     get_artwork_session_ids,
     refresh_session_title,
-    should_delete_session_after_artwork_removal,
 )
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _update_artwork_analysis_status(
+    artwork_id: str,
+    status: str,
+    *,
+    error: str | None = None,
+) -> None:
+    with SessionLocal() as recovery_db:
+        artwork = recovery_db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+        if not artwork:
+            return
+        artwork.analysis_status = status
+        artwork.analysis_error = error
+        artwork.analysis_completed_at = datetime.now(UTC)
+        recovery_db.commit()
+
+
+async def _run_artist_bio_with_status_recovery(artwork_id: str, artist_entity_id: str) -> None:
+    try:
+        await do_artist_bio(artist_entity_id)
+    except Exception as exc:
+        _update_artwork_analysis_status(artwork_id, "failed", error=str(exc))
+        raise
+    _update_artwork_analysis_status(artwork_id, "analyzed")
 
 
 @router.get("/artworks")
@@ -170,16 +194,22 @@ async def backfill_artwork_artist(
 
     artist_name = artwork.artist_name or ""
     if not artist_name or artist_name.lower() in ("unknown", "unknown artist", ""):
+        artwork.analysis_status = "analyzed"
+        artwork.analysis_completed_at = datetime.now(UTC)
+        db.commit()
         return {"artist_entity_id": None}
 
     if artwork.artist_entity_id:
         entity = db.query(ArtistEntity).filter(ArtistEntity.id == artwork.artist_entity_id).first()
         if entity and entity.bio_status == "done":
+            artwork.analysis_status = "analyzed"
+            artwork.analysis_completed_at = datetime.now(UTC)
+            db.commit()
             return entity.to_dict()
         if entity:
             artist_entity_id = entity.id
             db.close()
-            await do_artist_bio(artist_entity_id)
+            await _run_artist_bio_with_status_recovery(artwork_id, artist_entity_id)
             with SessionLocal() as fresh_db:
                 entity = fresh_db.query(ArtistEntity).filter(ArtistEntity.id == artist_entity_id).first()
                 return entity.to_dict() if entity else {"artist_entity_id": artist_entity_id}
@@ -195,7 +225,7 @@ async def backfill_artwork_artist(
     artist_entity_id = entity.id
     db.close()
 
-    await do_artist_bio(artist_entity_id)
+    await _run_artist_bio_with_status_recovery(artwork_id, artist_entity_id)
     with SessionLocal() as fresh_db:
         entity = fresh_db.query(ArtistEntity).filter(ArtistEntity.id == artist_entity_id).first()
         return entity.to_dict() if entity else {"artist_entity_id": artist_entity_id}
@@ -301,16 +331,9 @@ async def delete_artwork(
     db.commit()
 
     for linked_session_id in linked_session_ids:
-        if should_delete_session_after_artwork_removal(db, linked_session_id):
-            session_to_delete = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()
-            if session_to_delete:
-                db.delete(session_to_delete)
-                db.commit()
-                logger.info("Auto-deleted empty session: %s", linked_session_id)
-        else:
-            session_to_refresh = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()
-            refresh_session_title(db, session_to_refresh)
-            db.commit()
+        session_to_refresh = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()
+        refresh_session_title(db, session_to_refresh)
+        db.commit()
 
     return {"message": "Artwork deleted successfully"}
 
@@ -338,14 +361,8 @@ async def batch_delete_artworks(
         db.commit()
 
         for session_id in affected_session_ids:
-            if should_delete_session_after_artwork_removal(db, session_id):
-                session_to_delete = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-                if session_to_delete:
-                    db.delete(session_to_delete)
-                    logger.info("Auto-deleted empty session (batch): %s", session_id)
-            else:
-                session_to_refresh = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-                refresh_session_title(db, session_to_refresh)
+            session_to_refresh = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            refresh_session_title(db, session_to_refresh)
 
         db.commit()
         return {

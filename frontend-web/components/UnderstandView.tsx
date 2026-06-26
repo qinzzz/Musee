@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { GalleryItem, CuratorConversation, Message } from '../types';
-import { visitChatStream } from '../api/chat';
+import { streamSessionChat } from '../api/chat';
 
 interface Props {
   items: GalleryItem[];
@@ -89,7 +89,7 @@ const UnderstandView: React.FC<Props> = ({
     setStreamingText('');
     onFirstMsg?.(userMsg);
 
-    visitChatStream(
+    streamSessionChat(
       items,
       history,
       text,

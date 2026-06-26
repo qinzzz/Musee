@@ -13,6 +13,7 @@ import {
 } from '../../lib/bootstrapCache';
 import { parseAnalysis } from '../lib/analysisText';
 import type { ArtworkDetailSelection, InterpretingItem } from '../types';
+import { buildSessionLink, getPrimarySessionId } from '../../session/lib/sessionLinks';
 
 type UseArtworkLibraryOptions = {
   userId: string;
@@ -59,13 +60,11 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
         .map((link: any) => ({
           id: link.id,
           sessionId: link.session_id,
-          sessionTitle: link.session_title,
           sequenceNumber: link.sequence_number,
           source: link.source,
           createdAt: link.created_at,
         }))
     : [];
-  const primarySessionLink = sessionLinks[0];
 
   const analysisStatus = item.analysis_status || 'analyzed';
 
@@ -80,11 +79,9 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
     date: item.date,
     medium: item.medium,
     timestamp: item.photo_time ? new Date(item.photo_time).getTime() : (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
-    visitId: primarySessionLink?.sessionId,
     sessionLinks,
     location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
     photoTime: item.photo_time,
-    sessionTitle: primarySessionLink?.sessionTitle || item.session_title,
     movement: item.movement,
     periodBucket: item.period_bucket,
     referenceUrls: item.reference_urls || [],
@@ -111,6 +108,12 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
 }
 
 function mapCachedArtworkToGalleryItem(item: ArtworkBootstrapCacheItem): GalleryItem {
+  const sessionLinks = item.sessionLinks || buildSessionLink(
+    item.sessionId,
+    undefined,
+    undefined,
+  );
+
   return {
     id: item.id,
     artworkId: item.artworkId,
@@ -124,11 +127,9 @@ function mapCachedArtworkToGalleryItem(item: ArtworkBootstrapCacheItem): Gallery
     timestamp: item.timestamp,
     sessionCapturedAt: item.sessionCapturedAt,
     conversation: [],
-    visitId: item.visitId,
-    sessionLinks: item.sessionLinks,
+    sessionLinks,
     location: item.location,
     photoTime: item.photoTime,
-    sessionTitle: item.sessionTitle,
     movement: item.movement,
     periodBucket: item.periodBucket,
     referenceUrls: item.referenceUrls,
@@ -163,11 +164,9 @@ function mapGalleryItemToCacheItem(item: GalleryItem): ArtworkBootstrapCacheItem
     medium: item.medium,
     timestamp: item.timestamp,
     sessionCapturedAt: item.sessionCapturedAt,
-    visitId: item.visitId,
     sessionLinks: item.sessionLinks,
     location: typeof item.location === 'string' ? item.location : undefined,
     photoTime: item.photoTime,
-    sessionTitle: item.sessionTitle,
     movement: item.movement,
     periodBucket: item.periodBucket,
     referenceUrls: item.referenceUrls,
@@ -217,8 +216,9 @@ function resolveInterpretingNavigationItems(
     }
   }
 
-  if (sourceItem.visitId) {
-    return items.filter((entry) => entry.visitId === sourceItem.visitId);
+  const primarySessionId = getPrimarySessionId(sourceItem);
+  if (primarySessionId) {
+    return items.filter((entry) => getPrimarySessionId(entry) === primarySessionId);
   }
 
   return [sourceItem];
@@ -297,7 +297,7 @@ export function useArtworkLibrary({
 
     return {
       ...sourceItem,
-      allVisitItems: resolveInterpretingNavigationItems(
+      navigationItems: resolveInterpretingNavigationItems(
         sourceItem,
         items,
         artworkDetailSelection.navigationItemIds,

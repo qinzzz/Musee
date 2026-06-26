@@ -7,7 +7,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
-import type { VisitSummary } from '../../session/types';
+import type { SessionSummary } from '../../session/types';
 
 export type AppSidebarNavItem = {
   id: string;
@@ -22,16 +22,16 @@ type Props = {
   sidebarCollapsed: boolean;
   recentsOpen: boolean;
   userMenuOpen: boolean;
-  visitSearch: string;
+  sessionSearch: string;
   language: string;
   sessionsLoading: boolean;
-  recentVisitSummaries: VisitSummary[];
-  visitSummaries: VisitSummary[];
-  activeVisitSummaryId?: string | null;
+  recentSessionSummaries: SessionSummary[];
+  sessionSummaries: SessionSummary[];
+  activeSessionSummaryId?: string | null;
   isNewSessionEntryActive: boolean;
-  editingVisitId: string | null;
-  editingVisitTitle: string;
-  openVisitMenuId: string | null;
+  editingSessionId: string | null;
+  editingSessionTitle: string;
+  openSessionMenuId: string | null;
   pendingDeletedSessionIds: Set<string>;
   currentUsername?: string | null;
   isAuthenticated: boolean;
@@ -40,13 +40,13 @@ type Props = {
   navigationItems: AppSidebarNavItem[];
   onRecentsOpenChange: (open: boolean) => void;
   onUserMenuOpenChange: (open: boolean) => void;
-  onVisitSearchChange: (value: string) => void;
-  onEditingVisitTitleChange: (value: string) => void;
-  onCommitVisitRename: (summaryId: string) => Promise<void>;
-  onCancelVisitRename: () => void;
-  onOpenVisitMenuChange: (summaryId: string, open: boolean) => void;
-  onSelectVisitSummary: (summaryId: string) => void;
-  onStartRenameVisit: (summaryId: string, title: string) => void;
+  onSessionSearchChange: (value: string) => void;
+  onEditingSessionTitleChange: (value: string) => void;
+  onCommitSessionRename: (summaryId: string) => Promise<void>;
+  onCancelSessionRename: () => void;
+  onOpenSessionMenuChange: (summaryId: string, open: boolean) => void;
+  onSelectSessionSummary: (summaryId: string) => void;
+  onStartRenameSession: (summaryId: string, title: string) => void;
   onDeleteSession: (summaryId: string) => void;
   onLanguageChange: (language: string) => void;
   onOpenSettings: () => void;
@@ -100,16 +100,16 @@ const AppSidebar: React.FC<Props> = ({
   sidebarCollapsed,
   recentsOpen,
   userMenuOpen,
-  visitSearch,
+  sessionSearch,
   language,
   sessionsLoading,
-  recentVisitSummaries,
-  visitSummaries,
-  activeVisitSummaryId,
+  recentSessionSummaries,
+  sessionSummaries,
+  activeSessionSummaryId,
   isNewSessionEntryActive,
-  editingVisitId,
-  editingVisitTitle,
-  openVisitMenuId,
+  editingSessionId,
+  editingSessionTitle,
+  openSessionMenuId,
   pendingDeletedSessionIds,
   currentUsername,
   isAuthenticated,
@@ -118,13 +118,13 @@ const AppSidebar: React.FC<Props> = ({
   navigationItems,
   onRecentsOpenChange,
   onUserMenuOpenChange,
-  onVisitSearchChange,
-  onEditingVisitTitleChange,
-  onCommitVisitRename,
-  onCancelVisitRename,
-  onOpenVisitMenuChange,
-  onSelectVisitSummary,
-  onStartRenameVisit,
+  onSessionSearchChange,
+  onEditingSessionTitleChange,
+  onCommitSessionRename,
+  onCancelSessionRename,
+  onOpenSessionMenuChange,
+  onSelectSessionSummary,
+  onStartRenameSession,
   onDeleteSession,
   onLanguageChange,
   onOpenSettings,
@@ -134,9 +134,9 @@ const AppSidebar: React.FC<Props> = ({
   onCollapseSidebar,
   onCloseMobileSidebar,
 }) => {
-  const renderVisitSummaryCard = (summary: VisitSummary) => {
+  const renderSessionSummaryCard = (summary: SessionSummary) => {
     const isPendingDelete = pendingDeletedSessionIds.has(summary.id);
-    const isActive = activeVisitSummaryId === summary.id && isNewSessionEntryActive;
+    const isActive = activeSessionSummaryId === summary.id && isNewSessionEntryActive;
 
     return (
       <div
@@ -150,24 +150,24 @@ const AppSidebar: React.FC<Props> = ({
         <button
           onClick={() => {
             if (isPendingDelete) return;
-            onSelectVisitSummary(summary.id);
+            onSelectSessionSummary(summary.id);
           }}
           className="w-full rounded-[16px] px-4 py-2 pr-12 text-left"
         >
           <div className="flex min-w-0 flex-col gap-0.5">
-            {editingVisitId === summary.id ? (
+            {editingSessionId === summary.id ? (
               <input
                 ref={renameInputRef}
-                value={editingVisitTitle}
-                onChange={(event) => onEditingVisitTitleChange(event.target.value)}
-                onBlur={() => void onCommitVisitRename(summary.id)}
+                value={editingSessionTitle}
+                onChange={(event) => onEditingSessionTitleChange(event.target.value)}
+                onBlur={() => void onCommitSessionRename(summary.id)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault();
-                    void onCommitVisitRename(summary.id);
+                    void onCommitSessionRename(summary.id);
                   }
                   if (event.key === 'Escape') {
-                    onCancelVisitRename();
+                    onCancelSessionRename();
                   }
                 }}
                 onClick={(event) => event.stopPropagation()}
@@ -189,10 +189,10 @@ const AppSidebar: React.FC<Props> = ({
             </p>
           </div>
         </button>
-        {editingVisitId !== summary.id && !isPendingDelete && (
+        {editingSessionId !== summary.id && !isPendingDelete && (
           <DropdownMenu
-            open={openVisitMenuId === summary.id}
-            onOpenChange={(open) => onOpenVisitMenuChange(summary.id, open)}
+            open={openSessionMenuId === summary.id}
+            onOpenChange={(open) => onOpenSessionMenuChange(summary.id, open)}
           >
             <DropdownMenuTrigger asChild>
               <button
@@ -220,7 +220,7 @@ const AppSidebar: React.FC<Props> = ({
             >
               <DropdownMenuItem
                 className="gap-2 font-medium"
-                onSelect={() => onStartRenameVisit(summary.id, summary.title)}
+                onSelect={() => onStartRenameSession(summary.id, summary.title)}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 20h9" />
@@ -308,8 +308,8 @@ const AppSidebar: React.FC<Props> = ({
                 <div className="max-h-[min(70vh,560px)] space-y-2 overflow-y-auto px-1 pb-1">
                   {sessionsLoading ? (
                     <SessionListSkeleton compact={true} />
-                  ) : recentVisitSummaries.length > 0 ? (
-                    recentVisitSummaries.map((summary) => renderVisitSummaryCard(summary))
+                  ) : recentSessionSummaries.length > 0 ? (
+                    recentSessionSummaries.map((summary) => renderSessionSummaryCard(summary))
                   ) : (
                     <div className="px-3 py-4 text-[12px] text-neutral-400">No recent sessions yet.</div>
                   )}
@@ -449,8 +449,8 @@ const AppSidebar: React.FC<Props> = ({
               <path d="m20 20-3.5-3.5" />
             </svg>
             <input
-              value={visitSearch}
-              onChange={(event) => onVisitSearchChange(event.target.value)}
+              value={sessionSearch}
+              onChange={(event) => onSessionSearchChange(event.target.value)}
               placeholder="Search sessions"
               className="w-full bg-transparent text-[12px] placeholder-neutral-400 outline-none font-medium"
             />
@@ -461,7 +461,7 @@ const AppSidebar: React.FC<Props> = ({
           {sessionsLoading ? (
             <SessionListSkeleton />
           ) : (
-            visitSummaries.map((summary) => renderVisitSummaryCard(summary))
+            sessionSummaries.map((summary) => renderSessionSummaryCard(summary))
           )}
         </div>
 

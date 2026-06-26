@@ -1,7 +1,7 @@
 // ⚠️ ORPHANED (as of 2026-05-31): This component is not mounted anywhere in the app.
 // Nothing imports it, so the "interactive exploration" feature is currently unreachable
 // through the UI. Its backend chain is still intact end-to-end:
-//   fetchSkillObservation / fetchSkillDeepDive (apiService)
+//   fetchSkillObservation / fetchSkillDeepDive (api/explore)
 //     → POST /artwork-skill-observation, /artwork-skill-deepdive
 //       → ai_service.get_skill_observation / get_skill_deepdive
 //         → prompts: explore_observation.txt, explore_deepdive.txt, explore_skill_select.txt

@@ -4,7 +4,7 @@ import { useSessionWorkspace } from './useSessionWorkspace';
 import type { GalleryItem, Visit } from '../../types';
 import type { InterpretingItem } from '../../artwork/types';
 import type { PreparedSessionUploadEntry, PreparedUploadSessionContext } from '../../artwork-ingest/types';
-import type { VisitStreamMessage } from '../types';
+import type { SessionStreamMessage } from '../types';
 
 const {
   mockFetchSessionMessages,
@@ -12,14 +12,14 @@ const {
   mockUseSessionActions,
   mockUseSessionMessaging,
   mockUseSessionStartFlow,
-  mockUseVisits,
+  mockUseSessionState,
 } = vi.hoisted(() => ({
   mockFetchSessionMessages: vi.fn(),
   mockUsePreparedSessionStaging: vi.fn(),
   mockUseSessionActions: vi.fn(),
   mockUseSessionMessaging: vi.fn(),
   mockUseSessionStartFlow: vi.fn(),
-  mockUseVisits: vi.fn(),
+  mockUseSessionState: vi.fn(),
 }));
 
 vi.mock('../api/sessions', () => ({
@@ -42,11 +42,11 @@ vi.mock('./useSessionStartFlow', () => ({
   useSessionStartFlow: mockUseSessionStartFlow,
 }));
 
-vi.mock('./useVisits', () => ({
-  useVisits: mockUseVisits,
+vi.mock('./useSessionState', () => ({
+  useSessionState: mockUseSessionState,
 }));
 
-function createVisitMessage(overrides: Partial<VisitStreamMessage> = {}): VisitStreamMessage {
+function createSessionMessage(overrides: Partial<SessionStreamMessage> = {}): SessionStreamMessage {
   return {
     id: 'msg-1',
     role: 'model',
@@ -56,13 +56,13 @@ function createVisitMessage(overrides: Partial<VisitStreamMessage> = {}): VisitS
   };
 }
 
-function createVisitsMock(overrides: Record<string, unknown> = {}) {
+function createSessionStateMock(overrides: Record<string, unknown> = {}) {
   return {
-    filteredVisitId: 'session-1',
-    setFilteredVisitId: vi.fn(),
+    filteredSessionId: 'session-1',
+    setFilteredSessionId: vi.fn(),
     isComposingNewSession: false,
     setIsComposingNewSession: vi.fn(),
-    activeVisitSummary: {
+    activeSessionSummary: {
       id: 'session-1',
       title: 'Session 1',
       location: null,
@@ -71,13 +71,13 @@ function createVisitsMock(overrides: Record<string, unknown> = {}) {
       dateLabel: null,
       items: [],
     },
-    activeVisitStream: [createVisitMessage()],
-    streamingVisitResponses: { 'session-1': 'streaming' },
-    setVisitStreams: vi.fn(),
-    visitStreams: {
-      'session-1': [createVisitMessage({ id: 'existing', createdAt: 200 })],
+    activeSessionStream: [createSessionMessage()],
+    streamingSessionResponses: { 'session-1': 'streaming' },
+    setSessionStreams: vi.fn(),
+    sessionStreams: {
+      'session-1': [createSessionMessage({ id: 'existing', createdAt: 200 })],
     },
-    visitSummaries: [
+    sessionSummaries: [
       {
         id: 'session-1',
         title: 'Session 1',
@@ -89,23 +89,23 @@ function createVisitsMock(overrides: Record<string, unknown> = {}) {
       },
     ],
     persistedSessions: [],
-    editingVisitId: null,
-    editingVisitTitle: '',
-    setVisitDrafts: vi.fn(),
-    setStreamingVisitResponses: vi.fn(),
-    setOpenVisitMenuId: vi.fn(),
-    setEditingVisitId: vi.fn(),
-    setEditingVisitTitle: vi.fn(),
-    setVisitSearch: vi.fn(),
-    visitSearch: '',
-    visitDrafts: [],
+    editingSessionId: null,
+    editingSessionTitle: '',
+    setSessionDrafts: vi.fn(),
+    setStreamingSessionResponses: vi.fn(),
+    setOpenSessionMenuId: vi.fn(),
+    setEditingSessionId: vi.fn(),
+    setEditingSessionTitle: vi.fn(),
+    setSessionSearch: vi.fn(),
+    sessionSearch: '',
+    sessionDrafts: [],
     sessionGoalDismissed: new Set<string>(),
     setSessionGoalDismissed: vi.fn(),
     sessionGoalInput: '',
     setSessionGoalInput: vi.fn(),
     sessionGoals: {},
     setSessionGoals: vi.fn(),
-    pendingDeleteVisitSummary: null,
+    pendingDeleteSessionSummary: null,
     refreshPersistedSessions: vi.fn(),
     ...overrides,
   };
@@ -115,18 +115,18 @@ function renderUseSessionWorkspace(options?: {
   artworksLoaded?: boolean;
   activeTab?: 'newSession' | 'collect' | 'profile' | 'learn';
   interpretingItem?: InterpretingItem | null;
-  visitsOverrides?: Record<string, unknown>;
+  sessionStateOverrides?: Record<string, unknown>;
 }) {
-  const visitsMock = createVisitsMock(options?.visitsOverrides);
+  const sessionStateMock = createSessionStateMock(options?.sessionStateOverrides);
   const preparedReset = vi.fn();
   const submitPreparedSession = vi.fn();
   const sessionActions = { handleDeleteSession: vi.fn() };
   const messaging = {
-    appendVisitMessages: vi.fn(),
-    sendVisitInquiryToSession: vi.fn(),
+    appendSessionMessages: vi.fn(),
+    sendSessionInquiryToSession: vi.fn(),
   };
 
-  mockUseVisits.mockReturnValue(visitsMock);
+  mockUseSessionState.mockReturnValue(sessionStateMock);
   mockUsePreparedSessionStaging.mockReturnValue({
     pendingSessionArtworks: [],
     newSessionDraftMessage: '',
@@ -148,8 +148,8 @@ function renderUseSessionWorkspace(options?: {
     focus: vi.fn(),
     select: vi.fn(),
   } as unknown as HTMLInputElement;
-  const visitStreamScroll = { scrollTop: 123 } as HTMLDivElement;
-  const visitStreamEnd = { scrollIntoView: vi.fn() } as unknown as HTMLDivElement;
+  const sessionStreamScroll = { scrollTop: 123 } as HTMLDivElement;
+  const sessionStreamEnd = { scrollIntoView: vi.fn() } as unknown as HTMLDivElement;
   const ingestPreparedUploads = vi.fn<(
     uploadEntries: PreparedSessionUploadEntry[],
     context: PreparedUploadSessionContext,
@@ -160,13 +160,13 @@ function renderUseSessionWorkspace(options?: {
     items: [],
     artworksLoaded: options?.artworksLoaded ?? true,
     deleteConfirmation: null,
-    defaultVisitTitle: 'Untitled Session',
+    defaultSessionTitle: 'Untitled Session',
     initialIsComposingNewSession: false,
     activeTab: options?.activeTab ?? 'collect',
     interpretingItem: options?.interpretingItem ?? null,
     renameInputRef: { current: renameInput },
-    visitStreamScrollRef: { current: visitStreamScroll },
-    visitStreamEndRef: { current: visitStreamEnd },
+    sessionStreamScrollRef: { current: sessionStreamScroll },
+    sessionStreamEndRef: { current: sessionStreamEnd },
     setItems,
     setVisit,
     setDeleteConfirmation,
@@ -178,7 +178,7 @@ function renderUseSessionWorkspace(options?: {
 
   return {
     ...hook,
-    visitsMock,
+    sessionStateMock,
     preparedReset,
     submitPreparedSession,
     sessionActions,
@@ -192,8 +192,8 @@ function renderUseSessionWorkspace(options?: {
       showToast,
       ingestPreparedUploads,
       renameInput,
-      visitStreamScroll,
-      visitStreamEnd,
+      sessionStreamScroll,
+      sessionStreamEnd,
     },
   };
 }
@@ -208,9 +208,9 @@ describe('useSessionWorkspace', () => {
   });
 
   it('resets to a blank session and opens an existing session summary', () => {
-    const { result, visitsMock, preparedReset, spies } = renderUseSessionWorkspace({
+    const { result, sessionStateMock, preparedReset, spies } = renderUseSessionWorkspace({
       activeTab: 'collect',
-      visitsOverrides: { visitSummaries: [] },
+      sessionStateOverrides: { sessionSummaries: [] },
       artworksLoaded: false,
     });
 
@@ -221,8 +221,8 @@ describe('useSessionWorkspace', () => {
     });
 
     expect(spies.setActiveTab).toHaveBeenCalledWith('newSession');
-    expect(visitsMock.setFilteredVisitId).toHaveBeenCalledWith(null);
-    expect(visitsMock.setIsComposingNewSession).toHaveBeenCalledWith(true);
+    expect(sessionStateMock.setFilteredSessionId).toHaveBeenCalledWith(null);
+    expect(sessionStateMock.setIsComposingNewSession).toHaveBeenCalledWith(true);
     expect(preparedReset).toHaveBeenCalledTimes(1);
     expect(spies.setVisit).toHaveBeenCalledWith({
       id: '',
@@ -235,18 +235,18 @@ describe('useSessionWorkspace', () => {
     });
 
     expect(spies.setActiveTab).toHaveBeenLastCalledWith('newSession');
-    expect(visitsMock.setFilteredVisitId).toHaveBeenLastCalledWith('session-42');
-    expect(visitsMock.setIsComposingNewSession).toHaveBeenLastCalledWith(false);
+    expect(sessionStateMock.setFilteredSessionId).toHaveBeenLastCalledWith('session-42');
+    expect(sessionStateMock.setIsComposingNewSession).toHaveBeenLastCalledWith(false);
   });
 
   it('hydrates missing DB messages into the active visit stream without duplicating existing ones', async () => {
-    const existingMessage = createVisitMessage({ id: 'existing', createdAt: 200, text: 'existing' });
-    const visitsMock = createVisitsMock({
-      visitStreams: { 'session-1': [existingMessage] },
-      setVisitStreams: vi.fn(),
+    const existingMessage = createSessionMessage({ id: 'existing', createdAt: 200, text: 'existing' });
+    const sessionStateMock = createSessionStateMock({
+      sessionStreams: { 'session-1': [existingMessage] },
+      setSessionStreams: vi.fn(),
     });
 
-    mockUseVisits.mockReturnValue(visitsMock);
+    mockUseSessionState.mockReturnValue(sessionStateMock);
     mockUsePreparedSessionStaging.mockReturnValue({
       pendingSessionArtworks: [],
       newSessionDraftMessage: '',
@@ -255,8 +255,8 @@ describe('useSessionWorkspace', () => {
       resetPreparedSessionState: vi.fn(),
     });
     mockUseSessionMessaging.mockReturnValue({
-      appendVisitMessages: vi.fn(),
-      sendVisitInquiryToSession: vi.fn(),
+      appendSessionMessages: vi.fn(),
+      sendSessionInquiryToSession: vi.fn(),
     });
     mockUseSessionActions.mockReturnValue({});
     mockUseSessionStartFlow.mockReturnValue({ submitPreparedSession: vi.fn() });
@@ -279,17 +279,17 @@ describe('useSessionWorkspace', () => {
 
     renderUseSessionWorkspace({
       activeTab: 'newSession',
-      visitsOverrides: visitsMock,
+      sessionStateOverrides: sessionStateMock,
     });
 
     await waitFor(() => {
       expect(mockFetchSessionMessages).toHaveBeenCalledWith('session-1');
-      expect(visitsMock.setVisitStreams).toHaveBeenCalled();
+      expect(sessionStateMock.setSessionStreams).toHaveBeenCalled();
     });
 
-    const updater = visitsMock.setVisitStreams.mock.calls[0][0] as (
-      prev: Record<string, VisitStreamMessage[]>
-    ) => Record<string, VisitStreamMessage[]>;
+    const updater = sessionStateMock.setSessionStreams.mock.calls[0][0] as (
+      prev: Record<string, SessionStreamMessage[]>
+    ) => Record<string, SessionStreamMessage[]>;
 
     const next = updater({ 'session-1': [existingMessage] });
     expect(next['session-1']).toHaveLength(2);

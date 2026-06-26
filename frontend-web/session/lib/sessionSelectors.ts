@@ -1,15 +1,19 @@
 import type { GalleryItem } from '../../types';
 import type { SessionRecord } from '../api/sessions';
-import type { ActiveVisitStreamEntry, VisitDraft, VisitSummary, VisitStreamMessage } from '../types';
+import type {
+  ActiveSessionStreamEntry,
+  SessionDraft,
+  SessionSummary,
+  SessionStreamMessage,
+} from '../types';
 
 type SessionMembership = {
-  visitId: string;
-  title?: string;
+  sessionId: string;
   sequenceNumber?: number;
   source?: 'library' | 'upload' | 'camera';
 };
 
-export function getVisitItemTimestamp(item: GalleryItem): number {
+export function getSessionItemTimestamp(item: GalleryItem): number {
   return item.sessionCapturedAt ?? item.timestamp;
 }
 
@@ -18,22 +22,17 @@ export function getItemSessionMemberships(item: GalleryItem): SessionMembership[
     return item.sessionLinks
       .filter((link) => Boolean(link.sessionId))
       .map((link) => ({
-        visitId: link.sessionId,
-        title: link.sessionTitle,
+        sessionId: link.sessionId,
         sequenceNumber: link.sequenceNumber,
         source: link.source,
       }));
   }
 
-  if (item.visitId) {
-    return [{ visitId: item.visitId, title: item.sessionTitle }];
-  }
-
   return [];
 }
 
-export function getItemSequenceNumberForVisit(item: GalleryItem, visitId: string): number | null {
-  const link = item.sessionLinks?.find((entry) => entry.sessionId === visitId);
+export function getItemSequenceNumberForSession(item: GalleryItem, sessionId: string): number | null {
+  const link = item.sessionLinks?.find((entry) => entry.sessionId === sessionId);
   if (typeof link?.sequenceNumber === 'number') {
     return link.sequenceNumber;
   }
@@ -69,67 +68,67 @@ export function parseDisplayDate(dateStr: string): string {
   }
 }
 
-type BuildVisitSummariesOptions = {
+type BuildSessionSummariesOptions = {
   items: GalleryItem[];
   persistedSessions: SessionRecord[];
   persistedSessionsHydrated: boolean;
-  visitDrafts: VisitDraft[];
-  defaultVisitTitle: string;
-  visitSearch: string;
+  sessionDrafts?: SessionDraft[];
+  defaultSessionTitle?: string;
+  sessionSearch?: string;
 };
 
-export function buildVisitSummaries({
+export function buildSessionSummaries({
   items,
   persistedSessions,
   persistedSessionsHydrated,
-  visitDrafts,
-  defaultVisitTitle,
-  visitSearch,
-}: BuildVisitSummariesOptions): VisitSummary[] {
+  sessionDrafts,
+  defaultSessionTitle,
+  sessionSearch,
+}: BuildSessionSummariesOptions): SessionSummary[] {
+  const resolvedSessionDrafts = sessionDrafts ?? [];
+  const resolvedDefaultSessionTitle = defaultSessionTitle ?? 'Untitled Session';
+  const resolvedSessionSearch = sessionSearch ?? '';
   const grouped = new Map<string, GalleryItem[]>();
   const persistedSessionMap = new Map(persistedSessions.map((session) => [session.id, session]));
 
   items.forEach((item) => {
     const memberships = getItemSessionMemberships(item);
-    memberships.forEach(({ visitId }) => {
-      if (!grouped.has(visitId)) grouped.set(visitId, []);
-      grouped.get(visitId)!.push(item);
+    memberships.forEach(({ sessionId }) => {
+      if (!grouped.has(sessionId)) grouped.set(sessionId, []);
+      grouped.get(sessionId)!.push(item);
     });
   });
 
-  const summaries: VisitSummary[] = [];
+  const summaries: SessionSummary[] = [];
   const knownIds = new Set<string>();
 
-  grouped.forEach((visitItems, id) => {
+  grouped.forEach((sessionItems, id) => {
     knownIds.add(id);
-    const draft = visitDrafts.find((entry) => entry.id === id);
+    const draft = resolvedSessionDrafts.find((entry) => entry.id === id);
     const persistedSession = persistedSessionMap.get(id);
     const persistedUpdatedAt = persistedSession?.updated_at ? new Date(persistedSession.updated_at).getTime() : 0;
-    const sortedItems = [...visitItems].sort((a, b) => {
-      const aSequence = getItemSequenceNumberForVisit(a, id);
-      const bSequence = getItemSequenceNumberForVisit(b, id);
+    const sortedItems = [...sessionItems].sort((a, b) => {
+      const aSequence = getItemSequenceNumberForSession(a, id);
+      const bSequence = getItemSequenceNumberForSession(b, id);
       if (aSequence !== null && bSequence !== null && aSequence !== bSequence) {
         return aSequence - bSequence;
       }
       if (aSequence !== null && bSequence === null) return -1;
       if (aSequence === null && bSequence !== null) return 1;
-      return getVisitItemTimestamp(a) - getVisitItemTimestamp(b);
+      return getSessionItemTimestamp(a) - getSessionItemTimestamp(b);
     });
 
     const latestItem = sortedItems[sortedItems.length - 1];
     const firstItem = sortedItems[0];
     const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
-    const linkedTitle = latestItem?.sessionLinks?.find((link) => link.sessionId === id)?.sessionTitle;
     const resolvedTitle =
       persistedSession?.title ||
-      linkedTitle ||
-      latestItem?.sessionTitle ||
       draft?.title ||
       location ||
       null;
     const titlePending = !persistedSessionsHydrated && !resolvedTitle;
-    const title = resolvedTitle || defaultVisitTitle;
-    const lastArtworkTimestamp = latestItem ? getVisitItemTimestamp(latestItem) : 0;
+    const title = resolvedTitle || resolvedDefaultSessionTitle;
+    const lastArtworkTimestamp = latestItem ? getSessionItemTimestamp(latestItem) : 0;
     const updatedAt = Math.max(draft?.updatedAt || 0, persistedUpdatedAt, lastArtworkTimestamp);
 
     summaries.push({
@@ -149,10 +148,10 @@ export function buildVisitSummaries({
   persistedSessions.forEach((session) => {
     if (knownIds.has(session.id)) return;
     const persistedUpdatedAt = session.updated_at ? new Date(session.updated_at).getTime() : Date.now();
-    const draft = visitDrafts.find((entry) => entry.id === session.id);
+    const draft = resolvedSessionDrafts.find((entry) => entry.id === session.id);
     summaries.push({
       id: session.id,
-      title: session.title || draft?.title || defaultVisitTitle,
+      title: session.title || draft?.title || resolvedDefaultSessionTitle,
       titlePending: false,
       location: null,
       artworkCount: 0,
@@ -163,11 +162,11 @@ export function buildVisitSummaries({
     knownIds.add(session.id);
   });
 
-  visitDrafts.forEach((draft) => {
+  resolvedSessionDrafts.forEach((draft) => {
     if (knownIds.has(draft.id)) return;
     summaries.push({
       id: draft.id,
-      title: draft.title || defaultVisitTitle,
+      title: draft.title || resolvedDefaultSessionTitle,
       titlePending: false,
       location: null,
       artworkCount: 0,
@@ -177,7 +176,7 @@ export function buildVisitSummaries({
     });
   });
 
-  const search = visitSearch.trim().toLowerCase();
+  const search = resolvedSessionSearch.trim().toLowerCase();
   return summaries
     .filter((summary) => {
       if (!search) return true;
@@ -186,24 +185,24 @@ export function buildVisitSummaries({
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-type BuildActiveVisitStreamOptions = {
-  activeVisitSummary: VisitSummary | null;
+type BuildActiveSessionStreamOptions = {
+  activeSessionSummary: SessionSummary | null;
   artworksLoaded: boolean;
-  visitStreams: Record<string, VisitStreamMessage[]>;
+  sessionStreams: Record<string, SessionStreamMessage[]>;
 };
 
-export function buildActiveVisitStream({
-  activeVisitSummary,
+export function buildActiveSessionStream({
+  activeSessionSummary,
   artworksLoaded,
-  visitStreams,
-}: BuildActiveVisitStreamOptions): ActiveVisitStreamEntry[] {
-  if (!activeVisitSummary) return [];
+  sessionStreams,
+}: BuildActiveSessionStreamOptions): ActiveSessionStreamEntry[] {
+  if (!activeSessionSummary) return [];
 
-  const messages = visitStreams[activeVisitSummary.id] || [];
+  const messages = sessionStreams[activeSessionSummary.id] || [];
   const itemsByArtworkId = new Map<string, GalleryItem>();
   const itemsById = new Map<string, GalleryItem>();
 
-  activeVisitSummary.items.forEach((item) => {
+  activeSessionSummary.items.forEach((item) => {
     itemsById.set(item.id, item);
     if (item.artworkId) {
       itemsByArtworkId.set(item.artworkId, item);
@@ -217,14 +216,14 @@ export function buildActiveVisitStream({
     }
   }
 
-  const artworkEntries: ActiveVisitStreamEntry[] = activeVisitSummary.items.map((item) => ({
+  const artworkEntries: ActiveSessionStreamEntry[] = activeSessionSummary.items.map((item) => ({
     id: `artwork-${item.id}`,
-    createdAt: (item.artworkId && captureTimeByArtworkId.get(item.artworkId)) || getVisitItemTimestamp(item),
+    createdAt: (item.artworkId && captureTimeByArtworkId.get(item.artworkId)) || getSessionItemTimestamp(item),
     type: 'artwork',
     item,
   }));
 
-  const deletedArtworkEntries: ActiveVisitStreamEntry[] = messages
+  const deletedArtworkEntries: ActiveSessionStreamEntry[] = messages
     .filter(() => artworksLoaded)
     .filter((message) => message.type === 'artwork_card' && message.artworkId)
     .filter((message) => {
@@ -256,7 +255,7 @@ export function buildActiveVisitStream({
       },
     }));
 
-  const messageEntries: ActiveVisitStreamEntry[] = messages
+  const messageEntries: ActiveSessionStreamEntry[] = messages
     .filter((message) => message.type !== 'artwork_capture' && message.type !== 'artwork_card')
     .map((message) => ({
       id: message.id,

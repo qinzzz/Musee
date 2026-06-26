@@ -9,7 +9,7 @@ import { fetchAndPersistInsights } from '../../api/artworks';
 import { prefetchExploreDataWithContext } from '../../api/explore';
 import { hasUsableCommentaryContext } from '../../session/lib/commentary';
 import { buildSessionLink, itemBelongsToSession } from '../../session/lib/sessionLinks';
-import type { PendingSessionArtwork, VisitDraft, VisitStreamMessage } from '../../session/types';
+import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../../session/types';
 import type { GalleryItem, TagCoordinate, Visit } from '../../types';
 import { buildUnsupportedUploadMessage, isSupportedUploadImage } from '../../lib/uploadValidation';
 import { createLocationResolver } from '../lib/location';
@@ -36,30 +36,30 @@ type ToastType = 'info' | 'success';
 
 type UseArtworkIngestOptions = {
   userId: string;
-  defaultVisitTitle: string;
+  defaultSessionTitle: string;
   activeTab: 'newSession' | 'collect' | 'profile' | 'learn';
   isComposingNewSession: boolean;
   pendingSessionArtworks: PendingSessionArtwork[];
   items: GalleryItem[];
-  visitStreams: Record<string, VisitStreamMessage[]>;
+  sessionStreams: Record<string, SessionStreamMessage[]>;
   setPendingSessionArtworks: Dispatch<SetStateAction<PendingSessionArtwork[]>>;
   setItems: Dispatch<SetStateAction<GalleryItem[]>>;
   setVisit: Dispatch<SetStateAction<Visit>>;
   artworkDetailSelection: ArtworkDetailSelection | null;
   setArtworkDetailSelection: Dispatch<SetStateAction<ArtworkDetailSelection | null>>;
   setTagPositions: Dispatch<SetStateAction<Record<string, TagCoordinate>>>;
-  setVisitDrafts: Dispatch<SetStateAction<VisitDraft[]>>;
+  setSessionDrafts: Dispatch<SetStateAction<SessionDraft[]>>;
   setIsAnalyzing: Dispatch<SetStateAction<boolean>>;
-  setFilteredVisitId: Dispatch<SetStateAction<string | null>>;
+  setFilteredSessionId: Dispatch<SetStateAction<string | null>>;
   showToast: (message: string, type?: ToastType) => void;
   parseAnalysis: (text: string | null) => string;
-  resolveUploadSession: () => { visitId?: string; isNew: boolean };
-  appendVisitMessages: (visitId: string, newMessages: VisitStreamMessage[]) => void;
+  resolveUploadSession: () => { sessionId?: string; isNew: boolean };
+  appendSessionMessages: (sessionId: string, newMessages: SessionStreamMessage[]) => void;
   triggerUploadCommentary: (
-    visitId: string,
+    sessionId: string,
     artworks: GalleryItem[],
-    visitItemsOverride?: GalleryItem[],
-    history?: VisitStreamMessage[],
+    sessionItemsOverride?: GalleryItem[],
+    history?: SessionStreamMessage[],
   ) => void;
   onExitSessionCapture: () => void;
 };
@@ -67,8 +67,7 @@ type UseArtworkIngestOptions = {
 type AnalyzePersistedUploadOptions = {
   persistedItem: GalleryItem;
   liveItem: GalleryItem;
-  visitId?: string;
-  sessionTitle?: string;
+  sessionId?: string;
   sequenceNumber?: number;
   mode: IngestMode;
   labelFile?: File | null;
@@ -118,25 +117,25 @@ function buildAnalyzedItem(
 
 export function useArtworkIngest({
   userId,
-  defaultVisitTitle,
+  defaultSessionTitle,
   activeTab,
   isComposingNewSession,
   pendingSessionArtworks,
   items,
-  visitStreams,
+  sessionStreams,
   setPendingSessionArtworks,
   setItems,
   setVisit,
   artworkDetailSelection,
   setArtworkDetailSelection,
   setTagPositions,
-  setVisitDrafts,
+  setSessionDrafts,
   setIsAnalyzing,
-  setFilteredVisitId,
+  setFilteredSessionId,
   showToast,
   parseAnalysis,
   resolveUploadSession,
-  appendVisitMessages,
+  appendSessionMessages,
   triggerUploadCommentary,
   onExitSessionCapture,
 }: UseArtworkIngestOptions) {
@@ -230,7 +229,6 @@ export function useArtworkIngest({
     coords?: { latitude?: number; longitude?: number };
     location?: string;
     sessionId?: string;
-    sessionTitle?: string;
     sequenceNumber?: number;
   }): Promise<GalleryItem> => {
     const saved = await saveArtworkUpload(
@@ -256,8 +254,6 @@ export function useArtworkIngest({
       ...placeholder,
       id: persistedItem.id,
       artworkId: persistedItem.artworkId,
-      visitId: persistedItem.visitId,
-      sessionTitle: persistedItem.sessionTitle,
       sessionLinks: persistedItem.sessionLinks,
       location: persistedItem.location,
       photoTime: persistedItem.photoTime,
@@ -289,16 +285,16 @@ export function useArtworkIngest({
     return reconciled;
   }, [artworkDetailSelection?.artworkId, setArtworkDetailSelection, setItems, setVisit]);
 
-  const ensureVisitDraft = useCallback((visitId: string) => {
+  const ensureSessionDraft = useCallback((sessionId: string) => {
     const now = Date.now();
-    const newVisit: VisitDraft = {
-      id: visitId,
-      title: defaultVisitTitle,
+    const newSession: SessionDraft = {
+      id: sessionId,
+      title: defaultSessionTitle,
       createdAt: now,
       updatedAt: now,
     };
-    setVisitDrafts((prev) => [newVisit, ...prev.filter((visit) => visit.id !== visitId)]);
-  }, [defaultVisitTitle, setVisitDrafts]);
+    setSessionDrafts((prev) => [newSession, ...prev.filter((session) => session.id !== sessionId)]);
+  }, [defaultSessionTitle, setSessionDrafts]);
 
   const maybeResolveLocation = useCallback((itemId: string, coords?: { latitude?: number; longitude?: number }) => {
     if (coords?.latitude === undefined || coords.longitude === undefined) {
@@ -326,8 +322,7 @@ export function useArtworkIngest({
   const analyzePersistedUpload = useCallback(async ({
     persistedItem,
     liveItem,
-    visitId,
-    sessionTitle,
+    sessionId,
     sequenceNumber,
     mode,
     labelFile,
@@ -338,12 +333,10 @@ export function useArtworkIngest({
     });
     const analysisUpdates = applyArtworkAnalysisResult(persistedItem.id, analysis, {
       sessionLinks: buildSessionLink(
-        visitId,
-        analysis.session_title || sessionTitle || liveItem.sessionTitle || defaultVisitTitle,
+        sessionId,
         sequenceNumber,
         mode === 'camera' ? 'camera' : 'upload',
       ),
-      sessionTitle: analysis.session_title || sessionTitle || liveItem.sessionTitle,
     });
 
     const resolvedItem = buildAnalyzedItem(liveItem, analysis, parseAnalysis, analysisUpdates);
@@ -355,7 +348,7 @@ export function useArtworkIngest({
     }
 
     return { analysis, resolvedItem };
-  }, [applyArtworkAnalysisResult, defaultVisitTitle, maybeHydrateInsights, parseAnalysis]);
+  }, [applyArtworkAnalysisResult, defaultSessionTitle, maybeHydrateInsights, parseAnalysis]);
 
   const ingestPreparedUploads = useCallback(async (
     uploadEntries: PreparedSessionUploadEntry[],
@@ -376,7 +369,6 @@ export function useArtworkIngest({
           photoTime: uploadEntry.photoTime,
           location: uploadEntry.location,
           sessionId: context.sessionId,
-          sessionTitle: context.sessionTitle,
           sequenceNumber,
         });
         placeholderId = placeholder.id;
@@ -392,12 +384,11 @@ export function useArtworkIngest({
           coords: uploadEntry.coords,
           location: uploadEntry.location,
           sessionId: context.sessionId,
-          sessionTitle: context.sessionTitle,
           sequenceNumber,
         });
         persistedItemId = persistedItem.id;
         const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
-        appendVisitMessages(context.sessionId, [
+        appendSessionMessages(context.sessionId, [
           { id: `capture-${placeholder.id}`, role: 'user', text: '', type: 'artwork_capture', artworkId: persistedItem.artworkId!, createdAt: Date.now() },
           { id: `card-${placeholder.id}`, role: 'model', text: '', type: 'artwork_card', artworkId: persistedItem.artworkId!, createdAt: Date.now() + 1 },
         ]);
@@ -406,8 +397,7 @@ export function useArtworkIngest({
         const { resolvedItem } = await analyzePersistedUpload({
           persistedItem,
           liveItem,
-          visitId: context.sessionId,
-          sessionTitle: context.sessionTitle,
+          sessionId: context.sessionId,
           sequenceNumber,
           mode: uploadEntry.mode,
         });
@@ -426,7 +416,7 @@ export function useArtworkIngest({
     return resolvedSessionItems;
   }, [
     analyzePersistedUpload,
-    appendVisitMessages,
+    appendSessionMessages,
     markArtworkAnalysisFailed,
     maybeResolveLocation,
     persistRawArtwork,
@@ -544,12 +534,12 @@ export function useArtworkIngest({
         let persistedItemId: string | null = null;
 
         try {
-          const { visitId, isNew } = isLibraryOnlyUpload
-            ? { visitId: undefined, isNew: false }
+          const { sessionId, isNew } = isLibraryOnlyUpload
+            ? { sessionId: undefined, isNew: false }
             : resolveUploadSession();
 
-          if (isNew && visitId) {
-            ensureVisitDraft(visitId);
+          if (isNew && sessionId) {
+            ensureSessionDraft(sessionId);
           }
 
           placeholder = createUploadPlaceholder({
@@ -558,13 +548,12 @@ export function useArtworkIngest({
             timestamp: photoTimestamp,
             photoTime,
             location: buildUploadLocationString(coords),
-            sessionId: visitId,
-            sessionTitle: defaultVisitTitle,
+            sessionId,
             sequenceNumber: 0,
           });
 
           setItems((prev) => [placeholder!, ...prev]);
-          if (visitId) {
+          if (sessionId) {
             setVisit((prev) => ({ ...prev, itemIds: [...prev.itemIds, placeholder!.id] }));
           }
 
@@ -576,16 +565,15 @@ export function useArtworkIngest({
             photoTime,
             coords,
             location: buildUploadLocationString(coords),
-            sessionId: visitId,
-            sessionTitle: defaultVisitTitle,
+            sessionId,
             sequenceNumber: 0,
           });
           persistedItemId = persistedItem.id;
           const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
 
-          if (visitId) {
+          if (sessionId) {
             const now = Date.now();
-            appendVisitMessages(visitId, [
+            appendSessionMessages(sessionId, [
               { id: `capture-${placeholder.id}`, role: 'user', text: '', type: 'artwork_capture', artworkId: persistedItem.artworkId!, createdAt: now },
               { id: `card-${placeholder.id}`, role: 'model', text: '', type: 'artwork_card', artworkId: persistedItem.artworkId!, createdAt: now + 1 },
             ]);
@@ -600,24 +588,23 @@ export function useArtworkIngest({
           const { analysis, resolvedItem } = await analyzePersistedUpload({
             persistedItem,
             liveItem,
-            visitId,
-            sessionTitle: defaultVisitTitle,
+            sessionId,
             sequenceNumber: 0,
             mode,
             labelFile: options?.labelFile || null,
             previewUrl,
           });
 
-          if (visitId && hasUsableCommentaryContext(analysis)) {
+          if (sessionId && hasUsableCommentaryContext(analysis)) {
             const sessionItems = items
               .map((entry) => (
                 entry.id === placeholder.id || entry.id === persistedItem.id
                   ? resolvedItem
                   : entry
               ))
-              .filter((item) => itemBelongsToSession(item, visitId));
-            const history = visitStreams[visitId] || [];
-            triggerUploadCommentary(visitId, [resolvedItem], sessionItems, history);
+              .filter((item) => itemBelongsToSession(item, sessionId));
+            const history = sessionStreams[sessionId] || [];
+            triggerUploadCommentary(sessionId, [resolvedItem], sessionItems, history);
           }
         } catch (error) {
           console.error('Upload failed:', error);
@@ -640,16 +627,16 @@ export function useArtworkIngest({
         }));
 
         const anchorMeta = memoryFiles[0]?.metadata;
-        const { visitId: batchVisitId, isNew } = activeTab === 'collect'
-          ? { visitId: undefined, isNew: false }
+        const { sessionId: batchSessionId, isNew } = activeTab === 'collect'
+          ? { sessionId: undefined, isNew: false }
           : resolveUploadSession();
 
-        if (isNew && batchVisitId) {
-          ensureVisitDraft(batchVisitId);
+        if (isNew && batchSessionId) {
+          ensureSessionDraft(batchSessionId);
         }
 
-        if (batchVisitId) {
-          setVisit((prev) => ({ ...prev, id: batchVisitId, itemIds: [], globalConversation: [] }));
+        if (batchSessionId) {
+          setVisit((prev) => ({ ...prev, id: batchSessionId, itemIds: [], globalConversation: [] }));
         }
 
         const placeholders = memoryFiles.map((entry, index) => {
@@ -663,15 +650,14 @@ export function useArtworkIngest({
               latitude: entry.metadata.latitude,
               longitude: entry.metadata.longitude,
             }),
-            sessionId: batchVisitId,
-            sessionTitle: defaultVisitTitle,
+            sessionId: batchSessionId,
             sequenceNumber: index,
           });
         });
 
         if (placeholders.length > 0) {
           setItems((prev) => [...placeholders, ...prev]);
-          if (batchVisitId) {
+          if (batchSessionId) {
             setVisit((prev) => ({
               ...prev,
               itemIds: [...prev.itemIds, ...placeholders.map((item) => item.id)],
@@ -705,8 +691,7 @@ export function useArtworkIngest({
               photoTime,
               coords,
               location: buildUploadLocationString(coords),
-              sessionId: batchVisitId,
-              sessionTitle: defaultVisitTitle,
+              sessionId: batchSessionId,
               sequenceNumber: index,
             });
             const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
@@ -725,10 +710,10 @@ export function useArtworkIngest({
 
         const persistedItems = persistedUploads.map((entry) => entry.item);
         if (persistedItems.length > 0) {
-          if (batchVisitId) {
+          if (batchSessionId) {
             const now = Date.now();
-            appendVisitMessages(
-              batchVisitId,
+            appendSessionMessages(
+              batchSessionId,
               persistedUploads.flatMap((entry, index) => ([
                 { id: `capture-${entry.placeholder.id}`, role: 'user', text: '', type: 'artwork_capture', artworkId: entry.item.artworkId!, createdAt: now + (index * 2) },
                 { id: `card-${entry.placeholder.id}`, role: 'model', text: '', type: 'artwork_card', artworkId: entry.item.artworkId!, createdAt: now + (index * 2) + 1 },
@@ -762,8 +747,7 @@ export function useArtworkIngest({
             const { analysis, resolvedItem } = await analyzePersistedUpload({
               persistedItem: entry.item,
               liveItem: entry.item,
-              visitId: batchVisitId,
-              sessionTitle: defaultVisitTitle,
+              sessionId: batchSessionId,
               sequenceNumber: entry.item.sessionLinks?.[0]?.sequenceNumber,
               mode,
               previewUrl: entry.previewUrl,
@@ -777,12 +761,12 @@ export function useArtworkIngest({
           }
         }
 
-        if (batchVisitId && analyzedArtworks.length > 0) {
-          const history = visitStreams[batchVisitId] || [];
-          triggerUploadCommentary(batchVisitId, analyzedArtworks, analyzedArtworks, history);
+        if (batchSessionId && analyzedArtworks.length > 0) {
+          const history = sessionStreams[batchSessionId] || [];
+          triggerUploadCommentary(batchSessionId, analyzedArtworks, analyzedArtworks, history);
         }
-        if (batchVisitId && persistedItems.length >= 2) {
-          setFilteredVisitId(batchVisitId);
+        if (batchSessionId && persistedItems.length >= 2) {
+          setFilteredSessionId(batchSessionId);
         }
         setIsAnalyzing(false);
       }
@@ -793,9 +777,9 @@ export function useArtworkIngest({
   }, [
     activeTab,
     analyzePersistedUpload,
-    appendVisitMessages,
-    defaultVisitTitle,
-    ensureVisitDraft,
+    appendSessionMessages,
+    defaultSessionTitle,
+    ensureSessionDraft,
     isComposingNewSession,
     items,
     markArtworkAnalysisFailed,
@@ -806,14 +790,14 @@ export function useArtworkIngest({
     removeUploadPlaceholder,
     resolveMuseum,
     resolveUploadSession,
-    setFilteredVisitId,
+    setFilteredSessionId,
     setIsAnalyzing,
     setItems,
     setPendingSessionArtworks,
     setVisit,
     showToast,
     triggerUploadCommentary,
-    visitStreams,
+    sessionStreams,
   ]);
 
   const handleFileUpload = useCallback(async (

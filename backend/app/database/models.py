@@ -95,7 +95,6 @@ class SavedArtwork(Base):
     def to_dict(self):
         """Convert model to dictionary."""
         session_links = [link.to_dict() for link in self.session_links] if hasattr(self, 'session_links') else []
-        primary_session_link = session_links[0] if session_links else None
         result = {
             "id": self.id,
             "photo_uri": self.photo_uri,
@@ -112,8 +111,6 @@ class SavedArtwork(Base):
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "session_id": primary_session_link["session_id"] if primary_session_link else None,
-            "session_title": primary_session_link["session_title"] if primary_session_link else None,
             "session_links": session_links,
             "artwork_tags": [tag.to_dict() for tag in self.artwork_tags] if hasattr(self, 'artwork_tags') else [],
             "date": self.params.get('date') if self.params and isinstance(self.params, dict) else None,
@@ -292,7 +289,6 @@ class SessionArtwork(Base):
         return {
             "id": self.id,
             "session_id": self.session_id,
-            "session_title": self.session.title if self.session else None,
             "artwork_id": self.artwork_id,
             "sequence_number": self.sequence_number,
             "source": self.source,
@@ -301,7 +297,7 @@ class SessionArtwork(Base):
 
 
 class SessionMessage(Base):
-    """A single event in a visit/session conversation stream.
+    """A single event in a session conversation stream.
 
     type='text'            — user or model free-text message
     type='artwork_capture' — user uploaded an artwork (role='user')

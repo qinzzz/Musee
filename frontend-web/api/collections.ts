@@ -54,10 +54,11 @@ export async function createCollection(
 }
 
 export async function updateCollection(
+  userId: string,
   collectionId: string,
   updates: { name?: string; description?: string; artworkIds?: string[] },
 ): Promise<Album> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/collections/${collectionId}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/collections/${collectionId}?user_id=${encodeURIComponent(userId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -74,8 +75,8 @@ export async function updateCollection(
   return mapCollectionToAlbum(data);
 }
 
-export async function deleteCollection(collectionId: string): Promise<void> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/collections/${collectionId}`, {
+export async function deleteCollection(userId: string, collectionId: string): Promise<void> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/collections/${collectionId}?user_id=${encodeURIComponent(userId)}`, {
     method: 'DELETE',
   });
   if (!response.ok) {

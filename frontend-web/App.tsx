@@ -96,8 +96,8 @@ const App: React.FC = () => {
   const initialNavigationState = getInitialNavigationState(window.location.pathname);
   const goalGalleryInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
-  const visitStreamScrollRef = useRef<HTMLDivElement>(null);
-  const visitStreamEndRef = useRef<HTMLDivElement>(null);
+  const sessionStreamScrollRef = useRef<HTMLDivElement>(null);
+  const sessionStreamEndRef = useRef<HTMLDivElement>(null);
   const [isUnsortedFlowOpen, setIsUnsortedFlowOpen] = useState(false);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
   const [activeTab, setActiveTab] = useState<'newSession' | 'collect' | 'profile' | 'learn'>(initialNavigationState.activeTab);
@@ -278,13 +278,13 @@ const App: React.FC = () => {
     items,
     artworksLoaded,
     deleteConfirmation,
-    defaultVisitTitle: DEFAULT_VISIT_TITLE,
+    defaultSessionTitle: DEFAULT_VISIT_TITLE,
     initialIsComposingNewSession: initialNavigationState.activeTab === 'newSession',
     activeTab,
     interpretingItem,
     renameInputRef,
-    visitStreamScrollRef,
-    visitStreamEndRef,
+    sessionStreamScrollRef,
+    sessionStreamEndRef,
     setItems,
     setVisit,
     setDeleteConfirmation,
@@ -295,20 +295,20 @@ const App: React.FC = () => {
   });
 
   const {
-    visits: {
-      visitSearch,
-      setVisitSearch,
-      filteredVisitId,
-      setFilteredVisitId,
+    sessionState: {
+      sessionSearch,
+      setSessionSearch,
+      filteredSessionId,
+      setFilteredSessionId,
       isComposingNewSession,
-      openVisitMenuId,
-      setOpenVisitMenuId,
-      editingVisitId,
-      setEditingVisitId,
-      editingVisitTitle,
-      setEditingVisitTitle,
-      setVisitDrafts,
-      visitStreams,
+      openSessionMenuId,
+      setOpenSessionMenuId,
+      editingSessionId,
+      setEditingSessionId,
+      editingSessionTitle,
+      setEditingSessionTitle,
+      setSessionDrafts,
+      sessionStreams,
       sessionGoalDismissed,
       setSessionGoalDismissed,
       sessionGoalInput,
@@ -316,12 +316,12 @@ const App: React.FC = () => {
       sessionGoals,
       setSessionGoals,
       persistedSessions,
-      visitSummaries,
-      activeVisitSummary,
-      pendingDeleteVisitSummary,
-      activeVisitStream,
+      sessionSummaries,
+      activeSessionSummary,
+      pendingDeleteSessionSummary,
+      activeSessionStream,
       refreshPersistedSessions,
-      streamingVisitResponses,
+      streamingSessionResponses,
     },
     prepared: {
       pendingSessionArtworks,
@@ -339,23 +339,23 @@ const App: React.FC = () => {
       removePendingSessionArtwork,
     },
     messaging: {
-      createVisitDraft,
+      createSessionDraft,
       resolveUploadSession,
-      appendVisitMessages,
-      sendVisitInquiryToSession,
+      appendSessionMessages,
+      sendSessionInquiryToSession,
       triggerUploadCommentary,
-      handleVisitInquiry,
+      handleSessionInquiry,
     },
     sessionActions: {
       handleDeleteSession,
-      handleStartRenameVisit,
-      saveVisitTitle,
-      commitVisitRename,
+      handleStartRenameSession,
+      saveSessionTitle,
+      commitSessionRename,
       confirmDeleteSession,
     },
     submitPreparedSession,
     pendingDeletedSessionIds,
-    recentVisitSummaries,
+    recentSessionSummaries,
     sessionsLoading,
     enterBlankSession,
     openSessionSummary,
@@ -379,25 +379,25 @@ const App: React.FC = () => {
     ingestPreparedUploads,
   } = useArtworkIngest({
     userId: sessionUserId,
-    defaultVisitTitle: DEFAULT_VISIT_TITLE,
+    defaultSessionTitle: DEFAULT_VISIT_TITLE,
     activeTab,
     isComposingNewSession,
     pendingSessionArtworks,
     items,
-    visitStreams,
+    sessionStreams,
     setPendingSessionArtworks,
     setItems,
     setVisit,
     artworkDetailSelection,
     setArtworkDetailSelection,
     setTagPositions,
-    setVisitDrafts,
+    setSessionDrafts,
     setIsAnalyzing,
-    setFilteredVisitId,
+    setFilteredSessionId,
     showToast,
     parseAnalysis,
     resolveUploadSession,
-    appendVisitMessages,
+    appendSessionMessages,
     triggerUploadCommentary,
     onExitSessionCapture: exitCaptureAfterSubmit,
   });
@@ -474,7 +474,7 @@ const App: React.FC = () => {
     setUserMenuOpen,
     isNewSessionEntryActive,
     navigationItems: sidebarNavigationItems,
-    handleSelectVisitSummary,
+    handleSelectSessionSummary,
     openSidebar,
     closeMobileSidebar,
     expandSidebar,
@@ -482,12 +482,12 @@ const App: React.FC = () => {
   } = useAppShellNavigation({
     activeTab,
     isComposingNewSession,
-    editingVisitId,
+    editingSessionId,
     clearShellOverlays,
     onSetActiveTab: setActiveTab,
     onEnterBlankSession: enterBlankSession,
     onOpenSessionSummary: openSessionSummary,
-    onCloseVisitMenu: () => setOpenVisitMenuId(null),
+    onCloseSessionMenu: () => setOpenSessionMenuId(null),
   });
   const artworkHeaderActions = interpretingItem?.artworkId ? (
     <ArtworkActionsMenu
@@ -558,8 +558,8 @@ const App: React.FC = () => {
     artistPageContext,
     movementPageContext,
     isComposingNewSession,
-    activeVisitSummary,
-    activeVisitStream,
+    activeSessionSummary,
+    activeSessionStream,
     interpretingItem,
     artworkHeaderActions,
     artworkHeaderEditToken,
@@ -568,7 +568,7 @@ const App: React.FC = () => {
     sessionGoalInput,
     sessionGoals,
     sessionGoalDismissed,
-    streamingVisitResponses,
+    streamingSessionResponses,
     goalGalleryInputRef,
     pendingSessionArtworks: pendingSessionArtworks.map((entry) => ({
       id: entry.id,
@@ -579,15 +579,16 @@ const App: React.FC = () => {
     })),
     newSessionDraftMessage,
     isSubmittingPreparedSession,
-    visitStreamScrollRef,
-    visitStreamEndRef,
+    sessionStreamScrollRef,
+    sessionStreamEndRef,
     items,
     visit,
-    filteredVisitId,
+    filteredSessionId,
     isAnalyzing,
     likedIds,
     boards,
     boardsLoading,
+    sessionTitleById: Object.fromEntries(sessionSummaries.map((session) => [session.id, session.title])),
   };
 
   const viewportNavigation = {
@@ -600,7 +601,7 @@ const App: React.FC = () => {
     closeMovementPage,
     closeArtworkDetail,
     openArtistDetail,
-    handleSelectVisitSummary,
+    handleSelectSessionSummary,
     openSessionCapturePage,
     setCollectTab,
     openMovementPage,
@@ -617,9 +618,9 @@ const App: React.FC = () => {
     setSessionGoals,
     isPersistedSessionId: (sessionId: string) => persistedSessions.some((session) => session.id === sessionId),
     refreshPersistedSessions,
-    saveVisitTitle,
+    saveSessionTitle,
     showToast,
-    createVisitDraft,
+    createSessionDraft,
     setSessionGoalInput,
     onSaveSessionGoal: setSessionGoal,
     setSessionGoalDismissed,
@@ -635,7 +636,7 @@ const App: React.FC = () => {
     handleDeleteItem,
     setIsUnsortedFlowOpen,
     handleToggleLike,
-    handleVisitInquiry,
+    handleSessionInquiry,
   };
 
   return (
@@ -698,16 +699,16 @@ const App: React.FC = () => {
             sidebarCollapsed={sidebarCollapsed}
             recentsOpen={recentsOpen}
             userMenuOpen={userMenuOpen}
-            visitSearch={visitSearch}
+            sessionSearch={sessionSearch}
             language={language}
             sessionsLoading={sessionsLoading}
-            recentVisitSummaries={recentVisitSummaries}
-            visitSummaries={visitSummaries}
-            activeVisitSummaryId={activeVisitSummary?.id}
+            recentSessionSummaries={recentSessionSummaries}
+            sessionSummaries={sessionSummaries}
+            activeSessionSummaryId={activeSessionSummary?.id}
             isNewSessionEntryActive={isNewSessionEntryActive}
-            editingVisitId={editingVisitId}
-            editingVisitTitle={editingVisitTitle}
-            openVisitMenuId={openVisitMenuId}
+            editingSessionId={editingSessionId}
+            editingSessionTitle={editingSessionTitle}
+            openSessionMenuId={openSessionMenuId}
             pendingDeletedSessionIds={pendingDeletedSessionIds}
             currentUsername={currentUser?.username}
             isAuthenticated={Boolean(currentUser)}
@@ -716,16 +717,16 @@ const App: React.FC = () => {
             navigationItems={sidebarNavigationItems}
             onRecentsOpenChange={setRecentsOpen}
             onUserMenuOpenChange={setUserMenuOpen}
-            onVisitSearchChange={setVisitSearch}
-            onEditingVisitTitleChange={setEditingVisitTitle}
-            onCommitVisitRename={commitVisitRename}
-            onCancelVisitRename={() => {
-              setEditingVisitId(null);
-              setEditingVisitTitle('');
+            onSessionSearchChange={setSessionSearch}
+            onEditingSessionTitleChange={setEditingSessionTitle}
+            onCommitSessionRename={commitSessionRename}
+            onCancelSessionRename={() => {
+              setEditingSessionId(null);
+              setEditingSessionTitle('');
             }}
-            onOpenVisitMenuChange={(summaryId, open) => setOpenVisitMenuId(open ? summaryId : null)}
-            onSelectVisitSummary={handleSelectVisitSummary}
-            onStartRenameVisit={handleStartRenameVisit}
+            onOpenSessionMenuChange={(summaryId, open) => setOpenSessionMenuId(open ? summaryId : null)}
+            onSelectSessionSummary={handleSelectSessionSummary}
+            onStartRenameSession={handleStartRenameSession}
             onDeleteSession={handleDeleteSession}
             onLanguageChange={(nextLanguage) => {
               setLanguage(nextLanguage);
@@ -761,7 +762,7 @@ const App: React.FC = () => {
         />
         <AppConfirmationLayer
           deleteConfirmation={deleteConfirmation}
-          pendingDeleteVisitSummary={pendingDeleteVisitSummary}
+          pendingDeleteSessionSummary={pendingDeleteSessionSummary}
           showCaptureExitModal={showCaptureExitModal}
           onCloseDeleteConfirmation={() => setDeleteConfirmation(null)}
           onConfirmDeleteItem={confirmDeleteItem}

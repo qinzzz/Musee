@@ -13,7 +13,6 @@ export interface ArtworkAnalysisResult {
   photo_uri?: string;
   location?: string;
   photo_time?: string;
-  session_title?: string;
   reference_urls?: ReferenceItem[];
   artist_entity_id?: string;
 }
