@@ -5,16 +5,29 @@ from app.routers import session_chat as session_chat_router
 from app.services.session_chat_service import ExhibitionItem, build_session_chat_items_payload, load_bootstrap_image_bytes
 
 
+def _expected_item(item_id: str, keywords: list[str]) -> dict:
+    """The full payload build_session_chat_items_payload sends to the AI."""
+    return {
+        "id": item_id,
+        "keywords": keywords,
+        "artist_name": None,
+        "artwork_name": None,
+        "description": None,
+        "date": None,
+        "medium": None,
+    }
+
+
 class _SessionAIService:
     async def session_chat(self, items, history, new_message, image_bytes_list):
-        assert items == [{"keywords": ["red", "abstract"]}]
+        assert items == [_expected_item("a1", ["red", "abstract"])]
         assert history == []
         assert new_message == "What do these have in common?"
         assert image_bytes_list == [b"image-a"]
         return "They share a rhythmic abstract language."
 
     async def stream_session_chat(self, items, history, new_message, image_bytes_list):
-        assert items == [{"keywords": ["red", "abstract"]}]
+        assert items == [_expected_item("a1", ["red", "abstract"])]
         assert history == [{"role": "user", "content": "hello"}]
         assert new_message == "Continue."
         assert image_bytes_list == []
@@ -161,6 +174,6 @@ def test_build_session_chat_items_payload():
         ]
     )
     assert payload == [
-        {"keywords": ["a", "b"]},
-        {"keywords": ["c"]},
+        _expected_item("1", ["a", "b"]),
+        _expected_item("2", ["c"]),
     ]
