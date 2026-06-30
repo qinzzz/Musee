@@ -48,7 +48,7 @@ export interface SessionLink {
   createdAt?: string;
 }
 
-export interface GalleryItem {
+export interface ArtworkRecord {
   id: string;
   url: string;
   keywords: string[];
@@ -62,10 +62,8 @@ export interface GalleryItem {
   artworkName?: string;
   description?: string;
   artworkId?: string;  // Backend DB artwork ID
-  isAnalyzing?: boolean; // Loading state for batch analysis
   date?: string;
   medium?: string;
-  streamingText?: string;
   location?: any;
   photoTime?: string;
   movement?: string;
@@ -74,6 +72,11 @@ export interface GalleryItem {
   insights?: Array<{ title: string; text: string }>;
   artistEntityId?: string;
   classification?: ArtworkClassification;
+}
+
+export interface ArtworkClientState {
+  isAnalyzing?: boolean; // Loading state for batch analysis
+  streamingText?: string;
   analysisStatus?: ArtworkAnalysisStatus;
   analysisError?: string;
   deleteStatus?: ArtworkDeleteStatus;
@@ -81,7 +84,9 @@ export interface GalleryItem {
   isDeletedPlaceholder?: boolean;
 }
 
-export interface Visit {
+export type GalleryItem = ArtworkRecord & ArtworkClientState;
+
+export interface ArtworkWorkspace {
   id: string;
   itemIds: string[];
   globalConversation: Message[];

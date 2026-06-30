@@ -2,7 +2,7 @@ import io
 
 from fastapi.testclient import TestClient
 
-from app.database.models import SavedArtwork, Session as SessionModel, User
+from app.database.models import ArtworkEvent, SavedArtwork, Session as SessionModel, User
 from app.main import app
 from app.models.artwork import AIProvider
 from app.routers import artwork_ingest
@@ -62,6 +62,13 @@ def test_artworks_upload_persists_pending_artwork(client, monkeypatch):
         assert len(saved) == 1
         assert saved[0].photo_uri == "r2://saved-artwork.jpg"
         assert saved[0].analysis_status == "pending"
+        events = (
+            db.query(ArtworkEvent)
+            .filter(ArtworkEvent.artwork_id == saved[0].id)
+            .order_by(ArtworkEvent.created_at.asc())
+            .all()
+        )
+        assert [event.event_type for event in events] == ["artwork_created"]
 
 
 def test_artworks_upload_does_not_leave_shell_session_when_first_save_fails(monkeypatch):
@@ -119,6 +126,17 @@ def test_artworks_analyze_marks_failed_when_identify_throws(monkeypatch):
         saved = db.query(SavedArtwork).filter(SavedArtwork.user_id == "failed-user").one()
         assert saved.analysis_status == "failed"
         assert "identify failed" in (saved.analysis_error or "")
+        events = (
+            db.query(ArtworkEvent)
+            .filter(ArtworkEvent.artwork_id == saved.id)
+            .order_by(ArtworkEvent.created_at.asc())
+            .all()
+        )
+        assert [event.event_type for event in events] == [
+            "artwork_created",
+            "artwork_identification_requested",
+            "artwork_identification_failed",
+        ]
 
 
 def test_artwork_reanalyze_updates_existing_artwork(client, monkeypatch):
@@ -170,3 +188,13 @@ def test_artwork_reanalyze_updates_existing_artwork(client, monkeypatch):
         assert updated.reference_urls == ["https://example.com/ref"]
         assert updated.params["date"] == "1915"
         assert updated.params["medium"] == "Oil on canvas"
+        events = (
+            db.query(ArtworkEvent)
+            .filter(ArtworkEvent.artwork_id == artwork_id)
+            .order_by(ArtworkEvent.created_at.asc())
+            .all()
+        )
+        assert [event.event_type for event in events] == [
+            "artwork_reidentification_requested",
+            "artwork_reidentification_completed",
+        ]

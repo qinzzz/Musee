@@ -2,6 +2,11 @@ from sqlalchemy import Column, Integer, SmallInteger, String, Text, DateTime, JS
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.connection import Base
+from app.services.session_event_service import (
+    derive_session_event_artwork_ids,
+    legacy_session_transport_type,
+    normalize_session_event_type,
+)
 import uuid
 
 
@@ -82,7 +87,7 @@ class SavedArtwork(Base):
     user = relationship("User", back_populates="artworks")
     artwork_entity = relationship("ArtworkEntity", back_populates="instances")
     artist_entity = relationship("ArtistEntity", back_populates="artworks")
-    # conversations relationship removed — table deprecated, all chat is now session-level (see SessionMessage)
+    # conversations relationship removed — table deprecated, all chat is now session-level (see SessionEvent)
     collections = relationship("Collection", secondary="collection_artworks", back_populates="artworks")
     artwork_tags = relationship("Tag", secondary="artwork_tags", back_populates="artworks")
     session_links = relationship(
@@ -90,6 +95,12 @@ class SavedArtwork(Base):
         back_populates="artwork",
         cascade="all, delete-orphan",
         order_by="SessionArtwork.sequence_number",
+    )
+    artwork_events = relationship(
+        "ArtworkEvent",
+        back_populates="artwork",
+        cascade="all, delete-orphan",
+        order_by="ArtworkEvent.created_at",
     )
 
     def to_dict(self):
@@ -244,7 +255,7 @@ class Session(Base):
         cascade="all, delete-orphan",
         order_by="SessionArtwork.sequence_number",
     )
-    messages = relationship("SessionMessage", back_populates="session", cascade="all, delete-orphan", order_by="SessionMessage.sequence_number")
+    events = relationship("SessionEvent", back_populates="session", cascade="all, delete-orphan", order_by="SessionEvent.sequence_number")
 
     def to_dict(self, include_artworks=False):
         """Convert model to dictionary"""
@@ -296,37 +307,81 @@ class SessionArtwork(Base):
         }
 
 
-class SessionMessage(Base):
-    """A single event in a session conversation stream.
+class SessionEvent(Base):
+    """A single event in a session conversation stream."""
 
-    type='text'            — user or model free-text message
-    type='artwork_capture' — user uploaded an artwork (role='user')
-    type='artwork_card'    — model's artwork analysis card response (role='model')
-    """
-
-    __tablename__ = "session_messages"
+    __tablename__ = "session_events"
 
     id              = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     session_id      = Column(String, ForeignKey('sessions.id', ondelete='CASCADE'), nullable=False, index=True)
-    role            = Column(String(10), nullable=False)   # 'user' | 'model'
-    type            = Column(String(20), nullable=False, default='text')  # 'text' | 'artwork_capture' | 'artwork_card'
-    content         = Column(Text, nullable=True)          # populated for type='text'
-    artwork_id      = Column(String, ForeignKey('saved_artworks.id', ondelete='SET NULL'), nullable=True)
+    role            = Column(String(10), nullable=False)   # 'user' | 'model' | 'system'
+    type            = Column(String(20), nullable=False, default='message')  # canonical event type
+    content         = Column(Text, nullable=True)          # primarily used for event_type='message'
+    trigger_event_id = Column(String, nullable=True)
+    payload         = Column(JSON, nullable=True)
     sequence_number = Column(Integer, nullable=False)
     created_at      = Column(DateTime, server_default=func.now())
 
-    session = relationship("Session", back_populates="messages")
-    artwork = relationship("SavedArtwork")
+    session = relationship("Session", back_populates="events")
 
     def to_dict(self):
+        canonical_type = normalize_session_event_type(self.type, role=self.role)
+        payload_artwork_ids = derive_session_event_artwork_ids(
+            canonical_type,
+            self.payload,
+        )
+        primary_artwork_id = payload_artwork_ids[0] if payload_artwork_ids else None
         return {
             "id": self.id,
             "session_id": self.session_id,
             "role": self.role,
-            "type": self.type,
+            "type": legacy_session_transport_type(self.type, role=self.role, artwork_ids=payload_artwork_ids),
+            "event_type": canonical_type,
             "content": self.content,
-            "artwork_id": self.artwork_id,
+            "artwork_id": primary_artwork_id,
+            "artwork_ids": payload_artwork_ids,
+            "trigger_event_id": self.trigger_event_id,
+            "payload": self.payload,
             "sequence_number": self.sequence_number,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ArtworkEvent(Base):
+    """Immutable artwork lifecycle event."""
+
+    __tablename__ = "artwork_events"
+    __table_args__ = (
+        Index("idx_artwork_events_artwork_created", "artwork_id", "created_at"),
+        Index("idx_artwork_events_session_created", "trigger_session_id", "created_at"),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    artwork_id = Column(String, ForeignKey("saved_artworks.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type = Column(String(50), nullable=False)
+    actor_role = Column(String(20), nullable=False, default="system")
+    trigger_source = Column(String(30), nullable=True)
+    trigger_session_id = Column(String, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
+    trigger_event_id = Column(String, nullable=True)
+    parent_event_id = Column(String, ForeignKey("artwork_events.id", ondelete="SET NULL"), nullable=True)
+    payload = Column(JSON, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    artwork = relationship("SavedArtwork", back_populates="artwork_events")
+    trigger_session = relationship("Session", foreign_keys=[trigger_session_id])
+    parent_event = relationship("ArtworkEvent", remote_side=[id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "artwork_id": self.artwork_id,
+            "event_type": self.event_type,
+            "actor_role": self.actor_role,
+            "trigger_source": self.trigger_source,
+            "trigger_session_id": self.trigger_session_id,
+            "trigger_event_id": self.trigger_event_id,
+            "parent_event_id": self.parent_event_id,
+            "payload": self.payload,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

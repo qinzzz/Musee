@@ -8,11 +8,11 @@ vi.mock('../../capture/components/SessionCapturePage', () => ({
   default: () => <div>capture</div>,
 }));
 
-vi.mock('../../components/InterpretationModal', () => ({
+vi.mock('../../artwork/components/ArtworkDetailModal', () => ({
   default: () => <div>interpretation</div>,
 }));
 
-vi.mock('../../components/CollectView', () => ({
+vi.mock('../../collection/components/CollectionView', () => ({
   default: () => <div>collect</div>,
 }));
 
@@ -85,11 +85,11 @@ function renderAppViewport(options: {
         isComposingNewSession: false,
         activeSessionSummary: createSessionSummary(),
         activeSessionStream: [],
-        interpretingItem: null,
+        artworkDetailItem: null,
         artworkHeaderActions: null,
         artworkHeaderEditToken: 0,
         artworkDetailContext: null,
-        interpretationRightMode: 'metadata',
+        artworkDetailRightMode: 'metadata',
         sessionGoalInput: 'Draft goal',
         sessionGoals: {},
         sessionGoalDismissed: new Set<string>(),
@@ -101,7 +101,7 @@ function renderAppViewport(options: {
         sessionStreamScrollRef: { current: null },
         sessionStreamEndRef: { current: null },
         items: [],
-        visit: { id: '', itemIds: [], globalConversation: [] },
+        artworkWorkspace: { id: '', itemIds: [], globalConversation: [] },
         filteredSessionId: 'visit-1',
         isAnalyzing: false,
         likedIds: new Set<string>(),
@@ -127,8 +127,8 @@ function renderAppViewport(options: {
         updateItemMetadata: vi.fn(),
         handleUpdateClassification: vi.fn(),
         setDeleteConfirmation: vi.fn(),
-        handleNavigateInterpretation: vi.fn(),
-        setInterpretationRightMode: vi.fn(),
+        handleNavigateArtworkDetail: vi.fn(),
+        setArtworkDetailRightMode: vi.fn(),
         handleIdentifyAgain: vi.fn(),
         handleRetryAnalysis: vi.fn(),
         setSessionGoals,

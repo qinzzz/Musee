@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { deleteSession, type SessionRecord, updateSession } from '../api/sessions';
-import type { GalleryItem, Visit } from '../../types';
+import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import type { SessionDraft, SessionStreamMessage, SessionSummary } from '../types';
 import { itemBelongsToSession, updateSessionLinkForItem } from '../lib/sessionLinks';
 
@@ -23,7 +23,7 @@ type UseSessionActionsOptions = {
   setSessionDrafts: Dispatch<SetStateAction<SessionDraft[]>>;
   setSessionStreams: Dispatch<SetStateAction<Record<string, SessionStreamMessage[]>>>;
   setStreamingSessionResponses: Dispatch<SetStateAction<Record<string, string>>>;
-  setVisit: Dispatch<SetStateAction<Visit>>;
+  setVisit: Dispatch<SetStateAction<ArtworkWorkspace>>;
   setFilteredSessionId: Dispatch<SetStateAction<string | null>>;
   setPendingDeletedSessionIds: Dispatch<SetStateAction<Set<string>>>;
   setOpenSessionMenuId: Dispatch<SetStateAction<string | null>>;

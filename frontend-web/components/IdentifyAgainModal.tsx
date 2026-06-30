@@ -1,11 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-
-export type IdentifyAgainValues = {
-  artist: string;
-  title: string;
-  additionalClue: string;
-};
+import type { IdentifyAgainValues } from '../artwork/types';
 
 type Props = {
   open: boolean;

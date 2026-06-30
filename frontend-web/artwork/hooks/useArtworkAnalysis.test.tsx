@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useArtworkAnalysis } from './useArtworkAnalysis';
 import type { GalleryItem } from '../../types';
-import type { InterpretingItem } from '../types';
+import type { ArtworkDetailItem } from '../types';
 
 const {
   mockAnalyzeArtworkFromExisting,
@@ -49,7 +49,7 @@ function createAnalysis(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function createItem(overrides: Partial<GalleryItem> = {}): InterpretingItem {
+function createItem(overrides: Partial<GalleryItem> = {}): ArtworkDetailItem {
   return {
     id: 'item-1',
     artworkId: 'artwork-1',
@@ -71,20 +71,20 @@ function createItem(overrides: Partial<GalleryItem> = {}): InterpretingItem {
   };
 }
 
-function renderUseArtworkAnalysis(interpretingItem: InterpretingItem | null = createItem()) {
+function renderUseArtworkAnalysis(artworkDetailItem: ArtworkDetailItem | null = createItem()) {
   const updateSavedArtworkInState = vi.fn();
   const applyArtworkAnalysisResult = vi.fn();
   const markArtworkAnalysisFailed = vi.fn();
 
   const hook = renderHook(
     ({ item }) => useArtworkAnalysis({
-      interpretingItem: item,
+      artworkDetailItem: item,
       updateSavedArtworkInState,
       applyArtworkAnalysisResult,
       markArtworkAnalysisFailed,
     }),
     {
-      initialProps: { item: interpretingItem },
+      initialProps: { item: artworkDetailItem },
     },
   );
 
@@ -122,10 +122,12 @@ describe('useArtworkAnalysis', () => {
       await result.current.handleRetryAnalysis(item);
     });
 
-    expect(spies.updateSavedArtworkInState).toHaveBeenCalledWith(item.id, expect.objectContaining({
-      isAnalyzing: true,
-      analysisStatus: 'analyzing',
-    }));
+    expect(spies.updateSavedArtworkInState).toHaveBeenCalledWith(item.id, {
+      clientState: expect.objectContaining({
+        isAnalyzing: true,
+        analysisStatus: 'analyzing',
+      }),
+    });
     expect(spies.applyArtworkAnalysisResult).toHaveBeenCalledWith(item.id, expect.objectContaining({
       artist_name: 'Claude Monet',
       artwork_id: 'artwork-1',
@@ -134,7 +136,7 @@ describe('useArtworkAnalysis', () => {
     });
     await waitFor(() => {
       expect(spies.updateSavedArtworkInState).toHaveBeenCalledWith(item.id, {
-        insights: [{ title: 'Insight', text: 'Body' }],
+        record: { insights: [{ title: 'Insight', text: 'Body' }] },
       });
     });
   });
@@ -165,10 +167,12 @@ describe('useArtworkAnalysis', () => {
       additionalClue: 'Blue pond scene',
     })).rejects.toThrow('bad request');
 
-    expect(spies.updateSavedArtworkInState).toHaveBeenCalledWith(item.id, expect.objectContaining({
-      isAnalyzing: true,
-      analysisStatus: 'reidentifying',
-    }));
+    expect(spies.updateSavedArtworkInState).toHaveBeenCalledWith(item.id, {
+      clientState: expect.objectContaining({
+        isAnalyzing: true,
+        analysisStatus: 'reidentifying',
+      }),
+    });
     expect(mockAnalyzeArtworkFromExisting).toHaveBeenCalledWith('artwork-1', {
       artistName: 'Monet',
       artworkName: 'Water Lilies',

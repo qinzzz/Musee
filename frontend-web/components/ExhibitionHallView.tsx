@@ -1,10 +1,10 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { GalleryItem, Message, Visit } from '../types';
+import { ArtworkWorkspace, GalleryItem, Message } from '../types';
 import GalleryCard from './GalleryCard';
 
 interface Props {
   items: GalleryItem[];
-  visit: Visit;
+  artworkWorkspace: ArtworkWorkspace;
   onClose: () => void;
   onInterpret: (item: GalleryItem) => void;
   onContinueVisit?: () => void;
@@ -13,7 +13,7 @@ interface Props {
 
 const ExhibitionHallView: React.FC<Props> = ({ 
   items, 
-  visit, 
+  artworkWorkspace, 
   onClose, 
   onInterpret, 
   onContinueVisit,
@@ -90,10 +90,10 @@ const ExhibitionHallView: React.FC<Props> = ({
       {/* 2. Metadata Context */}
       <div className="shrink-0 text-center py-2 animate-in slide-in-from-top-4 duration-1000">
         <p className="text-[9px] tracking-[0.4em] uppercase text-neutral-500 font-bold mb-1">
-          {visit.title || "UNNAMED EXHIBITION"}
+          {artworkWorkspace.title || "UNNAMED EXHIBITION"}
         </p>
         <p className="text-[8px] tracking-[0.2em] uppercase text-neutral-600">
-          {items.length} Works • {visit.updatedAt ? new Date(visit.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "--"}
+          {items.length} Works • {artworkWorkspace.updatedAt ? new Date(artworkWorkspace.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "--"}
         </p>
       </div>
 

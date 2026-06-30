@@ -5,8 +5,10 @@ import {
   buildActiveSessionStream,
   buildSessionSummaries,
 } from '../lib/sessionSelectors';
+import { buildSessionRenderBlocks } from '../lib/sessionRenderBlocks';
 import type {
   ActiveSessionStreamEntry,
+  SessionRenderBlock,
   SessionDraft,
   SessionSummary,
   SessionStreamMessage,
@@ -25,6 +27,30 @@ type UseSessionStateOptions = {
   sessionStreamsStorageKey: string;
   sessionGoalsStorageKey: string;
 };
+
+function normalizeCachedSessionStreams(
+  raw: Record<string, Array<SessionStreamMessage & { turnId?: string }>>,
+): Record<string, SessionStreamMessage[]> {
+  return Object.fromEntries(
+    Object.entries(raw).map(([sessionId, entries]) => [
+      sessionId,
+      (entries || []).map((entry) => {
+        const isCanonicalUserInputMessage =
+          entry.role === 'user'
+          && Boolean(entry.text)
+          && (entry.type === 'text' || entry.type === undefined || entry.type === 'artwork_capture');
+        return {
+          ...entry,
+          type: isCanonicalUserInputMessage ? 'text' : entry.type,
+          triggerEventId:
+            entry.triggerEventId
+            || entry.turnId
+            || (isCanonicalUserInputMessage ? entry.id : undefined),
+        };
+      }),
+    ]),
+  );
+}
 
 export function useSessionState({
   userId,
@@ -52,7 +78,9 @@ export function useSessionState({
   });
   const [sessionStreams, setSessionStreams] = useState<Record<string, SessionStreamMessage[]>>(() => {
     try {
-      return JSON.parse(localStorage.getItem(sessionStreamsStorageKey) || '{}');
+      return normalizeCachedSessionStreams(
+        JSON.parse(localStorage.getItem(sessionStreamsStorageKey) || '{}'),
+      );
     } catch {
       return {};
     }
@@ -96,7 +124,6 @@ export function useSessionState({
       })
       .catch(() => {
         if (!cancelled) {
-          setPersistedSessions([]);
           setPersistedSessionsHydrated(true);
         }
       });
@@ -152,6 +179,10 @@ export function useSessionState({
     });
   }, [activeSessionSummary, artworksLoaded, sessionStreams]);
 
+  const activeSessionRenderBlocks = useMemo<SessionRenderBlock[]>(() => {
+    return buildSessionRenderBlocks(activeSessionSummary, sessionStreams);
+  }, [activeSessionSummary, sessionStreams]);
+
   useEffect(() => {
     if (isComposingNewSession) return;
     if (filteredSessionId && sessionSummaries.some((summary) => summary.id === filteredSessionId)) return;
@@ -189,6 +220,7 @@ export function useSessionState({
     activeSessionSummary,
     pendingDeleteSessionSummary,
     activeSessionStream,
+    activeSessionRenderBlocks,
     refreshPersistedSessions,
   };
 }

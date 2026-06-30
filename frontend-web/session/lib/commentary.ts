@@ -53,7 +53,7 @@ export function buildUploadCommentaryPrompt(
   if (artworks.length === 1) {
     const artwork = artworks[0];
     const goalClause = sessionGoal
-      ? ` Connect your observation to the visitor's stated goal for this visit: "${sessionGoal}".`
+      ? ` Connect your observation to the visitor's stated goal for this session: "${sessionGoal}".`
       : ' Add a brief personal observation or connection to other works seen today.';
 
     if (isKnownArtistName(artwork.artistName)) {
@@ -67,7 +67,7 @@ export function buildUploadCommentaryPrompt(
     .map((artwork) => describeArtworkForCommentary(artwork))
     .join(', ');
   const goalClause = sessionGoal
-    ? ` Tie it to the visitor's stated goal for this visit: "${sessionGoal}".`
+    ? ` Tie it to the visitor's stated goal for this session: "${sessionGoal}".`
     : '';
   const hasUnknownAttribution = artworks.some((artwork) => !isKnownArtistName(artwork.artistName));
 

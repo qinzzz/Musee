@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -24,8 +24,19 @@ class SessionChatRequest(BaseModel):
     new_message: str
 
 
-def build_session_chat_items_payload(items: List[ExhibitionItem]) -> List[Dict[str, List[str]]]:
-    return [{"keywords": item.keywords} for item in items]
+def build_session_chat_items_payload(items: List[ExhibitionItem]) -> List[Dict[str, Any]]:
+    return [
+        {
+            "id": item.id,
+            "keywords": item.keywords,
+            "artist_name": item.artist_name,
+            "artwork_name": item.artwork_name,
+            "description": item.description,
+            "date": item.date,
+            "medium": item.medium,
+        }
+        for item in items
+    ]
 
 
 async def load_bootstrap_image_bytes(

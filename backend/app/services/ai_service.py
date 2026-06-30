@@ -172,12 +172,41 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
     def build_session_chat_prompt(items: List[Dict[str, Any]]) -> str:
         """System instructions for session chat.
 
-        Artwork details are no longer restated here — they flow through the
-        conversation history (each capture/card is an inline turn), so listing
-        them in the system prompt would be redundant. The `items` arg is kept
-        for signature compatibility but intentionally unused.
+        Keep current artwork metadata in the system prompt so the first response
+        after session creation has context even before history is reconstructed.
         """
-        return get_session_chat_prompt("")
+        metadata_lines: List[str] = []
+        for index, item in enumerate(items[:10], start=1):
+            bits: List[str] = []
+            artwork_name = item.get("artwork_name")
+            artist_name = item.get("artist_name")
+            if artwork_name:
+                bits.append(str(artwork_name))
+            if artist_name:
+                bits.append(f"by {artist_name}")
+            if item.get("date"):
+                bits.append(str(item["date"]))
+            if item.get("medium"):
+                bits.append(str(item["medium"]))
+            if item.get("keywords"):
+                bits.append(f"keywords: {', '.join(item['keywords'][:8])}")
+            if item.get("description"):
+                description = str(item["description"]).strip()
+                if len(description) > 280:
+                    description = f"{description[:277]}..."
+                bits.append(description)
+            if bits:
+                metadata_lines.append(f"{index}. " + " | ".join(bits))
+
+        metadata_context = ""
+        if metadata_lines:
+            metadata_context = (
+                "\n\nCurrent artwork context:\n"
+                + "\n".join(metadata_lines)
+                + "\nUse this only as helpful context; prioritize what is visible in the image when image data is provided."
+            )
+
+        return get_session_chat_prompt("") + metadata_context
 
     @staticmethod
     def build_conversation_history(history: Optional[List[Dict[str, str]]]) -> List[ConversationMessage]:

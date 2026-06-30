@@ -2,14 +2,13 @@ import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { useArtworkIngest } from './useArtworkIngest';
-import type { GalleryItem, TagCoordinate, Visit } from '../../types';
+import type { ArtworkWorkspace, GalleryItem, TagCoordinate } from '../../types';
 import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../../session/types';
 
 const {
   mockAnalyzeArtworkFromExisting,
   mockSaveArtworkUpload,
   mockFetchAndPersistInsights,
-  mockPrefetchExploreDataWithContext,
   mockHasUsableCommentaryContext,
   mockNormalizeUploadFile,
   mockReadExifMetadata,
@@ -20,7 +19,6 @@ const {
   mockAnalyzeArtworkFromExisting: vi.fn(),
   mockSaveArtworkUpload: vi.fn(),
   mockFetchAndPersistInsights: vi.fn(),
-  mockPrefetchExploreDataWithContext: vi.fn(),
   mockHasUsableCommentaryContext: vi.fn(),
   mockNormalizeUploadFile: vi.fn(),
   mockReadExifMetadata: vi.fn(),
@@ -36,10 +34,6 @@ vi.mock('../../api/analysis', () => ({
 
 vi.mock('../../api/artworks', () => ({
   fetchAndPersistInsights: mockFetchAndPersistInsights,
-}));
-
-vi.mock('../../api/explore', () => ({
-  prefetchExploreDataWithContext: mockPrefetchExploreDataWithContext,
 }));
 
 vi.mock('../../session/lib/commentary', () => ({
@@ -116,7 +110,7 @@ function createSavedUpload() {
 function renderUseArtworkIngest(options: HarnessOptions = {}) {
   const showToast = vi.fn();
   const resolveUploadSession = vi.fn(() => ({ sessionId: 'visit-1', isNew: true }));
-  const appendSessionMessages = vi.fn();
+  const appendSessionEvents = vi.fn();
   const triggerUploadCommentary = vi.fn();
   const onExitSessionCapture = vi.fn();
 
@@ -125,7 +119,7 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       options.pendingSessionArtworks ?? [],
     );
     const [items, setItems] = React.useState<GalleryItem[]>(options.items ?? []);
-    const [visit, setVisit] = React.useState<Visit>({ id: 'initial', itemIds: [], globalConversation: [] });
+    const [artworkWorkspace, setArtworkWorkspace] = React.useState<ArtworkWorkspace>({ id: 'initial', itemIds: [], globalConversation: [] });
     const [artworkDetailSelection, setArtworkDetailSelection] = React.useState<{
       artworkId: string;
       navigationItemIds?: string[];
@@ -145,7 +139,7 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       sessionStreams: options.sessionStreams ?? {},
       setPendingSessionArtworks,
       setItems,
-      setVisit,
+        setVisit: setArtworkWorkspace,
       artworkDetailSelection,
       setArtworkDetailSelection,
       setTagPositions,
@@ -155,7 +149,7 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       showToast,
       parseAnalysis: (text) => text ?? '',
       resolveUploadSession,
-      appendSessionMessages,
+      appendSessionEvents,
       triggerUploadCommentary,
       onExitSessionCapture,
     });
@@ -165,7 +159,7 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       state: {
         pendingSessionArtworks,
         items,
-        visit,
+        artworkWorkspace,
         artworkDetailSelection,
         tagPositions,
         sessionDrafts,
@@ -183,7 +177,7 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
     spies: {
       showToast,
       resolveUploadSession,
-      appendSessionMessages,
+      appendSessionEvents,
       triggerUploadCommentary,
       onExitSessionCapture,
     },
@@ -210,7 +204,6 @@ describe('useArtworkIngest', () => {
     }));
     mockFetchAndPersistInsights.mockResolvedValue([]);
     mockHasUsableCommentaryContext.mockReturnValue(true);
-    mockPrefetchExploreDataWithContext.mockReturnValue(undefined);
   });
 
   afterEach(() => {

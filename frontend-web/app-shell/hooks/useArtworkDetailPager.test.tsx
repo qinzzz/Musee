@@ -1,9 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useArtworkDetailPager } from './useArtworkDetailPager';
-import type { InterpretingItem } from '../../artwork/types';
+import type { ArtworkDetailItem } from '../../artwork/types';
 
-function createItem(id: string): InterpretingItem {
+function createItem(id: string): ArtworkDetailItem {
   return {
     id,
     artworkId: id,
@@ -36,7 +36,7 @@ describe('useArtworkDetailPager', () => {
 
   it('moves to the next artwork and replaces history state in artwork detail view', () => {
     const items = [createItem('a1'), createItem('a2'), createItem('a3')];
-    const interpretingItem: InterpretingItem = {
+    const artworkDetailItem: ArtworkDetailItem = {
       ...items[0],
       navigationItems: items,
     };
@@ -49,14 +49,14 @@ describe('useArtworkDetailPager', () => {
         parentLabel: 'All Artworks',
         basePath: '/saved',
       },
-      interpretingItem,
+      artworkDetailItem,
       setArtworkDetailSelection,
     }));
 
     window.history.pushState({ view: 'artwork' }, '', '/saved');
 
     act(() => {
-      result.current.navigateInterpretation('next');
+      result.current.navigateArtworkDetail('next');
     });
 
     expect(setArtworkDetailSelection).toHaveBeenCalledWith({
@@ -80,12 +80,12 @@ describe('useArtworkDetailPager', () => {
       activeTab: 'collect',
       collectTab: 'saved',
       artworkDetailContext: null,
-      interpretingItem: createItem('solo'),
+      artworkDetailItem: createItem('solo'),
       setArtworkDetailSelection,
     }));
 
     act(() => {
-      result.current.navigateInterpretation('next');
+      result.current.navigateArtworkDetail('next');
     });
 
     expect(setArtworkDetailSelection).not.toHaveBeenCalled();

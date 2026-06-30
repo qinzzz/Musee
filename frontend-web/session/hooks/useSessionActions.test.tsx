@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionActions } from './useSessionActions';
-import type { GalleryItem, Visit } from '../../types';
+import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import type { SessionRecord } from '../api/sessions';
 import type { SessionSummary } from '../types';
 

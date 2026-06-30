@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { ArtworkDetailSelection, InterpretingItem } from '../../artwork/types';
+import type { ArtworkDetailItem, ArtworkDetailSelection } from '../../artwork/types';
 import type {
   AppTab,
   ArtworkDetailContext,
@@ -12,7 +12,7 @@ type UseArtworkDetailPagerOptions = {
   activeTab: AppTab;
   collectTab: CollectTab;
   artworkDetailContext: ArtworkDetailContext | null;
-  interpretingItem: InterpretingItem | null;
+  artworkDetailItem: ArtworkDetailItem | null;
   setArtworkDetailSelection: Dispatch<SetStateAction<ArtworkDetailSelection | null>>;
 };
 
@@ -20,14 +20,14 @@ export function useArtworkDetailPager({
   activeTab,
   collectTab,
   artworkDetailContext,
-  interpretingItem,
+  artworkDetailItem,
   setArtworkDetailSelection,
 }: UseArtworkDetailPagerOptions) {
-  const navigateInterpretation = useCallback((direction: 'prev' | 'next') => {
-    if (!interpretingItem || !interpretingItem.navigationItems || interpretingItem.navigationItems.length <= 1) return;
+  const navigateArtworkDetail = useCallback((direction: 'prev' | 'next') => {
+    if (!artworkDetailItem || !artworkDetailItem.navigationItems || artworkDetailItem.navigationItems.length <= 1) return;
 
-    const allItems = interpretingItem.navigationItems;
-    const currentIndex = allItems.findIndex((item) => item.id === interpretingItem.id);
+    const allItems = artworkDetailItem.navigationItems;
+    const currentIndex = allItems.findIndex((item) => item.id === artworkDetailItem.id);
 
     if (currentIndex === -1) return;
 
@@ -54,9 +54,9 @@ export function useArtworkDetailPager({
         artworkDetailContext.basePath,
       );
     }
-  }, [activeTab, artworkDetailContext, collectTab, interpretingItem, setArtworkDetailSelection]);
+  }, [activeTab, artworkDetailContext, artworkDetailItem, collectTab, setArtworkDetailSelection]);
 
   return {
-    navigateInterpretation,
+    navigateArtworkDetail,
   };
 }

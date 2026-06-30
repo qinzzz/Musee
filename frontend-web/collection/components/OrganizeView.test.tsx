@@ -2,19 +2,19 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import OrganizeView from './OrganizeView';
-import type { GalleryItem, Visit } from '../types';
+import type { ArtworkWorkspace, GalleryItem } from '../../types';
 
-vi.mock('./GridView', () => ({
+vi.mock('../../components/GridView', () => ({
   default: ({ items }: { items: Array<{ id: string }> }) => (
     <div data-testid="grid-view">{items.map((item) => item.id).join(',')}</div>
   ),
 }));
 
-vi.mock('./CollectionGridSkeleton', () => ({
+vi.mock('../../components/CollectionGridSkeleton', () => ({
   default: () => <div data-testid="collection-grid-skeleton">skeleton</div>,
 }));
 
-vi.mock('../artist/hooks/useUserArtists', () => ({
+vi.mock('../../artist/hooks/useUserArtists', () => ({
   buildArtistInvalidationKey: () => 'artists-key',
   useUserArtists: () => ({
     artists: [],
@@ -45,7 +45,7 @@ function createItem(id: string): GalleryItem {
   };
 }
 
-const visit: Visit = {
+const artworkWorkspace: ArtworkWorkspace = {
   id: 'visit-1',
   itemIds: [],
   globalConversation: [],
@@ -57,7 +57,7 @@ function renderOrganizeView(props: Partial<React.ComponentProps<typeof OrganizeV
       onFileUpload={vi.fn()}
       artworksLoaded={true}
       items={[]}
-      visit={visit}
+      artworkWorkspace={artworkWorkspace}
       filteredSessionId={null}
       isAnalyzing={false}
       likedIds={new Set()}
@@ -71,7 +71,6 @@ function renderOrganizeView(props: Partial<React.ComponentProps<typeof OrganizeV
       onDeleteBoard={vi.fn()}
       onAddItemsToBoard={vi.fn()}
       onOpenArtist={vi.fn()}
-      onOpenMovement={vi.fn()}
       onInterpret={vi.fn()}
       onDelete={vi.fn()}
       onStartUnsortedFlow={vi.fn()}

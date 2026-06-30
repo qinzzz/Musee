@@ -12,7 +12,12 @@ import {
   type ArtworkBootstrapCacheItem,
 } from '../../lib/bootstrapCache';
 import { parseAnalysis } from '../lib/analysisText';
-import type { ArtworkDetailSelection, InterpretingItem } from '../types';
+import type { ArtworkDetailItem, ArtworkDetailSelection } from '../types';
+import {
+  buildArtworkListItem,
+  resolveArtworkDetailItem,
+  splitArtworkListItem,
+} from '../lib/artworkState';
 import { buildSessionLink, getPrimarySessionId } from '../../session/lib/sessionLinks';
 
 type UseArtworkLibraryOptions = {
@@ -68,43 +73,47 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
 
   const analysisStatus = item.analysis_status || 'analyzed';
 
-  return {
-    id: item.id,
-    artworkId: item.id,
-    url: imageUrl,
-    artistName: item.artist_name,
-    artworkName: item.artwork_name,
-    description: parseAnalysis(item.analysis),
-    keywords,
-    date: item.date,
-    medium: item.medium,
-    timestamp: item.photo_time ? new Date(item.photo_time).getTime() : (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
-    sessionLinks,
-    location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
-    photoTime: item.photo_time,
-    movement: item.movement,
-    periodBucket: item.period_bucket,
-    referenceUrls: item.reference_urls || [],
-    insights: item.insights || [],
-    artistEntityId: item.artist_entity_id || undefined,
-    classification: item.classification || 'unsorted',
-    analysisStatus,
-    analysisError: item.analysis_error || undefined,
-    syncStatus: 'synced',
-    isAnalyzing: analysisStatus === 'pending' || analysisStatus === 'analyzing',
-    streamingText: analysisStatus === 'failed' ? (item.analysis_error || 'Analysis failed.') : undefined,
-    conversation: [],
-    sessionCapturedAt: item.created_at
-      ? new Date(item.created_at).getTime()
-      : (item.photo_time ? new Date(item.photo_time).getTime() : Date.now()),
-    vibe: {
-      backgroundColor: '#ffffff',
-      padding: 4,
-      borderRadius: '12px',
-      borderType: 'solid',
-      accentColor: '#000000',
+  return buildArtworkListItem(
+    {
+      id: item.id,
+      artworkId: item.id,
+      url: imageUrl,
+      artistName: item.artist_name,
+      artworkName: item.artwork_name,
+      description: parseAnalysis(item.analysis),
+      keywords,
+      date: item.date,
+      medium: item.medium,
+      timestamp: item.photo_time ? new Date(item.photo_time).getTime() : (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
+      sessionLinks,
+      location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
+      photoTime: item.photo_time,
+      movement: item.movement,
+      periodBucket: item.period_bucket,
+      referenceUrls: item.reference_urls || [],
+      insights: item.insights || [],
+      artistEntityId: item.artist_entity_id || undefined,
+      classification: item.classification || 'unsorted',
+      conversation: [],
+      sessionCapturedAt: item.created_at
+        ? new Date(item.created_at).getTime()
+        : (item.photo_time ? new Date(item.photo_time).getTime() : Date.now()),
+      vibe: {
+        backgroundColor: '#ffffff',
+        padding: 4,
+        borderRadius: '12px',
+        borderType: 'solid',
+        accentColor: '#000000',
+      },
     },
-  };
+    {
+      analysisStatus,
+      analysisError: item.analysis_error || undefined,
+      syncStatus: 'synced',
+      isAnalyzing: analysisStatus === 'pending' || analysisStatus === 'analyzing',
+      streamingText: analysisStatus === 'failed' ? (item.analysis_error || 'Analysis failed.') : undefined,
+    },
+  );
 }
 
 function mapCachedArtworkToGalleryItem(item: ArtworkBootstrapCacheItem): GalleryItem {
@@ -114,67 +123,72 @@ function mapCachedArtworkToGalleryItem(item: ArtworkBootstrapCacheItem): Gallery
     undefined,
   );
 
-  return {
-    id: item.id,
-    artworkId: item.artworkId,
-    url: item.url,
-    artistName: item.artistName,
-    artworkName: item.artworkName,
-    description: item.description,
-    keywords: item.keywords,
-    date: item.date,
-    medium: item.medium,
-    timestamp: item.timestamp,
-    sessionCapturedAt: item.sessionCapturedAt,
-    conversation: [],
-    sessionLinks,
-    location: item.location,
-    photoTime: item.photoTime,
-    movement: item.movement,
-    periodBucket: item.periodBucket,
-    referenceUrls: item.referenceUrls,
-    insights: item.insights,
-    artistEntityId: item.artistEntityId,
-    classification: item.classification,
-    analysisStatus: item.analysisStatus,
-    analysisError: item.analysisError,
-    syncStatus: 'synced',
-    isAnalyzing: item.analysisStatus === 'pending' || item.analysisStatus === 'analyzing',
-    streamingText: item.analysisStatus === 'failed' ? (item.analysisError || 'Analysis failed.') : undefined,
-    vibe: {
-      backgroundColor: '#ffffff',
-      padding: 4,
-      borderRadius: '12px',
-      borderType: 'solid',
-      accentColor: '#000000',
+  return buildArtworkListItem(
+    {
+      id: item.id,
+      artworkId: item.artworkId,
+      url: item.url,
+      artistName: item.artistName,
+      artworkName: item.artworkName,
+      description: item.description,
+      keywords: item.keywords,
+      date: item.date,
+      medium: item.medium,
+      timestamp: item.timestamp,
+      sessionCapturedAt: item.sessionCapturedAt,
+      conversation: [],
+      sessionLinks,
+      location: item.location,
+      photoTime: item.photoTime,
+      movement: item.movement,
+      periodBucket: item.periodBucket,
+      referenceUrls: item.referenceUrls,
+      insights: item.insights,
+      artistEntityId: item.artistEntityId,
+      classification: item.classification,
+      vibe: {
+        backgroundColor: '#ffffff',
+        padding: 4,
+        borderRadius: '12px',
+        borderType: 'solid',
+        accentColor: '#000000',
+      },
     },
-  };
+    {
+      analysisStatus: item.analysisStatus,
+      analysisError: item.analysisError,
+      syncStatus: 'synced',
+      isAnalyzing: item.analysisStatus === 'pending' || item.analysisStatus === 'analyzing',
+      streamingText: item.analysisStatus === 'failed' ? (item.analysisError || 'Analysis failed.') : undefined,
+    },
+  );
 }
 
 function mapGalleryItemToCacheItem(item: GalleryItem): ArtworkBootstrapCacheItem {
+  const { record, clientState } = splitArtworkListItem(item);
   return {
-    id: item.id,
-    artworkId: item.artworkId,
-    url: item.url,
-    artistName: item.artistName,
-    artworkName: item.artworkName,
-    description: item.description,
-    keywords: item.keywords,
-    date: item.date,
-    medium: item.medium,
-    timestamp: item.timestamp,
-    sessionCapturedAt: item.sessionCapturedAt,
-    sessionLinks: item.sessionLinks,
-    location: typeof item.location === 'string' ? item.location : undefined,
-    photoTime: item.photoTime,
-    movement: item.movement,
-    periodBucket: item.periodBucket,
-    referenceUrls: item.referenceUrls,
-    insights: item.insights,
-    artistEntityId: item.artistEntityId,
-    classification: item.classification,
-    analysisStatus: item.analysisStatus,
-    analysisError: item.analysisError,
+    id: record.id,
+    artworkId: record.artworkId,
+    url: record.url,
+    artistName: record.artistName,
+    artworkName: record.artworkName,
+    description: record.description,
+    keywords: record.keywords,
+    date: record.date,
+    medium: record.medium,
+    timestamp: record.timestamp,
+    sessionCapturedAt: record.sessionCapturedAt,
+    sessionLinks: record.sessionLinks,
+    location: typeof record.location === 'string' ? record.location : undefined,
+    photoTime: record.photoTime,
+    movement: record.movement,
+    periodBucket: record.periodBucket,
+    referenceUrls: record.referenceUrls,
+    insights: record.insights,
+    artistEntityId: record.artistEntityId,
+    classification: record.classification,
+    analysisStatus: clientState.analysisStatus,
+    analysisError: clientState.analysisError,
   };
 }
 
@@ -200,7 +214,7 @@ function seedTagPositionsFromItems(
   });
 }
 
-function resolveInterpretingNavigationItems(
+function resolveArtworkDetailNavigationItems(
   sourceItem: GalleryItem,
   items: GalleryItem[],
   navigationItemIds?: string[],
@@ -286,24 +300,12 @@ export function useArtworkLibrary({
     writeArtworkBootstrapCache(userId, cacheableItems);
   }, [items, userId]);
 
-  const interpretingItem = useMemo<InterpretingItem | null>(() => {
-    if (!artworkDetailSelection) return null;
-
-    const sourceItem = items.find((item) => (
-      item.id === artworkDetailSelection.artworkId || item.artworkId === artworkDetailSelection.artworkId
-    ));
-
-    if (!sourceItem) return null;
-
-    return {
-      ...sourceItem,
-      navigationItems: resolveInterpretingNavigationItems(
-        sourceItem,
-        items,
-        artworkDetailSelection.navigationItemIds,
-      ),
-      is_liked: artworkDetailSelection.is_liked,
-    };
+  const artworkDetailItem = useMemo<ArtworkDetailItem | null>(() => {
+    return resolveArtworkDetailItem(
+      items,
+      artworkDetailSelection,
+      resolveArtworkDetailNavigationItems,
+    );
   }, [artworkDetailSelection, items]);
 
   const buildArtworkDetailSelection = (item: GalleryItem, allItems?: GalleryItem[]): ArtworkDetailSelection => ({
@@ -359,7 +361,7 @@ export function useArtworkLibrary({
     setItems,
     artworksLoaded,
     profileRefreshKey,
-    interpretingItem,
+    artworkDetailItem,
     artworkDetailSelection,
     setArtworkDetailSelection,
     buildArtworkDetailSelection,

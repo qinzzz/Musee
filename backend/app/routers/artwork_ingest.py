@@ -29,6 +29,15 @@ from app.services.artwork_background_service import (
     track_artwork_task,
 )
 from app.services.artwork_enrichment_service import run_artist_bio_bg as _run_artist_bio_bg
+from app.services.artwork_event_service import (
+    ARTWORK_EVENT_IDENTIFICATION_COMPLETED,
+    ARTWORK_EVENT_IDENTIFICATION_FAILED,
+    ARTWORK_EVENT_IDENTIFICATION_REQUESTED,
+    ARTWORK_EVENT_REIDENTIFICATION_COMPLETED,
+    ARTWORK_EVENT_REIDENTIFICATION_FAILED,
+    ARTWORK_EVENT_REIDENTIFICATION_REQUESTED,
+    log_artwork_event,
+)
 from app.services.artwork_ingest_service import (
     create_saved_artwork_record_sync,
     location_payload_needs_resolution,
@@ -50,6 +59,38 @@ from app.utils.image_processing import process_image
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _resolve_artwork_analysis_event_type(
+    *,
+    artwork_id: Optional[str],
+    artist_name: Optional[str],
+    artwork_name: Optional[str],
+    additional_clue: Optional[str],
+) -> tuple[str, str]:
+    has_reidentify_hints = any(
+        value is not None and str(value).strip()
+        for value in (artist_name, artwork_name, additional_clue)
+    )
+    if artwork_id and has_reidentify_hints:
+        return ARTWORK_EVENT_REIDENTIFICATION_REQUESTED, ARTWORK_EVENT_REIDENTIFICATION_COMPLETED
+    if artwork_id and not has_reidentify_hints:
+        return ARTWORK_EVENT_IDENTIFICATION_REQUESTED, ARTWORK_EVENT_IDENTIFICATION_COMPLETED
+    return ARTWORK_EVENT_IDENTIFICATION_REQUESTED, ARTWORK_EVENT_IDENTIFICATION_COMPLETED
+
+
+def _resolve_artwork_analysis_failed_event_type(requested_event_type: str) -> str:
+    if requested_event_type == ARTWORK_EVENT_REIDENTIFICATION_REQUESTED:
+        return ARTWORK_EVENT_REIDENTIFICATION_FAILED
+    return ARTWORK_EVENT_IDENTIFICATION_FAILED
+
+
+def _resolve_artwork_trigger_source(*, session_id: Optional[str], artwork_id: Optional[str]) -> str:
+    if session_id:
+        return "session"
+    if artwork_id:
+        return "collection"
+    return "upload"
 
 
 @router.post("/artworks/analyze")
@@ -151,8 +192,35 @@ async def analyze_artwork_unified(
         existing_artwork.analysis_status = "analyzing"
         existing_artwork.analysis_error = None
         existing_artwork.analysis_attempted_at = datetime.now(UTC)
+        requested_event_type, completed_event_type = _resolve_artwork_analysis_event_type(
+            artwork_id=artwork_id,
+            artist_name=artist_name,
+            artwork_name=artwork_name,
+            additional_clue=additional_clue,
+        )
+        trigger_source = _resolve_artwork_trigger_source(session_id=session_id, artwork_id=artwork_id)
+        request_event = log_artwork_event(
+            db,
+            artwork_id=str(existing_artwork.id),
+            event_type=requested_event_type,
+            actor_role="user",
+            trigger_source=trigger_source,
+            trigger_session_id=session_id,
+            payload={
+                "artist_name_hint": artist_name,
+                "artwork_name_hint": artwork_name,
+                "additional_clue": additional_clue,
+                "has_label_image": bool(label_image_bytes),
+                "identity": identity,
+            },
+        )
         db.commit()
         db.refresh(existing_artwork)
+    else:
+        request_event = None
+        requested_event_type = ARTWORK_EVENT_IDENTIFICATION_REQUESTED
+        completed_event_type = ARTWORK_EVENT_IDENTIFICATION_COMPLETED
+        trigger_source = _resolve_artwork_trigger_source(session_id=session_id, artwork_id=artwork_id)
 
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
@@ -177,6 +245,16 @@ async def analyze_artwork_unified(
             existing_artwork.analysis_status = "failed"
             existing_artwork.analysis_error = str(exc)
             existing_artwork.analysis_completed_at = None
+            log_artwork_event(
+                db,
+                artwork_id=str(existing_artwork.id),
+                event_type=_resolve_artwork_analysis_failed_event_type(requested_event_type),
+                actor_role="system",
+                trigger_source=trigger_source,
+                trigger_session_id=session_id,
+                parent_event_id=request_event.id if request_event else None,
+                payload={"error_message": str(exc)},
+            )
             db.commit()
         raise
 
@@ -200,6 +278,21 @@ async def analyze_artwork_unified(
             existing_artwork,
             parsed_result,
             vision_ref_urls,
+        )
+        log_artwork_event(
+            db,
+            artwork_id=str(existing_artwork.id),
+            event_type=completed_event_type,
+            actor_role="system",
+            trigger_source=trigger_source,
+            trigger_session_id=session_id,
+            parent_event_id=request_event.id if request_event else None,
+            payload={
+                "artist_name": parsed_result["artist_name"],
+                "artwork_name": parsed_result["artwork_name"],
+                "used_label_image": bool(label_image_bytes),
+                "reference_urls": vision_ref_urls or [],
+            },
         )
         entity_id_fast = bg_ids["entity_id_fast"]
         artist_entity_id_fast = bg_ids["artist_entity_id_fast"]
@@ -407,6 +500,14 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
     artwork.analysis_status = "analyzing"
     artwork.analysis_error = None
     artwork.analysis_attempted_at = datetime.now(UTC)
+    request_event = log_artwork_event(
+        db,
+        artwork_id=str(artwork.id),
+        event_type=ARTWORK_EVENT_REIDENTIFICATION_REQUESTED,
+        actor_role="user",
+        trigger_source="collection",
+        payload={"request_kind": "reanalyze"},
+    )
     db.commit()
     db.refresh(artwork)
 
@@ -430,6 +531,15 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
         artwork.analysis_status = "failed"
         artwork.analysis_error = str(exc)
         artwork.analysis_completed_at = None
+        log_artwork_event(
+            db,
+            artwork_id=str(artwork.id),
+            event_type=ARTWORK_EVENT_REIDENTIFICATION_FAILED,
+            actor_role="system",
+            trigger_source="collection",
+            parent_event_id=request_event.id,
+            payload={"error_message": str(exc)},
+        )
         db.commit()
         raise
 
@@ -439,6 +549,19 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
         fallback_title=artwork.artwork_name or "Untitled",
     )
     apply_analysis_to_saved_artwork(db, artwork, parsed_result, vision_ref_urls)
+    log_artwork_event(
+        db,
+        artwork_id=str(artwork.id),
+        event_type=ARTWORK_EVENT_REIDENTIFICATION_COMPLETED,
+        actor_role="system",
+        trigger_source="collection",
+        parent_event_id=request_event.id,
+        payload={
+            "artist_name": parsed_result["artist_name"],
+            "artwork_name": parsed_result["artwork_name"],
+            "reference_urls": vision_ref_urls or [],
+        },
+    )
     db.commit()
     db.refresh(artwork)
 

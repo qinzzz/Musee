@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useState, useRef, useEffect } from 'react';
-import { GalleryItem, Visit, TagCoordinate } from './types';
+import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
 import { getCurrentUser, getOrCreateUserId, getUserQuota, logout, type UserQuota } from './api/auth';
@@ -27,7 +27,7 @@ import { useArtworkAnalysis } from './artwork/hooks/useArtworkAnalysis';
 import { useBoards } from './boards/hooks/useBoards';
 import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
 import { useArtworkIngest } from './artwork-ingest/hooks/useArtworkIngest';
-import type { PreparedSessionUploadEntry, PreparedUploadSessionContext } from './artwork-ingest/types';
+import type { PreparedSessionUploadEntry, PreparedUploadIngestResult, PreparedUploadSessionContext } from './artwork-ingest/types';
 import {
   getInitialNavigationState,
   type ArtistPageContext,
@@ -135,7 +135,7 @@ const App: React.FC = () => {
     setItems,
     artworksLoaded,
     profileRefreshKey,
-    interpretingItem,
+    artworkDetailItem,
     artworkDetailSelection,
     setArtworkDetailSelection,
     buildArtworkDetailSelection,
@@ -190,12 +190,12 @@ const App: React.FC = () => {
   });
 
   const {
-    navigateInterpretation: handleNavigateInterpretation,
+    navigateArtworkDetail: handleNavigateArtworkDetail,
   } = useArtworkDetailPager({
     activeTab,
     collectTab,
     artworkDetailContext,
-    interpretingItem,
+    artworkDetailItem,
     setArtworkDetailSelection,
   });
 
@@ -206,7 +206,7 @@ const App: React.FC = () => {
     movementPageContext,
     artworkDetailContext,
     captureState: sessionCaptureState,
-    interpretingItem,
+    artworkDetailItem,
     onRestoreArtworkFromHistory: restoreArtworkFromHistory,
     onSetArtistPageContext: setArtistPageContext,
     onSetMovementPageContext: setMovementPageContext,
@@ -249,8 +249,8 @@ const App: React.FC = () => {
     });
   };
 
-  const [interpretationRightMode, setInterpretationRightMode] = useState<'metadata' | 'community'>('metadata');
-  const [visit, setVisit] = useState<Visit>({
+  const [artworkDetailRightMode, setArtworkDetailRightMode] = useState<'metadata' | 'community'>('metadata');
+  const [artworkWorkspace, setArtworkWorkspace] = useState<ArtworkWorkspace>({
     id: 'initial-' + Math.random().toString(36).substring(7),
     itemIds: [],
     globalConversation: []
@@ -271,7 +271,10 @@ const App: React.FC = () => {
   const ingestPreparedUploadsRef = useRef<(
     uploadEntries: PreparedSessionUploadEntry[],
     context: PreparedUploadSessionContext,
-  ) => Promise<GalleryItem[]>>(async () => []);
+  ) => Promise<PreparedUploadIngestResult>>(async () => ({
+    persistedItems: [],
+    analysisPromise: Promise.resolve([]),
+  }));
 
   const sessionWorkspace = useSessionWorkspace({
     userId: sessionUserId,
@@ -281,12 +284,12 @@ const App: React.FC = () => {
     defaultSessionTitle: DEFAULT_VISIT_TITLE,
     initialIsComposingNewSession: initialNavigationState.activeTab === 'newSession',
     activeTab,
-    interpretingItem,
+    artworkDetailItem,
     renameInputRef,
     sessionStreamScrollRef,
     sessionStreamEndRef,
     setItems,
-    setVisit,
+    setVisit: setArtworkWorkspace,
     setDeleteConfirmation,
     setActiveTab,
     clearShellOverlays,
@@ -320,6 +323,7 @@ const App: React.FC = () => {
       activeSessionSummary,
       pendingDeleteSessionSummary,
       activeSessionStream,
+      activeSessionRenderBlocks,
       refreshPersistedSessions,
       streamingSessionResponses,
     },
@@ -341,7 +345,8 @@ const App: React.FC = () => {
     messaging: {
       createSessionDraft,
       resolveUploadSession,
-      appendSessionMessages,
+      appendSessionEvents,
+      persistSessionArtworkInput,
       sendSessionInquiryToSession,
       triggerUploadCommentary,
       handleSessionInquiry,
@@ -363,12 +368,12 @@ const App: React.FC = () => {
 
   const removeArtworkLocally = React.useCallback((itemId: string) => {
     setItems((prev) => prev.filter((item) => item.id !== itemId));
-    setVisit((prev) => ({
+    setArtworkWorkspace((prev) => ({
       ...prev,
       itemIds: prev.itemIds.filter((id) => id !== itemId),
     }));
     setArtworkDetailSelection((prev) => (prev?.artworkId === itemId ? null : prev));
-  }, [setArtworkDetailSelection, setItems, setVisit]);
+  }, [setArtworkDetailSelection, setArtworkWorkspace, setItems]);
 
   const {
     updateSavedArtworkInState,
@@ -387,7 +392,7 @@ const App: React.FC = () => {
     sessionStreams,
     setPendingSessionArtworks,
     setItems,
-    setVisit,
+    setVisit: setArtworkWorkspace,
     artworkDetailSelection,
     setArtworkDetailSelection,
     setTagPositions,
@@ -397,7 +402,8 @@ const App: React.FC = () => {
     showToast,
     parseAnalysis,
     resolveUploadSession,
-    appendSessionMessages,
+    appendSessionEvents,
+    persistSessionArtworkInput,
     triggerUploadCommentary,
     onExitSessionCapture: exitCaptureAfterSubmit,
   });
@@ -415,7 +421,7 @@ const App: React.FC = () => {
     updateHeaderIdentifyAgainValues,
     submitHeaderIdentifyAgain,
   } = useArtworkAnalysis({
-    interpretingItem,
+    artworkDetailItem,
     updateSavedArtworkInState,
     applyArtworkAnalysisResult,
     markArtworkAnalysisFailed,
@@ -423,8 +429,8 @@ const App: React.FC = () => {
 
   // Reset interpretation panel state when opening a new artwork
   useEffect(() => {
-    setInterpretationRightMode('metadata');
-  }, [interpretingItem?.id]);
+    setArtworkDetailRightMode('metadata');
+  }, [artworkDetailItem?.id]);
 
   useEffect(() => {
     if (currentUser?.user_id) {
@@ -447,7 +453,9 @@ const App: React.FC = () => {
     setDeleteConfirmation(null);
     setArtworkDetailSelection((prev) => (prev?.artworkId === id ? null : prev));
     updateSavedArtworkInState(id, {
-      deleteStatus: 'pending',
+      clientState: {
+        deleteStatus: 'pending',
+      },
     });
 
     try {
@@ -458,7 +466,9 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Failed to delete artwork:", error);
       updateSavedArtworkInState(id, {
-        deleteStatus: undefined,
+        clientState: {
+          deleteStatus: undefined,
+        },
       });
       showToast('Could not delete artwork', 'info');
     }
@@ -489,12 +499,12 @@ const App: React.FC = () => {
     onOpenSessionSummary: openSessionSummary,
     onCloseSessionMenu: () => setOpenSessionMenuId(null),
   });
-  const artworkHeaderActions = interpretingItem?.artworkId ? (
+  const artworkHeaderActions = artworkDetailItem?.artworkId ? (
     <ArtworkActionsMenu
-      disabled={Boolean(interpretingItem.isAnalyzing || interpretingItem.deleteStatus === 'pending')}
-      onEdit={!interpretingItem.isAnalyzing && interpretingItem.deleteStatus !== 'pending' ? () => setArtworkHeaderEditToken(token => token + 1) : undefined}
-      onIdentifyAgain={!interpretingItem.isAnalyzing && interpretingItem.deleteStatus !== 'pending' ? openHeaderIdentifyAgainModal : undefined}
-      onDelete={interpretingItem.deleteStatus !== 'pending' ? () => setDeleteConfirmation({ type: 'item', id: interpretingItem.id }) : undefined}
+      disabled={Boolean(artworkDetailItem.isAnalyzing || artworkDetailItem.deleteStatus === 'pending')}
+      onEdit={!artworkDetailItem.isAnalyzing && artworkDetailItem.deleteStatus !== 'pending' ? () => setArtworkHeaderEditToken(token => token + 1) : undefined}
+      onIdentifyAgain={!artworkDetailItem.isAnalyzing && artworkDetailItem.deleteStatus !== 'pending' ? openHeaderIdentifyAgainModal : undefined}
+      onDelete={artworkDetailItem.deleteStatus !== 'pending' ? () => setDeleteConfirmation({ type: 'item', id: artworkDetailItem.id }) : undefined}
       buttonClassName="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-200/50 hover:text-neutral-900 active:text-neutral-900"
       iconClassName="h-[18px] w-[18px]"
     />
@@ -560,11 +570,12 @@ const App: React.FC = () => {
     isComposingNewSession,
     activeSessionSummary,
     activeSessionStream,
-    interpretingItem,
+    activeSessionRenderBlocks,
+    artworkDetailItem,
     artworkHeaderActions,
     artworkHeaderEditToken,
     artworkDetailContext,
-    interpretationRightMode,
+    artworkDetailRightMode,
     sessionGoalInput,
     sessionGoals,
     sessionGoalDismissed,
@@ -582,7 +593,7 @@ const App: React.FC = () => {
     sessionStreamScrollRef,
     sessionStreamEndRef,
     items,
-    visit,
+    artworkWorkspace,
     filteredSessionId,
     isAnalyzing,
     likedIds,
@@ -611,8 +622,8 @@ const App: React.FC = () => {
     updateItemMetadata,
     handleUpdateClassification,
     setDeleteConfirmation,
-    handleNavigateInterpretation,
-    setInterpretationRightMode,
+    handleNavigateArtworkDetail,
+    setArtworkDetailRightMode,
     handleIdentifyAgain,
     handleRetryAnalysis,
     setSessionGoals,

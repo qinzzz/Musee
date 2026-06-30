@@ -1,19 +1,19 @@
 import React, { Suspense, lazy } from 'react';
 import EmptyWall from '../../components/EmptyWall';
 import ContextualActionBar from '../../components/ContextualActionBar';
-import InterpretationModal from '../../components/InterpretationModal';
+import ArtworkDetailModal from '../../artwork/components/ArtworkDetailModal';
 import SessionCapturePage from '../../capture/components/SessionCapturePage';
 import ExploreSessionView from '../../session/components/ExploreSessionView';
 import type { AppTab, ArtistPageContext, ArtworkDetailContext, CollectTab } from '../../lib/appNavigation';
 import { stateToPath } from '../../lib/appNavigation';
-import type { ArtworkClassification, GalleryItem, Visit } from '../../types';
+import type { ArtworkClassification, ArtworkWorkspace, GalleryItem } from '../../types';
 import type { SmartCollection } from '../../api/artworks';
 import type { Board } from '../../boards/types';
-import type { InterpretingItem } from '../../artwork/types';
-import type { ActiveSessionStreamEntry, SessionSummary } from '../../session/types';
+import type { ArtworkDetailItem } from '../../artwork/types';
+import type { ActiveSessionStreamEntry, SessionRenderBlock, SessionSummary } from '../../session/types';
 import type { CaptureState } from '../hooks/useCaptureNavigation';
 
-const CollectView = lazy(() => import('../../components/CollectView'));
+const CollectionView = lazy(() => import('../../collection/components/CollectionView'));
 const TasteProfileView = lazy(() => import('../../components/TasteProfileView'));
 const ArtistPage = lazy(() => import('../../artist/components/ArtistPage'));
 const ArtMovementPage = lazy(() => import('../../components/ArtMovementPage'));
@@ -51,11 +51,12 @@ type ViewportStateProps = {
   isComposingNewSession: boolean;
   activeSessionSummary: SessionSummary | null;
   activeSessionStream: ActiveSessionStreamEntry[];
-  interpretingItem: InterpretingItem | null;
+  activeSessionRenderBlocks: SessionRenderBlock[];
+  artworkDetailItem: ArtworkDetailItem | null;
   artworkHeaderActions: React.ReactNode;
   artworkHeaderEditToken: number;
   artworkDetailContext: ArtworkDetailContext | null;
-  interpretationRightMode: 'metadata' | 'community';
+  artworkDetailRightMode: 'metadata' | 'community';
   sessionGoalInput: string;
   sessionGoals: Record<string, string>;
   sessionGoalDismissed: Set<string>;
@@ -67,7 +68,7 @@ type ViewportStateProps = {
   sessionStreamScrollRef: React.RefObject<HTMLDivElement | null>;
   sessionStreamEndRef: React.RefObject<HTMLDivElement | null>;
   items: GalleryItem[];
-  visit: Visit;
+  artworkWorkspace: ArtworkWorkspace;
   filteredSessionId: string | null;
   isAnalyzing: boolean;
   likedIds: Set<string>;
@@ -96,8 +97,8 @@ type ViewportMutationProps = {
   updateItemMetadata: (itemId: string, fields: Partial<GalleryItem>) => void;
   handleUpdateClassification: (itemId: string, classification: ArtworkClassification) => Promise<void>;
   setDeleteConfirmation: React.Dispatch<React.SetStateAction<{ id: string; type: 'item' | 'session' } | null>>;
-  handleNavigateInterpretation: (direction: 'prev' | 'next') => void;
-  setInterpretationRightMode: React.Dispatch<React.SetStateAction<'metadata' | 'community'>>;
+  handleNavigateArtworkDetail: (direction: 'prev' | 'next') => void;
+  setArtworkDetailRightMode: React.Dispatch<React.SetStateAction<'metadata' | 'community'>>;
   handleIdentifyAgain: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
   handleRetryAnalysis: (item: GalleryItem) => Promise<void>;
   setSessionGoals: React.Dispatch<React.SetStateAction<Record<string, string>>>;
@@ -154,11 +155,12 @@ export default function AppViewport({
     isComposingNewSession,
     activeSessionSummary,
     activeSessionStream,
-    interpretingItem,
+    activeSessionRenderBlocks,
+    artworkDetailItem,
     artworkHeaderActions,
     artworkHeaderEditToken,
     artworkDetailContext,
-    interpretationRightMode,
+    artworkDetailRightMode,
     sessionGoalInput,
     sessionGoals,
     sessionGoalDismissed,
@@ -170,7 +172,7 @@ export default function AppViewport({
     sessionStreamScrollRef,
     sessionStreamEndRef,
     items,
-    visit,
+    artworkWorkspace,
     filteredSessionId,
     isAnalyzing,
     likedIds,
@@ -197,8 +199,8 @@ export default function AppViewport({
     updateItemMetadata,
     handleUpdateClassification,
     setDeleteConfirmation,
-    handleNavigateInterpretation,
-    setInterpretationRightMode,
+    handleNavigateArtworkDetail,
+    setArtworkDetailRightMode,
     handleIdentifyAgain,
     handleRetryAnalysis,
     setSessionGoals,
@@ -281,13 +283,14 @@ export default function AppViewport({
             <ExploreSessionView
               activeSessionSummary={activeSessionSummary}
               activeSessionStream={activeSessionStream}
-              interpretingItem={interpretingItem}
+              sessionRenderBlocks={activeSessionRenderBlocks}
+              artworkDetailItem={artworkDetailItem}
               artworkHeaderActions={artworkHeaderActions}
               artworkHeaderEditToken={artworkHeaderEditToken}
               artworkDetailContext={artworkDetailContext}
               headerLeftSlot={headerMenuButton}
               showSessionHeader={!isComposingNewSession}
-              interpretationRightMode={interpretationRightMode}
+              artworkDetailRightMode={artworkDetailRightMode}
               sessionGoalInput={sessionGoalInput}
               sessionGoals={sessionGoals}
               sessionGoalDismissed={sessionGoalDismissed}
@@ -303,18 +306,18 @@ export default function AppViewport({
               onUpdateMetadata={updateItemMetadata}
               onUpdateClassification={handleUpdateClassification}
               onDeleteArtwork={(itemId) => setDeleteConfirmation({ type: 'item', id: itemId })}
-              onNavigateInterpretation={handleNavigateInterpretation}
-              onInterpretationRightModeChange={setInterpretationRightMode}
+              onNavigateArtworkDetail={handleNavigateArtworkDetail}
+              onArtworkDetailRightModeChange={setArtworkDetailRightMode}
               onIdentifyAgain={handleIdentifyAgain}
               onRetryAnalysis={handleRetryAnalysis}
               onOpenArtistFromInterpretation={(artistEntityId, artworkId, artistName) => {
-                if (!interpretingItem) return;
+                if (!artworkDetailItem) return;
                 openArtistDetail({
                   artistEntityId,
                   artworkId,
                   artistName,
-                  parentLabel: interpretingItem.artworkName || 'Untitled',
-                  returnToArtworkId: interpretingItem.id,
+                  parentLabel: artworkDetailItem.artworkName || 'Untitled',
+                  returnToArtworkId: artworkDetailItem.id,
                   returnToArtworkContext: artworkDetailContext || {
                     parentLabel: activeSessionSummary.title,
                     basePath: stateToPath(activeTab, collectTab),
@@ -385,13 +388,13 @@ export default function AppViewport({
           )
         ) : activeTab === 'collect' ? (
           <Suspense fallback={<ScreenLoader label="Loading collection" />}>
-            <CollectView
+            <CollectionView
               headerLeftSlot={headerMenuButton}
               topLevelLeftSlot={collectionFloatingMenuButton}
               onFileUpload={handleFileUpload}
               artworksLoaded={artworksLoaded}
               items={items}
-              visit={visit}
+              artworkWorkspace={artworkWorkspace}
               filteredSessionId={filteredSessionId}
               isAnalyzing={isAnalyzing}
               likedIds={likedIds}
@@ -400,27 +403,27 @@ export default function AppViewport({
               sessionTitleById={sessionTitleById}
               userId={userId}
               collectTab={collectTab}
-              interpretingItem={interpretingItem}
+              artworkDetailItem={artworkDetailItem}
               artworkDetailContext={artworkDetailContext}
               artworkHeaderActions={artworkHeaderActions}
               artworkHeaderEditToken={artworkHeaderEditToken}
-              interpretationRightMode={interpretationRightMode}
+              artworkDetailRightMode={artworkDetailRightMode}
               onCloseArtworkDetail={closeArtworkDetail}
               onUpdateMetadata={updateItemMetadata}
               onUpdateClassification={handleUpdateClassification}
               onDeleteArtwork={(itemId) => setDeleteConfirmation({ type: 'item', id: itemId })}
-              onNavigateInterpretation={handleNavigateInterpretation}
-              onInterpretationRightModeChange={setInterpretationRightMode}
+              onNavigateArtworkDetail={handleNavigateArtworkDetail}
+              onArtworkDetailRightModeChange={setArtworkDetailRightMode}
               onIdentifyAgain={handleIdentifyAgain}
               onRetryAnalysis={handleRetryAnalysis}
               onNavigateToArtistFromInterpretation={(artistEntityId, artworkId, artistName) => {
-                if (!interpretingItem) return;
+                if (!artworkDetailItem) return;
                 openArtistDetail({
                   artistEntityId,
                   artworkId,
                   artistName,
-                  parentLabel: interpretingItem.artworkName || 'Untitled',
-                  returnToArtworkId: interpretingItem.id,
+                  parentLabel: artworkDetailItem.artworkName || 'Untitled',
+                  returnToArtworkId: artworkDetailItem.id,
                   returnToArtworkContext: artworkDetailContext || {
                     parentLabel: 'All Artworks',
                     basePath: stateToPath(activeTab, collectTab),
@@ -440,7 +443,6 @@ export default function AppViewport({
                   parentLabel: 'Artists',
                 });
               }}
-              onOpenMovement={openMovementPage}
               onInterpretArtwork={(item, context) => {
                 const basePath = stateToPath(activeTab, collectTab);
                 openArtworkDetail(item, {
@@ -480,27 +482,26 @@ export default function AppViewport({
         ) : null}
       </div>
 
-      {interpretingItem && activeTab !== 'newSession' && activeTab !== 'collect' && (
-        <InterpretationModal
-          item={interpretingItem}
+      {artworkDetailItem && activeTab !== 'newSession' && activeTab !== 'collect' && (
+        <ArtworkDetailModal
+          item={artworkDetailItem}
           onClose={closeArtworkDetail}
           onUpdateMetadata={updateItemMetadata}
           onUpdateClassification={handleUpdateClassification}
-          onDelete={() => setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
-          navigationItems={interpretingItem.navigationItems}
-          onNavigate={handleNavigateInterpretation}
-          rightMode={interpretationRightMode}
-          onRightModeChange={setInterpretationRightMode}
+          onDelete={() => setDeleteConfirmation({ type: 'item', id: artworkDetailItem.id })}
+          onNavigate={handleNavigateArtworkDetail}
+          rightMode={artworkDetailRightMode}
+          onRightModeChange={setArtworkDetailRightMode}
           onIdentifyAgain={handleIdentifyAgain}
-          onRetryAnalysis={() => handleRetryAnalysis(interpretingItem)}
+          onRetryAnalysis={() => handleRetryAnalysis(artworkDetailItem)}
             userId={userId}
             onNavigateToArtist={(artistEntityId, artworkId, artistName) => {
             openArtistDetail({
               artistEntityId,
               artworkId,
               artistName,
-              parentLabel: interpretingItem.artworkName || 'Untitled',
-              returnToArtworkId: interpretingItem.id,
+              parentLabel: artworkDetailItem.artworkName || 'Untitled',
+              returnToArtworkId: artworkDetailItem.id,
               returnToArtworkContext: artworkDetailContext || {
                 parentLabel: stateToPath(activeTab, collectTab),
                 basePath: stateToPath(activeTab, collectTab),
@@ -509,11 +510,10 @@ export default function AppViewport({
           }}
           onNavigateToSession={handleSelectSessionSummary}
           sessionTitleById={sessionTitleById}
-          navigationContextLabel={artworkDetailContext?.parentLabel || 'Artwork Set'}
         />
       )}
 
-      {activeTab === 'newSession' && !sessionCaptureState && !interpretingItem && !(
+      {activeTab === 'newSession' && !sessionCaptureState && !artworkDetailItem && !(
         activeSessionSummary &&
         activeSessionStream.length === 0 &&
         !sessionGoalDismissed.has(activeSessionSummary.id)
@@ -524,14 +524,14 @@ export default function AppViewport({
           onOpenSessionCapture={openSessionCapturePage}
           isAnalyzing={isAnalyzing}
           onInquiry={handleSessionInquiry}
-          onLike={() => interpretingItem && handleToggleLike(interpretingItem.id)}
-          isLiked={Boolean(interpretingItem && likedIds.has(interpretingItem.id))}
-          onDelete={() => interpretingItem && setDeleteConfirmation({ type: 'item', id: interpretingItem.id })}
+          onLike={() => artworkDetailItem && handleToggleLike(artworkDetailItem.id)}
+          isLiked={Boolean(artworkDetailItem && likedIds.has(artworkDetailItem.id))}
+          onDelete={() => artworkDetailItem && setDeleteConfirmation({ type: 'item', id: artworkDetailItem.id })}
           onCollect={() => {}}
-          onCommunity={() => setInterpretationRightMode((mode) => (mode === 'community' ? 'metadata' : 'community'))}
-          isCommunityActive={interpretationRightMode === 'community'}
-          activeItem={interpretingItem as unknown as GalleryItem || undefined}
-          placeholder={activeSessionSummary ? 'Add a reflection, memory, or association...' : 'Start a visit or capture an artwork...'}
+          onCommunity={() => setArtworkDetailRightMode((mode) => (mode === 'community' ? 'metadata' : 'community'))}
+          isCommunityActive={artworkDetailRightMode === 'community'}
+          activeItem={artworkDetailItem as unknown as GalleryItem || undefined}
+          placeholder={activeSessionSummary ? 'Add a reflection, memory, or association...' : 'Start a session or capture an artwork...'}
         />
       )}
     </>

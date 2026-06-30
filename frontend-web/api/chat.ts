@@ -14,39 +14,6 @@ export interface CommunityData {
   }>;
 }
 
-export async function suggestTopics(
-  artistName: string,
-  artworkName: string,
-  conversationHistory: Message[],
-): Promise<string[]> {
-  const formData = new FormData();
-  formData.append('artist_name', artistName);
-  formData.append('artwork_name', artworkName);
-
-  const historyForBackend = conversationHistory.map((msg) => ({
-    role: msg.role === 'model' ? 'assistant' : msg.role,
-    content: msg.text,
-  }));
-  formData.append('conversation_history', JSON.stringify(historyForBackend));
-
-  const lang = getLanguage();
-  if (lang) formData.append('language', lang);
-
-  const response = await fetchWithTimeout(`${API_BASE_URL}/suggest-topic`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.warn(`Failed to fetch suggested topics: ${errorText}`);
-    return [];
-  }
-
-  const data = await response.json();
-  return data.suggested_topics || [];
-}
-
 export async function streamSessionChat(
   items: { id: string; url: string; keywords: string[]; artistName?: string; artworkName?: string; description?: string; date?: string; medium?: string }[],
   conversationHistory: Message[],

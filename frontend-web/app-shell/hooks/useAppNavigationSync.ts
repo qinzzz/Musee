@@ -20,7 +20,7 @@ type UseAppNavigationSyncOptions = {
   movementPageContext: SmartCollection | null;
   artworkDetailContext: ArtworkDetailContext | null;
   captureState: CaptureState;
-  interpretingItem: { id: string } | null;
+  artworkDetailItem: { id: string } | null;
   onRestoreArtworkFromHistory: (artworkId: string, context: ArtworkDetailContext) => void;
   onSetArtistPageContext: (context: ArtistPageContext | null) => void;
   onSetMovementPageContext: (context: SmartCollection | null) => void;
@@ -39,7 +39,7 @@ export function useAppNavigationSync({
   movementPageContext,
   artworkDetailContext,
   captureState,
-  interpretingItem,
+  artworkDetailItem,
   onRestoreArtworkFromHistory,
   onSetArtistPageContext,
   onSetMovementPageContext,
@@ -110,7 +110,7 @@ export function useAppNavigationSync({
   }, [handlePopState]);
 
   useEffect(() => {
-    if (artistPageContext || movementPageContext || interpretingItem || captureState) {
+    if (artistPageContext || movementPageContext || artworkDetailItem || captureState) {
       return;
     }
 
@@ -128,7 +128,7 @@ export function useAppNavigationSync({
     collectTab,
     artistPageContext,
     movementPageContext,
-    interpretingItem,
+    artworkDetailItem,
     artworkDetailContext,
     captureState,
   ]);

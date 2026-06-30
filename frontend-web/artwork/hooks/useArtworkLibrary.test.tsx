@@ -167,7 +167,7 @@ describe('useArtworkLibrary', () => {
     expect(mockWriteArtworkBootstrapCache).toHaveBeenCalled();
   });
 
-  it('builds and restores interpreting items from history', async () => {
+  it('builds and restores artwork detail items from history', async () => {
     mockFetchUserArtworks.mockResolvedValue({
       items: [
         createServerRecord({ id: 'server-1' }),
@@ -203,8 +203,8 @@ describe('useArtworkLibrary', () => {
       parentLabel: 'All Artworks',
       basePath: '/saved',
     });
-    expect(result.current.interpretingItem?.id).toBe('server-1');
-    expect(result.current.interpretingItem?.navigationItems).toHaveLength(2);
+    expect(result.current.artworkDetailItem?.id).toBe('server-1');
+    expect(result.current.artworkDetailItem?.navigationItems).toHaveLength(2);
   });
 
   it('clears interpretation and calls missing callbacks when restoring a missing artwork', async () => {
@@ -230,7 +230,7 @@ describe('useArtworkLibrary', () => {
       });
     });
 
-    expect(result.current.interpretingItem).toBeNull();
+    expect(result.current.artworkDetailItem).toBeNull();
     expect(onArtworkDetailContextChange).toHaveBeenCalledWith(null);
     expect(onMissingArtworkFromHistory).toHaveBeenCalled();
   });
@@ -255,7 +255,7 @@ describe('useArtworkLibrary', () => {
     expect(showToast).toHaveBeenCalledWith('Could not update artwork classification', 'info');
   });
 
-  it('updates metadata in both the gallery list and interpreting item', async () => {
+  it('updates metadata in both the gallery list and artwork detail item', async () => {
     mockFetchUserArtworks.mockResolvedValue({ items: [createServerRecord()] });
 
     const { result } = renderHook(() => useArtworkLibrary({
@@ -281,7 +281,7 @@ describe('useArtworkLibrary', () => {
       artworkName: 'Updated Work',
       date: '1910',
     });
-    expect(result.current.interpretingItem).toMatchObject({
+    expect(result.current.artworkDetailItem).toMatchObject({
       artistName: 'Updated Artist',
       artworkName: 'Updated Work',
       date: '1910',
@@ -311,7 +311,7 @@ describe('useArtworkLibrary', () => {
       );
     });
 
-    expect(result.current.interpretingItem?.navigationItems?.[1].artworkName).toBe('Second Work');
+    expect(result.current.artworkDetailItem?.navigationItems?.[1].artworkName).toBe('Second Work');
 
     act(() => {
       result.current.setItems((prev) => prev.map((item) => (
@@ -319,6 +319,6 @@ describe('useArtworkLibrary', () => {
       )));
     });
 
-    expect(result.current.interpretingItem?.navigationItems?.[1].artworkName).toBe('Updated Second Work');
+    expect(result.current.artworkDetailItem?.navigationItems?.[1].artworkName).toBe('Updated Second Work');
   });
 });

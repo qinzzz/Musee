@@ -15,9 +15,14 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import settings
 from app.database.connection import SessionLocal
-from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionMessage, User
+from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
 from app.models.artwork import AIProvider
 from app.services.ai_service import AIServiceFactory
+from app.services.artwork_event_service import ARTWORK_EVENT_ADDED_TO_SESSION, log_artwork_event
+from app.services.session_event_service import (
+    normalize_session_event_type,
+    validate_and_normalize_session_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,10 +132,10 @@ def coerce_location_payload(location: Optional[Union[str, Dict[str, Any]]]) -> O
 def derive_session_system_title(session: SessionModel) -> tuple[str, str]:
     goal = clean_goal_to_title((session.metadata_json or {}).get("user_goal"))
     first_user_message_title: Optional[str] = None
-    for message in session.messages or []:
+    for message in session.events or []:
         if message.role != "user":
             continue
-        if message.type != "text":
+        if normalize_session_event_type(message.type, role=message.role) != "user_input":
             continue
         first_user_message_title = clean_goal_to_title(message.content)
         if first_user_message_title:
@@ -389,46 +394,100 @@ def attach_artwork_ids_to_session(
             source=source,
             sequence_number=next_sequence_number + inserted,
         )
+        log_artwork_event(
+            db,
+            artwork_id=artwork_id,
+            event_type=ARTWORK_EVENT_ADDED_TO_SESSION,
+            actor_role="system",
+            trigger_source=source,
+            trigger_session_id=session_record.id,
+            payload={
+                "session_id": session_record.id,
+                "source": source,
+                "sequence_number": next_sequence_number + inserted,
+            },
+        )
         inserted += 1
     return inserted
 
 
-def append_messages_to_session(
+def append_events_to_session(
     db: Session,
     session_record: SessionModel,
-    messages: List[Dict[str, Any]],
+    events: List[Dict[str, Any]],
 ) -> int:
-    if not messages:
+    if not events:
         return 0
 
     existing_ids = {
         row[0]
-        for row in db.query(SessionMessage.id)
-        .filter(SessionMessage.session_id == session_record.id)
+        for row in db.query(SessionEvent.id)
+        .filter(SessionEvent.session_id == session_record.id)
         .all()
     }
-    max_seq = db.query(func.max(SessionMessage.sequence_number)).filter(
-        SessionMessage.session_id == session_record.id
+    max_seq = db.query(func.max(SessionEvent.sequence_number)).filter(
+        SessionEvent.session_id == session_record.id
     ).scalar() or 0
 
     inserted = 0
-    for i, msg in enumerate(messages):
+    for i, msg in enumerate(events):
         msg_id = msg.get("id") or str(uuid_mod.uuid4())
         if msg_id in existing_ids:
             continue
-        db.add(SessionMessage(
+        normalized_event = validate_and_normalize_session_event(msg)
+        session_event = SessionEvent(
             id=msg_id,
             session_id=session_record.id,
-            role=msg["role"],
-            type=msg.get("type") or "text",
-            content=msg.get("content"),
-            artwork_id=msg.get("artwork_id"),
+            role=normalized_event["role"],
+            type=normalized_event["event_type"],
+            content=normalized_event.get("content"),
+            trigger_event_id=normalized_event.get("trigger_event_id"),
+            payload=normalized_event.get("payload"),
             sequence_number=max_seq + i + 1,
-        ))
+        )
+        db.add(session_event)
         inserted += 1
 
     refresh_session_title(db, session_record)
     return inserted
+
+
+def update_session_event(
+    db: Session,
+    session_record: SessionModel,
+    event_id: str,
+    event: Dict[str, Any],
+) -> SessionEvent:
+    session_event = (
+        db.query(SessionEvent)
+        .filter(
+            SessionEvent.session_id == session_record.id,
+            SessionEvent.id == event_id,
+        )
+        .first()
+    )
+    if not session_event:
+        raise HTTPException(status_code=404, detail="Session event not found")
+
+    normalized_event = validate_and_normalize_session_event({
+        "id": session_event.id,
+        "role": event.get("role", session_event.role),
+        "type": event.get("event_type") or event.get("type") or session_event.type,
+        "event_type": event.get("event_type"),
+        "content": event.get("content", session_event.content),
+        "artwork_ids": event.get("artwork_ids"),
+        "trigger_event_id": event.get("trigger_event_id", session_event.trigger_event_id),
+        "payload": event.get("payload", session_event.payload),
+    })
+
+    session_event.role = normalized_event["role"]
+    session_event.type = normalized_event["event_type"]
+    session_event.content = normalized_event.get("content")
+    session_event.trigger_event_id = normalized_event.get("trigger_event_id")
+    session_event.payload = normalized_event.get("payload")
+
+    refresh_session_title(db, session_record)
+    return session_event
 
 
 def get_primary_session_link(db: Session, artwork_id: str) -> Optional[SessionArtwork]:
