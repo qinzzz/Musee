@@ -1,24 +1,19 @@
 import React from 'react';
-import type { SmartCollection } from '../api/artworks';
-import type { ArtworkClassification, GalleryItem, Visit } from '../types';
-import type { Board } from '../boards/types';
-import type { ArtworkDetailContext, CollectTab } from '../lib/appNavigation';
-import CanvasHeader from './CanvasHeader';
-import InterpretationModal from './InterpretationModal';
+import type { ArtworkClassification, ArtworkWorkspace, GalleryItem } from '../../types';
+import type { Board } from '../../boards/types';
+import type { ArtworkDetailContext, CollectTab } from '../../lib/appNavigation';
+import type { ArtworkDetailItem, IdentifyAgainHints } from '../../artwork/types';
+import CanvasHeader from '../../components/CanvasHeader';
+import ArtworkDetailModal from '../../artwork/components/ArtworkDetailModal';
 import OrganizeView from './OrganizeView';
 
-type InterpretationItem = GalleryItem & {
-  navigationItems?: GalleryItem[];
-  is_liked?: boolean;
-};
-
-type CollectViewProps = {
+type CollectionViewProps = {
   headerLeftSlot?: React.ReactNode;
   topLevelLeftSlot?: React.ReactNode;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   artworksLoaded: boolean;
   items: GalleryItem[];
-  visit: Visit;
+  artworkWorkspace: ArtworkWorkspace;
   filteredSessionId: string | null;
   isAnalyzing: boolean;
   likedIds: Set<string>;
@@ -27,18 +22,18 @@ type CollectViewProps = {
   sessionTitleById: Record<string, string>;
   userId: string;
   collectTab: CollectTab;
-  interpretingItem: InterpretationItem | null;
+  artworkDetailItem: ArtworkDetailItem | null;
   artworkDetailContext: ArtworkDetailContext | null;
   artworkHeaderActions: React.ReactNode;
   artworkHeaderEditToken: number;
-  interpretationRightMode: 'metadata' | 'community';
+  artworkDetailRightMode: 'metadata' | 'community';
   onCloseArtworkDetail: () => void;
   onUpdateMetadata: (itemId: string, fields: Partial<GalleryItem>) => void;
   onUpdateClassification: (itemId: string, classification: ArtworkClassification) => Promise<void>;
   onDeleteArtwork: (itemId: string) => void;
-  onNavigateInterpretation: (direction: 'prev' | 'next') => void;
-  onInterpretationRightModeChange: (mode: 'metadata' | 'community') => void;
-  onIdentifyAgain: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
+  onNavigateArtworkDetail: (direction: 'prev' | 'next') => void;
+  onArtworkDetailRightModeChange: (mode: 'metadata' | 'community') => void;
+  onIdentifyAgain: (hints?: IdentifyAgainHints) => Promise<void>;
   onRetryAnalysis: (item: GalleryItem) => Promise<void>;
   onNavigateToArtistFromInterpretation: (
     artistEntityId: string,
@@ -52,19 +47,18 @@ type CollectViewProps = {
   onDeleteBoard: (boardId: string) => Promise<void>;
   onAddItemsToBoard: (boardId: string, itemIds: string[]) => Promise<void>;
   onOpenArtist: (artistEntityId: string, artistName: string) => void;
-  onOpenMovement: (collection: SmartCollection) => void;
   onInterpretArtwork: (item: GalleryItem, context?: { items: GalleryItem[]; label: string }) => void;
   onDeleteItem: (id: string) => void;
   onStartUnsortedFlow: () => void;
 };
 
-export default function CollectView({
+export default function CollectionView({
   headerLeftSlot,
   topLevelLeftSlot,
   onFileUpload,
   artworksLoaded,
   items,
-  visit,
+  artworkWorkspace,
   filteredSessionId,
   isAnalyzing,
   likedIds,
@@ -73,17 +67,17 @@ export default function CollectView({
   sessionTitleById,
   userId,
   collectTab,
-  interpretingItem,
+  artworkDetailItem,
   artworkDetailContext,
   artworkHeaderActions,
   artworkHeaderEditToken,
-  interpretationRightMode,
+  artworkDetailRightMode,
   onCloseArtworkDetail,
   onUpdateMetadata,
   onUpdateClassification,
   onDeleteArtwork,
-  onNavigateInterpretation,
-  onInterpretationRightModeChange,
+  onNavigateArtworkDetail,
+  onArtworkDetailRightModeChange,
   onIdentifyAgain,
   onRetryAnalysis,
   onNavigateToArtistFromInterpretation,
@@ -94,40 +88,37 @@ export default function CollectView({
   onDeleteBoard,
   onAddItemsToBoard,
   onOpenArtist,
-  onOpenMovement,
   onInterpretArtwork,
   onDeleteItem,
   onStartUnsortedFlow,
-}: CollectViewProps) {
-  if (interpretingItem) {
+}: CollectionViewProps) {
+  if (artworkDetailItem) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg-primary)]">
         <CanvasHeader
           parentLabel={artworkDetailContext?.parentLabel || 'All Artworks'}
           parentClick={onCloseArtworkDetail}
-          childLabel={interpretingItem.artworkName || 'Untitled'}
+          childLabel={artworkDetailItem.artworkName || 'Untitled'}
           leftSlot={headerLeftSlot}
           rightSlot={artworkHeaderActions}
           isInline={true}
         />
         <div className="flex-1 overflow-hidden animate-in fade-in zoom-in-98 duration-300">
-          <InterpretationModal
-            item={interpretingItem}
+          <ArtworkDetailModal
+            item={artworkDetailItem}
             onClose={onCloseArtworkDetail}
             onUpdateMetadata={onUpdateMetadata}
             onUpdateClassification={onUpdateClassification}
-            onDelete={() => onDeleteArtwork(interpretingItem.id)}
-            navigationItems={interpretingItem.navigationItems}
-            onNavigate={onNavigateInterpretation}
-            rightMode={interpretationRightMode}
-            onRightModeChange={onInterpretationRightModeChange}
+            onDelete={() => onDeleteArtwork(artworkDetailItem.id)}
+            onNavigate={onNavigateArtworkDetail}
+            rightMode={artworkDetailRightMode}
+            onRightModeChange={onArtworkDetailRightModeChange}
             onIdentifyAgain={onIdentifyAgain}
-            onRetryAnalysis={() => onRetryAnalysis(interpretingItem)}
+            onRetryAnalysis={() => onRetryAnalysis(artworkDetailItem)}
             userId={userId}
             onNavigateToArtist={onNavigateToArtistFromInterpretation}
             onNavigateToSession={onNavigateToSessionFromInterpretation}
             sessionTitleById={sessionTitleById}
-            navigationContextLabel={artworkDetailContext?.parentLabel || 'All Artworks'}
             editRequestToken={artworkHeaderEditToken}
             isInline={true}
           />
@@ -143,7 +134,7 @@ export default function CollectView({
         onFileUpload={onFileUpload}
         artworksLoaded={artworksLoaded}
         items={items}
-        visit={visit}
+        artworkWorkspace={artworkWorkspace}
         filteredSessionId={filteredSessionId}
         isAnalyzing={isAnalyzing}
         likedIds={likedIds}
@@ -157,7 +148,6 @@ export default function CollectView({
         onDeleteBoard={onDeleteBoard}
         onAddItemsToBoard={onAddItemsToBoard}
         onOpenArtist={onOpenArtist}
-        onOpenMovement={onOpenMovement}
         onInterpret={onInterpretArtwork}
         onDelete={onDeleteItem}
         onStartUnsortedFlow={onStartUnsortedFlow}

@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
-import { fetchSessionMessages } from '../api/sessions';
+import { fetchSessionEvents } from '../api/sessions';
+import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from '../lib/sessionEventArtworks';
 import { usePreparedSessionStaging } from './usePreparedSessionStaging';
 import { useSessionActions } from './useSessionActions';
 import { useSessionMessaging } from './useSessionMessaging';
 import { useSessionStartFlow } from './useSessionStartFlow';
 import { useSessionState } from './useSessionState';
-import type { GalleryItem, Visit } from '../../types';
-import type { InterpretingItem } from '../../artwork/types';
-import type { PreparedSessionUploadEntry, PreparedUploadSessionContext } from '../../artwork-ingest/types';
+import type { ArtworkWorkspace, GalleryItem } from '../../types';
+import type { ArtworkDetailItem } from '../../artwork/types';
+import type {
+  PreparedSessionUploadEntry,
+  PreparedUploadIngestResult,
+  PreparedUploadSessionContext,
+} from '../../artwork-ingest/types';
 import type {
   PendingSessionArtwork,
   SessionStreamMessage,
@@ -27,12 +32,12 @@ type UseSessionWorkspaceOptions = {
   defaultSessionTitle: string;
   initialIsComposingNewSession: boolean;
   activeTab: AppTab;
-  interpretingItem: InterpretingItem | null;
+  artworkDetailItem: ArtworkDetailItem | null;
   renameInputRef: RefObject<HTMLInputElement | null>;
   sessionStreamScrollRef: RefObject<HTMLDivElement | null>;
   sessionStreamEndRef: RefObject<HTMLDivElement | null>;
   setItems: Dispatch<SetStateAction<GalleryItem[]>>;
-  setVisit: Dispatch<SetStateAction<Visit>>;
+  setVisit: Dispatch<SetStateAction<ArtworkWorkspace>>;
   setDeleteConfirmation: Dispatch<SetStateAction<DeleteConfirmation>>;
   setActiveTab: Dispatch<SetStateAction<AppTab>>;
   clearShellOverlays: () => void;
@@ -40,7 +45,7 @@ type UseSessionWorkspaceOptions = {
   ingestPreparedUploads: (
     uploadEntries: PreparedSessionUploadEntry[],
     context: PreparedUploadSessionContext,
-  ) => Promise<GalleryItem[]>;
+  ) => Promise<PreparedUploadIngestResult>;
 };
 
 export function useSessionWorkspace({
@@ -51,7 +56,7 @@ export function useSessionWorkspace({
   defaultSessionTitle,
   initialIsComposingNewSession,
   activeTab,
-  interpretingItem,
+  artworkDetailItem,
   renameInputRef,
   sessionStreamScrollRef,
   sessionStreamEndRef,
@@ -134,14 +139,14 @@ export function useSessionWorkspace({
   ]);
 
   useEffect(() => {
-    if (activeTab !== 'newSession' || interpretingItem || !sessionStreamEndRef.current || !sessionState.activeSessionSummary) return;
+    if (activeTab !== 'newSession' || artworkDetailItem || !sessionStreamEndRef.current || !sessionState.activeSessionSummary) return;
 
     requestAnimationFrame(() => {
       sessionStreamEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     });
   }, [
     activeTab,
-    interpretingItem,
+    artworkDetailItem,
     sessionStreamEndRef,
     sessionState.activeSessionSummary?.id,
     sessionState.activeSessionStream.length,
@@ -153,23 +158,80 @@ export function useSessionWorkspace({
     if (sessionStreamScrollRef.current) sessionStreamScrollRef.current.scrollTop = 0;
     if (!sessionState.activeSessionSummary?.id) return;
     const sessionId = sessionState.activeSessionSummary.id;
-    fetchSessionMessages(sessionId).then(dbMessages => {
+    fetchSessionEvents(sessionId).then(dbMessages => {
       if (!dbMessages.length) return;
+      if (dbMessages.some((message) => (
+        (message.event_type === 'artwork_commentary' || message.type === 'artwork_commentary')
+        && (message.payload as Record<string, unknown> | undefined)?.status !== 'pending'
+      ))) {
+        sessionState.setStreamingSessionResponses((prev) => {
+          if (!(sessionId in prev)) {
+            return prev;
+          }
+          const next = { ...prev };
+          delete next[sessionId];
+          return next;
+        });
+      }
       sessionState.setSessionStreams(prev => {
         const existing = prev[sessionId] || [];
-        const existingIds = new Set(existing.map(m => m.id));
-        const newMsgs: SessionStreamMessage[] = dbMessages
-          .filter(m => !existingIds.has(m.id || ''))
-          .map(m => ({
+        const normalizedDbMessages: SessionStreamMessage[] = dbMessages.map(m => {
+          const artworkIds = getSessionEventArtworkIds(m);
+          const canonicalEventType = m.event_type || m.type;
+          const frontendMessageType: SessionStreamMessage['type'] =
+            canonicalEventType === 'artwork_commentary'
+              ? 'artwork_commentary'
+              : canonicalEventType === 'user_input'
+                ? 'text'
+                : (m.type || 'text') as SessionStreamMessage['type'];
+          return {
             id: m.id || `db-${Date.now()}-${Math.random()}`,
             role: m.role as 'user' | 'model',
             text: m.content || '',
-            type: (m.type || 'text') as SessionStreamMessage['type'],
-            artworkId: m.artwork_id || undefined,
+            type: frontendMessageType,
+            artworkId: getPrimarySessionEventArtworkId(m),
+            artworkIds: artworkIds.length ? artworkIds : undefined,
+            payload: m.payload as Record<string, unknown> | undefined,
+            triggerEventId: m.trigger_event_id || (canonicalEventType === 'user_input' ? m.id : undefined) || m.turn_id || undefined,
+            sequenceNumber: typeof m.sequence_number === 'number' ? m.sequence_number : undefined,
             createdAt: m.created_at ? new Date(m.created_at as unknown as string).getTime() : Date.now(),
-          }));
-        if (!newMsgs.length) return prev;
-        return { ...prev, [sessionId]: [...existing, ...newMsgs].sort((a, b) => a.createdAt - b.createdAt) };
+          };
+        });
+        const dbMessageIds = new Set(normalizedDbMessages.map((message) => message.id));
+        const pendingLocalOnlyMessages = existing.filter((message) => (
+          !dbMessageIds.has(message.id)
+          && message.type === 'artwork_commentary'
+          && message.payload?.status === 'pending'
+        ));
+        const nextMessages = [...normalizedDbMessages, ...pendingLocalOnlyMessages].sort((a, b) => {
+          if (
+            typeof a.sequenceNumber === 'number'
+            && typeof b.sequenceNumber === 'number'
+            && a.sequenceNumber !== b.sequenceNumber
+          ) {
+            return a.sequenceNumber - b.sequenceNumber;
+          }
+          if (a.createdAt !== b.createdAt) {
+            return a.createdAt - b.createdAt;
+          }
+          return a.id.localeCompare(b.id);
+        });
+        if (
+          nextMessages.length === existing.length
+          && nextMessages.every((message, index) => {
+            const previous = existing[index];
+            return previous
+              && previous.id === message.id
+              && previous.createdAt === message.createdAt
+              && previous.sequenceNumber === message.sequenceNumber
+              && previous.triggerEventId === message.triggerEventId
+              && previous.text === message.text
+              && previous.type === message.type;
+          })
+        ) {
+          return prev;
+        }
+        return { ...prev, [sessionId]: nextMessages };
       });
     }).catch(() => {});
   }, [activeTab, sessionStreamScrollRef, sessionState.activeSessionSummary?.id, sessionState.setSessionStreams]);
@@ -230,7 +292,8 @@ export function useSessionWorkspace({
     setIsComposingNewSession: sessionState.setIsComposingNewSession,
     setVisit,
     resetPreparedSessionState: prepared.resetPreparedSessionState,
-    appendSessionMessages: messaging.appendSessionMessages,
+    appendSessionEvents: messaging.appendSessionEvents,
+    persistSessionArtworkInput: messaging.persistSessionArtworkInput,
     ingestPreparedUploads,
     sendSessionInquiryToSession: messaging.sendSessionInquiryToSession,
     showToast,

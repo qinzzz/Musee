@@ -1,15 +1,16 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { streamSessionChat } from '../../api/chat';
-import type { GalleryItem, Visit } from '../../types';
+import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import {
-  appendSessionMessages as appendSessionMessagesApi,
+  appendSessionEvents as appendSessionEventsApi,
   createSession,
-  startSessionWithMessage,
+  startSessionWithEvent,
+  updateSessionEvent,
 } from '../api/sessions';
 import { buildUploadCommentaryPrompt } from '../lib/commentary';
-import { itemBelongsToSession } from '../lib/sessionLinks';
-import { serializeSessionHistory } from '../lib/sessionHistory';
+import { itemBelongsToSession, newSessionEventId } from '../lib/sessionLinks';
+import { getSessionHistoryBeforeTrigger, serializeSessionHistory } from '../lib/sessionHistory';
 import type { SessionDraft, SessionStreamMessage, SessionSummary } from '../types';
 
 type ToastType = 'info' | 'success';
@@ -29,7 +30,7 @@ type UseSessionMessagingOptions = {
   setSessionDrafts: Dispatch<SetStateAction<SessionDraft[]>>;
   setFilteredSessionId: Dispatch<SetStateAction<string | null>>;
   setIsComposingNewSession: Dispatch<SetStateAction<boolean>>;
-  setVisit: Dispatch<SetStateAction<Visit>>;
+  setVisit: Dispatch<SetStateAction<ArtworkWorkspace>>;
   setSessionStreams: Dispatch<SetStateAction<Record<string, SessionStreamMessage[]>>>;
   setStreamingSessionResponses: Dispatch<SetStateAction<Record<string, string>>>;
   showToast: ShowToast;
@@ -45,6 +46,36 @@ const toSessionChatArtwork = (item: GalleryItem) => ({
   date: item.date,
   medium: item.medium,
 });
+
+const getSessionArtworkIds = (sessionItems: GalleryItem[]) => (
+  sessionItems
+    .map((item) => item.artworkId || item.id)
+    .filter((artworkId, index, all) => Boolean(artworkId) && all.indexOf(artworkId) === index)
+);
+
+const getNextLocalEventCreatedAt = (
+  existingMessages: SessionStreamMessage[],
+  floor = Date.now(),
+) => Math.max(
+  floor,
+  (existingMessages[existingMessages.length - 1]?.createdAt ?? 0) + 1,
+);
+
+const sortSessionStreamMessages = (messages: SessionStreamMessage[]) => (
+  [...messages].sort((a, b) => {
+    if (
+      typeof a.sequenceNumber === 'number'
+      && typeof b.sequenceNumber === 'number'
+      && a.sequenceNumber !== b.sequenceNumber
+    ) {
+      return a.sequenceNumber - b.sequenceNumber;
+    }
+    if (a.createdAt !== b.createdAt) {
+      return a.createdAt - b.createdAt;
+    }
+    return a.id.localeCompare(b.id);
+  })
+);
 
 export function useSessionMessaging({
   defaultSessionTitle,
@@ -111,13 +142,50 @@ export function useSessionMessaging({
     return { sessionId, isNew: true };
   }, [createSessionDraft, filteredSessionId]);
 
-  const appendSessionMessages = useCallback((sessionId: string, newMessages: SessionStreamMessage[]) => {
+  const persistSessionEvents = useCallback((sessionId: string, newEvents: SessionStreamMessage[]) => (
+    appendSessionEventsApi(
+      sessionId,
+      newEvents.map((event) => {
+        const isPlaceholder = event.type === 'artwork_capture' || event.type === 'artwork_card';
+        return {
+          id: event.id,
+          role: event.role as 'user' | 'model',
+          type: event.type || 'text',
+          event_type: event.type === 'artwork_commentary'
+            ? 'artwork_commentary'
+            : undefined,
+          content: isPlaceholder ? undefined : event.text,
+          artwork_id: event.artworkId,
+          artwork_ids: event.artworkIds,
+          trigger_event_id: event.role === 'user' ? undefined : event.triggerEventId,
+          payload: event.type === 'artwork_commentary'
+            ? { status: 'completed' }
+            : undefined,
+          created_at: event.createdAt,
+        };
+      }),
+    ).finally(() => {
+      refreshPersistedSessions();
+    })
+  ), [refreshPersistedSessions]);
+
+  const appendLocalSessionEvents = useCallback((sessionId: string, newEvents: SessionStreamMessage[]) => {
     setSessionStreams((prev) => ({
       ...prev,
-      [sessionId]: [...(prev[sessionId] || []), ...newMessages],
+      [sessionId]: sortSessionStreamMessages(
+        [...(prev[sessionId] || []), ...newEvents].reduce<SessionStreamMessage[]>((acc, event) => {
+          const existingIndex = acc.findIndex((entry) => entry.id === event.id);
+          if (existingIndex >= 0) {
+            acc[existingIndex] = event;
+          } else {
+            acc.push(event);
+          }
+          return acc;
+        }, []),
+      ),
     }));
     setSessionDrafts((prev) => {
-      const nextUpdatedAt = newMessages[newMessages.length - 1]?.createdAt || Date.now();
+      const nextUpdatedAt = newEvents[newEvents.length - 1]?.createdAt || Date.now();
       const existingDraft = prev.find((draft) => draft.id === sessionId);
       if (existingDraft) {
         return prev.map((draft) =>
@@ -135,63 +203,198 @@ export function useSessionMessaging({
         ...prev,
       ];
     });
-
-    appendSessionMessagesApi(
-      sessionId,
-      newMessages.map((message) => {
-        const isPlaceholder = message.type === 'artwork_capture' || message.type === 'artwork_card';
-        return {
-          id: message.id,
-          role: message.role as 'user' | 'model',
-          type: message.type || 'text',
-          content: isPlaceholder ? undefined : message.text,
-          artwork_id: message.artworkId,
-          created_at: message.createdAt,
-        };
-      }),
-    ).finally(() => {
-      refreshPersistedSessions();
-    });
   }, [
     defaultSessionTitle,
-    refreshPersistedSessions,
     setSessionDrafts,
     setSessionStreams,
     sessionSummaries,
   ]);
+
+  const updateLocalSessionEvent = useCallback((
+    sessionId: string,
+    eventId: string,
+    updater: (event: SessionStreamMessage) => SessionStreamMessage,
+  ) => {
+    setSessionStreams((prev) => {
+      const existing = prev[sessionId] || [];
+      return {
+        ...prev,
+        [sessionId]: sortSessionStreamMessages(
+          existing.map((event) => (event.id === eventId ? updater(event) : event)),
+        ),
+      };
+    });
+  }, [setSessionStreams]);
+
+  const appendSessionEvents = useCallback((
+    sessionId: string,
+    newEvents: SessionStreamMessage[],
+    options?: { persist?: boolean },
+  ) => {
+    appendLocalSessionEvents(sessionId, newEvents);
+    if (options?.persist === false) {
+      return;
+    }
+    void persistSessionEvents(sessionId, newEvents);
+  }, [
+    appendLocalSessionEvents,
+    persistSessionEvents,
+  ]);
+
+  // Persist a batch of added artworks as ONE canonical user_input event
+  // (artworks live in payload.artworks with their source). The legacy
+  // per-artwork artwork_capture/artwork_card messages stay local-only for
+  // optimistic rendering; this is what actually reaches session_events.
+  const persistSessionArtworkInput = useCallback((
+    sessionId: string,
+    artworks: Array<{ artworkId: string; source: 'upload' | 'capture' | 'library' }>,
+    userInputEventId: string,
+    content?: string,
+  ) => {
+    const entries = artworks.filter((entry) => entry.artworkId);
+    const normalizedContent = content?.trim();
+    if (entries.length === 0 && !normalizedContent) {
+      return Promise.resolve();
+    }
+    return appendSessionEventsApi(sessionId, [{
+      id: userInputEventId,
+      role: 'user',
+      event_type: 'user_input',
+      content: normalizedContent,
+      artwork_ids: entries.map((entry) => entry.artworkId),
+      payload: { artworks: entries.map((entry) => ({ artwork_id: entry.artworkId, source: entry.source })) },
+    }]).finally(() => {
+      refreshPersistedSessions();
+    });
+  }, [refreshPersistedSessions]);
+
+  const persistPendingCommentary = useCallback((
+    sessionId: string,
+    commentaryId: string,
+    artworkIds: string[],
+    createdAt: number,
+    parentEventId?: string,
+  ) => (
+    appendSessionEventsApi(sessionId, [{
+      id: commentaryId,
+      role: 'model',
+      event_type: 'artwork_commentary',
+      artwork_ids: artworkIds,
+      trigger_event_id: parentEventId,
+      payload: { status: 'pending' },
+      created_at: createdAt,
+    }]).finally(() => {
+      refreshPersistedSessions();
+    })
+  ), [refreshPersistedSessions]);
+
+  const finalizeCommentary = useCallback(async (
+    sessionId: string,
+    commentaryId: string,
+    artworkIds: string[],
+    status: 'completed' | 'failed',
+    parentEventId?: string,
+    options?: { content?: string; errorMessage?: string },
+  ) => {
+    const messagePayload = {
+      role: 'model' as const,
+      event_type: 'artwork_commentary' as const,
+      content: options?.content,
+      artwork_ids: artworkIds,
+      trigger_event_id: parentEventId,
+      payload: {
+        status,
+        ...(options?.errorMessage ? { error_message: options.errorMessage } : {}),
+      },
+    };
+
+    try {
+      await updateSessionEvent(sessionId, commentaryId, messagePayload);
+    } catch (_error) {
+      await appendSessionEventsApi(sessionId, [{
+        id: commentaryId,
+        ...messagePayload,
+      }]);
+    } finally {
+      refreshPersistedSessions();
+    }
+  }, [refreshPersistedSessions]);
 
   const streamSessionInquiryResponse = useCallback((
     targetSessionId: string,
     text: string,
     sessionItemsOverride?: GalleryItem[],
     historyOverride?: SessionStreamMessage[],
+    parentEventIdOverride?: string,
   ) => {
     setStreamingSessionResponses((prev) => ({ ...prev, [targetSessionId]: '' }));
 
     const existingMessages = historyOverride || sessionStreams[targetSessionId] || [];
+    const historyForPrompt = getSessionHistoryBeforeTrigger(existingMessages, parentEventIdOverride);
     const sessionItems = sessionItemsOverride
       || (activeSessionSummary?.id === targetSessionId
         ? activeSessionSummary.items
         : items.filter((item) => itemBelongsToSession(item, targetSessionId)));
+    const commentaryId = `commentary-${Date.now()}`;
+    const commentaryCreatedAt = getNextLocalEventCreatedAt(existingMessages);
+    const commentaryArtworkIds = getSessionArtworkIds(sessionItems);
+    const parentEventId = parentEventIdOverride;
+    const pendingCommentaryMessage: SessionStreamMessage = {
+      id: commentaryId,
+      role: 'model',
+      text: '',
+      type: 'artwork_commentary',
+      artworkIds: commentaryArtworkIds,
+      triggerEventId: parentEventId,
+      createdAt: commentaryCreatedAt,
+      payload: { status: 'pending' },
+    };
+
+    appendSessionEvents(targetSessionId, [pendingCommentaryMessage], { persist: false });
+
+    void persistPendingCommentary(
+      targetSessionId,
+      commentaryId,
+      commentaryArtworkIds,
+      commentaryCreatedAt,
+      parentEventId,
+    );
 
     streamSessionChat(
       sessionItems.map(toSessionChatArtwork),
-      serializeSessionHistory(existingMessages, sessionItems),
+      serializeSessionHistory(historyForPrompt, sessionItems),
       text,
       (chunk) => {
+        updateLocalSessionEvent(targetSessionId, commentaryId, (event) => ({
+          ...event,
+          text: `${event.text || ''}${chunk}`,
+          payload: {
+            ...(event.payload || {}),
+            status: 'pending',
+          },
+        }));
         setStreamingSessionResponses((prev) => ({
           ...prev,
           [targetSessionId]: (prev[targetSessionId] || '') + chunk,
         }));
       },
       (fullResponse) => {
-        const assistantMsg: SessionStreamMessage = {
-          id: `session-msg-${Date.now()}-assistant`,
-          role: 'model',
+        updateLocalSessionEvent(targetSessionId, commentaryId, (event) => ({
+          ...event,
           text: fullResponse,
-          createdAt: Date.now(),
-        };
-        appendSessionMessages(targetSessionId, [assistantMsg]);
+          payload: {
+            ...(event.payload || {}),
+            status: 'completed',
+          },
+        }));
+        void finalizeCommentary(
+          targetSessionId,
+          commentaryId,
+          commentaryArtworkIds,
+          'completed',
+          parentEventId,
+          { content: fullResponse },
+        );
         setStreamingSessionResponses((prev) => {
           const next = { ...prev };
           delete next[targetSessionId];
@@ -199,13 +402,22 @@ export function useSessionMessaging({
         });
       },
       () => {
-        const assistantMsg: SessionStreamMessage = {
-          id: `session-msg-${Date.now()}-error`,
-          role: 'model',
-          text: 'Something interrupted the reflection stream. Please try again.',
-          createdAt: Date.now(),
-        };
-        appendSessionMessages(targetSessionId, [assistantMsg]);
+        updateLocalSessionEvent(targetSessionId, commentaryId, (event) => ({
+          ...event,
+          payload: {
+            ...(event.payload || {}),
+            status: 'failed',
+            error_message: 'Something interrupted the reflection stream. Please try again.',
+          },
+        }));
+        void finalizeCommentary(
+          targetSessionId,
+          commentaryId,
+          commentaryArtworkIds,
+          'failed',
+          parentEventId,
+          { errorMessage: 'Something interrupted the reflection stream. Please try again.' },
+        );
         setStreamingSessionResponses((prev) => {
           const next = { ...prev };
           delete next[targetSessionId];
@@ -215,36 +427,53 @@ export function useSessionMessaging({
     );
   }, [
     activeSessionSummary,
-    appendSessionMessages,
+    appendSessionEvents,
     items,
     setStreamingSessionResponses,
     sessionStreams,
+    updateLocalSessionEvent,
   ]);
 
   const sendSessionInquiryToSession = useCallback((
     targetSessionId: string,
     text: string,
     sessionItemsOverride?: GalleryItem[],
-    options?: { persistUserMessage?: boolean },
+    options?: {
+      persistUserMessage?: boolean;
+      parentEventIdOverride?: string;
+      historyOverride?: SessionStreamMessage[];
+      localUserMessageOverride?: SessionStreamMessage;
+    },
   ) => {
-    const existingMessages = sessionStreams[targetSessionId] || [];
+    const existingMessages = options?.historyOverride || sessionStreams[targetSessionId] || [];
     let nextHistory = existingMessages;
+    const userEventId = options?.parentEventIdOverride || newSessionEventId();
 
     if (options?.persistUserMessage !== false) {
       const createdAt = Date.now();
-      const userMsg: SessionStreamMessage = {
-        id: `session-msg-${createdAt}`,
+      const userMsg: SessionStreamMessage = options?.localUserMessageOverride || {
+        id: userEventId,
         role: 'user',
         text,
+        triggerEventId: userEventId,
         createdAt,
       };
-      appendSessionMessages(targetSessionId, [userMsg]);
+      appendSessionEvents(targetSessionId, [userMsg]);
       nextHistory = [...existingMessages, userMsg];
+    } else if (options?.localUserMessageOverride) {
+      appendSessionEvents(targetSessionId, [options.localUserMessageOverride], { persist: false });
+      nextHistory = [...existingMessages, options.localUserMessageOverride];
     }
 
-    streamSessionInquiryResponse(targetSessionId, text, sessionItemsOverride, nextHistory);
+    streamSessionInquiryResponse(
+      targetSessionId,
+      text,
+      sessionItemsOverride,
+      nextHistory,
+      options?.parentEventIdOverride || (options?.persistUserMessage === false ? undefined : userEventId),
+    );
   }, [
-    appendSessionMessages,
+    appendSessionEvents,
     streamSessionInquiryResponse,
     sessionStreams,
   ]);
@@ -254,27 +483,69 @@ export function useSessionMessaging({
     newArtworks: Array<Partial<Pick<GalleryItem, 'artistName' | 'artworkName'>>>,
     sessionItems: GalleryItem[],
     conversationHistory: SessionStreamMessage[],
+    parentEventId?: string,
   ) => {
     const trigger = buildUploadCommentaryPrompt(newArtworks, sessionGoals[sessionId]);
     if (!trigger) return;
 
     setStreamingSessionResponses((prev) => ({ ...prev, [sessionId]: '' }));
+    const historyForPrompt = getSessionHistoryBeforeTrigger(conversationHistory, parentEventId);
+    const commentaryId = `commentary-${Date.now()}`;
+    const commentaryCreatedAt = getNextLocalEventCreatedAt(conversationHistory);
+    const commentaryArtworkIds = getSessionArtworkIds(sessionItems);
+    const pendingCommentaryMessage: SessionStreamMessage = {
+      id: commentaryId,
+      role: 'model',
+      text: '',
+      type: 'artwork_commentary',
+      artworkIds: commentaryArtworkIds,
+      triggerEventId: parentEventId,
+      createdAt: commentaryCreatedAt,
+      payload: { status: 'pending' },
+    };
+
+    appendSessionEvents(sessionId, [pendingCommentaryMessage], { persist: false });
+
+    void persistPendingCommentary(
+      sessionId,
+      commentaryId,
+      commentaryArtworkIds,
+      commentaryCreatedAt,
+      parentEventId,
+    );
 
     streamSessionChat(
       sessionItems.map(toSessionChatArtwork),
-      serializeSessionHistory(conversationHistory, sessionItems),
+      serializeSessionHistory(historyForPrompt, sessionItems),
       trigger,
       (chunk) => {
+        updateLocalSessionEvent(sessionId, commentaryId, (event) => ({
+          ...event,
+          text: `${event.text || ''}${chunk}`,
+          payload: {
+            ...(event.payload || {}),
+            status: 'pending',
+          },
+        }));
         setStreamingSessionResponses((prev) => ({ ...prev, [sessionId]: (prev[sessionId] || '') + chunk }));
       },
       (fullResponse) => {
-        const msg: SessionStreamMessage = {
-          id: `commentary-${Date.now()}`,
-          role: 'model',
+        updateLocalSessionEvent(sessionId, commentaryId, (event) => ({
+          ...event,
           text: fullResponse,
-          createdAt: Date.now(),
-        };
-        appendSessionMessages(sessionId, [msg]);
+          payload: {
+            ...(event.payload || {}),
+            status: 'completed',
+          },
+        }));
+        void finalizeCommentary(
+          sessionId,
+          commentaryId,
+          commentaryArtworkIds,
+          'completed',
+          parentEventId,
+          { content: fullResponse },
+        );
         setStreamingSessionResponses((prev) => {
           const next = { ...prev };
           delete next[sessionId];
@@ -282,6 +553,22 @@ export function useSessionMessaging({
         });
       },
       () => {
+        updateLocalSessionEvent(sessionId, commentaryId, (event) => ({
+          ...event,
+          payload: {
+            ...(event.payload || {}),
+            status: 'failed',
+            error_message: 'Something interrupted the reflection stream. Please try again.',
+          },
+        }));
+        void finalizeCommentary(
+          sessionId,
+          commentaryId,
+          commentaryArtworkIds,
+          'failed',
+          parentEventId,
+          { errorMessage: 'Something interrupted the reflection stream. Please try again.' },
+        );
         setStreamingSessionResponses((prev) => {
           const next = { ...prev };
           delete next[sessionId];
@@ -290,9 +577,10 @@ export function useSessionMessaging({
       },
     );
   }, [
-    appendSessionMessages,
+    appendSessionEvents,
     sessionGoals,
     setStreamingSessionResponses,
+    updateLocalSessionEvent,
   ]);
 
   const handleSessionInquiry = useCallback(async (text: string) => {
@@ -306,30 +594,38 @@ export function useSessionMessaging({
 
     if (shouldPersistSession) {
       const createdAt = Date.now();
+      const userEventId = newSessionEventId();
       const userMsg: SessionStreamMessage = {
-        id: `session-msg-${createdAt}`,
+        id: userEventId,
         role: 'user',
         text,
+        triggerEventId: userEventId,
         createdAt,
       };
 
       try {
-        await startSessionWithMessage(sessionUserId, {
+        await startSessionWithEvent(sessionUserId, {
           session_id: targetSessionId,
           title: targetSummary?.title || defaultSessionTitle,
-          message: {
+          event: {
             id: userMsg.id,
             role: 'user',
-            type: 'text',
+            event_type: 'user_input',
             content: text,
             created_at: createdAt,
           },
         });
         refreshPersistedSessions();
-        appendSessionMessages(targetSessionId, [userMsg]);
-        streamSessionInquiryResponse(targetSessionId, text, undefined, [...(sessionStreams[targetSessionId] || []), userMsg]);
+        appendSessionEvents(targetSessionId, [userMsg]);
+        streamSessionInquiryResponse(
+          targetSessionId,
+          text,
+          undefined,
+          [...(sessionStreams[targetSessionId] || []), userMsg],
+          userEventId,
+        );
       } catch (error) {
-        console.error('Failed to commit first session message:', error);
+        console.error('Failed to commit first session event:', error);
         showToast('Couldn’t send your first message. Try again.', 'info');
         return false;
       }
@@ -340,10 +636,9 @@ export function useSessionMessaging({
     return true;
   }, [
     activeSessionSummary?.id,
-    appendSessionMessages,
+    appendSessionEvents,
     createSessionDraft,
     defaultSessionTitle,
-    ensureSessionRecord,
     isComposingNewSession,
     refreshPersistedSessions,
     sessionUserId,
@@ -358,7 +653,9 @@ export function useSessionMessaging({
     createSessionDraft,
     ensureSessionRecord,
     resolveUploadSession,
-    appendSessionMessages,
+    appendSessionEvents,
+    appendLocalSessionEvents,
+    persistSessionArtworkInput,
     sendSessionInquiryToSession,
     triggerUploadCommentary,
     handleSessionInquiry,

@@ -23,11 +23,11 @@ interface Props {
   onUpdateConversation: (newMessages: Message[]) => void;
   onDeleteItem?: (id: string) => void;
   onInterpret?: (item: GalleryItem) => void;
-  onEndVisit?: () => void;
+  onEndSession?: () => void;
   initialMessage?: string;
 }
 
-const CuratorRoom: React.FC<Props> = ({ items, conversation, onClose, onUpdateConversation, onDeleteItem, onInterpret, onEndVisit, initialMessage }) => {
+const CuratorRoom: React.FC<Props> = ({ items, conversation, onClose, onUpdateConversation, onDeleteItem, onInterpret, onEndSession, initialMessage }) => {
   const [messages, setMessages] = useState<Message[]>(conversation);
   const [streamingText, setStreamingText] = useState('');
   const [input, setInput] = useState('');
@@ -90,15 +90,15 @@ const CuratorRoom: React.FC<Props> = ({ items, conversation, onClose, onUpdateCo
             <p className="text-[9px] sm:text-[10px] text-neutral-400 tracking-widest mt-1 uppercase">{items.length} works under review</p>
           </div>
           <div className="flex items-center space-x-4">
-            {onEndVisit && (
+            {onEndSession && (
               <button
                 onClick={() => {
-                  onEndVisit();
+                  onEndSession();
                   onClose();
                 }}
                 className="px-4 py-2 bg-neutral-900 text-white text-[9px] tracking-[0.2em] uppercase font-bold rounded-lg hover:bg-neutral-800 transition-colors shadow-sm"
               >
-                End Visit
+                End Session
               </button>
             )}
             <button onClick={onClose} className="text-neutral-300 hover:text-neutral-900 transition-colors text-2xl">✕</button>
@@ -143,7 +143,7 @@ const CuratorRoom: React.FC<Props> = ({ items, conversation, onClose, onUpdateCo
                   <p className="text-[13px] text-neutral-400 font-serif italic leading-relaxed">
                     "Deep inquiry reveals the hidden threads that bind a collection."
                   </p>
-                  <p className="mt-4 text-[10px] tracking-widest uppercase text-neutral-300">Ask about themes, contrasts, or the narrative flow of your visit.</p>
+                  <p className="mt-4 text-[10px] tracking-widest uppercase text-neutral-300">Ask about themes, contrasts, or the narrative flow of your session.</p>
                 </div>
               )}
               {messages.map((m, idx) => (

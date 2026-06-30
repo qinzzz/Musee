@@ -1,42 +1,23 @@
 import React from 'react';
 import CanvasHeader from '../../components/CanvasHeader';
-import InterpretationModal from '../../components/InterpretationModal';
+import ArtworkDetailModal from '../../artwork/components/ArtworkDetailModal';
 import { GalleryItem, ArtworkClassification } from '../../types';
 import type { ArtistPageContext, ArtworkDetailContext } from '../../lib/appNavigation';
 import { SUPPORTED_UPLOAD_ACCEPT } from '../../lib/uploadValidation';
-import type { ActiveSessionStreamEntry, SessionStreamMessage, SessionSummary } from '../types';
-
-type GroupedSessionStreamEntry =
-  | {
-      type: 'artwork_group';
-      id: string;
-      createdAt: number;
-      items: GalleryItem[];
-    }
-  | {
-      type: 'message';
-      id: string;
-      createdAt: number;
-      message: SessionStreamMessage;
-    };
-
-type ArtworkEventSource = 'library' | 'upload' | 'camera';
-
-type InterpretationItem = GalleryItem & {
-  navigationItems?: GalleryItem[];
-  is_liked?: boolean;
-};
+import type { ArtworkDetailItem, IdentifyAgainHints } from '../../artwork/types';
+import type { ActiveSessionStreamEntry, SessionRenderBlock, SessionSummary } from '../types';
 
 type ExploreSessionViewProps = {
   activeSessionSummary: SessionSummary;
   activeSessionStream: ActiveSessionStreamEntry[];
-  interpretingItem: InterpretationItem | null;
+  sessionRenderBlocks: SessionRenderBlock[];
+  artworkDetailItem: ArtworkDetailItem | null;
   artworkHeaderActions: React.ReactNode;
   artworkHeaderEditToken: number;
   artworkDetailContext: ArtworkDetailContext | null;
   headerLeftSlot?: React.ReactNode;
   showSessionHeader?: boolean;
-  interpretationRightMode: 'metadata' | 'community';
+  artworkDetailRightMode: 'metadata' | 'community';
   sessionGoalInput: string;
   sessionGoals: Record<string, string>;
   sessionGoalDismissed: Set<string>;
@@ -59,9 +40,9 @@ type ExploreSessionViewProps = {
   onUpdateMetadata: (itemId: string, fields: Partial<GalleryItem>) => void;
   onUpdateClassification: (itemId: string, classification: ArtworkClassification) => Promise<void>;
   onDeleteArtwork: (itemId: string) => void;
-  onNavigateInterpretation: (direction: 'prev' | 'next') => void;
-  onInterpretationRightModeChange: (mode: 'metadata' | 'community') => void;
-  onIdentifyAgain: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
+  onNavigateArtworkDetail: (direction: 'prev' | 'next') => void;
+  onArtworkDetailRightModeChange: (mode: 'metadata' | 'community') => void;
+  onIdentifyAgain: (hints?: IdentifyAgainHints) => Promise<void>;
   onRetryAnalysis: (item: GalleryItem) => Promise<void>;
   onOpenArtistFromInterpretation: (
     artistEntityId: string,
@@ -152,7 +133,7 @@ const SessionDetailsPanel: React.FC<{
             onChange={(event) => setGoalDraft(event.target.value)}
             onBlur={commitGoal}
             rows={3}
-            placeholder="Add a focus for this visit…"
+            placeholder="Add a focus for this session…"
             className="w-full resize-none rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] sm:text-[14px] leading-relaxed text-neutral-800 outline-none transition-colors focus:border-neutral-300"
           />
         </div>
@@ -175,43 +156,17 @@ const InsightPill: React.FC<{ title: string; text: string }> = ({ title, text })
   );
 };
 
-function getArtworkEventSourceForSession(item: GalleryItem, sessionId: string): ArtworkEventSource {
-  const sessionLink = item.sessionLinks?.find((link) => link.sessionId === sessionId);
-  if (sessionLink?.source === 'library' || sessionLink?.source === 'upload' || sessionLink?.source === 'camera') {
-    return sessionLink.source;
-  }
-  return 'camera';
-}
-
-function getArtworkGroupLabel(items: GalleryItem[], sessionId: string): string {
-  const count = items.length;
-  const sources = Array.from(new Set(items.map((item) => getArtworkEventSourceForSession(item, sessionId))));
-
-  if (sources.length === 1) {
-    switch (sources[0]) {
-      case 'library':
-        return count === 1 ? 'Added from collection' : `Added ${count} artworks from collection`;
-      case 'upload':
-        return count === 1 ? 'Uploaded an artwork' : `Uploaded ${count} artworks`;
-      case 'camera':
-      default:
-        return count === 1 ? 'Captured an artwork' : `Captured ${count} artworks`;
-    }
-  }
-
-  return count === 1 ? 'Added an artwork' : `Added ${count} artworks from multiple sources`;
-}
-
 export default function ExploreSessionView({
   activeSessionSummary,
   activeSessionStream,
-  interpretingItem,
+  sessionRenderBlocks,
+  artworkDetailItem,
   artworkHeaderActions,
   artworkHeaderEditToken,
   artworkDetailContext,
   headerLeftSlot,
   showSessionHeader = true,
-  interpretationRightMode,
+  artworkDetailRightMode,
   sessionGoalInput,
   sessionGoals,
   sessionGoalDismissed,
@@ -228,8 +183,8 @@ export default function ExploreSessionView({
   onUpdateMetadata,
   onUpdateClassification,
   onDeleteArtwork,
-  onNavigateInterpretation,
-  onInterpretationRightModeChange,
+  onNavigateArtworkDetail,
+  onArtworkDetailRightModeChange,
   onIdentifyAgain,
   onRetryAnalysis,
   onOpenArtistFromInterpretation,
@@ -266,37 +221,6 @@ export default function ExploreSessionView({
     textarea.style.height = `${Math.max(textarea.scrollHeight + borderTop + borderBottom, oneLineHeight)}px`;
   }, []);
 
-  const groupedSessionStream = React.useMemo<GroupedSessionStreamEntry[]>(() => {
-    const grouped: GroupedSessionStreamEntry[] = [];
-
-    activeSessionStream.forEach((entry) => {
-      if (entry.type === 'artwork') {
-        const previous = grouped[grouped.length - 1];
-        if (previous?.type === 'artwork_group') {
-          previous.items.push(entry.item);
-          return;
-        }
-
-        grouped.push({
-          type: 'artwork_group',
-          id: `artwork-group-${entry.id}`,
-          createdAt: entry.createdAt,
-          items: [entry.item],
-        });
-        return;
-      }
-
-      grouped.push({
-        type: 'message',
-        id: entry.id,
-        createdAt: entry.createdAt,
-        message: entry.message,
-      });
-    });
-
-    return grouped;
-  }, [activeSessionStream]);
-
   React.useEffect(() => {
     setSessionDetailsOpen(false);
   }, [activeSessionSummary.id]);
@@ -320,35 +244,33 @@ export default function ExploreSessionView({
     onSubmitGoal(goal);
   };
 
-  if (interpretingItem) {
+  if (artworkDetailItem) {
     return (
       <>
         <CanvasHeader
           parentLabel={activeSessionSummary.title}
           parentClick={onCloseArtworkDetail}
-          childLabel={interpretingItem.artworkName || 'Untitled'}
+          childLabel={artworkDetailItem.artworkName || 'Untitled'}
           leftSlot={headerLeftSlot}
           rightSlot={artworkHeaderActions}
           isInline={true}
         />
         <div className="flex-1 overflow-hidden animate-in fade-in zoom-in-98 duration-300">
-          <InterpretationModal
-            item={interpretingItem}
+          <ArtworkDetailModal
+            item={artworkDetailItem}
             onClose={onCloseArtworkDetail}
             onUpdateMetadata={onUpdateMetadata}
             onUpdateClassification={onUpdateClassification}
-            onDelete={() => onDeleteArtwork(interpretingItem.id)}
-            navigationItems={interpretingItem.navigationItems}
-            onNavigate={onNavigateInterpretation}
-            rightMode={interpretationRightMode}
-            onRightModeChange={onInterpretationRightModeChange}
+            onDelete={() => onDeleteArtwork(artworkDetailItem.id)}
+            onNavigate={onNavigateArtworkDetail}
+            rightMode={artworkDetailRightMode}
+            onRightModeChange={onArtworkDetailRightModeChange}
             onIdentifyAgain={onIdentifyAgain}
-            onRetryAnalysis={() => onRetryAnalysis(interpretingItem)}
+            onRetryAnalysis={() => onRetryAnalysis(artworkDetailItem)}
             userId={userId}
             onNavigateToArtist={onOpenArtistFromInterpretation}
             onNavigateToSession={onOpenSessionFromInterpretation}
             sessionTitleById={sessionTitleById}
-            navigationContextLabel={artworkDetailContext?.parentLabel || activeSessionSummary.title}
             editRequestToken={artworkHeaderEditToken}
             isInline={true}
           />
@@ -392,7 +314,7 @@ export default function ExploreSessionView({
           </div>
         ) : null}
 
-        {activeSessionStream.length === 0 ? (
+        {sessionRenderBlocks.length === 0 ? (
           sessionGoalDismissed.has(activeSessionSummary.id) ? (
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center pb-20 px-6">
               <div className="text-center">
@@ -528,86 +450,45 @@ export default function ExploreSessionView({
           )
         ) : (
           <>
-            {activeSessionStream.some((entry) => entry.type === 'artwork') && (() => {
-              const collapsed = true;
-              const ease = '0.5s cubic-bezier(0.68, -0.25, 0.27, 1.25)';
-              const vh = window.innerHeight / 100;
-              const thumbnailEntries = activeSessionStream.filter(
-                (entry): entry is Extract<ActiveSessionStreamEntry, { type: 'artwork' }> =>
-                  entry.type === 'artwork' && !entry.item.isDeletedPlaceholder,
-              );
-
-              if (thumbnailEntries.length === 0) {
-                return null;
-              }
-
-              return (
-                <div
-                  className="relative shrink-0"
-                  style={{ height: collapsed ? '88px' : `${45 * vh}px`, overflow: 'clip', transition: `height ${ease}` }}
-                >
+            {activeSessionSummary.items.length > 0 ? (
+              <div className="shrink-0 border-b border-neutral-100 bg-[var(--color-bg-primary)] px-4 sm:px-10 py-3">
+                <div className="mx-auto w-full max-w-[640px]">
                   <div
-                    className="h-full flex items-center gap-2 overflow-x-auto px-4 sm:px-6"
-                    style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}
+                    className="flex gap-2.5 overflow-x-auto pb-1"
+                    style={{ scrollbarWidth: 'none' }}
                   >
-                    {thumbnailEntries.map((entry) => (
-                        (() => {
-                          const isPendingDelete = entry.item.deleteStatus === 'pending';
-                          return (
-                        <button
-                          key={entry.id}
-                          onClick={() => {
-                            if (isPendingDelete) return;
-                            onOpenSessionArtwork(entry.item);
-                          }}
-                          className={`relative shrink-0 group overflow-hidden ${isPendingDelete ? 'cursor-default opacity-45' : ''}`}
-                          style={{
-                            height: collapsed ? '68px' : '38vh',
-                            width: collapsed ? '68px' : '420px',
-                            maxWidth: collapsed ? '68px' : '420px',
-                            borderRadius: collapsed ? '10px' : '16px',
-                            boxShadow: collapsed ? '0 1px 6px rgba(0,0,0,0.12)' : '0 4px 24px rgba(0,0,0,0.14)',
-                            flexShrink: 0,
-                            transition: `all ${ease}`,
-                          }}
-                        >
-                          <img
-                            src={entry.item.url}
-                            alt={entry.item.artworkName || 'Artwork'}
-                            className={`w-full h-full object-cover ${isPendingDelete ? 'saturate-[0.7]' : ''}`}
-                          />
-                          <div
-                            className={`absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/60 to-transparent transition-opacity duration-300 ${isPendingDelete ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}
-                            style={{ opacity: collapsed || isPendingDelete ? 0 : undefined }}
-                          >
-                            <p className="text-white text-[12px] font-medium truncate">
-                              {entry.item.artworkName || 'Untitled'}
-                            </p>
-                            {entry.item.artistName && (
-                              <p className="text-white/70 text-[11px] truncate">{entry.item.artistName}</p>
-                            )}
+                    {activeSessionSummary.items.map((item) => (
+                      <button
+                        key={`session-strip-${item.id}`}
+                        onClick={() => {
+                          if (item.isDeletedPlaceholder || item.deleteStatus === 'pending') return;
+                          onOpenSessionArtwork(item);
+                        }}
+                        className={`shrink-0 overflow-hidden rounded-[18px] border border-neutral-200 bg-white shadow-sm transition-shadow ${
+                          item.isDeletedPlaceholder || item.deleteStatus === 'pending'
+                            ? 'cursor-default opacity-45'
+                            : 'hover:shadow-md'
+                        }`}
+                        style={{ width: '96px', height: '96px' }}
+                        aria-label={item.artworkName || 'Artwork'}
+                      >
+                        {item.isDeletedPlaceholder ? (
+                          <div className="flex h-full w-full items-center justify-center bg-neutral-100 px-2 text-center text-[11px] font-medium text-neutral-400">
+                            Deleted artwork
                           </div>
-                          {entry.item.isAnalyzing && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70">
-                              <div className="relative mb-2">
-                                <div className="w-7 h-7 border-2 border-neutral-100 rounded-full" />
-                                <div className="absolute inset-0 w-7 h-7 border-t-2 border-neutral-700 rounded-full animate-spin" />
-                              </div>
-                              {!collapsed && (
-                                <p className="text-[10px] font-medium text-neutral-500">Analyzing</p>
-                              )}
-                            </div>
-                          )}
-                        </button>
-                          );
-                        })()
-                      ))}
-                    <div className="shrink-0 w-2 sm:w-4" />
+                        ) : (
+                          <img
+                            src={item.url}
+                            alt={item.artworkName || 'Artwork'}
+                            className="h-full w-full object-cover"
+                          />
+                        )}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              );
-            })()}
-
+              </div>
+            ) : null}
             <div
               ref={sessionStreamScrollRef}
               className="flex-1 overflow-y-auto px-4 sm:px-10 pb-56 pt-3 sm:pt-4"
@@ -615,8 +496,8 @@ export default function ExploreSessionView({
               style={{ overscrollBehaviorY: 'contain', touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
               <div className="mx-auto w-full max-w-[640px] space-y-3 sm:space-y-4">
-                {groupedSessionStream.map((entry) =>
-                  entry.type === 'artwork_group' ? (
+                {sessionRenderBlocks.map((entry) =>
+                  entry.type === 'artwork_group' || entry.type === 'input' ? (
                     <div key={entry.id} className="space-y-2">
                       <div className="flex justify-end">
                         <div className="flex items-center gap-2.5 rounded-[20px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-neutral-800 shadow-sm sm:rounded-[28px] sm:px-6 sm:py-3">
@@ -626,7 +507,7 @@ export default function ExploreSessionView({
                             <polyline points="21 15 16 10 5 21" />
                           </svg>
                           <span className="text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
-                            {getArtworkGroupLabel(entry.items, activeSessionSummary.id)}
+                            {entry.sourceLabel}
                           </span>
                         </div>
                       </div>
@@ -685,7 +566,32 @@ export default function ExploreSessionView({
                           </div>
                         </div>
                       </div>
+                      {entry.type === 'input' && entry.userMessage?.text ? (
+                        <div className="flex justify-end">
+                          <div className="max-w-[85%] rounded-[20px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-neutral-800 shadow-sm sm:rounded-[28px] sm:px-6 sm:py-3">
+                            <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
+                              {entry.userMessage.text}
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
+                  ) : entry.type === 'commentary' ? (
+                    <React.Fragment key={entry.id}>
+                      <div className="text-neutral-700">
+                        {entry.status === 'pending' && !entry.message.text ? (
+                          <div className="flex items-center gap-1.5 py-1">
+                            <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '160ms' }} />
+                            <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '320ms' }} />
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
+                            {entry.message.text}
+                          </p>
+                        )}
+                      </div>
+                    </React.Fragment>
                   ) : (
                     <React.Fragment key={entry.id}>
                       {entry.message.role === 'user' ? (
@@ -701,21 +607,6 @@ export default function ExploreSessionView({
                       )}
                     </React.Fragment>
                   ),
-                )}
-                {typeof streamingSessionResponse === 'string' && (
-                  streamingSessionResponse === '' ? (
-                    <div className="flex items-center gap-1.5 py-1">
-                      <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '160ms' }} />
-                      <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '320ms' }} />
-                    </div>
-                  ) : (
-                        <div className="text-neutral-700">
-                      <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
-                        {streamingSessionResponse}
-                      </p>
-                    </div>
-                  )
                 )}
                 <div ref={sessionStreamEndRef} className="h-24 shrink-0" />
               </div>

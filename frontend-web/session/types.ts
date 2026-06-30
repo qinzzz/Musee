@@ -3,8 +3,15 @@ import type { GalleryItem, Message } from '../types';
 export type SessionStreamMessage = Message & {
   id: string;
   createdAt: number;
-  type?: 'text' | 'artwork_capture' | 'artwork_card';
+  type?: 'text' | 'artwork_capture' | 'artwork_card' | 'artwork_commentary';
   artworkId?: string;
+  artworkIds?: string[];
+  payload?: Record<string, unknown>;
+  // Local UI anchor used to group related session entries. In persisted data
+  // this should usually resolve to the originating user_input event id.
+  triggerEventId?: string;
+  // Server-assigned total ordering; used as a deterministic tiebreaker.
+  sequenceNumber?: number;
 };
 
 export type SessionDraft = {
@@ -31,11 +38,52 @@ export type ActiveSessionStreamEntry =
       createdAt: number;
       type: 'artwork';
       item: GalleryItem;
+      triggerEventId?: string;
+      sequenceNumber?: number;
     }
   | {
       id: string;
       createdAt: number;
       type: 'message';
+      message: SessionStreamMessage;
+      triggerEventId?: string;
+      sequenceNumber?: number;
+    };
+
+export type SessionRenderBlock =
+  | {
+      type: 'input';
+      id: string;
+      createdAt: number;
+      sequenceNumber?: number;
+      triggerEventId: string;
+      items: GalleryItem[];
+      sourceLabel: string;
+      userMessage?: SessionStreamMessage;
+    }
+  | {
+      type: 'artwork_group';
+      id: string;
+      createdAt: number;
+      sequenceNumber?: number;
+      triggerEventId?: string;
+      items: GalleryItem[];
+      sourceLabel: string;
+    }
+  | {
+      type: 'commentary';
+      id: string;
+      createdAt: number;
+      sequenceNumber?: number;
+      triggerEventId?: string;
+      message: SessionStreamMessage;
+      status: 'pending' | 'completed' | 'failed';
+    }
+  | {
+      type: 'message';
+      id: string;
+      createdAt: number;
+      sequenceNumber?: number;
       message: SessionStreamMessage;
     };
 

@@ -11,6 +11,11 @@ from app.database.models import SavedArtwork, Session as SessionModel
 from app.models.artwork import UpdateArtworkClassificationRequest, UpdateArtworkRequest
 from app.services.ai_service import AIServiceFactory
 from app.services.artwork_analysis_service import batch_link_tags, determine_ai_provider
+from app.services.artwork_event_service import (
+    ARTWORK_EVENT_METADATA_UPDATED,
+    build_metadata_update_payload,
+    log_artwork_event,
+)
 from app.services.session_service import get_artwork_session_ids, refresh_session_title
 from app.services.taste_profile_service import mark_taste_profile_outdated
 
@@ -27,6 +32,15 @@ def update_artwork_record(
     artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
+
+    before_payload = {
+        "artist_name": artwork.artist_name,
+        "artwork_name": artwork.artwork_name,
+        "summary": artwork.summary,
+        "analysis": artwork.analysis,
+        "date": (artwork.params or {}).get("date") if isinstance(artwork.params, dict) else None,
+        "medium": (artwork.params or {}).get("medium") if isinstance(artwork.params, dict) else None,
+    }
 
     if request.artist_name is not None:
         artwork.artist_name = request.artist_name.strip()
@@ -54,6 +68,25 @@ def update_artwork_record(
         artwork.artist_name.lower() != "unknown artist"
         and artwork.artwork_name.lower() != "unknown"
     ) else 0
+
+    after_payload = {
+        "artist_name": artwork.artist_name,
+        "artwork_name": artwork.artwork_name,
+        "summary": artwork.summary,
+        "analysis": artwork.analysis,
+        "date": (artwork.params or {}).get("date") if isinstance(artwork.params, dict) else None,
+        "medium": (artwork.params or {}).get("medium") if isinstance(artwork.params, dict) else None,
+    }
+    metadata_event_payload = build_metadata_update_payload(before=before_payload, after=after_payload)
+    if metadata_event_payload:
+        log_artwork_event(
+            db,
+            artwork_id=artwork_id,
+            event_type=ARTWORK_EVENT_METADATA_UPDATED,
+            actor_role="user",
+            trigger_source="collection",
+            payload=metadata_event_payload,
+        )
 
     for linked_session_id in get_artwork_session_ids(db, artwork_id):
         linked_session = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()

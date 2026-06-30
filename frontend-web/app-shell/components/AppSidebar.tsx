@@ -73,7 +73,7 @@ const SessionListSkeleton: React.FC<{ compact?: boolean }> = ({ compact = false 
 
 const SessionTitleSkeleton: React.FC<{ summaryId: string }> = ({ summaryId }) => (
   <div
-    data-testid={`visit-title-skeleton-${summaryId}`}
+    data-testid={`session-title-skeleton-${summaryId}`}
     className="h-4 w-28 animate-pulse rounded-full bg-neutral-200/80"
   />
 );

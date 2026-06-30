@@ -1,5 +1,10 @@
 
 import React from 'react';
+import {
+  getArtworkFailureMessage,
+  isArtworkAnalyzing,
+  isArtworkPendingDelete,
+} from '../artwork/lib/artworkState';
 import { GalleryItem } from '../types';
 import InteractionOverlay from './InteractionOverlay';
 
@@ -15,7 +20,9 @@ interface Props {
 
 const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, onRetry, size = 'normal' }) => {
   const { url } = item;
-  const isPendingDelete = item.deleteStatus === 'pending';
+  const isPendingDelete = isArtworkPendingDelete(item);
+  const isAnalyzing = isArtworkAnalyzing(item);
+  const failureMessage = getArtworkFailureMessage(item);
 
   return (
     <div
@@ -41,7 +48,7 @@ const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, o
       {/* No more white fade overlay for inactive — keeping it clean with saturation only */}
 
       {/* Loading state */}
-      {item.isAnalyzing && (
+      {isAnalyzing && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-20">
           <div className="relative mb-3">
             <div className="w-8 h-8 border-2 border-neutral-100 rounded-full" />
@@ -52,7 +59,7 @@ const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, o
       )}
 
       {/* Error state */}
-      {!item.isAnalyzing && item.analysisStatus === 'failed' && item.streamingText && (
+      {!isAnalyzing && failureMessage && (
         <div className="absolute bottom-0 left-0 right-0 bg-neutral-900/90 text-white py-2 px-3 z-20 flex items-center justify-between gap-2">
           <p className="text-[9px] tracking-wider uppercase font-bold">Analysis failed</p>
           {onRetry && (
@@ -67,7 +74,7 @@ const GalleryCard: React.FC<Props> = ({ item, isActive, onInterpret, onDelete, o
       )}
 
       {/* Hover overlay */}
-      {!item.isAnalyzing && !isPendingDelete && (
+      {!isAnalyzing && !isPendingDelete && (
         <InteractionOverlay
           isVisible={true}
           className="opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"

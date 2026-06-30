@@ -1,5 +1,18 @@
 import type { GalleryItem, SessionLink } from '../../types';
 
+export function newSessionEventId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `evt-${crypto.randomUUID()}`;
+  }
+  return `evt-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Legacy alias retained while the session stream UI still uses triggerEventId as
+ * the local grouping key. The generated value is now a real session event id.
+ */
+export const newTriggerEventId = newSessionEventId;
+
 export function getPrimarySessionLink(item: GalleryItem): SessionLink | undefined {
   return item.sessionLinks?.[0];
 }

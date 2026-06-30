@@ -141,6 +141,112 @@ This is not only a product feature enabler. It is also a structural cleanup that
 - chronology
 - rendered session UI
 
+## 0.15 AI Job Layer
+
+Status: deferred until the session event model exists
+
+### Problem
+
+AI work is currently represented indirectly through mixed flags and side effects spread across artwork, session stream state, and backend orchestration.
+
+Examples include:
+
+- initial artwork identification
+- re-identification
+- label OCR
+- upload commentary
+- session reflection
+
+These are all AI-backed jobs, but they do not yet have a first-class lifecycle model.
+
+### Why this matters
+
+Without a dedicated AI job abstraction, the product has to overload domain entities with process state such as:
+
+- loading
+- retryability
+- failure reason
+- partial output
+- completion timing
+
+That makes it harder to reason about:
+
+- what AI work was requested
+- what triggered it
+- whether it succeeded or failed
+- what should be retried
+
+### Recommended direction
+
+Add a later `ai_jobs` layer after `session_events` is in place.
+
+Preferred naming:
+
+- `AIJob`
+
+Suggested first responsibilities:
+
+- represent one unit of AI work
+- track status (`queued`, `running`, `succeeded`, `failed`)
+- link back to the triggering session event
+- link optionally to affected session / artwork
+- store structured input / output payloads
+- support retry and failure inspection cleanly
+
+### Important sequencing
+
+Do not implement this before the session event layer.
+
+The cleaner model is:
+
+- `session_events` answer what happened in the session
+- `ai_jobs` answer what AI work was launched because of those events
+
+### First-pass scope later
+
+Start with the highest-value job types:
+
+- artwork identification
+- artwork re-identification
+- session reflection / upload commentary
+
+## 0.2 Dormant Artwork Community / Comments
+
+Status: deferred
+
+### Problem
+
+The artwork community/comments capability is only partially surfaced in the product.
+
+Right now:
+
+- frontend fetch / publish / delete code exists
+- backend community/comment routes exist
+- artwork detail still carries a `community` right-side mode
+
+But the user-facing reachability is inconsistent, and the feature is not clearly presented as a stable part of the product.
+
+### Why this matters
+
+This is a cleanup and product-clarity problem:
+
+- dead-looking code is expensive to maintain
+- partially wired UI paths are harder to reason about
+- future artwork-detail cleanup should not keep carrying ambiguous feature branches indefinitely
+
+### Later decision needed
+
+Choose one direction explicitly:
+
+1. fully surface artwork community/comments as a real product feature
+2. or remove the dormant UI/state branches and keep only the backend capability until needed again
+
+### Scope for a later pass
+
+1. audit all reachable entry points into `community` mode
+2. decide whether comments belong in artwork detail at all
+3. either expose a coherent UX or delete the dormant frontend layer
+
 ## 1. Automated Testing Plan
 
 Status: foundational pass completed; expand incrementally

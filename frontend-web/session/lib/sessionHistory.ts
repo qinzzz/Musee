@@ -1,5 +1,47 @@
 import type { GalleryItem } from '../../types';
 import type { SessionStreamMessage } from '../types';
+import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from './sessionEventArtworks';
+
+function compareSessionHistoryOrder(a: SessionStreamMessage, b: SessionStreamMessage): number {
+  if (
+    typeof a.sequenceNumber === 'number'
+    && typeof b.sequenceNumber === 'number'
+    && a.sequenceNumber !== b.sequenceNumber
+  ) {
+    return a.sequenceNumber - b.sequenceNumber;
+  }
+  if (typeof a.sequenceNumber === 'number' && typeof b.sequenceNumber !== 'number') {
+    return -1;
+  }
+  if (typeof a.sequenceNumber !== 'number' && typeof b.sequenceNumber === 'number') {
+    return 1;
+  }
+  if (a.createdAt !== b.createdAt) {
+    return a.createdAt - b.createdAt;
+  }
+  return a.id.localeCompare(b.id);
+}
+
+export function sortSessionHistory(messages: SessionStreamMessage[]): SessionStreamMessage[] {
+  return [...messages].sort(compareSessionHistoryOrder);
+}
+
+export function getSessionHistoryBeforeTrigger(
+  messages: SessionStreamMessage[],
+  triggerEventId?: string,
+): SessionStreamMessage[] {
+  const sortedMessages = sortSessionHistory(messages);
+  if (!triggerEventId) {
+    return sortedMessages;
+  }
+
+  const triggerMessage = sortedMessages.find((message) => message.id === triggerEventId);
+  if (!triggerMessage) {
+    return sortedMessages.filter((message) => message.triggerEventId !== triggerEventId);
+  }
+
+  return sortedMessages.filter((message) => compareSessionHistoryOrder(message, triggerMessage) < 0);
+}
 
 export function serializeSessionHistory(
   messages: SessionStreamMessage[],
@@ -12,15 +54,17 @@ export function serializeSessionHistory(
   });
 
   const out: { role: 'user' | 'model'; text: string }[] = [];
-  for (const message of messages) {
+  for (const message of sortSessionHistory(messages)) {
     if (message.type === 'artwork_capture') {
-      const art = message.artworkId ? byId.get(message.artworkId) : undefined;
+      const artworkId = getPrimarySessionEventArtworkId(message);
+      const art = artworkId ? byId.get(artworkId) : undefined;
       const label = art
         ? `"${art.artworkName || 'an artwork'}" by ${art.artistName || 'an unknown artist'}`
         : 'an artwork';
       out.push({ role: 'user', text: `I captured ${label}.` });
     } else if (message.type === 'artwork_card') {
-      const art = message.artworkId ? byId.get(message.artworkId) : undefined;
+      const artworkId = getPrimarySessionEventArtworkId(message);
+      const art = artworkId ? byId.get(artworkId) : undefined;
       if (!art) {
         out.push({ role: 'model', text: '[Deleted artwork]' });
         continue;
@@ -31,6 +75,29 @@ export function serializeSessionHistory(
       let line = bits.join(' — ');
       if (art.description) line += `. ${art.description}`;
       out.push({ role: 'model', text: line });
+    } else if (message.role === 'user') {
+      if (message.text) {
+        out.push({ role: 'user', text: message.text });
+        continue;
+      }
+
+      const artworkIds = getSessionEventArtworkIds(message);
+      if (artworkIds.length === 0) {
+        continue;
+      }
+
+      const labels = artworkIds.map((artworkId) => {
+        const art = byId.get(artworkId);
+        return art
+          ? `"${art.artworkName || 'an artwork'}" by ${art.artistName || 'an unknown artist'}`
+          : 'an artwork';
+      });
+      out.push({
+        role: 'user',
+        text: labels.length === 1
+          ? `I added ${labels[0]}.`
+          : `I added ${labels.length} artworks: ${labels.join('; ')}.`,
+      });
     } else if (message.text) {
       out.push({ role: message.role as 'user' | 'model', text: message.text });
     }

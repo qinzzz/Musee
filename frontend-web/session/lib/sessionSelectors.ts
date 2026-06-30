@@ -6,6 +6,7 @@ import type {
   SessionSummary,
   SessionStreamMessage,
 } from '../types';
+import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from './sessionEventArtworks';
 
 type SessionMembership = {
   sessionId: string;
@@ -210,9 +211,23 @@ export function buildActiveSessionStream({
   });
 
   const captureTimeByArtworkId = new Map<string, number>();
+  const triggerEventByArtworkId = new Map<string, string>();
+  const seqByArtworkId = new Map<string, number>();
   for (const message of messages) {
-    if (message.type === 'artwork_capture' && message.artworkId) {
-      captureTimeByArtworkId.set(message.artworkId, message.createdAt);
+    const messageArtworkIds = getSessionEventArtworkIds(message);
+    if (messageArtworkIds.length === 0) {
+      continue;
+    }
+    for (const artworkId of messageArtworkIds) {
+      if (message.type === 'artwork_capture') {
+        captureTimeByArtworkId.set(artworkId, message.createdAt);
+      }
+      if (message.triggerEventId && !triggerEventByArtworkId.has(artworkId)) {
+        triggerEventByArtworkId.set(artworkId, message.triggerEventId);
+      }
+      if (typeof message.sequenceNumber === 'number' && !seqByArtworkId.has(artworkId)) {
+        seqByArtworkId.set(artworkId, message.sequenceNumber);
+      }
     }
   }
 
@@ -221,39 +236,46 @@ export function buildActiveSessionStream({
     createdAt: (item.artworkId && captureTimeByArtworkId.get(item.artworkId)) || getSessionItemTimestamp(item),
     type: 'artwork',
     item,
+    triggerEventId: item.artworkId ? triggerEventByArtworkId.get(item.artworkId) : undefined,
+    sequenceNumber: item.artworkId ? seqByArtworkId.get(item.artworkId) : undefined,
   }));
 
   const deletedArtworkEntries: ActiveSessionStreamEntry[] = messages
     .filter(() => artworksLoaded)
-    .filter((message) => message.type === 'artwork_card' && message.artworkId)
+    .filter((message) => message.type === 'artwork_card' && Boolean(getPrimarySessionEventArtworkId(message)))
     .filter((message) => {
-      const artworkId = message.artworkId!;
+      const artworkId = getPrimarySessionEventArtworkId(message)!;
       return !itemsByArtworkId.has(artworkId) && !itemsById.has(artworkId);
     })
-    .map((message) => ({
-      id: `deleted-artwork-${message.artworkId}`,
-      createdAt: captureTimeByArtworkId.get(message.artworkId!) || message.createdAt,
-      type: 'artwork' as const,
-      item: {
-        id: `deleted-artwork-${message.artworkId}`,
-        artworkId: message.artworkId,
-        url: '',
-        keywords: [],
-        vibe: {
-          backgroundColor: '#ffffff',
-          padding: 4,
-          borderRadius: '12px',
-          borderType: 'solid',
-          accentColor: '#000000',
+    .map((message) => {
+      const artworkId = getPrimarySessionEventArtworkId(message)!;
+      return {
+        id: `deleted-artwork-${artworkId}`,
+        createdAt: captureTimeByArtworkId.get(artworkId) || message.createdAt,
+        type: 'artwork' as const,
+        triggerEventId: message.triggerEventId,
+        sequenceNumber: message.sequenceNumber,
+        item: {
+          id: `deleted-artwork-${artworkId}`,
+          artworkId,
+          url: '',
+          keywords: [],
+          vibe: {
+            backgroundColor: '#ffffff',
+            padding: 4,
+            borderRadius: '12px',
+            borderType: 'solid',
+            accentColor: '#000000',
+          },
+          timestamp: message.createdAt,
+          sessionCapturedAt: captureTimeByArtworkId.get(artworkId) || message.createdAt,
+          conversation: [],
+          artworkName: 'Deleted artwork',
+          syncStatus: 'synced',
+          isDeletedPlaceholder: true,
         },
-        timestamp: message.createdAt,
-        sessionCapturedAt: captureTimeByArtworkId.get(message.artworkId!) || message.createdAt,
-        conversation: [],
-        artworkName: 'Deleted artwork',
-        syncStatus: 'synced',
-        isDeletedPlaceholder: true,
-      },
-    }));
+      };
+    });
 
   const messageEntries: ActiveSessionStreamEntry[] = messages
     .filter((message) => message.type !== 'artwork_capture' && message.type !== 'artwork_card')
@@ -262,7 +284,19 @@ export function buildActiveSessionStream({
       createdAt: message.createdAt,
       type: 'message',
       message,
+      triggerEventId: message.triggerEventId,
+      sequenceNumber: message.sequenceNumber,
     }));
 
-  return [...artworkEntries, ...deletedArtworkEntries, ...messageEntries].sort((a, b) => a.createdAt - b.createdAt);
+  return [...artworkEntries, ...deletedArtworkEntries, ...messageEntries].sort((a, b) => {
+    if (
+      typeof a.sequenceNumber === 'number'
+      && typeof b.sequenceNumber === 'number'
+      && a.sequenceNumber !== b.sequenceNumber
+    ) {
+      return a.sequenceNumber - b.sequenceNumber;
+    }
+    if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+    return (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0);
+  });
 }

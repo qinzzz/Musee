@@ -1,4 +1,4 @@
-from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionMessage, User
+from app.database.models import ArtworkEvent, SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
 from app.services.session_service import (
     DEFAULT_SESSION_TITLE,
     SESSION_TITLE_STATE_AUTO,
@@ -82,7 +82,7 @@ def test_refresh_session_title_uses_first_user_message_when_no_artworks(db):
     )
     db.add(session)
     db.flush()
-    db.add(SessionMessage(
+    db.add(SessionEvent(
         id="msg-1",
         session_id=session.id,
         role="user",
@@ -158,3 +158,11 @@ def test_attach_artwork_ids_to_session_dedupes_and_preserves_sequence(db):
         ("art-attach-1", 1),
         ("art-attach-2", 2),
     ]
+    events = (
+        db.query(ArtworkEvent)
+        .filter(ArtworkEvent.artwork_id == "art-attach-2")
+        .order_by(ArtworkEvent.created_at.asc())
+        .all()
+    )
+    assert [event.event_type for event in events] == ["artwork_added_to_session"]
+    assert events[0].trigger_session_id == session.id

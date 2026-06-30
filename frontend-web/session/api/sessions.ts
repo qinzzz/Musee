@@ -14,19 +14,25 @@ export interface SessionRecord {
   updated_at?: string | null;
 }
 
-export interface SessionMessagePayload {
+export interface SessionEventPayload {
   id?: string;
-  role: 'user' | 'model';
-  type?: 'text' | 'artwork_capture' | 'artwork_card';
+  role: 'user' | 'model' | 'system';
+  type?: 'text' | 'artwork_capture' | 'artwork_card' | 'artwork_commentary';
+  event_type?: 'user_input' | 'artwork_result' | 'artwork_commentary' | 'message';
   content?: string;
   artwork_id?: string;
-  created_at?: number;
+  artwork_ids?: string[];
+  trigger_event_id?: string;
+  turn_id?: string;
+  sequence_number?: number;
+  payload?: Record<string, unknown>;
+  created_at?: number | string;
 }
 
-export interface StartSessionWithMessagePayload {
+export interface StartSessionWithEventPayload {
   session_id?: string;
   title?: string;
-  message: SessionMessagePayload;
+  event: SessionEventPayload;
 }
 
 export interface StartSessionWithArtworksPayload {
@@ -37,8 +43,8 @@ export interface StartSessionWithArtworksPayload {
 
 const inFlightSessionListRequests = new Map<string, Promise<SessionRecord[]>>();
 
-export async function fetchSessionMessages(sessionId: string): Promise<SessionMessagePayload[]> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/messages`, { timeout: 10000 });
+export async function fetchSessionEvents(sessionId: string): Promise<SessionEventPayload[]> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/events`, { timeout: 10000 });
   if (!response.ok) return [];
   return response.json();
 }
@@ -61,7 +67,7 @@ export async function fetchSessions(userId: string): Promise<SessionRecord[]> {
 
   const request = fetchWithTimeout(
     `${API_BASE_URL}/sessions?user_id=${encodeURIComponent(userId)}`,
-    { timeout: 10000 },
+    {},
   )
     .then(async (response) => {
       if (!response.ok) return [];
@@ -75,18 +81,36 @@ export async function fetchSessions(userId: string): Promise<SessionRecord[]> {
   return request;
 }
 
-export async function appendSessionMessages(sessionId: string, messages: SessionMessagePayload[]): Promise<void> {
-  if (!messages.length) return;
-  await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/messages`, {
+export async function appendSessionEvents(sessionId: string, events: SessionEventPayload[]): Promise<void> {
+  if (!events.length) return;
+  await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/events`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(messages),
+    body: JSON.stringify(events),
     timeout: 10000,
   }).catch(() => {});
 }
 
-export async function startSessionWithMessage(userId: string, payload: StartSessionWithMessagePayload): Promise<any> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/start-with-message?user_id=${encodeURIComponent(userId)}`, {
+export async function updateSessionEvent(
+  sessionId: string,
+  eventId: string,
+  event: SessionEventPayload,
+): Promise<SessionEventPayload> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/events/${eventId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(event),
+    timeout: 10000,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function startSessionWithEvent(userId: string, payload: StartSessionWithEventPayload): Promise<any> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/start-with-event?user_id=${encodeURIComponent(userId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

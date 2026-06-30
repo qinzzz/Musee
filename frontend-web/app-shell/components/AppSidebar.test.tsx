@@ -66,14 +66,14 @@ describe('AppSidebar session title loading', () => {
   it('renders a title skeleton instead of Untitled Session while a summary title is pending', () => {
     renderSidebar(createSessionSummary({ titlePending: true }));
 
-    expect(screen.getByTestId('visit-title-skeleton-visit-1')).toBeTruthy();
+    expect(screen.getByTestId('session-title-skeleton-visit-1')).toBeTruthy();
     expect(screen.queryByText('Untitled Session')).toBeNull();
   });
 
   it('renders the resolved session title when the title is no longer pending', () => {
     renderSidebar(createSessionSummary({ title: 'New York', titlePending: false }));
 
-    expect(screen.queryByTestId('visit-title-skeleton-visit-1')).toBeNull();
+    expect(screen.queryByTestId('session-title-skeleton-visit-1')).toBeNull();
     expect(screen.getByText('New York')).toBeTruthy();
   });
 });

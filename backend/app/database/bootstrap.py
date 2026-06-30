@@ -7,6 +7,23 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 SCHEMA_BOOTSTRAP_STATEMENTS = (
+    """
+    DO $$
+    BEGIN
+        IF EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'session_messages'
+        ) AND NOT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'session_events'
+        ) THEN
+            ALTER TABLE session_messages RENAME TO session_events;
+        END IF;
+    END
+    $$;
+    """,
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS skill_stats JSONB",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'free'",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS reference_urls JSONB",
@@ -93,10 +110,115 @@ SCHEMA_BOOTSTRAP_STATEMENTS = (
         CONSTRAINT uq_session_artwork UNIQUE (session_id, artwork_id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS artwork_events (
+        id VARCHAR PRIMARY KEY,
+        artwork_id VARCHAR NOT NULL REFERENCES saved_artworks(id) ON DELETE CASCADE,
+        event_type VARCHAR(50) NOT NULL,
+        actor_role VARCHAR(20) NOT NULL DEFAULT 'system',
+        trigger_source VARCHAR(30),
+        trigger_session_id VARCHAR REFERENCES sessions(id) ON DELETE SET NULL,
+        trigger_event_id VARCHAR,
+        parent_event_id VARCHAR REFERENCES artwork_events(id) ON DELETE SET NULL,
+        payload JSONB,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS session_event_artworks (
+        id VARCHAR PRIMARY KEY,
+        session_event_id VARCHAR NOT NULL REFERENCES session_events(id) ON DELETE CASCADE,
+        artwork_id VARCHAR NOT NULL REFERENCES saved_artworks(id) ON DELETE CASCADE,
+        role VARCHAR(20) NOT NULL DEFAULT 'subject',
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT uq_session_event_artwork UNIQUE (session_event_id, artwork_id)
+    )
+    """,
+    """
+    DO $$
+    BEGIN
+        IF EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'session_event_artworks'
+              AND column_name = 'session_message_id'
+        ) AND NOT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'session_event_artworks'
+              AND column_name = 'session_event_id'
+        ) THEN
+            ALTER TABLE session_event_artworks RENAME COLUMN session_message_id TO session_event_id;
+        END IF;
+    END
+    $$;
+    """,
+    # The messages→events rename repointed the column but left the FK pointing at the
+    # old session_messages table, which silently rolled back every artwork_commentary
+    # insert (model replies). Repoint the FK to session_events.
+    """
+    DO $$
+    BEGIN
+        IF EXISTS (
+            SELECT 1 FROM pg_constraint con
+            JOIN pg_class rel ON rel.oid = con.conrelid
+            JOIN pg_class ref ON ref.oid = con.confrelid
+            WHERE rel.relname = 'session_event_artworks'
+              AND con.contype = 'f'
+              AND ref.relname = 'session_messages'
+        ) THEN
+            ALTER TABLE session_event_artworks
+                DROP CONSTRAINT session_event_artworks_session_message_id_fkey;
+        END IF;
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint con
+            JOIN pg_class rel ON rel.oid = con.conrelid
+            JOIN pg_class ref ON ref.oid = con.confrelid
+            WHERE rel.relname = 'session_event_artworks'
+              AND con.contype = 'f'
+              AND ref.relname = 'session_events'
+        ) THEN
+            ALTER TABLE session_event_artworks
+                ADD CONSTRAINT session_event_artworks_session_event_id_fkey
+                FOREIGN KEY (session_event_id) REFERENCES session_events(id) ON DELETE CASCADE;
+        END IF;
+    END
+    $$;
+    """,
     "CREATE INDEX IF NOT EXISTS idx_session_artworks_session_sequence ON session_artworks(session_id, sequence_number)",
     "CREATE INDEX IF NOT EXISTS idx_session_artworks_artwork_id ON session_artworks(artwork_id)",
+    "CREATE INDEX IF NOT EXISTS idx_artwork_events_artwork_created ON artwork_events(artwork_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_artwork_events_session_created ON artwork_events(trigger_session_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_session_event_artworks_event_position ON session_event_artworks(session_event_id, position)",
+    "CREATE INDEX IF NOT EXISTS idx_session_event_artworks_artwork_id ON session_event_artworks(artwork_id)",
     "CREATE INDEX IF NOT EXISTS idx_saved_artworks_user_id ON saved_artworks(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_saved_artworks_device_id ON saved_artworks(device_id)",
+    """
+    DO $$
+    BEGIN
+        IF EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'session_events'
+              AND column_name = 'turn_id'
+        ) AND NOT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'session_events'
+              AND column_name = 'trigger_event_id'
+        ) THEN
+            ALTER TABLE session_events RENAME COLUMN turn_id TO trigger_event_id;
+        END IF;
+    END
+    $$;
+    """,
+    "ALTER TABLE session_events ADD COLUMN IF NOT EXISTS trigger_event_id VARCHAR",
+    "ALTER TABLE session_events ADD COLUMN IF NOT EXISTS payload JSONB",
 )
 
 

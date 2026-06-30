@@ -1,25 +1,28 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionMessaging } from './useSessionMessaging';
-import type { GalleryItem, Visit } from '../../types';
+import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import type { SessionStreamMessage, SessionSummary } from '../types';
 
 const {
   mockAppendSessionMessages,
   mockCreateSession,
-  mockStartSessionWithMessage,
+  mockStartSessionWithEvent,
   mockStreamSessionChat,
+  mockUpdateSessionEvent,
 } = vi.hoisted(() => ({
   mockAppendSessionMessages: vi.fn(),
   mockCreateSession: vi.fn(),
-  mockStartSessionWithMessage: vi.fn(),
+  mockStartSessionWithEvent: vi.fn(),
   mockStreamSessionChat: vi.fn(),
+  mockUpdateSessionEvent: vi.fn(),
 }));
 
 vi.mock('../api/sessions', () => ({
-  appendSessionMessages: mockAppendSessionMessages,
+  appendSessionEvents: mockAppendSessionMessages,
   createSession: mockCreateSession,
-  startSessionWithMessage: mockStartSessionWithMessage,
+  startSessionWithEvent: mockStartSessionWithEvent,
+  updateSessionEvent: mockUpdateSessionEvent,
 }));
 
 vi.mock('../../api/chat', () => ({
@@ -45,6 +48,7 @@ function renderUseSessionMessaging(options: {
   isComposingNewSession?: boolean;
   sessionSummaries?: SessionSummary[];
   sessionStreams?: Record<string, SessionStreamMessage[]>;
+  items?: GalleryItem[];
 } = {}) {
   const refreshPersistedSessions = vi.fn();
   const setSessionDrafts = vi.fn();
@@ -60,7 +64,7 @@ function renderUseSessionMessaging(options: {
     sessionUserId: 'user-1',
     filteredSessionId: options.filteredSessionId ?? null,
     isComposingNewSession: options.isComposingNewSession ?? true,
-    items: [] as GalleryItem[],
+    items: options.items ?? [] as GalleryItem[],
     sessionStreams: options.sessionStreams ?? {},
     sessionGoals: {},
     sessionSummaries: options.sessionSummaries ?? [],
@@ -97,7 +101,8 @@ describe('useSessionMessaging', () => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockAppendSessionMessages.mockResolvedValue(undefined);
     mockCreateSession.mockResolvedValue({ session: { id: 'session-1' } });
-    mockStartSessionWithMessage.mockResolvedValue({ inserted: 1, session: { id: 'session-1', title: 'Untitled Session' } });
+    mockStartSessionWithEvent.mockResolvedValue({ inserted: 1, session: { id: 'session-1', title: 'Untitled Session' } });
+    mockUpdateSessionEvent.mockResolvedValue({});
     mockStreamSessionChat.mockImplementation((
       _items: GalleryItem[],
       _history: SessionStreamMessage[],
@@ -123,22 +128,174 @@ describe('useSessionMessaging', () => {
     });
 
     expect(didSubmit).toBe(true);
-    expect(mockStartSessionWithMessage).toHaveBeenCalledWith('user-1', {
+    expect(mockStartSessionWithEvent).toHaveBeenCalledWith('user-1', {
       session_id: expect.stringMatching(/^session_/),
       title: 'Untitled Session',
-      message: expect.objectContaining({
+      event: expect.objectContaining({
+        id: expect.stringMatching(/^evt-/),
         role: 'user',
-        type: 'text',
+        event_type: 'user_input',
         content: 'Hello there',
       }),
     });
     expect(spies.refreshPersistedSessions).toHaveBeenCalled();
     expect(mockAppendSessionMessages).toHaveBeenCalled();
+    const persistedEvents = mockAppendSessionMessages.mock.calls.flatMap((call) => call[1] ?? []);
+    expect(persistedEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        event_type: 'artwork_commentary',
+        trigger_event_id: expect.stringMatching(/^evt-/),
+      }),
+    ]));
     expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
   });
 
+  it('persists commentary lifecycle as pending then completed artwork_commentary', async () => {
+    const summary = createSessionSummary({
+      id: 'visit-1',
+      items: [
+        {
+          id: 'item-1',
+          artworkId: 'art-1',
+          url: 'https://example.com/a.jpg',
+          keywords: [],
+          vibe: {
+            backgroundColor: '#fff',
+            padding: 0,
+            borderRadius: '12px',
+            borderType: 'solid',
+            accentColor: '#000',
+          },
+          timestamp: Date.now(),
+          conversation: [],
+        } as GalleryItem,
+        {
+          id: 'item-2',
+          artworkId: 'art-2',
+          url: 'https://example.com/b.jpg',
+          keywords: [],
+          vibe: {
+            backgroundColor: '#fff',
+            padding: 0,
+            borderRadius: '12px',
+            borderType: 'solid',
+            accentColor: '#000',
+          },
+          timestamp: Date.now(),
+          conversation: [],
+        } as GalleryItem,
+      ],
+    });
+    const { result } = renderUseSessionMessaging({
+      activeSessionSummary: summary,
+      sessionSummaries: [summary],
+      filteredSessionId: 'visit-1',
+      isComposingNewSession: false,
+      items: summary.items,
+      sessionStreams: { 'visit-1': [] },
+    });
+
+    await act(async () => {
+      result.current.sendSessionInquiryToSession('visit-1', 'Compare these', summary.items);
+    });
+
+    expect(mockAppendSessionMessages).toHaveBeenCalledWith(
+      'visit-1',
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'model',
+          event_type: 'artwork_commentary',
+          artwork_ids: ['art-1', 'art-2'],
+          payload: { status: 'pending' },
+        }),
+      ]),
+    );
+    expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
+      'visit-1',
+      expect.stringMatching(/^commentary-/),
+      expect.objectContaining({
+        role: 'model',
+        event_type: 'artwork_commentary',
+        artwork_ids: ['art-1', 'art-2'],
+        payload: { status: 'completed' },
+        content: 'assistant reply',
+      }),
+    );
+  });
+
+  it('persists failed commentary status when the stream errors', async () => {
+    mockStreamSessionChat.mockImplementation((
+      _items: GalleryItem[],
+      _history: SessionStreamMessage[],
+      _text: string,
+      _onChunk: (chunk: string) => void,
+      _onComplete: (fullResponse: string) => void,
+      onError: () => void,
+    ) => {
+      onError();
+    });
+
+    const summary = createSessionSummary({
+      id: 'visit-1',
+      items: [
+        {
+          id: 'item-1',
+          artworkId: 'art-1',
+          url: 'https://example.com/a.jpg',
+          keywords: [],
+          vibe: {
+            backgroundColor: '#fff',
+            padding: 0,
+            borderRadius: '12px',
+            borderType: 'solid',
+            accentColor: '#000',
+          },
+          timestamp: Date.now(),
+          conversation: [],
+        } as GalleryItem,
+      ],
+    });
+    const { result } = renderUseSessionMessaging({
+      activeSessionSummary: summary,
+      sessionSummaries: [summary],
+      filteredSessionId: 'visit-1',
+      isComposingNewSession: false,
+      items: summary.items,
+      sessionStreams: { 'visit-1': [] },
+    });
+
+    await act(async () => {
+      result.current.sendSessionInquiryToSession('visit-1', 'Compare these', summary.items);
+    });
+
+    expect(mockAppendSessionMessages).toHaveBeenCalledWith(
+      'visit-1',
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'model',
+          event_type: 'artwork_commentary',
+          artwork_ids: ['art-1'],
+          payload: { status: 'pending' },
+        }),
+      ]),
+    );
+    expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
+      'visit-1',
+      expect.stringMatching(/^commentary-/),
+      expect.objectContaining({
+        role: 'model',
+        event_type: 'artwork_commentary',
+        artwork_ids: ['art-1'],
+        payload: {
+          status: 'failed',
+          error_message: 'Something interrupted the reflection stream. Please try again.',
+        },
+      }),
+    );
+  });
+
   it('keeps the draft intact when the first-message commit fails', async () => {
-    mockStartSessionWithMessage.mockRejectedValue(new Error('network down'));
+    mockStartSessionWithEvent.mockRejectedValue(new Error('network down'));
     const { result, spies } = renderUseSessionMessaging();
     let didSubmit = true;
 

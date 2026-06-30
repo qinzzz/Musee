@@ -25,4 +25,11 @@ export type PreparedSessionUploadEntry = Extract<PendingSessionArtwork, { kind: 
 export type PreparedUploadSessionContext = {
   sessionId: string;
   getSequenceNumber: (entryId: string) => number;
+  // The canonical persisted user_input event id for the batch.
+  userInputEventId: string;
+};
+
+export type PreparedUploadIngestResult = {
+  persistedItems: import('../types').GalleryItem[];
+  analysisPromise: Promise<import('../types').GalleryItem[]>;
 };

@@ -64,7 +64,8 @@ frontend-web/
 ├── artist/              # Artist domain: artist pages, artist data hooks, and artist-specific UI
 │   ├── components/
 │   └── hooks/
-├── artwork/             # Artwork domain: library state, analysis helpers, and artwork-specific hooks
+├── artwork/             # Artwork domain: detail UI, analysis helpers, and artwork-specific hooks
+│   ├── components/
 │   ├── hooks/
 │   ├── lib/
 │   └── types.ts
@@ -83,7 +84,6 @@ frontend-web/
 │   ├── lib/
 │   └── components/
 ├── components/          # Shared or cross-domain UI components
-│   ├── InterpretationModal.tsx
 │   ├── GalleryCard.tsx
 │   └── TopographyView.tsx
 ├── types.ts             # Global TS interfaces

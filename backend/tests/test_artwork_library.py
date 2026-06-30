@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routers import artwork_library as artwork_library_router
-from app.database.models import ArtistEntity, SavedArtwork, Session as SessionModel, SessionArtwork, SessionMessage, User
+from app.database.models import ArtistEntity, SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
 
 
 def test_get_artworks_returns_user_items(client, db):
@@ -51,7 +51,7 @@ def test_delete_artwork_keeps_session_with_text_messages(client, db):
     db.flush()
     db.add(SessionArtwork(session_id="sess-keep", artwork_id="art-keep", sequence_number=1, source="upload"))
     db.add(
-        SessionMessage(
+        SessionEvent(
             id="msg-keep",
             session_id="sess-keep",
             role="user",
@@ -91,7 +91,7 @@ def test_batch_delete_artworks_keeps_session_with_text_messages(client, db):
         )
     )
     db.add(
-        SessionMessage(
+        SessionEvent(
             id="msg-batch-keep",
             session_id="sess-batch-keep",
             role="user",

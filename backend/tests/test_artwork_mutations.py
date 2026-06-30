@@ -1,4 +1,4 @@
-from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, User
+from app.database.models import ArtworkEvent, SavedArtwork, Session as SessionModel, SessionArtwork, User
 from tests.conftest import TestingSessionLocal
 
 
@@ -57,6 +57,21 @@ def test_update_artwork_updates_fields_and_tags(client):
         assert artwork.params["date"] == "1915"
         assert artwork.params["medium"] == "Oil on canvas"
         assert {tag.name for tag in artwork.artwork_tags} == {"#symbolism", "#abstract"}
+        events = (
+            db.query(ArtworkEvent)
+            .filter(ArtworkEvent.artwork_id == "art-mutate")
+            .order_by(ArtworkEvent.created_at.asc())
+            .all()
+        )
+        assert [event.event_type for event in events] == ["artwork_metadata_updated"]
+        assert events[0].payload["updated_fields"] == [
+            "analysis",
+            "artist_name",
+            "artwork_name",
+            "date",
+            "medium",
+            "summary",
+        ]
 
 
 def test_update_artwork_refreshes_linked_session_title(client):

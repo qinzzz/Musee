@@ -1,9 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionWorkspace } from './useSessionWorkspace';
-import type { GalleryItem, Visit } from '../../types';
-import type { InterpretingItem } from '../../artwork/types';
-import type { PreparedSessionUploadEntry, PreparedUploadSessionContext } from '../../artwork-ingest/types';
+import type { ArtworkWorkspace, GalleryItem } from '../../types';
+import type { ArtworkDetailItem } from '../../artwork/types';
+import type {
+  PreparedSessionUploadEntry,
+  PreparedUploadIngestResult,
+  PreparedUploadSessionContext,
+} from '../../artwork-ingest/types';
 import type { SessionStreamMessage } from '../types';
 
 const {
@@ -23,7 +27,7 @@ const {
 }));
 
 vi.mock('../api/sessions', () => ({
-  fetchSessionMessages: mockFetchSessionMessages,
+  fetchSessionEvents: mockFetchSessionMessages,
 }));
 
 vi.mock('./usePreparedSessionStaging', () => ({
@@ -72,6 +76,7 @@ function createSessionStateMock(overrides: Record<string, unknown> = {}) {
       items: [],
     },
     activeSessionStream: [createSessionMessage()],
+    activeSessionRenderBlocks: [],
     streamingSessionResponses: { 'session-1': 'streaming' },
     setSessionStreams: vi.fn(),
     sessionStreams: {
@@ -114,7 +119,7 @@ function createSessionStateMock(overrides: Record<string, unknown> = {}) {
 function renderUseSessionWorkspace(options?: {
   artworksLoaded?: boolean;
   activeTab?: 'newSession' | 'collect' | 'profile' | 'learn';
-  interpretingItem?: InterpretingItem | null;
+  artworkDetailItem?: ArtworkDetailItem | null;
   sessionStateOverrides?: Record<string, unknown>;
 }) {
   const sessionStateMock = createSessionStateMock(options?.sessionStateOverrides);
@@ -122,7 +127,7 @@ function renderUseSessionWorkspace(options?: {
   const submitPreparedSession = vi.fn();
   const sessionActions = { handleDeleteSession: vi.fn() };
   const messaging = {
-    appendSessionMessages: vi.fn(),
+    appendSessionEvents: vi.fn(),
     sendSessionInquiryToSession: vi.fn(),
   };
 
@@ -153,7 +158,10 @@ function renderUseSessionWorkspace(options?: {
   const ingestPreparedUploads = vi.fn<(
     uploadEntries: PreparedSessionUploadEntry[],
     context: PreparedUploadSessionContext,
-  ) => Promise<GalleryItem[]>>().mockResolvedValue([]);
+  ) => Promise<PreparedUploadIngestResult>>().mockResolvedValue({
+    persistedItems: [],
+    analysisPromise: Promise.resolve([]),
+  });
 
   const hook = renderHook(() => useSessionWorkspace({
     userId: 'user-1',
@@ -163,7 +171,7 @@ function renderUseSessionWorkspace(options?: {
     defaultSessionTitle: 'Untitled Session',
     initialIsComposingNewSession: false,
     activeTab: options?.activeTab ?? 'collect',
-    interpretingItem: options?.interpretingItem ?? null,
+    artworkDetailItem: options?.artworkDetailItem ?? null,
     renameInputRef: { current: renameInput },
     sessionStreamScrollRef: { current: sessionStreamScroll },
     sessionStreamEndRef: { current: sessionStreamEnd },
@@ -255,7 +263,7 @@ describe('useSessionWorkspace', () => {
       resetPreparedSessionState: vi.fn(),
     });
     mockUseSessionMessaging.mockReturnValue({
-      appendSessionMessages: vi.fn(),
+      appendSessionEvents: vi.fn(),
       sendSessionInquiryToSession: vi.fn(),
     });
     mockUseSessionActions.mockReturnValue({});
@@ -304,6 +312,65 @@ describe('useSessionWorkspace', () => {
       text: 'existing',
       createdAt: 200,
     });
+  });
+
+  it('maps canonical user_input DB events back into visible text messages', async () => {
+    const sessionStateMock = createSessionStateMock({
+      sessionStreams: { 'session-1': [] },
+      setSessionStreams: vi.fn(),
+    });
+
+    mockUseSessionState.mockReturnValue(sessionStateMock);
+    mockUsePreparedSessionStaging.mockReturnValue({
+      pendingSessionArtworks: [],
+      newSessionDraftMessage: '',
+      isSubmittingPreparedSession: false,
+      setIsSubmittingPreparedSession: vi.fn(),
+      resetPreparedSessionState: vi.fn(),
+    });
+    mockUseSessionMessaging.mockReturnValue({
+      appendSessionEvents: vi.fn(),
+      sendSessionInquiryToSession: vi.fn(),
+    });
+    mockUseSessionActions.mockReturnValue({});
+    mockUseSessionStartFlow.mockReturnValue({ submitPreparedSession: vi.fn() });
+
+    mockFetchSessionMessages.mockResolvedValue([
+      {
+        id: 'evt-1',
+        role: 'user',
+        event_type: 'user_input',
+        type: 'artwork_capture',
+        content: 'compare these different native community artworks',
+        artwork_ids: ['art-1', 'art-2', 'art-3'],
+        created_at: 150,
+      },
+    ]);
+
+    renderUseSessionWorkspace({
+      activeTab: 'newSession',
+      sessionStateOverrides: sessionStateMock,
+    });
+
+    await waitFor(() => {
+      expect(mockFetchSessionMessages).toHaveBeenCalledWith('session-1');
+      expect(sessionStateMock.setSessionStreams).toHaveBeenCalled();
+    });
+
+    const updater = sessionStateMock.setSessionStreams.mock.calls[0][0] as (
+      prev: Record<string, SessionStreamMessage[]>
+    ) => Record<string, SessionStreamMessage[]>;
+
+    const next = updater({ 'session-1': [] });
+    expect(next['session-1']).toEqual([
+      expect.objectContaining({
+        id: 'evt-1',
+        role: 'user',
+        type: 'text',
+        text: 'compare these different native community artworks',
+        triggerEventId: 'evt-1',
+      }),
+    ]);
   });
 
   it('does not fetch session messages outside the session workspace tab', async () => {

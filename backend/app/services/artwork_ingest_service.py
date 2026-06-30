@@ -8,6 +8,11 @@ from typing import Any, Dict, Optional, Union
 from app.database.connection import SessionLocal
 from app.database.models import SavedArtwork, User
 from app.services.artwork_analysis_service import batch_link_tags
+from app.services.artwork_event_service import (
+    ARTWORK_EVENT_ADDED_TO_SESSION,
+    ARTWORK_EVENT_CREATED,
+    log_artwork_event,
+)
 from app.services.session_service import (
     coerce_location_payload as _coerce_location_payload,
     ensure_session_artwork_link as _ensure_session_artwork_link,
@@ -105,14 +110,41 @@ def create_saved_artwork_record_sync(
         local_db.add(artwork)
         local_db.commit()
         local_db.refresh(artwork)
+        log_artwork_event(
+            local_db,
+            artwork_id=str(artwork.id),
+            event_type=ARTWORK_EVENT_CREATED,
+            actor_role="system",
+            trigger_source=source,
+            trigger_session_id=session_id,
+            payload={
+                "photo_uri": photo_uri,
+                "has_location": bool(location),
+                "photo_time": photo_time,
+            },
+        )
 
-        _ensure_session_artwork_link(
+        link = _ensure_session_artwork_link(
             local_db,
             session_id=session_id,
             artwork_id=str(artwork.id),
             source=source,
             sequence_number=sequence_number,
         )
+        if link and session_id:
+            log_artwork_event(
+                local_db,
+                artwork_id=str(artwork.id),
+                event_type=ARTWORK_EVENT_ADDED_TO_SESSION,
+                actor_role="system",
+                trigger_source=source,
+                trigger_session_id=session_id,
+                payload={
+                    "session_id": session_id,
+                    "source": source,
+                    "sequence_number": link.sequence_number,
+                },
+            )
         if session:
             local_db.flush()
             _refresh_session_title(local_db, session)
@@ -182,13 +214,41 @@ def save_analyzed_artwork_record_sync(
             else:
                 raise
         local_db.refresh(artwork)
+        log_artwork_event(
+            local_db,
+            artwork_id=str(artwork.id),
+            event_type=ARTWORK_EVENT_CREATED,
+            actor_role="system",
+            trigger_source=source,
+            trigger_session_id=session_id,
+            payload={
+                "photo_uri": photo_uri,
+                "has_location": bool(location),
+                "photo_time": photo_time,
+                "recognized": artwork.is_recognized == 1,
+            },
+        )
 
-        _ensure_session_artwork_link(
+        link = _ensure_session_artwork_link(
             local_db,
             session_id=session_id,
             artwork_id=str(artwork.id),
             source=source,
         )
+        if link and session_id:
+            log_artwork_event(
+                local_db,
+                artwork_id=str(artwork.id),
+                event_type=ARTWORK_EVENT_ADDED_TO_SESSION,
+                actor_role="system",
+                trigger_source=source,
+                trigger_session_id=session_id,
+                payload={
+                    "session_id": session_id,
+                    "source": source,
+                    "sequence_number": link.sequence_number,
+                },
+            )
         if session_record:
             local_db.flush()
             _refresh_session_title(local_db, session_record)

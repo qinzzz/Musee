@@ -3,21 +3,22 @@ import { analyzeArtworkFromExisting } from '../../api/analysis';
 import { fetchAndPersistInsights } from '../../api/artworks';
 import type { GalleryItem } from '../../types';
 import type { ArtworkAnalysisResult } from '../../api/analysis';
-import type { IdentifyAgainHints, IdentifyAgainValues, InterpretingItem } from '../types';
+import type { ArtworkDetailItem, IdentifyAgainHints, IdentifyAgainValues } from '../types';
+import type { ArtworkStatePatch } from '../lib/artworkState';
 
 type UseArtworkAnalysisOptions = {
-  interpretingItem: InterpretingItem | null;
-  updateSavedArtworkInState: (targetId: string, updates: Partial<GalleryItem>) => void;
+  artworkDetailItem: ArtworkDetailItem | null;
+  updateSavedArtworkInState: (targetId: string, patch: ArtworkStatePatch) => void;
   applyArtworkAnalysisResult: (
     itemId: string,
     analysis: ArtworkAnalysisResult,
     extras?: Partial<GalleryItem>,
-  ) => Partial<GalleryItem>;
+  ) => ArtworkStatePatch;
   markArtworkAnalysisFailed: (itemId: string, message: string) => void;
 };
 
 export function useArtworkAnalysis({
-  interpretingItem,
+  artworkDetailItem,
   updateSavedArtworkInState,
   applyArtworkAnalysisResult,
   markArtworkAnalysisFailed,
@@ -31,13 +32,13 @@ export function useArtworkAnalysis({
   const [headerIdentifyAgainError, setHeaderIdentifyAgainError] = useState<string | null>(null);
   const [isHeaderIdentifyingAgain, setIsHeaderIdentifyingAgain] = useState(false);
 
-  const hydrateInsights = useCallback((itemId: string, artworkId?: string) => {
-    if (!artworkId) return;
-
-    fetchAndPersistInsights(artworkId)
+  const hydrateInsights = useCallback((itemId: string) => {
+    fetchAndPersistInsights(itemId)
       .then((insights) => {
         if (insights.length > 0) {
-          updateSavedArtworkInState(itemId, { insights });
+          updateSavedArtworkInState(itemId, {
+            record: { insights },
+          });
         }
       })
       .catch(() => {});
@@ -46,11 +47,13 @@ export function useArtworkAnalysis({
   const handleRetryAnalysis = useCallback(async (item: GalleryItem) => {
     const itemId = item.id;
     updateSavedArtworkInState(itemId, {
-      isAnalyzing: true,
-      analysisStatus: 'analyzing',
-      analysisError: undefined,
-      streamingText: undefined,
-      syncStatus: 'synced',
+      clientState: {
+        isAnalyzing: true,
+        analysisStatus: 'analyzing',
+        analysisError: undefined,
+        streamingText: undefined,
+        syncStatus: 'synced',
+      },
     });
 
     try {
@@ -59,7 +62,7 @@ export function useArtworkAnalysis({
         sessionLinks: item.sessionLinks,
       });
       if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-        hydrateInsights(itemId, analysis.artwork_id || item.artworkId || item.id);
+        hydrateInsights(itemId);
       }
     } catch {
       markArtworkAnalysisFailed(itemId, 'Retry failed.');
@@ -67,13 +70,15 @@ export function useArtworkAnalysis({
   }, [applyArtworkAnalysisResult, hydrateInsights, markArtworkAnalysisFailed, updateSavedArtworkInState]);
 
   const handleIdentifyAgain = useCallback(async (hints?: IdentifyAgainHints) => {
-    if (!interpretingItem?.artworkId) return;
+    if (!artworkDetailItem?.artworkId) return;
 
-    const targetItem = interpretingItem;
+    const targetItem = artworkDetailItem;
     updateSavedArtworkInState(targetItem.id, {
-      isAnalyzing: true,
-      analysisStatus: 'reidentifying',
-      analysisError: undefined,
+      clientState: {
+        isAnalyzing: true,
+        analysisStatus: 'reidentifying',
+        analysisError: undefined,
+      },
     });
 
     try {
@@ -85,25 +90,25 @@ export function useArtworkAnalysis({
       applyArtworkAnalysisResult(targetItem.id, result, {
         referenceUrls: result.reference_urls || [],
       });
-      hydrateInsights(targetItem.id, result.artwork_id || targetItem.artworkId);
+      hydrateInsights(targetItem.id);
     } catch (error) {
       console.error('Failed to identify artwork again:', error);
       markArtworkAnalysisFailed(targetItem.id, 'Identify again failed.');
       throw error;
     }
-  }, [applyArtworkAnalysisResult, hydrateInsights, interpretingItem, markArtworkAnalysisFailed, updateSavedArtworkInState]);
+  }, [applyArtworkAnalysisResult, artworkDetailItem, hydrateInsights, markArtworkAnalysisFailed, updateSavedArtworkInState]);
 
   const openHeaderIdentifyAgainModal = useCallback(() => {
-    if (!interpretingItem || interpretingItem.isAnalyzing || interpretingItem.deleteStatus === 'pending') return;
+    if (!artworkDetailItem || artworkDetailItem.isAnalyzing || artworkDetailItem.deleteStatus === 'pending') return;
 
     setHeaderIdentifyAgainValues({
-      artist: interpretingItem.artistName || '',
-      title: interpretingItem.artworkName || '',
+      artist: artworkDetailItem.artistName || '',
+      title: artworkDetailItem.artworkName || '',
       additionalClue: '',
     });
     setHeaderIdentifyAgainError(null);
     setShowHeaderIdentifyAgainModal(true);
-  }, [interpretingItem]);
+  }, [artworkDetailItem]);
 
   const closeHeaderIdentifyAgainModal = useCallback(() => {
     if (isHeaderIdentifyingAgain) return;
@@ -117,7 +122,7 @@ export function useArtworkAnalysis({
   }, []);
 
   const submitHeaderIdentifyAgain = useCallback(async () => {
-    if (!interpretingItem?.artworkId || isHeaderIdentifyingAgain) return;
+    if (!artworkDetailItem?.artworkId || isHeaderIdentifyingAgain) return;
 
     const artistName = headerIdentifyAgainValues.artist.trim();
     const artworkName = headerIdentifyAgainValues.title.trim();
@@ -143,14 +148,14 @@ export function useArtworkAnalysis({
     } finally {
       setIsHeaderIdentifyingAgain(false);
     }
-  }, [handleIdentifyAgain, headerIdentifyAgainValues, interpretingItem?.artworkId, isHeaderIdentifyingAgain]);
+  }, [artworkDetailItem?.artworkId, handleIdentifyAgain, headerIdentifyAgainValues, isHeaderIdentifyingAgain]);
 
   useEffect(() => {
-    if (interpretingItem) return;
+    if (artworkDetailItem) return;
     setShowHeaderIdentifyAgainModal(false);
     setHeaderIdentifyAgainError(null);
     setIsHeaderIdentifyingAgain(false);
-  }, [interpretingItem]);
+  }, [artworkDetailItem]);
 
   return {
     showHeaderIdentifyAgainModal,

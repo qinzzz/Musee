@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionMessage, User
+from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
 from app.main import app
 from app.routers import sessions as sessions_router
 from app.utils.auth_utils import create_access_token
@@ -28,7 +28,7 @@ def test_get_session_messages_rejects_authenticated_non_owner(client, db):
     db.add(User(user_id="owner", device_id="owner"))
     db.add(User(user_id="other", device_id="other"))
     db.add(SessionModel(id="visit-1", user_id="owner", title="Owner session"))
-    db.add(SessionMessage(id="msg-1", session_id="visit-1", role="user", type="text", content="hello", sequence_number=1))
+    db.add(SessionEvent(id="msg-1", session_id="visit-1", role="user", type="text", content="hello", sequence_number=1))
     db.commit()
 
     response = client.get("/api/sessions/visit-1/messages", headers=_auth_headers("other"))
@@ -78,9 +78,55 @@ def test_start_session_with_message_creates_session_and_first_message(client, db
     assert session_record is not None
     assert session_record.user_id == "fresh-user"
 
-    messages = db.query(SessionMessage).filter(SessionMessage.session_id == "visit-new").all()
+    messages = db.query(SessionEvent).filter(SessionEvent.session_id == "visit-new").all()
     assert len(messages) == 1
+    assert messages[0].type == "user_input"
     assert messages[0].content == "Help me understand this work"
+
+
+def test_start_session_with_message_accepts_canonical_user_input_event_type(client, db):
+    response = client.post(
+        "/api/sessions/start-with-message",
+        params={"user_id": "canonical-user"},
+        json={
+            "session_id": "visit-canonical",
+            "title": "Untitled Session",
+            "message": {
+                "id": "msg-canonical",
+                "role": "user",
+                "event_type": "user_input",
+                "content": "Start with the story here",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+
+    message = db.query(SessionEvent).filter(SessionEvent.session_id == "visit-canonical").one()
+    assert message.type == "user_input"
+    assert message.trigger_event_id is None
+    assert message.payload is None
+
+
+def test_start_session_with_message_rejects_trigger_on_user_input(client, db):
+    response = client.post(
+        "/api/sessions/start-with-message",
+        params={"user_id": "canonical-user"},
+        json={
+            "session_id": "visit-canonical-invalid",
+            "title": "Untitled Session",
+            "message": {
+                "id": "msg-canonical-invalid",
+                "role": "user",
+                "event_type": "user_input",
+                "content": "Start with the story here",
+                "trigger_event_id": "evt-parent-1",
+            },
+        },
+    )
+
+    assert response.status_code == 400
+    assert "cannot set trigger_event_id" in response.json()["detail"]
 
 
 def test_start_session_with_artworks_creates_session_and_attaches_links(client, db):
@@ -120,7 +166,7 @@ def test_start_session_with_message_does_not_leave_shell_session_on_failure(monk
     def failing_append_messages(*_args, **_kwargs):
         raise RuntimeError("write failed")
 
-    monkeypatch.setattr(sessions_router, "append_messages_to_session", failing_append_messages)
+    monkeypatch.setattr(sessions_router, "append_events_to_session", failing_append_messages)
 
     with TestClient(app, raise_server_exceptions=False) as failing_client:
         response = failing_client.post(
@@ -141,6 +187,129 @@ def test_start_session_with_message_does_not_leave_shell_session_on_failure(monk
 
     with TestingSessionLocal() as db:
         assert db.query(SessionModel).filter(SessionModel.id == "visit-failed").first() is None
+
+
+def test_append_session_messages_accepts_event_fields_and_keeps_legacy_response_shape(client, db):
+    db.add(User(user_id="event-user", device_id="event-user"))
+    db.add(SessionModel(id="visit-event", user_id="event-user", title="Event session"))
+    db.commit()
+
+    response = client.post(
+        "/api/sessions/visit-event/messages",
+        json=[{
+            "id": "event-msg-1",
+            "role": "user",
+            "event_type": "artwork_input",
+            "artwork_id": "artwork-123",
+            "payload": {"source": "capture", "has_label": True},
+        }],
+    )
+
+    assert response.status_code == 200
+    db.expire_all()
+    stored = db.query(SessionEvent).filter(SessionEvent.id == "event-msg-1").one()
+    assert stored.type == "user_input"
+    assert stored.trigger_event_id is None
+    assert stored.payload == {
+        "artworks": [
+            {"artwork_id": "artwork-123", "source": "capture", "reference": {"has_label": True}}
+        ]
+    }
+
+    fetch_response = client.get("/api/sessions/visit-event/messages")
+    assert fetch_response.status_code == 200
+    payload = fetch_response.json()
+    assert payload == [{
+        "id": "event-msg-1",
+        "session_id": "visit-event",
+        "role": "user",
+        "type": "artwork_capture",
+        "event_type": "user_input",
+        "content": None,
+        "artwork_id": "artwork-123",
+        "artwork_ids": ["artwork-123"],
+        "trigger_event_id": None,
+        "payload": {"artworks": [{"artwork_id": "artwork-123", "source": "capture", "reference": {"has_label": True}}]},
+        "sequence_number": 1,
+        "created_at": payload[0]["created_at"],
+    }]
+
+
+def test_get_session_messages_normalizes_legacy_types(client, db):
+    db.add(User(user_id="legacy-user", device_id="legacy-user"))
+    db.add(SessionModel(id="visit-legacy", user_id="legacy-user", title="Legacy session"))
+    db.add(SessionEvent(
+        id="legacy-art-card",
+        session_id="visit-legacy",
+        role="model",
+        type="artwork_card",
+        artwork_id="legacy-artwork",
+        sequence_number=1,
+    ))
+    db.commit()
+
+    response = client.get("/api/sessions/visit-legacy/messages")
+
+    assert response.status_code == 200
+    assert response.json() == [{
+        "id": "legacy-art-card",
+        "session_id": "visit-legacy",
+        "role": "model",
+        "type": "artwork_card",
+        "event_type": "artwork_result",
+        "content": None,
+        "artwork_id": "legacy-artwork",
+        "artwork_ids": ["legacy-artwork"],
+        "trigger_event_id": None,
+        "payload": None,
+        "sequence_number": 1,
+        "created_at": response.json()[0]["created_at"],
+    }]
+
+
+def test_append_session_messages_supports_multiple_artwork_ids(client, db):
+    db.add(User(user_id="multi-art-user", device_id="multi-art-user"))
+    db.add(SessionModel(id="visit-multi-art", user_id="multi-art-user", title="Multi artwork session"))
+    db.add(SavedArtwork(id="artwork-a", user_id="multi-art-user", photo_uri="https://example.com/a.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
+    db.add(SavedArtwork(id="artwork-b", user_id="multi-art-user", photo_uri="https://example.com/b.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
+    db.commit()
+
+    response = client.post(
+        "/api/sessions/visit-multi-art/messages",
+        json=[{
+            "id": "event-msg-multi",
+            "role": "model",
+            "event_type": "artwork_result",
+            "artwork_ids": ["artwork-a", "artwork-b"],
+            "payload": {"result_kind": "commentary"},
+        }],
+    )
+
+    assert response.status_code == 200
+
+    stored = db.query(SessionEvent).filter(SessionEvent.id == "event-msg-multi").one()
+    assert stored.artwork_id is None
+    assert stored.payload == {
+        "result_kind": "commentary",
+        "artwork_ids": ["artwork-a", "artwork-b"],
+    }
+
+    fetch_response = client.get("/api/sessions/visit-multi-art/messages")
+    assert fetch_response.status_code == 200
+    assert fetch_response.json() == [{
+        "id": "event-msg-multi",
+        "session_id": "visit-multi-art",
+        "role": "model",
+        "type": "artwork_card",
+        "event_type": "artwork_result",
+        "content": None,
+        "artwork_id": "artwork-a",
+        "artwork_ids": ["artwork-a", "artwork-b"],
+        "trigger_event_id": None,
+        "payload": {"result_kind": "commentary", "artwork_ids": ["artwork-a", "artwork-b"]},
+        "sequence_number": 1,
+        "created_at": fetch_response.json()[0]["created_at"],
+    }]
 
 
 def test_start_session_with_artworks_does_not_leave_shell_session_on_failure(monkeypatch, db):
@@ -170,12 +339,169 @@ def test_start_session_with_artworks_does_not_leave_shell_session_on_failure(mon
         assert db.query(SessionModel).filter(SessionModel.id == "visit-art-failed").first() is None
 
 
+def test_patch_session_message_updates_commentary_to_completed(client, db):
+    db.add(User(user_id="commentary-user", device_id="commentary-user"))
+    db.add(SessionModel(id="visit-commentary", user_id="commentary-user", title="Commentary session"))
+    db.add(SavedArtwork(id="artwork-commentary", user_id="commentary-user", photo_uri="https://example.com/c.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
+    db.add(SessionEvent(
+        id="msg-commentary",
+        session_id="visit-commentary",
+        role="model",
+        type="artwork_commentary",
+        content=None,
+        payload={"status": "pending", "artwork_ids": ["artwork-commentary"]},
+        sequence_number=1,
+    ))
+    db.commit()
+
+    response = client.patch(
+        "/api/sessions/visit-commentary/messages/msg-commentary",
+        json={
+            "role": "model",
+            "event_type": "artwork_commentary",
+            "content": "Here is the finished commentary.",
+            "artwork_ids": ["artwork-commentary"],
+            "payload": {"status": "completed"},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["event_type"] == "artwork_commentary"
+    assert payload["content"] == "Here is the finished commentary."
+    assert payload["payload"] == {"status": "completed", "artwork_ids": ["artwork-commentary"]}
+    assert payload["artwork_ids"] == ["artwork-commentary"]
+
+    db.expire_all()
+    stored = db.query(SessionEvent).filter(SessionEvent.id == "msg-commentary").one()
+    assert stored.content == "Here is the finished commentary."
+    assert stored.payload == {"status": "completed", "artwork_ids": ["artwork-commentary"]}
+
+
+def test_patch_session_message_updates_commentary_to_failed(client, db):
+    db.add(User(user_id="commentary-failed-user", device_id="commentary-failed-user"))
+    db.add(SessionModel(id="visit-commentary-failed", user_id="commentary-failed-user", title="Commentary session"))
+    db.add(SavedArtwork(id="artwork-failed-a", user_id="commentary-failed-user", photo_uri="https://example.com/a.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
+    db.add(SavedArtwork(id="artwork-failed-b", user_id="commentary-failed-user", photo_uri="https://example.com/b.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
+    db.add(SessionEvent(
+        id="msg-commentary-failed",
+        session_id="visit-commentary-failed",
+        role="model",
+        type="artwork_commentary",
+        content=None,
+        payload={"status": "pending", "artwork_ids": ["artwork-failed-a"]},
+        sequence_number=1,
+    ))
+    db.commit()
+
+    response = client.patch(
+        "/api/sessions/visit-commentary-failed/messages/msg-commentary-failed",
+        json={
+            "role": "model",
+            "event_type": "artwork_commentary",
+            "artwork_ids": ["artwork-failed-a", "artwork-failed-b"],
+            "payload": {
+                "status": "failed",
+                "error_message": "stream interrupted",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["content"] is None
+    assert payload["payload"] == {
+        "status": "failed",
+        "error_message": "stream interrupted",
+        "artwork_ids": ["artwork-failed-a", "artwork-failed-b"],
+    }
+    assert payload["artwork_ids"] == ["artwork-failed-a", "artwork-failed-b"]
+
+    db.expire_all()
+    stored = db.query(SessionEvent).filter(SessionEvent.id == "msg-commentary-failed").one()
+    assert stored.artwork_id is None
+    assert stored.payload == {
+        "status": "failed",
+        "error_message": "stream interrupted",
+        "artwork_ids": ["artwork-failed-a", "artwork-failed-b"],
+    }
+
+
+def test_canonical_artwork_input_batch_persists_payload_links_and_legacy_shape(client, db):
+    """An upload batch is one user_input event whose artworks live in
+    payload.artworks (with source). Observe the DB to confirm it actually
+    persists and reads back as the legacy artwork_capture transport type the FE
+    reconstructs rows from."""
+    db.add(User(user_id="batch-user", device_id="batch-user"))
+    db.add(SessionModel(id="visit-batch", user_id="batch-user", title="Batch session"))
+    db.add(SavedArtwork(id="batch-art-1", user_id="batch-user", photo_uri="https://example.com/1.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
+    db.add(SavedArtwork(id="batch-art-2", user_id="batch-user", photo_uri="https://example.com/2.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
+    db.commit()
+
+    response = client.post(
+        "/api/sessions/visit-batch/events",
+        json=[{
+            "id": "input-batch-1",
+            "role": "user",
+            "event_type": "user_input",
+            "artwork_ids": ["batch-art-1", "batch-art-2"],
+            "payload": {"artworks": [
+                {"artwork_id": "batch-art-1", "source": "upload"},
+                {"artwork_id": "batch-art-2", "source": "capture"},
+            ]},
+        }],
+    )
+
+    assert response.status_code == 200
+    db.expire_all()
+
+    stored = db.query(SessionEvent).filter(SessionEvent.id == "input-batch-1").one()
+    assert stored.type == "user_input"
+    assert stored.trigger_event_id is None
+    assert stored.payload == {"artworks": [
+        {"artwork_id": "batch-art-1", "source": "upload"},
+        {"artwork_id": "batch-art-2", "source": "capture"},
+    ]}
+
+    assert stored.artwork_id is None
+
+    fetched = client.get("/api/sessions/visit-batch/events").json()
+    assert len(fetched) == 1
+    assert fetched[0]["type"] == "artwork_capture"
+    assert fetched[0]["event_type"] == "user_input"
+    assert fetched[0]["artwork_ids"] == ["batch-art-1", "batch-art-2"]
+    assert fetched[0]["trigger_event_id"] is None
+
+
+def test_legacy_artwork_capture_without_source_is_rejected(client, db):
+    """Regression guard: the old upload path sent artwork_capture + artwork_id
+    with no payload.artworks/source — which the backend rejects, silently
+    dropping uploads. Document that this 400s and writes nothing."""
+    db.add(User(user_id="legacy-cap-user", device_id="legacy-cap-user"))
+    db.add(SessionModel(id="visit-legacy-cap", user_id="legacy-cap-user", title="Legacy capture"))
+    db.add(SavedArtwork(id="legacy-cap-art", user_id="legacy-cap-user", photo_uri="https://example.com/x.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
+    db.commit()
+
+    response = client.post(
+        "/api/sessions/visit-legacy-cap/events",
+        json=[{
+            "id": "legacy-cap-1",
+            "role": "user",
+            "type": "artwork_capture",
+            "artwork_id": "legacy-cap-art",
+        }],
+    )
+
+    assert response.status_code == 400
+    assert db.query(SessionEvent).filter(SessionEvent.id == "legacy-cap-1").first() is None
+
+
 def test_delete_session_removes_messages_and_links_but_keeps_artworks(client, db):
     db.add(User(user_id="delete-user", device_id="delete-user"))
     db.add(SessionModel(id="delete-session", user_id="delete-user", title="Session"))
     db.add(SavedArtwork(id="delete-art", user_id="delete-user", photo_uri="https://example.com/delete.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
     db.add(SessionArtwork(session_id="delete-session", artwork_id="delete-art", sequence_number=1, source="upload"))
-    db.add(SessionMessage(id="delete-msg", session_id="delete-session", role="user", type="text", content="hello", sequence_number=1))
+    db.add(SessionEvent(id="delete-msg", session_id="delete-session", role="user", type="text", content="hello", sequence_number=1))
     db.commit()
 
     response = client.delete("/api/sessions/delete-session", params={"user_id": "delete-user"})
@@ -184,5 +510,5 @@ def test_delete_session_removes_messages_and_links_but_keeps_artworks(client, db
 
     assert db.query(SessionModel).filter(SessionModel.id == "delete-session").first() is None
     assert db.query(SessionArtwork).filter(SessionArtwork.session_id == "delete-session").count() == 0
-    assert db.query(SessionMessage).filter(SessionMessage.session_id == "delete-session").count() == 0
+    assert db.query(SessionEvent).filter(SessionEvent.session_id == "delete-session").count() == 0
     assert db.query(SavedArtwork).filter(SavedArtwork.id == "delete-art").first() is not None

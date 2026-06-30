@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { GalleryItem, Visit, Album } from '../types';
+import { ArtworkWorkspace, GalleryItem, Album } from '../types';
 import { Checkbox } from './ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
@@ -14,7 +14,7 @@ const OverflowDotsIcon: React.FC<{ className?: string }> = ({ className = 'h-3.5
 
 interface Props {
   items: GalleryItem[];
-  visit: Visit;
+  artworkWorkspace: ArtworkWorkspace;
   filteredSessionId: string | null;
   isAnalyzing: boolean;
   boards?: Album[];
@@ -27,7 +27,7 @@ interface Props {
 
 const GridView: React.FC<Props> = ({
   items,
-  visit,
+  artworkWorkspace,
   filteredSessionId,
   isAnalyzing,
   boards = [],

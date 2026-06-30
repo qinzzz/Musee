@@ -9,18 +9,20 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
-from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionMessage, User
+from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
 from app.services.session_service import (
     DEFAULT_SESSION_TITLE,
     SESSION_ARTWORK_LIMIT,
     attach_artwork_ids_to_session,
-    append_messages_to_session,
+    append_events_to_session,
     get_or_create_owned_session,
     get_session_or_404,
     normalize_session_title,
     refresh_session_title,
     require_session_access,
+    update_session_event,
 )
+from app.services.session_event_service import validate_and_normalize_session_event
 from app.utils.auth_utils import get_current_user, require_same_user
 
 router = APIRouter()
@@ -39,10 +41,11 @@ class AttachSessionArtworksRequest(BaseModel):
     artwork_ids: List[str]
 
 
-class StartSessionWithMessageRequest(BaseModel):
+class StartSessionWithEventRequest(BaseModel):
     session_id: Optional[str] = None
     title: Optional[str] = None
-    message: SessionMessageIn
+    event: Optional[SessionEventIn] = None
+    message: Optional[SessionEventIn] = None
 
 
 class StartSessionWithArtworksRequest(BaseModel):
@@ -51,16 +54,34 @@ class StartSessionWithArtworksRequest(BaseModel):
     artwork_ids: List[str]
 
 
-class SessionMessageIn(BaseModel):
+class SessionEventIn(BaseModel):
     id: Optional[str] = None
     role: str
     type: str = "text"
+    event_type: Optional[str] = None
     content: Optional[str] = None
     artwork_id: Optional[str] = None
+    artwork_ids: Optional[List[str]] = None
+    trigger_event_id: Optional[str] = None
+    turn_id: Optional[str] = None
+    payload: Optional[Dict[str, Any]] = None
 
 
+class SessionEventUpdateRequest(BaseModel):
+    role: str
+    type: Optional[str] = None
+    event_type: Optional[str] = None
+    content: Optional[str] = None
+    artwork_id: Optional[str] = None
+    artwork_ids: Optional[List[str]] = None
+    trigger_event_id: Optional[str] = None
+    turn_id: Optional[str] = None
+    payload: Optional[Dict[str, Any]] = None
+
+
+@router.get("/sessions/{session_id}/events")
 @router.get("/sessions/{session_id}/messages")
-async def get_session_messages(
+async def get_session_events(
     session_id: str,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
@@ -68,18 +89,19 @@ async def get_session_messages(
     session_record = get_session_or_404(db, session_id)
     require_session_access(current_user, session_record)
     msgs = (
-        db.query(SessionMessage)
-        .filter(SessionMessage.session_id == session_id)
-        .order_by(SessionMessage.sequence_number)
+        db.query(SessionEvent)
+        .filter(SessionEvent.session_id == session_id)
+        .order_by(SessionEvent.sequence_number)
         .all()
     )
     return [m.to_dict() for m in msgs]
 
 
+@router.post("/sessions/{session_id}/events")
 @router.post("/sessions/{session_id}/messages")
-async def append_session_messages(
+async def append_session_events(
     session_id: str,
-    messages: List[SessionMessageIn],
+    messages: List[SessionEventIn],
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
 ):
@@ -88,7 +110,7 @@ async def append_session_messages(
     if not messages:
         return {"inserted": 0}
 
-    inserted = append_messages_to_session(
+    inserted = append_events_to_session(
         db,
         session_record,
         [msg.model_dump() for msg in messages],
@@ -97,18 +119,46 @@ async def append_session_messages(
     return {"inserted": inserted}
 
 
+@router.patch("/sessions/{session_id}/events/{event_id}")
+@router.patch("/sessions/{session_id}/messages/{event_id}")
+async def patch_session_event(
+    session_id: str,
+    event_id: str,
+    request: SessionEventUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    session_record = get_session_or_404(db, session_id)
+    require_session_access(current_user, session_record)
+
+    updated = update_session_event(
+        db,
+        session_record,
+        event_id,
+        request.model_dump(exclude_unset=True),
+    )
+    db.commit()
+    db.refresh(updated)
+    return updated.to_dict()
+
+
+@router.post("/sessions/start-with-event")
 @router.post("/sessions/start-with-message")
-async def start_session_with_message(
-    request: StartSessionWithMessageRequest,
+async def start_session_with_event(
+    request: StartSessionWithEventRequest,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
 ):
     require_same_user(current_user, user_id)
 
-    message = request.message
-    if message.role != "user" or (message.type or "text") != "text" or not (message.content or "").strip():
-        raise HTTPException(status_code=400, detail="A non-empty user text message is required")
+    submitted_event = request.event or request.message
+    if submitted_event is None:
+        raise HTTPException(status_code=400, detail="A session event is required")
+
+    normalized_event = validate_and_normalize_session_event(submitted_event.model_dump())
+    if normalized_event["event_type"] != "user_input" or not normalized_event.get("content"):
+        raise HTTPException(status_code=400, detail="A non-empty user input event is required")
 
     session_record = get_or_create_owned_session(
         db,
@@ -116,7 +166,7 @@ async def start_session_with_message(
         session_id=request.session_id,
         requested_title=request.title,
     )
-    inserted = append_messages_to_session(db, session_record, [message.model_dump()])
+    inserted = append_events_to_session(db, session_record, [normalized_event])
     db.commit()
     db.refresh(session_record)
 
@@ -139,7 +189,7 @@ async def delete_session(
         raise HTTPException(status_code=403, detail="Not authorized to delete this session")
 
     db.query(SessionArtwork).filter(SessionArtwork.session_id == session_id).delete()
-    db.query(SessionMessage).filter(SessionMessage.session_id == session_id).delete()
+    db.query(SessionEvent).filter(SessionEvent.session_id == session_id).delete()
     db.delete(session_record)
     db.commit()
     return {"message": "Session deleted successfully"}
