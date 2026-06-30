@@ -73,6 +73,29 @@ function createFile(name = 'artwork.jpg', type = 'image/jpeg') {
   return new File(['file-data'], name, { type, lastModified: 1710000000000 });
 }
 
+function createGalleryItem(overrides: Partial<GalleryItem> = {}): GalleryItem {
+  return {
+    id: 'existing-1',
+    artworkId: 'existing-artwork-1',
+    url: 'https://example.com/existing.jpg',
+    keywords: [],
+    vibe: {
+      backgroundColor: '#fff',
+      padding: 4,
+      borderRadius: '12px',
+      borderType: 'solid',
+      accentColor: '#000',
+    },
+    timestamp: 100,
+    sessionCapturedAt: 100,
+    conversation: [],
+    artistName: 'Artist',
+    artworkName: 'Existing Work',
+    syncStatus: 'synced',
+    ...overrides,
+  };
+}
+
 function createAnalysis(overrides: Partial<Parameters<typeof mockAnalyzeArtworkFromExisting>[1]> = {}) {
   return {
     artist_name: 'Claude Monet',
@@ -111,6 +134,7 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
   const showToast = vi.fn();
   const resolveUploadSession = vi.fn(() => ({ sessionId: 'visit-1', isNew: true }));
   const appendSessionEvents = vi.fn();
+  const persistSessionArtworkInput = vi.fn();
   const triggerUploadCommentary = vi.fn();
   const onExitSessionCapture = vi.fn();
 
@@ -150,6 +174,7 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       parseAnalysis: (text) => text ?? '',
       resolveUploadSession,
       appendSessionEvents,
+      persistSessionArtworkInput,
       triggerUploadCommentary,
       onExitSessionCapture,
     });
@@ -178,6 +203,7 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       showToast,
       resolveUploadSession,
       appendSessionEvents,
+      persistSessionArtworkInput,
       triggerUploadCommentary,
       onExitSessionCapture,
     },
@@ -308,6 +334,86 @@ describe('useArtworkIngest', () => {
       syncStatus: 'synced',
     });
     expect(spies.showToast).toHaveBeenCalledWith('Added an artwork to collection', 'success');
+  });
+
+  it('persists the session artwork input immediately after raw upload save, before analysis resolves', async () => {
+    const deferredAnalysis = createDeferred<ReturnType<typeof createAnalysis>>();
+    mockSaveArtworkUpload.mockResolvedValue({
+      ...createSavedUpload(),
+      session_links: [{ session_id: 'visit-1', sequence_number: 0, source: 'upload' }],
+    });
+    mockAnalyzeArtworkFromExisting.mockReturnValue(deferredAnalysis.promise);
+
+    const { result, spies } = renderUseArtworkIngest({
+      activeTab: 'newSession',
+      isComposingNewSession: false,
+      items: [],
+    });
+
+    let uploadPromise!: Promise<void>;
+    act(() => {
+      uploadPromise = result.current.api.processArtworkFiles([createFile('session-upload.jpg')], 'gallery');
+    });
+
+    await waitFor(() => {
+      expect(mockSaveArtworkUpload).toHaveBeenCalled();
+      expect(spies.persistSessionArtworkInput).toHaveBeenCalledWith(
+        'visit-1',
+        [{ artworkId: 'saved-1', source: 'upload' }],
+        expect.stringMatching(/^evt-/),
+      );
+    });
+
+    expect(mockAnalyzeArtworkFromExisting).toHaveBeenCalled();
+    expect(spies.triggerUploadCommentary).not.toHaveBeenCalled();
+
+    deferredAnalysis.resolve(createAnalysis());
+    await act(async () => {
+      await uploadPromise;
+    });
+
+    await waitFor(() => {
+      expect(spies.triggerUploadCommentary).toHaveBeenCalled();
+    });
+  });
+
+  it('attaches a new session upload after existing session artwork sequence numbers', async () => {
+    mockSaveArtworkUpload.mockResolvedValue({
+      ...createSavedUpload(),
+      session_links: [{ session_id: 'visit-1', sequence_number: 4, source: 'upload' }],
+    });
+    mockAnalyzeArtworkFromExisting.mockResolvedValue(createAnalysis());
+
+    const { result } = renderUseArtworkIngest({
+      activeTab: 'newSession',
+      isComposingNewSession: false,
+      items: [
+        createGalleryItem({
+          id: 'existing-1',
+          artworkId: 'existing-artwork-1',
+          sessionLinks: [{ sessionId: 'visit-1', sequenceNumber: 3, source: 'library' }],
+        }),
+      ],
+    });
+
+    await act(async () => {
+      await result.current.api.processArtworkFiles([createFile('later-upload.jpg')], 'gallery');
+    });
+
+    expect(mockSaveArtworkUpload).toHaveBeenCalledWith(
+      expect.any(File),
+      'user-1',
+      'visit-1',
+      expect.any(String),
+      'Mar 9, 2024',
+      37.78,
+      -122.4,
+      'upload',
+      4,
+    );
+    expect(result.current.state.items[0].sessionLinks).toEqual([
+      { sessionId: 'visit-1', sequenceNumber: 4, source: 'upload' },
+    ]);
   });
 
   it('normalizes capture files, exits capture, and forwards label + coords into analysis', async () => {

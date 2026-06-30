@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { streamSessionChat } from '../../api/chat';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
@@ -23,6 +23,7 @@ type UseSessionMessagingOptions = {
   isComposingNewSession: boolean;
   items: GalleryItem[];
   sessionStreams: Record<string, SessionStreamMessage[]>;
+  streamingSessionResponses: Record<string, string>;
   sessionGoals: Record<string, string>;
   sessionSummaries: SessionSummary[];
   activeSessionSummary: SessionSummary | null;
@@ -84,6 +85,7 @@ export function useSessionMessaging({
   isComposingNewSession,
   items,
   sessionStreams,
+  streamingSessionResponses,
   sessionGoals,
   sessionSummaries,
   activeSessionSummary,
@@ -96,6 +98,27 @@ export function useSessionMessaging({
   setStreamingSessionResponses,
   showToast,
 }: UseSessionMessagingOptions) {
+  const sessionEventWriteQueuesRef = useRef<Record<string, Promise<unknown>>>({});
+  const hasPendingSessionReply = useCallback((sessionId: string | null | undefined) => (
+    Boolean(sessionId && Object.prototype.hasOwnProperty.call(streamingSessionResponses, sessionId))
+  ), [streamingSessionResponses]);
+
+  const enqueueSessionEventWrite = useCallback(<T,>(
+    sessionId: string,
+    task: () => Promise<T>,
+  ): Promise<T> => {
+    const previous = sessionEventWriteQueuesRef.current[sessionId] || Promise.resolve();
+    const next = previous
+      .catch(() => undefined)
+      .then(task);
+    sessionEventWriteQueuesRef.current[sessionId] = next.finally(() => {
+      if (sessionEventWriteQueuesRef.current[sessionId] === next) {
+        delete sessionEventWriteQueuesRef.current[sessionId];
+      }
+    });
+    return next;
+  }, []);
+
   const createSessionDraft = useCallback(() => {
     const now = Date.now();
     const newSession: SessionDraft = {
@@ -143,31 +166,33 @@ export function useSessionMessaging({
   }, [createSessionDraft, filteredSessionId]);
 
   const persistSessionEvents = useCallback((sessionId: string, newEvents: SessionStreamMessage[]) => (
-    appendSessionEventsApi(
-      sessionId,
-      newEvents.map((event) => {
-        const isPlaceholder = event.type === 'artwork_capture' || event.type === 'artwork_card';
-        return {
-          id: event.id,
-          role: event.role as 'user' | 'model',
-          type: event.type || 'text',
-          event_type: event.type === 'artwork_commentary'
-            ? 'artwork_commentary'
-            : undefined,
-          content: isPlaceholder ? undefined : event.text,
-          artwork_id: event.artworkId,
-          artwork_ids: event.artworkIds,
-          trigger_event_id: event.role === 'user' ? undefined : event.triggerEventId,
-          payload: event.type === 'artwork_commentary'
-            ? { status: 'completed' }
-            : undefined,
-          created_at: event.createdAt,
-        };
-      }),
-    ).finally(() => {
-      refreshPersistedSessions();
-    })
-  ), [refreshPersistedSessions]);
+    enqueueSessionEventWrite(sessionId, () => (
+      appendSessionEventsApi(
+        sessionId,
+        newEvents.map((event) => {
+          const isPlaceholder = event.type === 'artwork_capture' || event.type === 'artwork_card';
+          return {
+            id: event.id,
+            role: event.role as 'user' | 'model',
+            type: event.type || 'text',
+            event_type: event.type === 'artwork_commentary'
+              ? 'artwork_commentary'
+              : undefined,
+            content: isPlaceholder ? undefined : event.text,
+            artwork_id: event.artworkId,
+            artwork_ids: event.artworkIds,
+            trigger_event_id: event.role === 'user' ? undefined : event.triggerEventId,
+            payload: event.type === 'artwork_commentary'
+              ? { status: 'completed' }
+              : undefined,
+            created_at: event.createdAt,
+          };
+        }),
+      ).finally(() => {
+        refreshPersistedSessions();
+      })
+    ))
+  ), [enqueueSessionEventWrite, refreshPersistedSessions]);
 
   const appendLocalSessionEvents = useCallback((sessionId: string, newEvents: SessionStreamMessage[]) => {
     setSessionStreams((prev) => ({
@@ -256,17 +281,19 @@ export function useSessionMessaging({
     if (entries.length === 0 && !normalizedContent) {
       return Promise.resolve();
     }
-    return appendSessionEventsApi(sessionId, [{
-      id: userInputEventId,
-      role: 'user',
-      event_type: 'user_input',
-      content: normalizedContent,
-      artwork_ids: entries.map((entry) => entry.artworkId),
-      payload: { artworks: entries.map((entry) => ({ artwork_id: entry.artworkId, source: entry.source })) },
-    }]).finally(() => {
-      refreshPersistedSessions();
-    });
-  }, [refreshPersistedSessions]);
+    return enqueueSessionEventWrite(sessionId, () => (
+      appendSessionEventsApi(sessionId, [{
+        id: userInputEventId,
+        role: 'user',
+        event_type: 'user_input',
+        content: normalizedContent,
+        artwork_ids: entries.map((entry) => entry.artworkId),
+        payload: { artworks: entries.map((entry) => ({ artwork_id: entry.artworkId, source: entry.source })) },
+      }]).finally(() => {
+        refreshPersistedSessions();
+      })
+    ));
+  }, [enqueueSessionEventWrite, refreshPersistedSessions]);
 
   const persistPendingCommentary = useCallback((
     sessionId: string,
@@ -275,18 +302,20 @@ export function useSessionMessaging({
     createdAt: number,
     parentEventId?: string,
   ) => (
-    appendSessionEventsApi(sessionId, [{
-      id: commentaryId,
-      role: 'model',
-      event_type: 'artwork_commentary',
-      artwork_ids: artworkIds,
-      trigger_event_id: parentEventId,
-      payload: { status: 'pending' },
-      created_at: createdAt,
-    }]).finally(() => {
-      refreshPersistedSessions();
-    })
-  ), [refreshPersistedSessions]);
+    enqueueSessionEventWrite(sessionId, () => (
+      appendSessionEventsApi(sessionId, [{
+        id: commentaryId,
+        role: 'model',
+        event_type: 'artwork_commentary',
+        artwork_ids: artworkIds,
+        trigger_event_id: parentEventId,
+        payload: { status: 'pending' },
+        created_at: createdAt,
+      }]).finally(() => {
+        refreshPersistedSessions();
+      })
+    ))
+  ), [enqueueSessionEventWrite, refreshPersistedSessions]);
 
   const finalizeCommentary = useCallback(async (
     sessionId: string,
@@ -308,17 +337,19 @@ export function useSessionMessaging({
       },
     };
 
-    try {
-      await updateSessionEvent(sessionId, commentaryId, messagePayload);
-    } catch (_error) {
-      await appendSessionEventsApi(sessionId, [{
-        id: commentaryId,
-        ...messagePayload,
-      }]);
-    } finally {
-      refreshPersistedSessions();
-    }
-  }, [refreshPersistedSessions]);
+    await enqueueSessionEventWrite(sessionId, async () => {
+      try {
+        await updateSessionEvent(sessionId, commentaryId, messagePayload);
+      } catch (_error) {
+        await appendSessionEventsApi(sessionId, [{
+          id: commentaryId,
+          ...messagePayload,
+        }]);
+      } finally {
+        refreshPersistedSessions();
+      }
+    });
+  }, [enqueueSessionEventWrite, refreshPersistedSessions]);
 
   const streamSessionInquiryResponse = useCallback((
     targetSessionId: string,
@@ -589,6 +620,10 @@ export function useSessionMessaging({
       targetSessionId = createSessionDraft();
     }
 
+    if (hasPendingSessionReply(targetSessionId)) {
+      return false;
+    }
+
     const targetSummary = sessionSummaries.find((summary) => summary.id === targetSessionId);
     const shouldPersistSession = !targetSummary || targetSummary.items.length === 0;
 
@@ -639,6 +674,7 @@ export function useSessionMessaging({
     appendSessionEvents,
     createSessionDraft,
     defaultSessionTitle,
+    hasPendingSessionReply,
     isComposingNewSession,
     refreshPersistedSessions,
     sessionUserId,
