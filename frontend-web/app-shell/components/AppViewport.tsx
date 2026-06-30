@@ -226,6 +226,10 @@ export default function AppViewport({
     handleToggleLike,
     handleSessionInquiry,
   } = actions;
+  const isSessionReplyPending = Boolean(
+    activeSessionSummary
+    && Object.prototype.hasOwnProperty.call(streamingSessionResponses, activeSessionSummary.id),
+  );
 
   return (
     <>
@@ -523,6 +527,7 @@ export default function AppViewport({
           onUpload={handleFileUpload}
           onOpenSessionCapture={openSessionCapturePage}
           isAnalyzing={isAnalyzing}
+          isInquiryDisabled={isSessionReplyPending}
           onInquiry={handleSessionInquiry}
           onLike={() => artworkDetailItem && handleToggleLike(artworkDetailItem.id)}
           isLiked={Boolean(artworkDetailItem && likedIds.has(artworkDetailItem.id))}

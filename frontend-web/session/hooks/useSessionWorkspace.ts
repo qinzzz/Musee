@@ -97,6 +97,7 @@ export function useSessionWorkspace({
     isComposingNewSession: sessionState.isComposingNewSession,
     items,
     sessionStreams: sessionState.sessionStreams,
+    streamingSessionResponses: sessionState.streamingSessionResponses,
     sessionGoals: sessionState.sessionGoals,
     sessionSummaries: sessionState.sessionSummaries,
     activeSessionSummary: sessionState.activeSessionSummary,

@@ -537,7 +537,7 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
             event_type=ARTWORK_EVENT_REIDENTIFICATION_FAILED,
             actor_role="system",
             trigger_source="collection",
-            parent_event_id=request_event.id,
+            parent_event_id=request_event.id if request_event else None,
             payload={"error_message": str(exc)},
         )
         db.commit()
@@ -555,7 +555,7 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
         event_type=ARTWORK_EVENT_REIDENTIFICATION_COMPLETED,
         actor_role="system",
         trigger_source="collection",
-        parent_event_id=request_event.id,
+        parent_event_id=request_event.id if request_event else None,
         payload={
             "artist_name": parsed_result["artist_name"],
             "artwork_name": parsed_result["artwork_name"],

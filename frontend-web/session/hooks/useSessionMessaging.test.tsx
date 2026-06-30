@@ -48,6 +48,7 @@ function renderUseSessionMessaging(options: {
   isComposingNewSession?: boolean;
   sessionSummaries?: SessionSummary[];
   sessionStreams?: Record<string, SessionStreamMessage[]>;
+  streamingSessionResponses?: Record<string, string>;
   items?: GalleryItem[];
 } = {}) {
   const refreshPersistedSessions = vi.fn();
@@ -66,6 +67,7 @@ function renderUseSessionMessaging(options: {
     isComposingNewSession: options.isComposingNewSession ?? true,
     items: options.items ?? [] as GalleryItem[],
     sessionStreams: options.sessionStreams ?? {},
+    streamingSessionResponses: options.streamingSessionResponses ?? {},
     sessionGoals: {},
     sessionSummaries: options.sessionSummaries ?? [],
     activeSessionSummary: options.activeSessionSummary ?? null,
@@ -305,6 +307,27 @@ describe('useSessionMessaging', () => {
 
     expect(didSubmit).toBe(false);
     expect(spies.showToast).toHaveBeenCalledWith('Couldn’t send your first message. Try again.', 'info');
+    expect(mockAppendSessionMessages).not.toHaveBeenCalled();
+    expect(mockStreamSessionChat).not.toHaveBeenCalled();
+  });
+
+  it('rejects a new user message while the active session response is still streaming', async () => {
+    const summary = createSessionSummary({ id: 'visit-1' });
+    const { result } = renderUseSessionMessaging({
+      activeSessionSummary: summary,
+      sessionSummaries: [summary],
+      filteredSessionId: 'visit-1',
+      isComposingNewSession: false,
+      sessionStreams: { 'visit-1': [] },
+      streamingSessionResponses: { 'visit-1': '' },
+    });
+    let didSubmit = true;
+
+    await act(async () => {
+      didSubmit = await result.current.handleSessionInquiry('Second message too soon');
+    });
+
+    expect(didSubmit).toBe(false);
     expect(mockAppendSessionMessages).not.toHaveBeenCalled();
     expect(mockStreamSessionChat).not.toHaveBeenCalled();
   });
