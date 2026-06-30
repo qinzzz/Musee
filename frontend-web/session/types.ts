@@ -56,7 +56,6 @@ export type SessionRenderBlock =
       id: string;
       createdAt: number;
       sequenceNumber?: number;
-      triggerEventId: string;
       items: GalleryItem[];
       sourceLabel: string;
       userMessage?: SessionStreamMessage;
@@ -65,8 +64,6 @@ export type SessionRenderBlock =
       type: 'artwork_group';
       id: string;
       createdAt: number;
-      sequenceNumber?: number;
-      triggerEventId?: string;
       items: GalleryItem[];
       sourceLabel: string;
     }
@@ -75,7 +72,6 @@ export type SessionRenderBlock =
       id: string;
       createdAt: number;
       sequenceNumber?: number;
-      triggerEventId?: string;
       message: SessionStreamMessage;
       status: 'pending' | 'completed' | 'failed';
     }

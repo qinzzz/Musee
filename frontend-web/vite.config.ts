@@ -13,7 +13,10 @@ export default defineConfig(() => ({
         changeOrigin: true,
         bypass(req) {
           const url = req.url || '';
-          if (/\.(ts|tsx|js|jsx|css|map|json)$/.test(url)) {
+          // Source modules live under /api/ too (e.g. /api/chat.ts). Don't proxy
+          // them — match the extension before an optional ?query (Vite appends
+          // ?t=, ?import, etc. for HMR), otherwise the $ anchor misses them.
+          if (/\.(ts|tsx|js|jsx|css|map|json)(\?|$)/.test(url)) {
             return url;
           }
           return undefined;

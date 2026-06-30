@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { fetchSessionEvents } from '../api/sessions';
 import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from '../lib/sessionEventArtworks';
+import { parseServerTimestamp } from '../../lib/time';
 import { usePreparedSessionStaging } from './usePreparedSessionStaging';
 import { useSessionActions } from './useSessionActions';
 import { useSessionMessaging } from './useSessionMessaging';
@@ -195,7 +196,7 @@ export function useSessionWorkspace({
             payload: m.payload as Record<string, unknown> | undefined,
             triggerEventId: m.trigger_event_id || (canonicalEventType === 'user_input' ? m.id : undefined) || m.turn_id || undefined,
             sequenceNumber: typeof m.sequence_number === 'number' ? m.sequence_number : undefined,
-            createdAt: m.created_at ? new Date(m.created_at as unknown as string).getTime() : Date.now(),
+            createdAt: parseServerTimestamp(m.created_at as unknown as string),
           };
         });
         const dbMessageIds = new Set(normalizedDbMessages.map((message) => message.id));

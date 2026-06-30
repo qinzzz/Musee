@@ -244,7 +244,7 @@ export function useSessionStartFlow({
           sendSessionInquiryToSession(sessionId, openingMessage, sessionItemsForCommentary, {
             persistUserMessage: false,
             parentEventIdOverride: batchUserInputEventId,
-            historyOverride: [],
+            historyOverride: [localUserInputEvent],
           });
         });
       } else if (openingMessage) {
@@ -252,7 +252,7 @@ export function useSessionStartFlow({
           sendSessionInquiryToSession(sessionId, openingMessage, resolvedSessionItems, {
             persistUserMessage: false,
             parentEventIdOverride: batchUserInputEventId,
-            historyOverride: [],
+            historyOverride: [localUserInputEvent],
           });
         }, 0);
       } else if (uploadAnalysisPromise) {
@@ -270,7 +270,7 @@ export function useSessionStartFlow({
             {
               persistUserMessage: false,
               parentEventIdOverride: batchUserInputEventId,
-              historyOverride: [],
+              historyOverride: [localUserInputEvent],
             },
           );
         });
@@ -283,7 +283,7 @@ export function useSessionStartFlow({
             {
               persistUserMessage: false,
               parentEventIdOverride: batchUserInputEventId,
-              historyOverride: [],
+              historyOverride: [localUserInputEvent],
             },
           );
         }, 0);
