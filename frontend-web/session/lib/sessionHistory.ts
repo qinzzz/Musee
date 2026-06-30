@@ -1,26 +1,9 @@
 import type { GalleryItem } from '../../types';
 import type { SessionStreamMessage } from '../types';
 import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from './sessionEventArtworks';
+import { compareSessionEvents } from './sessionOrdering';
 
-function compareSessionHistoryOrder(a: SessionStreamMessage, b: SessionStreamMessage): number {
-  if (
-    typeof a.sequenceNumber === 'number'
-    && typeof b.sequenceNumber === 'number'
-    && a.sequenceNumber !== b.sequenceNumber
-  ) {
-    return a.sequenceNumber - b.sequenceNumber;
-  }
-  if (typeof a.sequenceNumber === 'number' && typeof b.sequenceNumber !== 'number') {
-    return -1;
-  }
-  if (typeof a.sequenceNumber !== 'number' && typeof b.sequenceNumber === 'number') {
-    return 1;
-  }
-  if (a.createdAt !== b.createdAt) {
-    return a.createdAt - b.createdAt;
-  }
-  return a.id.localeCompare(b.id);
-}
+const compareSessionHistoryOrder = compareSessionEvents;
 
 export function sortSessionHistory(messages: SessionStreamMessage[]): SessionStreamMessage[] {
   return [...messages].sort(compareSessionHistoryOrder);

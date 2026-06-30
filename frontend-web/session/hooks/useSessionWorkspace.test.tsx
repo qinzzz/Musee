@@ -271,17 +271,19 @@ describe('useSessionWorkspace', () => {
 
     mockFetchSessionMessages.mockResolvedValue([
       {
-        id: 'existing',
-        role: 'model',
-        content: 'existing',
-        created_at: 200,
-      },
-      {
         id: 'from-db',
         role: 'user',
         content: 'from database',
         type: 'text',
+        sequence_number: 1,
         created_at: 150,
+      },
+      {
+        id: 'existing',
+        role: 'model',
+        content: 'existing',
+        sequence_number: 2,
+        created_at: 200,
       },
     ]);
 

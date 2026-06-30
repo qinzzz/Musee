@@ -12,6 +12,7 @@ import {
   type ArtworkBootstrapCacheItem,
 } from '../../lib/bootstrapCache';
 import { parseAnalysis } from '../lib/analysisText';
+import { parseServerTimestamp } from '../../lib/time';
 import type { ArtworkDetailItem, ArtworkDetailSelection } from '../types';
 import {
   buildArtworkListItem,
@@ -84,7 +85,7 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
       keywords,
       date: item.date,
       medium: item.medium,
-      timestamp: item.photo_time ? new Date(item.photo_time).getTime() : (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
+      timestamp: item.photo_time ? new Date(item.photo_time).getTime() : parseServerTimestamp(item.created_at),
       sessionLinks,
       location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
       photoTime: item.photo_time,
@@ -96,7 +97,7 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
       classification: item.classification || 'unsorted',
       conversation: [],
       sessionCapturedAt: item.created_at
-        ? new Date(item.created_at).getTime()
+        ? parseServerTimestamp(item.created_at)
         : (item.photo_time ? new Date(item.photo_time).getTime() : Date.now()),
       vibe: {
         backgroundColor: '#ffffff',
