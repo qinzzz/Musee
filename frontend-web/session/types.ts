@@ -3,6 +3,9 @@ import type { GalleryItem, Message } from '../types';
 export type SessionStreamMessage = Message & {
   id: string;
   createdAt: number;
+  // Client-side creation order, used to order optimistic events that don't yet
+  // have a sequence_number. Ordering never uses createdAt — see sessionOrdering.
+  localOrder?: number;
   type?: 'text' | 'artwork_capture' | 'artwork_card' | 'artwork_commentary';
   artworkId?: string;
   artworkIds?: string[];
@@ -56,6 +59,7 @@ export type SessionRenderBlock =
       id: string;
       createdAt: number;
       sequenceNumber?: number;
+      localOrder?: number;
       items: GalleryItem[];
       sourceLabel: string;
       userMessage?: SessionStreamMessage;
@@ -72,6 +76,7 @@ export type SessionRenderBlock =
       id: string;
       createdAt: number;
       sequenceNumber?: number;
+      localOrder?: number;
       message: SessionStreamMessage;
       status: 'pending' | 'completed' | 'failed';
     }
@@ -80,6 +85,7 @@ export type SessionRenderBlock =
       id: string;
       createdAt: number;
       sequenceNumber?: number;
+      localOrder?: number;
       message: SessionStreamMessage;
     };
 

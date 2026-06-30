@@ -9,6 +9,7 @@ import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import { startSessionWithArtworks } from '../api/sessions';
 import { buildPreparedSessionFallbackPrompt } from '../lib/preparedSession';
 import { newSessionEventId, updateSessionLinkForItem } from '../lib/sessionLinks';
+import { nextLocalOrder } from '../lib/sessionOrdering';
 import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../types';
 
 type ToastType = 'info' | 'success';
@@ -132,8 +133,8 @@ export function useSessionStartFlow({
       libraryEntries.forEach((entry) => {
         const artworkId = entry.artwork.artworkId || entry.artwork.id;
         libraryStreamMessages.push(
-          { id: `capture-${sessionId}-${artworkId}`, role: 'user', text: '', type: 'artwork_capture', artworkId, triggerEventId: batchUserInputEventId, createdAt: streamCursor++ },
-          { id: `card-${sessionId}-${artworkId}`, role: 'model', text: '', type: 'artwork_card', artworkId, triggerEventId: batchUserInputEventId, createdAt: streamCursor++ },
+          { id: `capture-${sessionId}-${artworkId}`, role: 'user', text: '', type: 'artwork_capture', artworkId, triggerEventId: batchUserInputEventId, createdAt: streamCursor++, localOrder: nextLocalOrder() },
+          { id: `card-${sessionId}-${artworkId}`, role: 'model', text: '', type: 'artwork_card', artworkId, triggerEventId: batchUserInputEventId, createdAt: streamCursor++, localOrder: nextLocalOrder() },
         );
       });
 
@@ -229,6 +230,7 @@ export function useSessionStartFlow({
         },
         triggerEventId: batchUserInputEventId,
         createdAt: now + 1,
+        localOrder: nextLocalOrder(),
       };
       appendSessionEvents(sessionId, [localUserInputEvent], { persist: false });
 
@@ -244,7 +246,7 @@ export function useSessionStartFlow({
           sendSessionInquiryToSession(sessionId, openingMessage, sessionItemsForCommentary, {
             persistUserMessage: false,
             parentEventIdOverride: batchUserInputEventId,
-            historyOverride: [localUserInputEvent],
+            historyOverride: [],
           });
         });
       } else if (openingMessage) {
@@ -252,7 +254,7 @@ export function useSessionStartFlow({
           sendSessionInquiryToSession(sessionId, openingMessage, resolvedSessionItems, {
             persistUserMessage: false,
             parentEventIdOverride: batchUserInputEventId,
-            historyOverride: [localUserInputEvent],
+            historyOverride: [],
           });
         }, 0);
       } else if (uploadAnalysisPromise) {
@@ -270,7 +272,7 @@ export function useSessionStartFlow({
             {
               persistUserMessage: false,
               parentEventIdOverride: batchUserInputEventId,
-              historyOverride: [localUserInputEvent],
+              historyOverride: [],
             },
           );
         });
@@ -283,7 +285,7 @@ export function useSessionStartFlow({
             {
               persistUserMessage: false,
               parentEventIdOverride: batchUserInputEventId,
-              historyOverride: [localUserInputEvent],
+              historyOverride: [],
             },
           );
         }, 0);

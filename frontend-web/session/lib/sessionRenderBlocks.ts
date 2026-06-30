@@ -1,6 +1,7 @@
 import type { GalleryItem } from '../../types';
 import { getItemSequenceNumberForSession, getSessionItemTimestamp } from './sessionSelectors';
 import { getSessionEventArtworkIds } from './sessionEventArtworks';
+import { compareSessionEvents } from './sessionOrdering';
 import type { SessionRenderBlock, SessionStreamMessage, SessionSummary } from '../types';
 
 function getArtworkEventSourceForSession(
@@ -31,26 +32,6 @@ function getArtworkGroupLabel(items: GalleryItem[], sessionId: string): string {
   }
 
   return count === 1 ? 'Added an artwork' : `Added ${count} artworks from multiple sources`;
-}
-
-function sortByCanonicalOrder<T extends { sequenceNumber?: number; createdAt: number; id: string }>(a: T, b: T): number {
-  if (
-    typeof a.sequenceNumber === 'number'
-    && typeof b.sequenceNumber === 'number'
-    && a.sequenceNumber !== b.sequenceNumber
-  ) {
-    return a.sequenceNumber - b.sequenceNumber;
-  }
-  if (typeof a.sequenceNumber === 'number' && typeof b.sequenceNumber !== 'number') {
-    return -1;
-  }
-  if (typeof a.sequenceNumber !== 'number' && typeof b.sequenceNumber === 'number') {
-    return 1;
-  }
-  if (a.createdAt !== b.createdAt) {
-    return a.createdAt - b.createdAt;
-  }
-  return a.id.localeCompare(b.id);
 }
 
 function getCommentaryStatus(message: SessionStreamMessage): 'pending' | 'completed' | 'failed' {
@@ -112,6 +93,7 @@ export function buildSessionRenderBlocks(
           id: message.id,
           createdAt: message.createdAt,
           sequenceNumber: message.sequenceNumber,
+          localOrder: message.localOrder,
           items,
           sourceLabel: getArtworkGroupLabel(items, sessionId),
           userMessage: message.text ? message : undefined,
@@ -126,6 +108,7 @@ export function buildSessionRenderBlocks(
         id: message.id,
         createdAt: message.createdAt,
         sequenceNumber: message.sequenceNumber,
+        localOrder: message.localOrder,
         message,
         status: getCommentaryStatus(message),
       });
@@ -138,6 +121,7 @@ export function buildSessionRenderBlocks(
         id: message.id,
         createdAt: message.createdAt,
         sequenceNumber: message.sequenceNumber,
+        localOrder: message.localOrder,
         message,
       });
     }
@@ -157,10 +141,10 @@ export function buildSessionRenderBlocks(
     });
 
   // sequence_number is the authoritative order (the DB assigns it in event
-  // order, so a reply always follows its trigger). Optimistic messages have no
-  // seq yet and sort after all persisted ones, then by createdAt — see
-  // sortByCanonicalOrder.
-  const orderedBlocks = blocks.sort(sortByCanonicalOrder);
+  // order, so a reply always follows its trigger). Optimistic blocks have no
+  // seq yet and sort after all persisted ones, by creation order — see
+  // compareSessionEvents.
+  const orderedBlocks = blocks.sort(compareSessionEvents);
 
   if (orphanItems.length > 0) {
     // Orphan artworks live in the session but aren't tied to any conversation

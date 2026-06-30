@@ -257,9 +257,7 @@ describe('useSessionStartFlow', () => {
       expect.objectContaining({
         persistUserMessage: false,
         parentEventIdOverride: expect.stringMatching(/^evt-/),
-        // The local user_input event (artworks + opening text) is passed so the
-        // commentary is stamped AFTER it; it's filtered out of the LLM prompt.
-        historyOverride: [expect.objectContaining({ role: 'user' })],
+        historyOverride: [],
       }),
     );
     expect(result.current.state.isSubmittingPreparedSession).toBe(false);
@@ -385,9 +383,7 @@ describe('useSessionStartFlow', () => {
       expect.objectContaining({
         persistUserMessage: false,
         parentEventIdOverride: expect.stringMatching(/^evt-/),
-        // The local user_input event (artworks + opening text) is passed so the
-        // commentary is stamped AFTER it; it's filtered out of the LLM prompt.
-        historyOverride: [expect.objectContaining({ role: 'user' })],
+        historyOverride: [],
       }),
     );
   });
@@ -453,9 +449,7 @@ describe('useSessionStartFlow', () => {
       expect.objectContaining({
         persistUserMessage: false,
         parentEventIdOverride: expect.stringMatching(/^evt-/),
-        // The local user_input event (artworks + opening text) is passed so the
-        // commentary is stamped AFTER it; it's filtered out of the LLM prompt.
-        historyOverride: [expect.objectContaining({ role: 'user' })],
+        historyOverride: [],
       }),
     );
   });

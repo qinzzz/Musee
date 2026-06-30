@@ -49,6 +49,37 @@ function createMessage(overrides: Partial<SessionStreamMessage>): SessionStreamM
 }
 
 describe('buildSessionRenderBlocks', () => {
+  it('orders optimistic (no-seq) events by localOrder, never by createdAt', () => {
+    const item = createItem('art-1');
+    // createdAt deliberately inverted: the reply has the EARLIER createdAt.
+    const inputEvent = createMessage({
+      id: 'evt-input',
+      role: 'user',
+      text: 'look at this',
+      artworkIds: ['art-1'],
+      payload: { artworks: [{ artwork_id: 'art-1', source: 'library' }] },
+      localOrder: 1,
+      createdAt: 9999,
+    });
+    const reply = createMessage({
+      id: 'evt-reply',
+      role: 'model',
+      type: 'artwork_commentary',
+      text: 'nice',
+      triggerEventId: 'evt-input',
+      localOrder: 2,
+      createdAt: 1,
+      payload: { status: 'completed' },
+    });
+
+    const blocks = buildSessionRenderBlocks(createSummary([item]), {
+      'session-1': [reply, inputEvent],
+    });
+
+    // createdAt would put the reply first (1 < 9999); localOrder keeps it last.
+    expect(blocks.map((block) => block.id)).toEqual(['evt-input', 'evt-reply']);
+  });
+
   it('orders events by sequence_number (reply after its trigger)', () => {
     const userInput = createMessage({
       id: 'evt-user',

@@ -11,6 +11,7 @@ import {
 import { buildUploadCommentaryPrompt } from '../lib/commentary';
 import { itemBelongsToSession, newSessionEventId } from '../lib/sessionLinks';
 import { getSessionHistoryBeforeTrigger, serializeSessionHistory } from '../lib/sessionHistory';
+import { compareSessionEvents, nextLocalOrder } from '../lib/sessionOrdering';
 import type { SessionDraft, SessionStreamMessage, SessionSummary } from '../types';
 
 type ToastType = 'info' | 'success';
@@ -63,19 +64,7 @@ const getNextLocalEventCreatedAt = (
 );
 
 const sortSessionStreamMessages = (messages: SessionStreamMessage[]) => (
-  [...messages].sort((a, b) => {
-    if (
-      typeof a.sequenceNumber === 'number'
-      && typeof b.sequenceNumber === 'number'
-      && a.sequenceNumber !== b.sequenceNumber
-    ) {
-      return a.sequenceNumber - b.sequenceNumber;
-    }
-    if (a.createdAt !== b.createdAt) {
-      return a.createdAt - b.createdAt;
-    }
-    return a.id.localeCompare(b.id);
-  })
+  [...messages].sort(compareSessionEvents)
 );
 
 export function useSessionMessaging({
@@ -378,6 +367,7 @@ export function useSessionMessaging({
       artworkIds: commentaryArtworkIds,
       triggerEventId: parentEventId,
       createdAt: commentaryCreatedAt,
+      localOrder: nextLocalOrder(),
       payload: { status: 'pending' },
     };
 
@@ -488,6 +478,7 @@ export function useSessionMessaging({
         text,
         triggerEventId: userEventId,
         createdAt,
+        localOrder: nextLocalOrder(),
       };
       appendSessionEvents(targetSessionId, [userMsg]);
       nextHistory = [...existingMessages, userMsg];
@@ -532,6 +523,7 @@ export function useSessionMessaging({
       artworkIds: commentaryArtworkIds,
       triggerEventId: parentEventId,
       createdAt: commentaryCreatedAt,
+      localOrder: nextLocalOrder(),
       payload: { status: 'pending' },
     };
 
@@ -636,6 +628,7 @@ export function useSessionMessaging({
         text,
         triggerEventId: userEventId,
         createdAt,
+        localOrder: nextLocalOrder(),
       };
 
       try {
