@@ -125,65 +125,36 @@ SCHEMA_BOOTSTRAP_STATEMENTS = (
     )
     """,
     """
-    CREATE TABLE IF NOT EXISTS session_event_artworks (
-        id VARCHAR PRIMARY KEY,
-        session_event_id VARCHAR NOT NULL REFERENCES session_events(id) ON DELETE CASCADE,
-        artwork_id VARCHAR NOT NULL REFERENCES saved_artworks(id) ON DELETE CASCADE,
-        role VARCHAR(20) NOT NULL DEFAULT 'subject',
-        position INTEGER NOT NULL DEFAULT 0,
-        created_at TIMESTAMP DEFAULT NOW(),
-        CONSTRAINT uq_session_event_artwork UNIQUE (session_event_id, artwork_id)
-    )
-    """,
-    """
     DO $$
     BEGIN
         IF EXISTS (
             SELECT 1
             FROM information_schema.columns
             WHERE table_schema = 'public'
-              AND table_name = 'session_event_artworks'
-              AND column_name = 'session_message_id'
+              AND table_name = 'artwork_events'
+              AND column_name = 'turn_id'
         ) AND NOT EXISTS (
             SELECT 1
             FROM information_schema.columns
             WHERE table_schema = 'public'
-              AND table_name = 'session_event_artworks'
-              AND column_name = 'session_event_id'
+              AND table_name = 'artwork_events'
+              AND column_name = 'trigger_event_id'
         ) THEN
-            ALTER TABLE session_event_artworks RENAME COLUMN session_message_id TO session_event_id;
+            ALTER TABLE artwork_events RENAME COLUMN turn_id TO trigger_event_id;
         END IF;
     END
     $$;
     """,
-    # The messages→events rename repointed the column but left the FK pointing at the
-    # old session_messages table, which silently rolled back every artwork_commentary
-    # insert (model replies). Repoint the FK to session_events.
+    "ALTER TABLE artwork_events ADD COLUMN IF NOT EXISTS trigger_event_id VARCHAR",
     """
     DO $$
     BEGIN
         IF EXISTS (
-            SELECT 1 FROM pg_constraint con
-            JOIN pg_class rel ON rel.oid = con.conrelid
-            JOIN pg_class ref ON ref.oid = con.confrelid
-            WHERE rel.relname = 'session_event_artworks'
-              AND con.contype = 'f'
-              AND ref.relname = 'session_messages'
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'session_event_artworks'
         ) THEN
-            ALTER TABLE session_event_artworks
-                DROP CONSTRAINT session_event_artworks_session_message_id_fkey;
-        END IF;
-        IF NOT EXISTS (
-            SELECT 1 FROM pg_constraint con
-            JOIN pg_class rel ON rel.oid = con.conrelid
-            JOIN pg_class ref ON ref.oid = con.confrelid
-            WHERE rel.relname = 'session_event_artworks'
-              AND con.contype = 'f'
-              AND ref.relname = 'session_events'
-        ) THEN
-            ALTER TABLE session_event_artworks
-                ADD CONSTRAINT session_event_artworks_session_event_id_fkey
-                FOREIGN KEY (session_event_id) REFERENCES session_events(id) ON DELETE CASCADE;
+            DROP TABLE session_event_artworks;
         END IF;
     END
     $$;
@@ -192,8 +163,6 @@ SCHEMA_BOOTSTRAP_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_session_artworks_artwork_id ON session_artworks(artwork_id)",
     "CREATE INDEX IF NOT EXISTS idx_artwork_events_artwork_created ON artwork_events(artwork_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_artwork_events_session_created ON artwork_events(trigger_session_id, created_at)",
-    "CREATE INDEX IF NOT EXISTS idx_session_event_artworks_event_position ON session_event_artworks(session_event_id, position)",
-    "CREATE INDEX IF NOT EXISTS idx_session_event_artworks_artwork_id ON session_event_artworks(artwork_id)",
     "CREATE INDEX IF NOT EXISTS idx_saved_artworks_user_id ON saved_artworks(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_saved_artworks_device_id ON saved_artworks(device_id)",
     """
@@ -219,6 +188,53 @@ SCHEMA_BOOTSTRAP_STATEMENTS = (
     """,
     "ALTER TABLE session_events ADD COLUMN IF NOT EXISTS trigger_event_id VARCHAR",
     "ALTER TABLE session_events ADD COLUMN IF NOT EXISTS payload JSONB",
+    "ALTER TABLE session_events ALTER COLUMN payload TYPE JSONB USING payload::jsonb",
+    """
+    DO $$
+    BEGIN
+        IF EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'session_events'
+              AND column_name = 'artwork_id'
+        ) THEN
+            EXECUTE $sql$
+                UPDATE session_events
+                SET payload = CASE
+                    WHEN type IN ('user_input', 'artwork_input', 'artwork_capture') THEN
+                        jsonb_set(
+                            COALESCE(payload::jsonb, '{}'::jsonb),
+                            '{artworks}',
+                            jsonb_build_array(jsonb_build_object('artwork_id', artwork_id, 'source', 'library')),
+                            true
+                        )
+                    ELSE
+                        jsonb_set(
+                            COALESCE(payload::jsonb, '{}'::jsonb),
+                            '{artwork_ids}',
+                            jsonb_build_array(artwork_id),
+                            true
+                        )
+                    END
+                WHERE artwork_id IS NOT NULL
+                  AND (
+                    payload IS NULL
+                    OR (
+                        type IN ('user_input', 'artwork_input', 'artwork_capture')
+                        AND NOT (payload::jsonb ? 'artworks')
+                    )
+                    OR (
+                        type NOT IN ('user_input', 'artwork_input', 'artwork_capture')
+                        AND NOT (payload::jsonb ? 'artwork_ids')
+                    )
+                  )
+            $sql$;
+            ALTER TABLE session_events DROP COLUMN artwork_id;
+        END IF;
+    END
+    $$;
+    """,
 )
 
 

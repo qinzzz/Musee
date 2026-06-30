@@ -60,10 +60,8 @@ class SessionEventIn(BaseModel):
     type: str = "text"
     event_type: Optional[str] = None
     content: Optional[str] = None
-    artwork_id: Optional[str] = None
     artwork_ids: Optional[List[str]] = None
     trigger_event_id: Optional[str] = None
-    turn_id: Optional[str] = None
     payload: Optional[Dict[str, Any]] = None
 
 
@@ -72,10 +70,8 @@ class SessionEventUpdateRequest(BaseModel):
     type: Optional[str] = None
     event_type: Optional[str] = None
     content: Optional[str] = None
-    artwork_id: Optional[str] = None
     artwork_ids: Optional[List[str]] = None
     trigger_event_id: Optional[str] = None
-    turn_id: Optional[str] = None
     payload: Optional[Dict[str, Any]] = None
 
 

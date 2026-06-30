@@ -475,17 +475,14 @@ def update_session_event(
         "type": event.get("event_type") or event.get("type") or session_event.type,
         "event_type": event.get("event_type"),
         "content": event.get("content", session_event.content),
-        "artwork_id": event.get("artwork_id", session_event.artwork_id),
         "artwork_ids": event.get("artwork_ids"),
         "trigger_event_id": event.get("trigger_event_id", session_event.trigger_event_id),
-        "turn_id": event.get("turn_id"),
         "payload": event.get("payload", session_event.payload),
     })
 
     session_event.role = normalized_event["role"]
     session_event.type = normalized_event["event_type"]
     session_event.content = normalized_event.get("content")
-    session_event.artwork_id = None
     session_event.trigger_event_id = normalized_event.get("trigger_event_id")
     session_event.payload = normalized_event.get("payload")
 

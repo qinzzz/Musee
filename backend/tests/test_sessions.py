@@ -200,7 +200,7 @@ def test_append_session_messages_accepts_event_fields_and_keeps_legacy_response_
             "id": "event-msg-1",
             "role": "user",
             "event_type": "artwork_input",
-            "artwork_id": "artwork-123",
+            "artwork_ids": ["artwork-123"],
             "payload": {"source": "capture", "has_label": True},
         }],
     )
@@ -243,7 +243,7 @@ def test_get_session_messages_normalizes_legacy_types(client, db):
         session_id="visit-legacy",
         role="model",
         type="artwork_card",
-        artwork_id="legacy-artwork",
+        payload={"artwork_ids": ["legacy-artwork"], "result_kind": "identification"},
         sequence_number=1,
     ))
     db.commit()
@@ -261,7 +261,7 @@ def test_get_session_messages_normalizes_legacy_types(client, db):
         "artwork_id": "legacy-artwork",
         "artwork_ids": ["legacy-artwork"],
         "trigger_event_id": None,
-        "payload": None,
+        "payload": {"artwork_ids": ["legacy-artwork"], "result_kind": "identification"},
         "sequence_number": 1,
         "created_at": response.json()[0]["created_at"],
     }]
@@ -288,7 +288,6 @@ def test_append_session_messages_supports_multiple_artwork_ids(client, db):
     assert response.status_code == 200
 
     stored = db.query(SessionEvent).filter(SessionEvent.id == "event-msg-multi").one()
-    assert stored.artwork_id is None
     assert stored.payload == {
         "result_kind": "commentary",
         "artwork_ids": ["artwork-a", "artwork-b"],
@@ -419,7 +418,6 @@ def test_patch_session_message_updates_commentary_to_failed(client, db):
 
     db.expire_all()
     stored = db.query(SessionEvent).filter(SessionEvent.id == "msg-commentary-failed").one()
-    assert stored.artwork_id is None
     assert stored.payload == {
         "status": "failed",
         "error_message": "stream interrupted",
@@ -462,8 +460,6 @@ def test_canonical_artwork_input_batch_persists_payload_links_and_legacy_shape(c
         {"artwork_id": "batch-art-1", "source": "upload"},
         {"artwork_id": "batch-art-2", "source": "capture"},
     ]}
-
-    assert stored.artwork_id is None
 
     fetched = client.get("/api/sessions/visit-batch/events").json()
     assert len(fetched) == 1

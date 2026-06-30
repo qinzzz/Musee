@@ -3,8 +3,7 @@ Rename canonical session event storage from session_messages to session_events.
 
 Changes:
 1. RENAME TABLE session_messages -> session_events when needed
-2. RENAME COLUMN session_event_artworks.session_message_id -> session_event_id when needed
-3. Ensure canonical trigger_event_id / payload columns exist on session_events
+2. Ensure canonical trigger_event_id / payload columns exist on session_events
 
 Run against DEV:
     python migrations/20260628_rename_session_messages_to_events.py
@@ -42,27 +41,6 @@ def run() -> None:
                     WHERE table_schema = 'public' AND table_name = 'session_events'
                 ) THEN
                     ALTER TABLE session_messages RENAME TO session_events;
-                END IF;
-            END
-            $$;
-        """))
-        conn.execute(text("""
-            DO $$
-            BEGIN
-                IF EXISTS (
-                    SELECT 1
-                    FROM information_schema.columns
-                    WHERE table_schema = 'public'
-                      AND table_name = 'session_event_artworks'
-                      AND column_name = 'session_message_id'
-                ) AND NOT EXISTS (
-                    SELECT 1
-                    FROM information_schema.columns
-                    WHERE table_schema = 'public'
-                      AND table_name = 'session_event_artworks'
-                      AND column_name = 'session_event_id'
-                ) THEN
-                    ALTER TABLE session_event_artworks RENAME COLUMN session_message_id TO session_event_id;
                 END IF;
             END
             $$;

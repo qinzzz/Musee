@@ -214,18 +214,14 @@ def validate_and_normalize_session_event(
     if role not in VALID_SESSION_EVENT_ROLES:
         raise HTTPException(status_code=400, detail="Invalid session event role")
 
-    normalized_trigger_event_id = normalize_session_trigger_event_id(
-        event.get("trigger_event_id") or event.get("turn_id")
-    )
+    normalized_trigger_event_id = normalize_session_trigger_event_id(event.get("trigger_event_id"))
     normalized_content = event.get("content")
     if isinstance(normalized_content, str):
         normalized_content = normalized_content.strip() or None
     elif normalized_content is not None:
         raise HTTPException(status_code=400, detail="Session event content must be text")
 
-    normalized_artwork_ids = normalize_session_event_artwork_ids(
-        [event.get("artwork_id"), *(event.get("artwork_ids") or [])]
-    )
+    normalized_artwork_ids = normalize_session_event_artwork_ids(event.get("artwork_ids") or [])
     canonical_type = normalize_session_event_type(
         event.get("event_type") or event.get("type"),
         role=role,

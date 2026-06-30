@@ -317,27 +317,18 @@ class SessionEvent(Base):
     role            = Column(String(10), nullable=False)   # 'user' | 'model' | 'system'
     type            = Column(String(20), nullable=False, default='message')  # canonical event type
     content         = Column(Text, nullable=True)          # primarily used for event_type='message'
-    artwork_id      = Column(String, ForeignKey('saved_artworks.id', ondelete='SET NULL'), nullable=True)
     trigger_event_id = Column(String, nullable=True)
     payload         = Column(JSON, nullable=True)
     sequence_number = Column(Integer, nullable=False)
     created_at      = Column(DateTime, server_default=func.now())
 
     session = relationship("Session", back_populates="events")
-    artwork = relationship("SavedArtwork")
-    artwork_links = relationship(
-        "SessionEventArtwork",
-        back_populates="session_event",
-        cascade="all, delete-orphan",
-        order_by="SessionEventArtwork.position",
-    )
 
     def to_dict(self):
         canonical_type = normalize_session_event_type(self.type, role=self.role)
         payload_artwork_ids = derive_session_event_artwork_ids(
             canonical_type,
             self.payload,
-            fallback_artwork_ids=[self.artwork_id] if self.artwork_id else None,
         )
         primary_artwork_id = payload_artwork_ids[0] if payload_artwork_ids else None
         return {
@@ -352,37 +343,6 @@ class SessionEvent(Base):
             "trigger_event_id": self.trigger_event_id,
             "payload": self.payload,
             "sequence_number": self.sequence_number,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
-
-
-class SessionEventArtwork(Base):
-    """Bridge table between session events and saved artworks."""
-
-    __tablename__ = "session_event_artworks"
-    __table_args__ = (
-        UniqueConstraint("session_event_id", "artwork_id", name="uq_session_event_artwork"),
-        Index("idx_session_event_artworks_event_position", "session_event_id", "position"),
-        Index("idx_session_event_artworks_artwork_id", "artwork_id"),
-    )
-
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_event_id = Column(String, ForeignKey("session_events.id", ondelete="CASCADE"), nullable=False)
-    artwork_id = Column(String, ForeignKey("saved_artworks.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String(20), nullable=False, default="subject")
-    position = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, server_default=func.now())
-
-    session_event = relationship("SessionEvent", back_populates="artwork_links")
-    artwork = relationship("SavedArtwork")
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "session_event_id": self.session_event_id,
-            "artwork_id": self.artwork_id,
-            "role": self.role,
-            "position": self.position,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -402,7 +362,7 @@ class ArtworkEvent(Base):
     actor_role = Column(String(20), nullable=False, default="system")
     trigger_source = Column(String(30), nullable=True)
     trigger_session_id = Column(String, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
-    turn_id = Column(String, nullable=True)
+    trigger_event_id = Column(String, nullable=True)
     parent_event_id = Column(String, ForeignKey("artwork_events.id", ondelete="SET NULL"), nullable=True)
     payload = Column(JSON, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
@@ -419,7 +379,7 @@ class ArtworkEvent(Base):
             "actor_role": self.actor_role,
             "trigger_source": self.trigger_source,
             "trigger_session_id": self.trigger_session_id,
-            "turn_id": self.turn_id,
+            "trigger_event_id": self.trigger_event_id,
             "parent_event_id": self.parent_event_id,
             "payload": self.payload,
             "created_at": self.created_at.isoformat() if self.created_at else None,

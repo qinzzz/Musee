@@ -27,7 +27,7 @@ def log_artwork_event(
     actor_role: str = "system",
     trigger_source: Optional[str] = None,
     trigger_session_id: Optional[str] = None,
-    turn_id: Optional[str] = None,
+    trigger_event_id: Optional[str] = None,
     parent_event_id: Optional[str] = None,
     payload: Optional[Dict[str, Any]] = None,
 ) -> ArtworkEvent:
@@ -38,7 +38,7 @@ def log_artwork_event(
         actor_role=actor_role,
         trigger_source=trigger_source,
         trigger_session_id=trigger_session_id,
-        turn_id=turn_id,
+        trigger_event_id=trigger_event_id,
         parent_event_id=parent_event_id,
         payload=payload or None,
     )
