@@ -97,6 +97,16 @@ function getNextLocalSessionEventCreatedAt(messages: SessionStreamMessage[]): nu
   return Math.max(Date.now(), lastCreatedAt + 1);
 }
 
+function getNextSessionArtworkSequenceNumber(items: GalleryItem[], sessionId: string): number {
+  const maxSequenceNumber = items.reduce((max, item) => {
+    const link = item.sessionLinks?.find((sessionLink) => sessionLink.sessionId === sessionId);
+    return typeof link?.sequenceNumber === 'number'
+      ? Math.max(max, link.sequenceNumber)
+      : max;
+  }, -1);
+  return maxSequenceNumber + 1;
+}
+
 function buildAnalyzedItem(
   baseItem: GalleryItem,
   analysis: ArtworkAnalysisResult,
@@ -582,6 +592,9 @@ export function useArtworkIngest({
           if (isNew && sessionId) {
             ensureSessionDraft(sessionId);
           }
+          const sessionArtworkSequenceNumber = sessionId
+            ? getNextSessionArtworkSequenceNumber(items, sessionId)
+            : 0;
 
           placeholder = createUploadPlaceholder({
             previewUrl,
@@ -590,7 +603,7 @@ export function useArtworkIngest({
             photoTime,
             location: buildUploadLocationString(coords),
             sessionId,
-            sequenceNumber: 0,
+            sequenceNumber: sessionArtworkSequenceNumber,
           });
 
           if (sessionId) {
@@ -623,7 +636,7 @@ export function useArtworkIngest({
             coords,
             location: buildUploadLocationString(coords),
             sessionId,
-            sequenceNumber: 0,
+            sequenceNumber: sessionArtworkSequenceNumber,
           });
           persistedItemId = persistedItem.id;
           const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
@@ -661,7 +674,7 @@ export function useArtworkIngest({
             persistedItem,
             liveItem,
             sessionId,
-            sequenceNumber: 0,
+            sequenceNumber: sessionArtworkSequenceNumber,
             mode,
             labelFile: options?.labelFile || null,
             previewUrl,
@@ -726,6 +739,9 @@ export function useArtworkIngest({
         if (batchSessionId) {
           setVisit((prev) => ({ ...prev, id: batchSessionId, itemIds: [], globalConversation: [] }));
         }
+        const batchSequenceStart = batchSessionId
+          ? getNextSessionArtworkSequenceNumber(items, batchSessionId)
+          : 0;
 
         const placeholders = memoryFiles.map((entry, index) => {
           const itemTime = entry.metadata.timestamp || Date.now();
@@ -739,7 +755,7 @@ export function useArtworkIngest({
               longitude: entry.metadata.longitude,
             }),
             sessionId: batchSessionId,
-            sequenceNumber: index,
+            sequenceNumber: batchSequenceStart + index,
           });
         });
 
@@ -801,7 +817,7 @@ export function useArtworkIngest({
               coords,
               location: buildUploadLocationString(coords),
               sessionId: batchSessionId,
-              sequenceNumber: index,
+              sequenceNumber: batchSequenceStart + index,
             });
             const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
             persistedUploads.push({

@@ -15,6 +15,7 @@ interface Props {
   onCommunity?: () => void;
   isCommunityActive?: boolean;
   isAnalyzing?: boolean;
+  isInquiryDisabled?: boolean;
   isLiked?: boolean;
   activeItem?: GalleryItem;
   placeholder?: string;
@@ -30,6 +31,7 @@ const ContextualActionBar: React.FC<Props> = ({
   onCommunity,
   isCommunityActive,
   isAnalyzing,
+  isInquiryDisabled,
   isLiked,
   activeItem,
   placeholder,
@@ -40,7 +42,7 @@ const ContextualActionBar: React.FC<Props> = ({
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const value = text.trim();
-    if (!value) return;
+    if (!value || isInquiryDisabled) return;
     const didSubmit = await onInquiry?.(value);
     if (didSubmit !== false) {
       setText('');
@@ -153,7 +155,8 @@ const ContextualActionBar: React.FC<Props> = ({
               <button
                 type="submit"
                 className="w-14 h-14 rounded-[18px] bg-neutral-900 text-white flex items-center justify-center disabled:opacity-30"
-                disabled={!text.trim()}
+                disabled={!text.trim() || isInquiryDisabled}
+                title={isInquiryDisabled ? 'Waiting for response' : 'Send'}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13"/>

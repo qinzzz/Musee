@@ -61,6 +61,44 @@ function getCommentaryStatus(message: SessionStreamMessage): 'pending' | 'comple
   return message.text ? 'completed' : 'pending';
 }
 
+function sortBlocksWithTriggeredCommentary(blocks: SessionRenderBlock[]): SessionRenderBlock[] {
+  const sortedBlocks = [...blocks].sort(sortByCanonicalOrder);
+  const triggeredCommentary = new Map<string, SessionRenderBlock[]>();
+  const unlinkedBlocks: SessionRenderBlock[] = [];
+
+  sortedBlocks.forEach((block) => {
+    if (block.type === 'commentary' && block.triggerEventId) {
+      const existing = triggeredCommentary.get(block.triggerEventId) || [];
+      existing.push(block);
+      triggeredCommentary.set(block.triggerEventId, existing);
+      return;
+    }
+    unlinkedBlocks.push(block);
+  });
+
+  const ordered: SessionRenderBlock[] = [];
+  unlinkedBlocks.forEach((block) => {
+    ordered.push(block);
+    const triggerEventId = block.type === 'input' ? block.triggerEventId : undefined;
+    if (!triggerEventId) {
+      return;
+    }
+    const commentaryBlocks = triggeredCommentary.get(triggerEventId);
+    if (!commentaryBlocks?.length) {
+      return;
+    }
+    ordered.push(...commentaryBlocks.sort(sortByCanonicalOrder));
+    triggeredCommentary.delete(triggerEventId);
+  });
+
+  Array.from(triggeredCommentary.values())
+    .flat()
+    .sort(sortByCanonicalOrder)
+    .forEach((block) => ordered.push(block));
+
+  return ordered;
+}
+
 export function buildSessionRenderBlocks(
   activeSessionSummary: SessionSummary | null,
   sessionStreams: Record<string, SessionStreamMessage[]>,
@@ -164,5 +202,5 @@ export function buildSessionRenderBlocks(
     });
   }
 
-  return blocks.sort(sortByCanonicalOrder);
+  return sortBlocksWithTriggeredCommentary(blocks);
 }
