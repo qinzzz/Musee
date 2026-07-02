@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.database.connection import SessionLocal
 from app.database.models import ArtworkEntity, SavedArtwork, User as UserModel
 from app.services.ai_service import AIServiceFactory
+from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import determine_ai_provider
 from app.services.openai_api_client import OpenAIAPIClient
 
@@ -83,6 +84,7 @@ def check_artwork_quota(user_id: str, db: Session) -> None:
 
 async def do_dimension_analysis(entity_id: str) -> None:
     db = SessionLocal()
+    usage_id: Optional[str] = None
     try:
         entity = db.query(ArtworkEntity).filter(ArtworkEntity.id == entity_id).first()
         if not entity or entity.dim_status == "done":
@@ -98,6 +100,13 @@ async def do_dimension_analysis(entity_id: str) -> None:
         entity.dim_status = "processing"
         db.commit()
         try:
+            usage_id = start_ai_usage(
+                user_id=None,
+                job_type="dimension_enrichment",
+                model="gpt-5.4-mini",
+                subject_type="artwork_entity",
+                subject_id=entity_id,
+            )
             client = OpenAIAPIClient()
             raw = await client.client.chat.completions.create(
                 model="gpt-5.4-mini",
@@ -123,8 +132,15 @@ async def do_dimension_analysis(entity_id: str) -> None:
             entity.dim_analyzed_at = datetime.now(UTC)
             entity.dim_error = None
             db.commit()
+            token_usage = getattr(raw, "usage", None)
+            succeed_ai_usage(
+                usage_id,
+                input_tokens=getattr(token_usage, "prompt_tokens", None) or getattr(token_usage, "input_tokens", None),
+                output_tokens=getattr(token_usage, "completion_tokens", None) or getattr(token_usage, "output_tokens", None),
+            )
             logger.info("Dimension analysis done for entity %s", entity_id)
         except Exception as exc:
+            fail_ai_usage(usage_id, exc)
             entity.dim_status = "failed"
             entity.dim_error = str(exc)
             db.commit()
@@ -146,17 +162,27 @@ async def do_insights(
     if not artist_name or artist_name.lower() in ("unknown", "unknown artist", ""):
         return
 
+    usage_id = None
     try:
         ai_service = AIServiceFactory.get_service(determine_ai_provider(None))
+        usage_id = start_ai_usage(
+            user_id=None,
+            job_type="artwork_insights",
+            model=get_ai_model_name(ai_service),
+            subject_type="artwork",
+            subject_id=artwork_id,
+        )
         points = await ai_service.get_insights(
             artist_name=artist_name,
             artwork_name=artwork_name or "Untitled",
             language=language,
         )
+        succeed_ai_usage(usage_id)
         with SessionLocal() as db:
             artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
             if artwork:
                 artwork.insights = points
                 db.commit()
     except Exception as exc:
+        fail_ai_usage(usage_id, exc)
         logger.warning("Insights bg task failed for %s: %s", artwork_id, exc)

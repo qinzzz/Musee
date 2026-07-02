@@ -16,7 +16,9 @@ from app.config.settings import settings
 from app.database.connection import get_db
 from app.database.models import User
 from app.models.artwork import AIProvider
+from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
+from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import determine_ai_provider, parse_identify_result, resolve_image_bytes
 from app.services.artwork_background_service import (
     check_artwork_quota,
@@ -129,13 +131,35 @@ async def analyze_artist(
         session_context = await get_session_context(session_id) if session_id else None
 
         ai_service = AIServiceFactory.get_service(ai_provider)
-        analysis_text = await ai_service.identify_artist(
-            image_bytes,
-            identity=identity,
-            language=language,
-            session_context=session_context,
-            vision_hint=vision_hint,
+        usage_id = start_ai_usage(
+            user_id=user_id,
+            job_type="artwork_identification",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="session" if session_id else "user",
+            subject_id=session_id or user_id,
         )
+        try:
+            identify_artist_result = getattr(ai_service, "identify_artist_result", None)
+            identify_kwargs = {
+                "image_bytes": image_bytes,
+                "identity": identity,
+                "language": language,
+                "session_context": session_context,
+                "vision_hint": vision_hint,
+            }
+            if callable(identify_artist_result):
+                analysis_result = await identify_artist_result(**identify_kwargs)
+            else:
+                analysis_result = AITextResult(text=await ai_service.identify_artist(**identify_kwargs))
+            analysis_text = analysis_result.text
+            succeed_ai_usage(
+                usage_id,
+                input_tokens=analysis_result.input_tokens,
+                output_tokens=analysis_result.output_tokens,
+            )
+        except Exception as exc:
+            fail_ai_usage(usage_id, exc)
+            raise
         parsed_result = parse_identify_result(analysis_text)
         response = {"analysis": parsed_result["analysis"], "model_used": ai_provider.value}
 
@@ -279,16 +303,25 @@ async def analyze_artist_stream(
     async def _analyze_task() -> None:
         full_text = ""
         ai_service = AIServiceFactory.get_service(ai_provider)
+        usage_id = start_ai_usage(
+            user_id=user_id,
+            job_type="artwork_identification",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="session" if session_id else "user",
+            subject_id=session_id or user_id,
+        )
         t_ai_call = t_first_chunk = t_streaming_done = None
         first_chunk_received = False
         generated_photo_uri: Optional[str] = None
+        input_tokens = None
+        output_tokens = None
 
         try:
             t_ai_call = time.time()
             vision_hint, vision_ref_urls = await get_vision_hint(image_bytes)
             session_context = await get_session_context(session_id) if session_id else None
 
-            async for chunk in ai_service.identify_artist_stream(
+            async for chunk in ai_service.identify_artist_stream_result(
                 image_bytes,
                 identity=identity,
                 language=language,
@@ -296,11 +329,15 @@ async def analyze_artist_stream(
                 reasoning_effort=reasoning_effort,
                 vision_hint=vision_hint,
             ):
+                if chunk.type == "usage":
+                    input_tokens = chunk.input_tokens
+                    output_tokens = chunk.output_tokens
+                    continue
                 if not first_chunk_received:
                     t_first_chunk = time.time()
                     first_chunk_received = True
-                full_text += chunk
-                await queue.put(f"event: chunk\ndata: {json.dumps({'type': 'text', 'content': chunk})}\n\n")
+                full_text += chunk.text
+                await queue.put(f"event: chunk\ndata: {json.dumps({'type': 'text', 'content': chunk.text})}\n\n")
 
             t_streaming_done = time.time()
             parsed_result = parse_identify_result(full_text)
@@ -408,7 +445,9 @@ async def analyze_artist_stream(
             logger.info("[%s] METRIC_SUMMARY: %s", request_id, json.dumps(metrics["timings"]))
             await queue.put(f"event: metrics\ndata: {json.dumps(metrics)}\n\n")
             await queue.put(f"event: complete\ndata: {json.dumps(result)}\n\n")
+            succeed_ai_usage(usage_id, input_tokens=input_tokens, output_tokens=output_tokens)
         except Exception as exc:
+            fail_ai_usage(usage_id, exc)
             logger.error("[%s] Streaming error: %s", request_id, exc, exc_info=True)
             await queue.put(f"event: error\ndata: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n")
         finally:

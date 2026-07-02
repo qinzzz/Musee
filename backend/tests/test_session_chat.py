@@ -2,6 +2,7 @@ import pytest
 
 from app.models.artwork import AIProvider
 from app.routers import session_chat as session_chat_router
+from app.services.ai_client_interface import AIStreamChunk
 from app.services.session_chat_service import ExhibitionItem, build_session_chat_items_payload, load_bootstrap_image_bytes
 
 
@@ -33,6 +34,13 @@ class _SessionAIService:
         assert image_bytes_list == []
         for chunk in ("Part one. ", "Part two."):
             yield chunk
+
+
+class _SessionAIServiceWithUsage(_SessionAIService):
+    async def stream_session_chat_result(self, items, history, new_message, image_bytes_list):
+        async for text in super().stream_session_chat(items, history, new_message, image_bytes_list):
+            yield AIStreamChunk(type="text", text=text)
+        yield AIStreamChunk(type="usage", input_tokens=123, output_tokens=45)
 
 
 @pytest.mark.asyncio
@@ -164,6 +172,44 @@ def test_session_chat_stream_route(client, monkeypatch):
         },
     )
     assert legacy_response.status_code == 200
+
+
+def test_session_chat_stream_route_records_usage_tokens(client, monkeypatch):
+    completed: dict[str, int | None] = {}
+
+    monkeypatch.setattr(session_chat_router, "determine_ai_provider", lambda _model=None: AIProvider.OPENAI)
+    monkeypatch.setattr(
+        session_chat_router.AIServiceFactory,
+        "get_service",
+        lambda _provider: _SessionAIServiceWithUsage(),
+    )
+    monkeypatch.setattr(session_chat_router, "start_ai_usage", lambda **_kwargs: "usage-1")
+
+    def fake_succeed(_usage_id, *, input_tokens=None, output_tokens=None):
+        completed["input_tokens"] = input_tokens
+        completed["output_tokens"] = output_tokens
+
+    monkeypatch.setattr(session_chat_router, "succeed_ai_usage", fake_succeed)
+
+    async def fake_bootstrap(_items, _history):
+        return []
+
+    monkeypatch.setattr(session_chat_router, "load_bootstrap_image_bytes", fake_bootstrap)
+
+    response = client.post(
+        "/api/session/chat-stream",
+        json={
+            "items": [{"id": "a1", "url": "https://example.com/a.jpg", "keywords": ["red", "abstract"]}],
+            "conversation_history": [{"role": "user", "content": "hello"}],
+            "new_message": "Continue.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Part one. " in response.text
+    assert "Part two." in response.text
+    assert "usage" not in response.text
+    assert completed == {"input_tokens": 123, "output_tokens": 45}
 
 
 def test_build_session_chat_items_payload():

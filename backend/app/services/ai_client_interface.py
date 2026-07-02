@@ -4,8 +4,28 @@ These clients only handle the actual API calls to external LLM providers.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Optional, Any, Dict, AsyncGenerator, List
 from app.models.artwork import AIProvider
+
+
+@dataclass(frozen=True)
+class AITextResult:
+    """Text response plus provider usage metadata when available."""
+
+    text: str
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class AIStreamChunk:
+    """Streaming response event plus provider usage metadata when available."""
+
+    type: str
+    text: str = ""
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 class AIClientInterface(ABC):
@@ -79,6 +99,56 @@ class AIClientInterface(ABC):
         """
         pass
 
+    async def call_with_image_and_text_result(
+        self,
+        prompt: str,
+        image_data: Any,
+        max_tokens: int,
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None,
+    ) -> AITextResult:
+        """Structured image+text result. Subclasses can override to include token usage."""
+        text = await self.call_with_image_and_text(
+            prompt=prompt,
+            image_data=image_data,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            response_schema=response_schema,
+        )
+        return AITextResult(text=text)
+
+    async def call_with_conversation_result(
+        self,
+        messages: list,
+        max_tokens: int,
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None,
+    ) -> AITextResult:
+        """Structured conversation result. Subclasses can override to include token usage."""
+        text = await self.call_with_conversation(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            response_schema=response_schema,
+        )
+        return AITextResult(text=text)
+
+    async def call_text_only_result(
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float = 0.7,
+        response_schema: Optional[Dict[str, Any]] = None,
+    ) -> AITextResult:
+        """Structured text-only result. Subclasses can override to include token usage."""
+        text = await self.call_text_only(
+            prompt=prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            response_schema=response_schema,
+        )
+        return AITextResult(text=text)
+
     @abstractmethod
     def prepare_image(self, image_bytes: bytes) -> Any:
         """
@@ -149,6 +219,26 @@ class AIClientInterface(ABC):
         """
         pass
 
+    async def stream_with_image_and_text_result(
+        self,
+        prompt: str,
+        image_data: Any,
+        max_tokens: int,
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None
+    ) -> AsyncGenerator[AIStreamChunk, None]:
+        """Structured streaming image+text result. Subclasses can include token usage."""
+        async for text in self.stream_with_image_and_text(
+            prompt=prompt,
+            image_data=image_data,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            response_schema=response_schema,
+            reasoning_effort=reasoning_effort,
+        ):
+            yield AIStreamChunk(type="text", text=text)
+
     @abstractmethod
     async def stream_with_conversation(
         self,
@@ -170,3 +260,19 @@ class AIClientInterface(ABC):
             str: Text chunks as they arrive from the API
         """
         pass
+
+    async def stream_with_conversation_result(
+        self,
+        messages: list,
+        max_tokens: int,
+        temperature: float,
+        response_schema: Optional[Dict[str, Any]] = None
+    ) -> AsyncGenerator[AIStreamChunk, None]:
+        """Structured streaming conversation result. Subclasses can include token usage."""
+        async for text in self.stream_with_conversation(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            response_schema=response_schema,
+        ):
+            yield AIStreamChunk(type="text", text=text)

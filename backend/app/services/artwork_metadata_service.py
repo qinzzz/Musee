@@ -7,7 +7,9 @@ import re
 from sqlalchemy.orm import Session
 
 from app.database.models import SavedArtwork
+from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
+from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.utils.prompt_loader import get_movement_names
 
 logger = logging.getLogger(__name__)
@@ -45,20 +47,35 @@ Analysis:
 
     enriched_count = 0
     for artwork in artworks:
+        usage_id = None
         try:
             prompt = enrich_prompt.replace("{analysis}", (artwork.analysis or "")[:1000])
-            response = await ai_service.ai_client.call_text_only(
-                prompt=prompt,
-                max_tokens=100,
-                temperature=0.1,
+            usage_id = start_ai_usage(
+                user_id=user_id,
+                job_type="artwork_metadata_enrichment",
+                model=get_ai_model_name(ai_service),
+                subject_type="artwork",
+                subject_id=artwork.id,
             )
-            json_match = re.search(r"\{[^}]+\}", response)
+            call_text_only_result = getattr(ai_service.ai_client, "call_text_only_result", None)
+            call_kwargs = {"prompt": prompt, "max_tokens": 100, "temperature": 0.1}
+            if callable(call_text_only_result):
+                response = await call_text_only_result(**call_kwargs)
+            else:
+                response = AITextResult(text=await ai_service.ai_client.call_text_only(**call_kwargs))
+            succeed_ai_usage(
+                usage_id,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+            )
+            json_match = re.search(r"\{[^}]+\}", response.text)
             if json_match:
                 parsed = json.loads(json_match.group())
                 artwork.movement = parsed.get("movement")
                 artwork.period_bucket = parsed.get("period_bucket")
                 enriched_count += 1
         except Exception as exc:
+            fail_ai_usage(usage_id, exc)
             logger.warning("Enrichment failed for artwork %s: %s", artwork.id, exc)
             continue
 

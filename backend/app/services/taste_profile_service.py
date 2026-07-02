@@ -11,7 +11,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.models import ArtworkEntity, SavedArtwork, TasteProfile
+from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
+from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import determine_ai_provider
 from app.services.artwork_background_service import do_dimension_analysis
 
@@ -119,6 +121,7 @@ async def generate_taste_narrative(
     loved_artworks: List[SavedArtwork],
     rejected_artworks: List[SavedArtwork],
     respected_artworks: List[SavedArtwork],
+    user_id: Optional[str] = None,
 ) -> str:
     loved = [f"{art.artwork_name} by {art.artist_name}" for art in loved_artworks[:6]]
     rejected = [f"{art.artwork_name} by {art.artist_name}" for art in rejected_artworks[:6]]
@@ -144,9 +147,27 @@ Write 2 short paragraphs in a warm but analytical tone explaining the user's tas
     try:
         ai_provider = determine_ai_provider(None)
         ai_service = AIServiceFactory.get_service(ai_provider)
-        response = await ai_service.ai_client.call_text_only(prompt, max_tokens=500, temperature=0.7)
-        return response.strip()
+        usage_id = start_ai_usage(
+            user_id=user_id,
+            job_type="taste_profile_narrative",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="user" if user_id else None,
+            subject_id=user_id,
+        )
+        call_text_only_result = getattr(ai_service.ai_client, "call_text_only_result", None)
+        call_kwargs = {"prompt": prompt, "max_tokens": 500, "temperature": 0.7}
+        if callable(call_text_only_result):
+            response = await call_text_only_result(**call_kwargs)
+        else:
+            response = AITextResult(text=await ai_service.ai_client.call_text_only(**call_kwargs))
+        succeed_ai_usage(
+            usage_id,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+        )
+        return response.text.strip()
     except Exception as exc:
+        fail_ai_usage(locals().get("usage_id"), exc)
         logger.warning("Taste profile narrative generation failed: %s", exc)
         loved_phrase = "、".join(loved[:3]) if loved else "目前还没有明确喜欢的作品"
         rejected_phrase = "、".join(rejected[:3]) if rejected else "目前还没有明确排斥的作品"
@@ -361,6 +382,7 @@ async def generate_taste_profile_snapshot(user_id: str, db: Session) -> Dict[str
         loved_artworks,
         rejected_artworks,
         respected_artworks,
+        user_id=user_id,
     )
 
     profile = get_or_create_taste_profile(user_id, db)

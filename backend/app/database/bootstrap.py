@@ -125,6 +125,22 @@ SCHEMA_BOOTSTRAP_STATEMENTS = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS ai_usage (
+        id VARCHAR PRIMARY KEY,
+        user_id VARCHAR,
+        job_type VARCHAR(50) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'running',
+        model VARCHAR,
+        subject_type VARCHAR(50),
+        subject_id VARCHAR,
+        input_tokens INTEGER,
+        output_tokens INTEGER,
+        error_message TEXT,
+        started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMP
+    )
+    """,
+    """
     DO $$
     BEGIN
         IF EXISTS (
@@ -163,6 +179,9 @@ SCHEMA_BOOTSTRAP_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_session_artworks_artwork_id ON session_artworks(artwork_id)",
     "CREATE INDEX IF NOT EXISTS idx_artwork_events_artwork_created ON artwork_events(artwork_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_artwork_events_session_created ON artwork_events(trigger_session_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_ai_usage_user_started ON ai_usage(user_id, started_at)",
+    "CREATE INDEX IF NOT EXISTS idx_ai_usage_subject ON ai_usage(subject_type, subject_id)",
+    "CREATE INDEX IF NOT EXISTS idx_ai_usage_job_status ON ai_usage(job_type, status)",
     "CREATE INDEX IF NOT EXISTS idx_saved_artworks_user_id ON saved_artworks(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_saved_artworks_device_id ON saved_artworks(device_id)",
     """

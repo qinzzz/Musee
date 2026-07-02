@@ -13,7 +13,8 @@ export default defineConfig(() => ({
         changeOrigin: true,
         bypass(req) {
           const url = req.url || '';
-          if (/\.(ts|tsx|js|jsx|css|map|json)$/.test(url)) {
+          const pathname = url.split('?')[0] || '';
+          if (/\.(ts|tsx|js|jsx|css|map|json)$/.test(pathname)) {
             return url;
           }
           return undefined;

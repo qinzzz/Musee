@@ -6,7 +6,9 @@ import logging
 from app.database.connection import get_db
 from app.database.models import Tag, SavedArtwork, ArtworkTag
 from app.config.settings import settings
+from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
+from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.models.artwork import AIProvider
 
 router = APIRouter()
@@ -43,14 +45,28 @@ Example: For "impressionism" -> "A 19th-century art movement emphasizing light, 
 """
 
     try:
-        # Use the AI client's text-only method
-        response = await ai_service.ai_client.call_text_only(
-            prompt=prompt,
-            max_tokens=100,
-            temperature=0.7
+        usage_id = start_ai_usage(
+            user_id=None,
+            job_type="tag_explanation",
+            model=get_ai_model_name(ai_service, provider.value),
+            subject_type="tag",
+            subject_id=tag,
         )
-        return response.strip().strip('"')
+        # Use the AI client's text-only method
+        call_text_only_result = getattr(ai_service.ai_client, "call_text_only_result", None)
+        call_kwargs = {"prompt": prompt, "max_tokens": 100, "temperature": 0.7}
+        if callable(call_text_only_result):
+            response = await call_text_only_result(**call_kwargs)
+        else:
+            response = AITextResult(text=await ai_service.ai_client.call_text_only(**call_kwargs))
+        succeed_ai_usage(
+            usage_id,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+        )
+        return response.text.strip().strip('"')
     except Exception as e:
+        fail_ai_usage(locals().get("usage_id"), e)
         logger.error(f"Failed to generate tag explanation: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate explanation")
 

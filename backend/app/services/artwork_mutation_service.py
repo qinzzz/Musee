@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database.models import SavedArtwork, Session as SessionModel
 from app.models.artwork import UpdateArtworkClassificationRequest, UpdateArtworkRequest
 from app.services.ai_service import AIServiceFactory
+from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import batch_link_tags, determine_ai_provider
 from app.services.artwork_event_service import (
     ARTWORK_EVENT_METADATA_UPDATED,
@@ -141,13 +142,22 @@ async def get_or_create_artwork_insights_payload(
 
     ai_provider = determine_ai_provider(None)
     ai_service = AIServiceFactory.get_service(ai_provider)
+    usage_id = start_ai_usage(
+        user_id=artwork.user_id,
+        job_type="artwork_insights",
+        model=get_ai_model_name(ai_service, ai_provider.value),
+        subject_type="artwork",
+        subject_id=artwork_id,
+    )
     try:
         points = await ai_service.get_insights(
             artist_name=artist,
             artwork_name=artwork.artwork_name or "Untitled",
             language=language,
         )
+        succeed_ai_usage(usage_id)
     except Exception as exc:
+        fail_ai_usage(usage_id, exc)
         logger.exception("Insights computation failed for %s", artwork_id)
         raise HTTPException(status_code=500, detail=str(exc))
 

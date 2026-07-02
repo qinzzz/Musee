@@ -21,6 +21,7 @@ export async function streamSessionChat(
   onChunk: (text: string) => void,
   onComplete: (response: string) => void,
   onError: (error: Error) => void,
+  context?: { userId?: string; sessionId?: string; triggerEventId?: string },
 ): Promise<void> {
   const history = conversationHistory.map((message) => ({
     role: message.role === 'model' ? 'assistant' : message.role,
@@ -44,6 +45,9 @@ export async function streamSessionChat(
         })),
         conversation_history: history,
         new_message: newMessage,
+        user_id: context?.userId,
+        session_id: context?.sessionId,
+        trigger_event_id: context?.triggerEventId,
       }),
       timeout: API_TIMEOUT,
     });

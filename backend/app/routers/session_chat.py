@@ -8,7 +8,9 @@ from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.models.artwork import AIProvider
+from app.services.ai_client_interface import AIStreamChunk, AITextResult
 from app.services.ai_service import AIServiceFactory
+from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import determine_ai_provider
 from app.services.session_chat_service import (
     SessionChatRequest,
@@ -34,14 +36,32 @@ async def session_chat(
     )
 
     try:
-        response_text = await ai_service.session_chat(
-            items=build_session_chat_items_payload(request.items),
-            history=request.conversation_history,
-            new_message=request.new_message,
-            image_bytes_list=image_bytes_list,
+        usage_id = start_ai_usage(
+            user_id=request.user_id,
+            job_type="session_chat",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="session_event" if request.trigger_event_id else "session",
+            subject_id=request.trigger_event_id or request.session_id,
         )
-        return {"response": response_text}
+        session_chat_result = getattr(ai_service, "session_chat_result", None)
+        chat_kwargs = {
+            "items": build_session_chat_items_payload(request.items),
+            "history": request.conversation_history,
+            "new_message": request.new_message,
+            "image_bytes_list": image_bytes_list,
+        }
+        if callable(session_chat_result):
+            response = await session_chat_result(**chat_kwargs)
+        else:
+            response = AITextResult(text=await ai_service.session_chat(**chat_kwargs))
+        succeed_ai_usage(
+            usage_id,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+        )
+        return {"response": response.text}
     except Exception as exc:
+        fail_ai_usage(locals().get("usage_id"), exc)
         logger.exception("Exhibition chat failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -61,17 +81,42 @@ async def stream_session_chat(
 
     async def event_generator():
         full_text = ""
+        input_tokens = None
+        output_tokens = None
+        usage_id = start_ai_usage(
+            user_id=request.user_id,
+            job_type="session_chat",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="session_event" if request.trigger_event_id else "session",
+            subject_id=request.trigger_event_id or request.session_id,
+        )
         try:
-            async for chunk in ai_service.stream_session_chat(
-                items=build_session_chat_items_payload(request.items),
-                history=request.conversation_history,
-                new_message=request.new_message,
-                image_bytes_list=image_bytes_list,
-            ):
-                full_text += chunk
-                yield f"event: chunk\ndata: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
+            stream_chat_result = getattr(ai_service, "stream_session_chat_result", None)
+            stream_kwargs = {
+                "items": build_session_chat_items_payload(request.items),
+                "history": request.conversation_history,
+                "new_message": request.new_message,
+                "image_bytes_list": image_bytes_list,
+            }
+            if callable(stream_chat_result):
+                stream = stream_chat_result(**stream_kwargs)
+            else:
+                async def _legacy_stream():
+                    async for text in ai_service.stream_session_chat(**stream_kwargs):
+                        yield AIStreamChunk(type="text", text=text)
+                stream = _legacy_stream()
+
+            async for chunk in stream:
+                if chunk.type == "usage":
+                    input_tokens = chunk.input_tokens
+                    output_tokens = chunk.output_tokens
+                    continue
+                full_text += chunk.text
+                yield f"event: chunk\ndata: {json.dumps({'type': 'text', 'content': chunk.text})}\n\n"
+            succeed_ai_usage(usage_id, input_tokens=input_tokens, output_tokens=output_tokens)
             yield f"event: complete\ndata: {json.dumps({'type': 'result', 'response': full_text})}\n\n"
         except Exception as exc:
+            fail_ai_usage(usage_id, exc)
             logger.exception("Exhibition chat stream failed")
             yield f"event: error\ndata: {json.dumps({'message': str(exc)})}\n\n"
 
