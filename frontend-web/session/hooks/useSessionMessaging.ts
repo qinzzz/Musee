@@ -445,11 +445,17 @@ export function useSessionMessaging({
           return next;
         });
       },
+      {
+        userId: sessionUserId,
+        sessionId: targetSessionId,
+        triggerEventId: parentEventId,
+      },
     );
   }, [
     activeSessionSummary,
     appendSessionEvents,
     items,
+    sessionUserId,
     setStreamingSessionResponses,
     sessionStreams,
     updateLocalSessionEvent,
@@ -598,9 +604,15 @@ export function useSessionMessaging({
           return next;
         });
       },
+      {
+        userId: sessionUserId,
+        sessionId,
+        triggerEventId: parentEventId,
+      },
     );
   }, [
     appendSessionEvents,
+    sessionUserId,
     sessionGoals,
     setStreamingSessionResponses,
     updateLocalSessionEvent,

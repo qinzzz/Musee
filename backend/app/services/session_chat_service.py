@@ -22,6 +22,9 @@ class SessionChatRequest(BaseModel):
     items: List[ExhibitionItem]
     conversation_history: List[Dict[str, str]]
     new_message: str
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
+    trigger_event_id: Optional[str] = None
 
 
 def build_session_chat_items_payload(items: List[ExhibitionItem]) -> List[Dict[str, Any]]:

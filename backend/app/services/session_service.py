@@ -17,7 +17,9 @@ from app.config.settings import settings
 from app.database.connection import SessionLocal
 from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
 from app.models.artwork import AIProvider
+from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
+from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_event_service import ARTWORK_EVENT_ADDED_TO_SESSION, log_artwork_event
 from app.services.session_event_service import (
     normalize_session_event_type,
@@ -602,13 +604,37 @@ async def update_session_narrative_task(
 
         ai_provider = resolve_session_ai_provider()
         ai_service = AIServiceFactory.get_service(ai_provider)
-
-        updated_narrative = await ai_service.summarize_session_narrative(
-            previous_narrative=session_record.narrative_summary,
-            new_artwork_data=new_artwork_data,
-            identity=identity,
-            language=language,
+        usage_id = start_ai_usage(
+            user_id=session_record.user_id,
+            job_type="session_narrative_summary",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="session",
+            subject_id=session_id,
         )
+
+        try:
+            summarize_result = getattr(ai_service, "summarize_session_narrative_result", None)
+            summarize_kwargs = {
+                "previous_narrative": session_record.narrative_summary,
+                "new_artwork_data": new_artwork_data,
+                "identity": identity,
+                "language": language,
+            }
+            if callable(summarize_result):
+                narrative_result = await summarize_result(**summarize_kwargs)
+            else:
+                narrative_result = AITextResult(
+                    text=await ai_service.summarize_session_narrative(**summarize_kwargs)
+                )
+            updated_narrative = narrative_result.text
+            succeed_ai_usage(
+                usage_id,
+                input_tokens=narrative_result.input_tokens,
+                output_tokens=narrative_result.output_tokens,
+            )
+        except Exception as exc:
+            fail_ai_usage(usage_id, exc)
+            raise
 
         session_record.narrative_summary = updated_narrative
         db.commit()

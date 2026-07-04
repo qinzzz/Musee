@@ -10,6 +10,7 @@ from app.database.connection import SessionLocal
 from app.database.models import SkillEvent, User
 from app.models.artwork import AIProvider
 from app.services.ai_service import AIServiceFactory
+from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.claude_api_client import ClaudeAPIClient
 from app.services.gemini_api_client import GeminiAPIClient
 from app.services.openai_api_client import OpenAIAPIClient
@@ -105,6 +106,13 @@ async def suggest_topics(
 
     try:
         ai_service = AIServiceFactory.get_service(ai_provider)
+        usage_id = start_ai_usage(
+            user_id=None,
+            job_type="suggest_topics",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="artwork_metadata",
+            subject_id=f"{artist_name}:{artwork_name}",
+        )
         suggested_topics = await ai_service.suggest_topics(
             artist_name,
             artwork_name,
@@ -112,8 +120,10 @@ async def suggest_topics(
             identity=identity,
             language=language,
         )
+        succeed_ai_usage(usage_id)
         return {"suggested_topics": suggested_topics, "model_used": ai_provider.value}
     except Exception as exc:
+        fail_ai_usage(locals().get("usage_id"), exc)
         logger.error("Topic suggestion failed: %s", exc)
         if "API error" in str(exc):
             raise HTTPException(status_code=503, detail=str(exc))
@@ -144,6 +154,13 @@ async def generate_summary(
 
     try:
         ai_service = AIServiceFactory.get_service(ai_provider)
+        usage_id = start_ai_usage(
+            user_id=None,
+            job_type="artwork_summary",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="artwork_metadata",
+            subject_id=f"{artist_name}:{artwork_name}",
+        )
         summary = await ai_service.generate_summary(
             image_bytes,
             artist_name,
@@ -152,8 +169,10 @@ async def generate_summary(
             identity=identity,
             language=language,
         )
+        succeed_ai_usage(usage_id)
         return {"summary": summary, "model_used": ai_provider.value}
     except Exception as exc:
+        fail_ai_usage(locals().get("usage_id"), exc)
         if "API error" in str(exc):
             raise HTTPException(status_code=503, detail=str(exc))
         raise HTTPException(status_code=500, detail=f"Summary generation failed: {exc}")
@@ -202,14 +221,23 @@ async def select_explore_skills(
 ) -> dict:
     try:
         ai_service = AIServiceFactory.get_fast_service(ai_provider)
+        usage_id = start_ai_usage(
+            user_id=None,
+            job_type="explore_skill_selection",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="artwork_metadata",
+            subject_id=f"{artist_name or ''}:{artwork_name or ''}",
+        )
         skills = await ai_service.select_explore_skills(
             image_bytes,
             language=language,
             artist_name=artist_name or None,
             artwork_name=artwork_name or None,
         )
+        succeed_ai_usage(usage_id)
         return {"skills": skills}
     except Exception as exc:
+        fail_ai_usage(locals().get("usage_id"), exc)
         logger.error("artwork-explore-skills error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -225,6 +253,13 @@ async def create_skill_observation(
 ) -> dict:
     try:
         ai_service = AIServiceFactory.get_fast_service(ai_provider)
+        usage_id = start_ai_usage(
+            user_id=None,
+            job_type="explore_skill_observation",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="skill",
+            subject_id=skill_name,
+        )
         observation = await ai_service.get_skill_observation(
             image_bytes,
             skill_name,
@@ -232,8 +267,10 @@ async def create_skill_observation(
             prev_observations=prev_observations,
             language=language,
         )
+        succeed_ai_usage(usage_id)
         return {"observation": observation}
     except Exception as exc:
+        fail_ai_usage(locals().get("usage_id"), exc)
         logger.error("artwork-skill-observation error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -248,26 +285,45 @@ async def create_skill_deepdive(
 ) -> dict:
     try:
         ai_service = AIServiceFactory.get_fast_service(ai_provider)
-        return await ai_service.get_skill_deepdive(
+        usage_id = start_ai_usage(
+            user_id=None,
+            job_type="explore_skill_deepdive",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="skill",
+            subject_id=skill_name,
+        )
+        deepdive = await ai_service.get_skill_deepdive(
             image_bytes,
             skill_name,
             skill_desc,
             language=language,
         )
+        succeed_ai_usage(usage_id)
+        return deepdive
     except Exception as exc:
+        fail_ai_usage(locals().get("usage_id"), exc)
         logger.error("artwork-skill-deepdive error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 async def define_aesthetic_term(*, tag: str, ai_provider: AIProvider) -> dict:
     ai_service = AIServiceFactory.get_service(ai_provider)
+    usage_id = start_ai_usage(
+        user_id=None,
+        job_type="aesthetic_term_definition",
+        model=get_ai_model_name(ai_service, ai_provider.value),
+        subject_type="tag",
+        subject_id=tag,
+    )
     try:
         result = await ai_service.define_aesthetic_term(tag)
+        succeed_ai_usage(usage_id)
         return {
             "definition": result["definition"],
             "externalResonances": result["external_resonances"],
         }
     except Exception as exc:
+        fail_ai_usage(usage_id, exc)
         logger.exception("Define aesthetic term failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -283,14 +339,23 @@ async def get_artwork_insights(
         return {"points": []}
 
     ai_service = AIServiceFactory.get_service(ai_provider)
+    usage_id = start_ai_usage(
+        user_id=None,
+        job_type="artwork_insights",
+        model=get_ai_model_name(ai_service, ai_provider.value),
+        subject_type="artwork_metadata",
+        subject_id=f"{artist_name}:{artwork_name}",
+    )
     try:
         points = await ai_service.get_insights(
             artist_name=artist_name,
             artwork_name=artwork_name or "Untitled",
             language=language,
         )
+        succeed_ai_usage(usage_id)
         return {"points": points}
     except Exception as exc:
+        fail_ai_usage(usage_id, exc)
         logger.exception("Unlock points failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -300,14 +365,24 @@ async def generate_speech_audio(*, text: str, ai_provider: AIProvider) -> bytes:
     if not isinstance(ai_service.ai_client, GeminiAPIClient):
         raise HTTPException(status_code=503, detail="Speech generation requires Gemini")
     client = ai_service.ai_client
+    usage_id = start_ai_usage(
+        user_id=None,
+        job_type="speech_generation",
+        model=get_ai_model_name(ai_service, ai_provider.value),
+        subject_type=None,
+        subject_id=None,
+    )
     try:
         audio_bytes = await client.generate_speech(text)
         if not audio_bytes:
             raise HTTPException(status_code=502, detail="No audio generated")
+        succeed_ai_usage(usage_id)
         return audio_bytes
     except HTTPException:
+        fail_ai_usage(usage_id, "Speech generation failed")
         raise
     except Exception as exc:
+        fail_ai_usage(usage_id, exc)
         logger.exception("Generate speech failed")
         raise HTTPException(status_code=500, detail=str(exc))
 

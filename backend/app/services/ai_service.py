@@ -19,7 +19,7 @@ from app.utils.prompt_loader import (
     get_insights_prompt,
     get_artist_bio_prompt,
 )
-from app.services.ai_client_interface import AIClientInterface
+from app.services.ai_client_interface import AIClientInterface, AIStreamChunk, AITextResult
 import anyio
 from app.config.settings import settings
 from app.utils.conversation_storage import ConversationMessage
@@ -287,6 +287,21 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         identity: str = "default",
         language: Optional[str] = None
     ) -> str:
+        result = await self.summarize_session_narrative_result(
+            previous_narrative=previous_narrative,
+            new_artwork_data=new_artwork_data,
+            identity=identity,
+            language=language,
+        )
+        return result.text.strip()
+
+    async def summarize_session_narrative_result(
+        self,
+        previous_narrative: Optional[str],
+        new_artwork_data: Dict[str, Any],
+        identity: str = "default",
+        language: Optional[str] = None
+    ) -> AITextResult:
         """
         Update the session's thematic narrative summary based on a new artwork.
         """
@@ -305,13 +320,17 @@ Update the "Session Narrative" to incorporate this latest piece. The narrative s
 
 Return ONLY the updated narrative text.{language_instruction}"""
 
-        response = await self.ai_client.call_text_only(
+        result = await self.ai_client.call_text_only_result(
             prompt=prompt,
             max_tokens=300,
             temperature=0.7
         )
         
-        return response.strip()
+        return AITextResult(
+            text=result.text.strip(),
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+        )
 
     # Main service methods
     async def identify_artist(
@@ -326,6 +345,31 @@ Return ONLY the updated narrative text.{language_instruction}"""
         artwork_name: Optional[str] = None,
         additional_clue: Optional[str] = None,
     ) -> str:
+        result = await self.identify_artist_result(
+            image_bytes=image_bytes,
+            label_image_bytes=label_image_bytes,
+            identity=identity,
+            language=language,
+            session_context=session_context,
+            vision_hint=vision_hint,
+            artist_name=artist_name,
+            artwork_name=artwork_name,
+            additional_clue=additional_clue,
+        )
+        return result.text
+
+    async def identify_artist_result(
+        self,
+        image_bytes: bytes,
+        label_image_bytes: Optional[bytes] = None,
+        identity: str = "default",
+        language: Optional[str] = None,
+        session_context: Optional[Dict[str, Any]] = None,
+        vision_hint: Optional[str] = None,
+        artist_name: Optional[str] = None,
+        artwork_name: Optional[str] = None,
+        additional_clue: Optional[str] = None,
+    ) -> AITextResult:
         """
         Identify the artist and artwork details (non-streaming)
 
@@ -371,7 +415,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
 
         # Call API through client
         with anyio.fail_after(settings.ai_timeout):
-            response = await self.ai_client.call_with_image_and_text(
+            result = await self.ai_client.call_with_image_and_text_result(
                 prompt=prompt,
                 image_data=image_data,
                 max_tokens=2000,
@@ -379,7 +423,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 response_schema=ARTWORK_ANALYSIS_SCHEMA
             )
 
-        return response
+        return result
 
     async def identify_artist_stream(
         self,
@@ -399,6 +443,35 @@ Return ONLY the updated narrative text.{language_instruction}"""
         session_context param retained for signature compatibility but no longer injected —
         contextual commentary belongs in the exhibition chat, not the artwork card.
         """
+        async for chunk in self.identify_artist_stream_result(
+            image_bytes=image_bytes,
+            label_image_bytes=label_image_bytes,
+            identity=identity,
+            language=language,
+            session_context=session_context,
+            reasoning_effort=reasoning_effort,
+            vision_hint=vision_hint,
+            artist_name=artist_name,
+            artwork_name=artwork_name,
+            additional_clue=additional_clue,
+        ):
+            if chunk.type == "text":
+                yield chunk.text
+
+    async def identify_artist_stream_result(
+        self,
+        image_bytes: bytes,
+        label_image_bytes: Optional[bytes] = None,
+        identity: str = "default",
+        language: Optional[str] = None,
+        session_context: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None,
+        vision_hint: Optional[str] = None,
+        artist_name: Optional[str] = None,
+        artwork_name: Optional[str] = None,
+        additional_clue: Optional[str] = None,
+    ) -> AsyncGenerator[AIStreamChunk, None]:
+        """Stream identify the artist and artwork details with usage metadata events."""
         image_payloads = [image_bytes]
         if label_image_bytes:
             image_payloads.append(label_image_bytes)
@@ -428,7 +501,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
 
         # Stream API through client
         with anyio.fail_after(settings.ai_timeout):
-            async for chunk in self.ai_client.stream_with_image_and_text(
+            async for chunk in self.ai_client.stream_with_image_and_text_result(
                 prompt=prompt,
                 image_data=image_data,
                 max_tokens=2000,
@@ -643,6 +716,21 @@ Return ONLY the updated narrative text.{language_instruction}"""
         new_message: str,
         image_bytes_list: List[bytes],
     ) -> str:
+        result = await self.session_chat_result(
+            items=items,
+            history=history,
+            new_message=new_message,
+            image_bytes_list=image_bytes_list,
+        )
+        return result.text
+
+    async def session_chat_result(
+        self,
+        items: list,
+        history: list,
+        new_message: str,
+        image_bytes_list: List[bytes],
+    ) -> AITextResult:
         """
         Exhibition curator chat: discuss a collection of works with the user.
         Implements provider-agnostic orchestration similar to other service methods.
@@ -659,7 +747,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         )
 
         with anyio.fail_after(settings.ai_timeout):
-            return await self.ai_client.call_with_conversation(
+            return await self.ai_client.call_with_conversation_result(
                 messages=messages,
                 max_tokens=2048,
                 temperature=0.7,
@@ -676,6 +764,23 @@ Return ONLY the updated narrative text.{language_instruction}"""
         Stream exhibition curator response token by token.
         Mirrors the non-streaming version but yields incremental chunks.
         """
+        async for chunk in self.stream_session_chat_result(
+            items=items,
+            history=history,
+            new_message=new_message,
+            image_bytes_list=image_bytes_list,
+        ):
+            if chunk.type == "text":
+                yield chunk.text
+
+    async def stream_session_chat_result(
+        self,
+        items: list,
+        history: list,
+        new_message: str,
+        image_bytes_list: List[bytes],
+    ) -> AsyncGenerator[AIStreamChunk, None]:
+        """Stream session chat with usage metadata events when the provider exposes them."""
         prompt = self.build_session_chat_prompt(items)
         conversation_history = self.build_conversation_history(history)
         image_data = None if history else self.prepare_image_batch(image_bytes_list)
@@ -688,7 +793,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         )
 
         with anyio.fail_after(settings.ai_timeout):
-            async for chunk in self.ai_client.stream_with_conversation(
+            async for chunk in self.ai_client.stream_with_conversation_result(
                 messages=messages,
                 max_tokens=2048,
                 temperature=0.7,

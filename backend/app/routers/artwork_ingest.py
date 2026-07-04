@@ -15,7 +15,9 @@ from app.config.settings import settings
 from app.database.connection import get_db
 from app.database.models import SavedArtwork, Session as SessionModel, User
 from app.models.artwork import AIProvider
+from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
+from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import (
     apply_analysis_to_saved_artwork,
     determine_ai_provider,
@@ -224,23 +226,42 @@ async def analyze_artwork_unified(
 
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
+    usage_id = start_ai_usage(
+        user_id=user_id,
+        job_type="artwork_reidentification" if artwork_id else "artwork_identification",
+        model=get_ai_model_name(ai_service, ai_provider.value),
+        subject_type="artwork" if existing_artwork else None,
+        subject_id=str(existing_artwork.id) if existing_artwork else None,
+    )
 
     try:
         vision_hint, vision_ref_urls = await get_vision_hint(image_bytes)
         session_context = await get_session_context(session_id) if session_id else None
 
-        analysis_text = await ai_service.identify_artist(
-            image_bytes,
-            label_image_bytes=label_image_bytes,
-            identity=identity,
-            language=language,
-            session_context=session_context,
-            vision_hint=vision_hint,
-            artist_name=artist_name,
-            artwork_name=artwork_name,
-            additional_clue=additional_clue,
+        identify_artist_result = getattr(ai_service, "identify_artist_result", None)
+        identify_kwargs = {
+            "image_bytes": image_bytes,
+            "label_image_bytes": label_image_bytes,
+            "identity": identity,
+            "language": language,
+            "session_context": session_context,
+            "vision_hint": vision_hint,
+            "artist_name": artist_name,
+            "artwork_name": artwork_name,
+            "additional_clue": additional_clue,
+        }
+        if callable(identify_artist_result):
+            analysis_result = await identify_artist_result(**identify_kwargs)
+        else:
+            analysis_result = AITextResult(text=await ai_service.identify_artist(**identify_kwargs))
+        analysis_text = analysis_result.text
+        succeed_ai_usage(
+            usage_id,
+            input_tokens=analysis_result.input_tokens,
+            output_tokens=analysis_result.output_tokens,
         )
     except Exception as exc:
+        fail_ai_usage(usage_id, exc)
         if existing_artwork:
             existing_artwork.analysis_status = "failed"
             existing_artwork.analysis_error = str(exc)
@@ -518,16 +539,35 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
 
     ai_provider = determine_ai_provider()
     ai_service = AIServiceFactory.get_service(ai_provider)
+    usage_id = start_ai_usage(
+        user_id=artwork.user_id or artwork.device_id,
+        job_type="artwork_reidentification",
+        model=get_ai_model_name(ai_service, ai_provider.value),
+        subject_type="artwork",
+        subject_id=str(artwork.id),
+    )
 
     vision_hint, vision_ref_urls = await get_vision_hint(image_bytes)
 
     try:
-        analysis_text = await ai_service.identify_artist(
-            image_bytes,
-            identity="default",
-            vision_hint=vision_hint,
+        identify_artist_result = getattr(ai_service, "identify_artist_result", None)
+        identify_kwargs = {
+            "image_bytes": image_bytes,
+            "identity": "default",
+            "vision_hint": vision_hint,
+        }
+        if callable(identify_artist_result):
+            analysis_result = await identify_artist_result(**identify_kwargs)
+        else:
+            analysis_result = AITextResult(text=await ai_service.identify_artist(**identify_kwargs))
+        analysis_text = analysis_result.text
+        succeed_ai_usage(
+            usage_id,
+            input_tokens=analysis_result.input_tokens,
+            output_tokens=analysis_result.output_tokens,
         )
     except Exception as exc:
+        fail_ai_usage(usage_id, exc)
         artwork.analysis_status = "failed"
         artwork.analysis_error = str(exc)
         artwork.analysis_completed_at = None

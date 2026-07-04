@@ -386,6 +386,50 @@ class ArtworkEvent(Base):
         }
 
 
+class AIUsage(Base):
+    """Best-effort AI usage telemetry.
+
+    This is operational logging, not product state. Product flows must not
+    depend on these rows existing.
+    """
+
+    __tablename__ = "ai_usage"
+    __table_args__ = (
+        Index("idx_ai_usage_user_started", "user_id", "started_at"),
+        Index("idx_ai_usage_subject", "subject_type", "subject_id"),
+        Index("idx_ai_usage_job_status", "job_type", "status"),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=True, index=True)
+    job_type = Column(String(50), nullable=False)
+    status = Column(String(20), nullable=False, default="running")
+    model = Column(String, nullable=True)
+    subject_type = Column(String(50), nullable=True)
+    subject_id = Column(String, nullable=True)
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+    started_at = Column(DateTime, server_default=func.now(), nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "job_type": self.job_type,
+            "status": self.status,
+            "model": self.model,
+            "subject_type": self.subject_type,
+            "subject_id": self.subject_id,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "error_message": self.error_message,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+        }
+
+
 class ArtworkEntity(Base):
     """Canonical artwork entity — shared across all users' instances of the same work."""
 
