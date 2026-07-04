@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { fetchSessionEvents } from '../api/sessions';
 import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from '../lib/sessionEventArtworks';
+import { parseServerTimestamp } from '../../lib/time';
+import { compareSessionEvents } from '../lib/sessionOrdering';
 import { usePreparedSessionStaging } from './usePreparedSessionStaging';
 import { useSessionActions } from './useSessionActions';
 import { useSessionMessaging } from './useSessionMessaging';
@@ -195,7 +197,7 @@ export function useSessionWorkspace({
             payload: m.payload as Record<string, unknown> | undefined,
             triggerEventId: m.trigger_event_id || (canonicalEventType === 'user_input' ? m.id : undefined) || m.turn_id || undefined,
             sequenceNumber: typeof m.sequence_number === 'number' ? m.sequence_number : undefined,
-            createdAt: m.created_at ? new Date(m.created_at as unknown as string).getTime() : Date.now(),
+            createdAt: parseServerTimestamp(m.created_at as unknown as string),
           };
         });
         const dbMessageIds = new Set(normalizedDbMessages.map((message) => message.id));
@@ -204,19 +206,7 @@ export function useSessionWorkspace({
           && message.type === 'artwork_commentary'
           && message.payload?.status === 'pending'
         ));
-        const nextMessages = [...normalizedDbMessages, ...pendingLocalOnlyMessages].sort((a, b) => {
-          if (
-            typeof a.sequenceNumber === 'number'
-            && typeof b.sequenceNumber === 'number'
-            && a.sequenceNumber !== b.sequenceNumber
-          ) {
-            return a.sequenceNumber - b.sequenceNumber;
-          }
-          if (a.createdAt !== b.createdAt) {
-            return a.createdAt - b.createdAt;
-          }
-          return a.id.localeCompare(b.id);
-        });
+        const nextMessages = [...normalizedDbMessages, ...pendingLocalOnlyMessages].sort(compareSessionEvents);
         if (
           nextMessages.length === existing.length
           && nextMessages.every((message, index) => {

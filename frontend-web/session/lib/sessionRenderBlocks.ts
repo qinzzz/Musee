@@ -1,6 +1,7 @@
 import type { GalleryItem } from '../../types';
 import { getItemSequenceNumberForSession, getSessionItemTimestamp } from './sessionSelectors';
 import { getSessionEventArtworkIds } from './sessionEventArtworks';
+import { compareSessionEvents } from './sessionOrdering';
 import type { SessionRenderBlock, SessionStreamMessage, SessionSummary } from '../types';
 
 function getArtworkEventSourceForSession(
@@ -33,70 +34,12 @@ function getArtworkGroupLabel(items: GalleryItem[], sessionId: string): string {
   return count === 1 ? 'Added an artwork' : `Added ${count} artworks from multiple sources`;
 }
 
-function sortByCanonicalOrder<T extends { sequenceNumber?: number; createdAt: number; id: string }>(a: T, b: T): number {
-  if (
-    typeof a.sequenceNumber === 'number'
-    && typeof b.sequenceNumber === 'number'
-    && a.sequenceNumber !== b.sequenceNumber
-  ) {
-    return a.sequenceNumber - b.sequenceNumber;
-  }
-  if (typeof a.sequenceNumber === 'number' && typeof b.sequenceNumber !== 'number') {
-    return -1;
-  }
-  if (typeof a.sequenceNumber !== 'number' && typeof b.sequenceNumber === 'number') {
-    return 1;
-  }
-  if (a.createdAt !== b.createdAt) {
-    return a.createdAt - b.createdAt;
-  }
-  return a.id.localeCompare(b.id);
-}
-
 function getCommentaryStatus(message: SessionStreamMessage): 'pending' | 'completed' | 'failed' {
   const status = message.payload?.status;
   if (status === 'failed' || status === 'completed' || status === 'pending') {
     return status;
   }
   return message.text ? 'completed' : 'pending';
-}
-
-function sortBlocksWithTriggeredCommentary(blocks: SessionRenderBlock[]): SessionRenderBlock[] {
-  const sortedBlocks = [...blocks].sort(sortByCanonicalOrder);
-  const triggeredCommentary = new Map<string, SessionRenderBlock[]>();
-  const unlinkedBlocks: SessionRenderBlock[] = [];
-
-  sortedBlocks.forEach((block) => {
-    if (block.type === 'commentary' && block.triggerEventId) {
-      const existing = triggeredCommentary.get(block.triggerEventId) || [];
-      existing.push(block);
-      triggeredCommentary.set(block.triggerEventId, existing);
-      return;
-    }
-    unlinkedBlocks.push(block);
-  });
-
-  const ordered: SessionRenderBlock[] = [];
-  unlinkedBlocks.forEach((block) => {
-    ordered.push(block);
-    const triggerEventId = block.type === 'input' ? block.triggerEventId : undefined;
-    if (!triggerEventId) {
-      return;
-    }
-    const commentaryBlocks = triggeredCommentary.get(triggerEventId);
-    if (!commentaryBlocks?.length) {
-      return;
-    }
-    ordered.push(...commentaryBlocks.sort(sortByCanonicalOrder));
-    triggeredCommentary.delete(triggerEventId);
-  });
-
-  Array.from(triggeredCommentary.values())
-    .flat()
-    .sort(sortByCanonicalOrder)
-    .forEach((block) => ordered.push(block));
-
-  return ordered;
 }
 
 export function buildSessionRenderBlocks(
@@ -108,7 +51,9 @@ export function buildSessionRenderBlocks(
   }
 
   const sessionId = activeSessionSummary.id;
-  const messages = [...(sessionStreams[sessionId] || [])].sort(sortByCanonicalOrder);
+  // No need to pre-sort: blocks are sorted once at the end, and the build loop
+  // is order-independent (used-item tracking is a Set).
+  const messages = sessionStreams[sessionId] || [];
 
   const itemsByArtworkId = new Map<string, GalleryItem>();
   const itemsById = new Map<string, GalleryItem>();
@@ -139,15 +84,18 @@ export function buildSessionRenderBlocks(
 
       items.forEach((item) => usedItemIds.add(item.id));
 
-      if (items.length > 0 || message.text) {
+      // Only an artwork-bearing event becomes an "input" block (the artwork
+      // chip + thumbnails). A text-only user message falls through to a plain
+      // "message" block below, which renders as a chat bubble with no chip.
+      if (items.length > 0) {
         blocks.push({
           type: 'input',
           id: message.id,
           createdAt: message.createdAt,
           sequenceNumber: message.sequenceNumber,
-          triggerEventId: message.triggerEventId || message.id,
+          localOrder: message.localOrder,
           items,
-          sourceLabel: items.length > 0 ? getArtworkGroupLabel(items, sessionId) : 'Message',
+          sourceLabel: getArtworkGroupLabel(items, sessionId),
           userMessage: message.text ? message : undefined,
         });
         continue;
@@ -160,7 +108,7 @@ export function buildSessionRenderBlocks(
         id: message.id,
         createdAt: message.createdAt,
         sequenceNumber: message.sequenceNumber,
-        triggerEventId: message.triggerEventId,
+        localOrder: message.localOrder,
         message,
         status: getCommentaryStatus(message),
       });
@@ -173,6 +121,7 @@ export function buildSessionRenderBlocks(
         id: message.id,
         createdAt: message.createdAt,
         sequenceNumber: message.sequenceNumber,
+        localOrder: message.localOrder,
         message,
       });
     }
@@ -191,16 +140,26 @@ export function buildSessionRenderBlocks(
       return getSessionItemTimestamp(a) - getSessionItemTimestamp(b);
     });
 
+  // sequence_number is the authoritative order (the DB assigns it in event
+  // order, so a reply always follows its trigger). Optimistic blocks have no
+  // seq yet and sort after all persisted ones, by creation order — see
+  // compareSessionEvents.
+  const orderedBlocks = blocks.sort(compareSessionEvents);
+
   if (orphanItems.length > 0) {
-    blocks.push({
+    // Orphan artworks live in the session but aren't tied to any conversation
+    // event (legacy sessions, or an event not yet loaded). They're ordered by a
+    // different numbering (per-artwork index, not event sequence_number), so we
+    // keep them OUT of the canonical sort and render them first as the session's
+    // base contents — avoids mixing the two numbering spaces.
+    orderedBlocks.unshift({
       type: 'artwork_group',
       id: `artwork-group-${sessionId}`,
       createdAt: orphanItems[0] ? getSessionItemTimestamp(orphanItems[0]) : Date.now(),
-      sequenceNumber: getItemSequenceNumberForSession(orphanItems[0], sessionId) ?? undefined,
       items: orphanItems,
       sourceLabel: getArtworkGroupLabel(orphanItems, sessionId),
     });
   }
 
-  return sortBlocksWithTriggeredCommentary(blocks);
+  return orderedBlocks;
 }

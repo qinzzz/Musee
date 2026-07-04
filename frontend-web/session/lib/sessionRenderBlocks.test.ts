@@ -49,14 +49,45 @@ function createMessage(overrides: Partial<SessionStreamMessage>): SessionStreamM
 }
 
 describe('buildSessionRenderBlocks', () => {
-  it('renders triggered commentary after its user input even when sequence numbers arrive out of order', () => {
+  it('orders optimistic (no-seq) events by localOrder, never by createdAt', () => {
+    const item = createItem('art-1');
+    // createdAt deliberately inverted: the reply has the EARLIER createdAt.
+    const inputEvent = createMessage({
+      id: 'evt-input',
+      role: 'user',
+      text: 'look at this',
+      artworkIds: ['art-1'],
+      payload: { artworks: [{ artwork_id: 'art-1', source: 'library' }] },
+      localOrder: 1,
+      createdAt: 9999,
+    });
+    const reply = createMessage({
+      id: 'evt-reply',
+      role: 'model',
+      type: 'artwork_commentary',
+      text: 'nice',
+      triggerEventId: 'evt-input',
+      localOrder: 2,
+      createdAt: 1,
+      payload: { status: 'completed' },
+    });
+
+    const blocks = buildSessionRenderBlocks(createSummary([item]), {
+      'session-1': [reply, inputEvent],
+    });
+
+    // createdAt would put the reply first (1 < 9999); localOrder keeps it last.
+    expect(blocks.map((block) => block.id)).toEqual(['evt-input', 'evt-reply']);
+  });
+
+  it('orders events by sequence_number (reply after its trigger)', () => {
     const userInput = createMessage({
       id: 'evt-user',
       role: 'user',
       text: 'what does slop mean',
       triggerEventId: 'evt-user',
-      sequenceNumber: 4,
-      createdAt: 400,
+      sequenceNumber: 3,
+      createdAt: 300,
     });
     const commentary = createMessage({
       id: 'evt-commentary',
@@ -64,18 +95,61 @@ describe('buildSessionRenderBlocks', () => {
       type: 'artwork_commentary',
       text: 'In tech, slop means low-effort AI content.',
       triggerEventId: 'evt-user',
-      sequenceNumber: 3,
-      createdAt: 300,
+      sequenceNumber: 4,
+      createdAt: 400,
       payload: { status: 'completed' },
     });
 
+    // Provided out of array order; the builder must order by sequence_number.
     const blocks = buildSessionRenderBlocks(createSummary(), {
       'session-1': [commentary, userInput],
     });
 
     expect(blocks.map((block) => block.id)).toEqual(['evt-user', 'evt-commentary']);
-    expect(blocks[0].type).toBe('input');
+    // A text-only user message is a plain message bubble, not an artwork "input" block.
+    expect(blocks[0].type).toBe('message');
     expect(blocks[1].type).toBe('commentary');
+  });
+
+  it('keeps a reply at its sequence position even when its trigger renders no block, and a new (unsaved) message stays last', () => {
+    // An upload user_input whose artworks do not resolve to items → produces no
+    // input block. Its reply must still render at its seq position, and a
+    // brand-new optimistic message (no sequence_number) must remain at the bottom.
+    const uploadInput = createMessage({
+      id: 'evt-upload',
+      role: 'user',
+      text: '',
+      triggerEventId: 'evt-upload',
+      artworkIds: ['missing-artwork'],
+      sequenceNumber: 1,
+      createdAt: 100,
+      payload: { artworks: [{ artwork_id: 'missing-artwork', source: 'upload' }] },
+    });
+    const uploadReply = createMessage({
+      id: 'evt-upload-reply',
+      role: 'model',
+      type: 'artwork_commentary',
+      text: 'reply about the upload',
+      triggerEventId: 'evt-upload',
+      sequenceNumber: 2,
+      createdAt: 200,
+      payload: { status: 'completed' },
+    });
+    const newMessage = createMessage({
+      id: 'evt-new',
+      role: 'user',
+      text: 'NEW MESSAGE',
+      triggerEventId: 'evt-new',
+      createdAt: 999, // optimistic: no sequenceNumber yet
+    });
+
+    const blocks = buildSessionRenderBlocks(createSummary(), {
+      'session-1': [uploadReply, uploadInput, newMessage],
+    });
+
+    const order = blocks.map((block) => block.id);
+    expect(order).toEqual(['evt-upload-reply', 'evt-new']);
+    expect(order[order.length - 1]).toBe('evt-new');
   });
 
   it('keeps artwork user input, its text, and triggered commentary together', () => {
@@ -90,8 +164,8 @@ describe('buildSessionRenderBlocks', () => {
       text: 'compare these works',
       triggerEventId: 'evt-artworks',
       artworkIds: ['artwork-a', 'artwork-b'],
-      sequenceNumber: 2,
-      createdAt: 200,
+      sequenceNumber: 1,
+      createdAt: 100,
       payload: {
         artworks: [
           { artwork_id: 'artwork-a', source: 'library' },
@@ -105,8 +179,8 @@ describe('buildSessionRenderBlocks', () => {
       type: 'artwork_commentary',
       text: 'They differ in texture and ceremony.',
       triggerEventId: 'evt-artworks',
-      sequenceNumber: 1,
-      createdAt: 100,
+      sequenceNumber: 2,
+      createdAt: 200,
       payload: { status: 'completed' },
     });
 
