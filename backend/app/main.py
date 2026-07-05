@@ -83,7 +83,7 @@ def create_lifespan():
 def configure_cors(app: FastAPI) -> None:
     allowed_origins = [
         "https://musee-web.vercel.app",
-        "https://musee-web.personal-noise.workers.dev",
+        "https://musee-web.qinzzz.workers.dev",
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3002",
