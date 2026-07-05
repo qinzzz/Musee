@@ -22,6 +22,16 @@ export type LocationInfo = {
 
 export type PreparedSessionUploadEntry = Extract<PendingSessionArtwork, { kind: 'upload' }>;
 
+export type PreparedUploadCandidate = {
+  file: File;
+  previewUrl: string;
+  mode: IngestMode;
+  timestamp: number;
+  photoTime: string;
+  coords?: { latitude?: number; longitude?: number };
+  location?: string;
+};
+
 export type PreparedUploadSessionContext = {
   sessionId: string;
   getSequenceNumber: (entryId: string) => number;

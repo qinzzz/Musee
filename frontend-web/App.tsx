@@ -372,7 +372,7 @@ const App: React.FC = () => {
       ...prev,
       itemIds: prev.itemIds.filter((id) => id !== itemId),
     }));
-    setArtworkDetailSelection((prev) => (prev?.artworkId === itemId ? null : prev));
+    setArtworkDetailSelection((prev) => (prev?.artworkClientId === itemId ? null : prev));
   }, [setArtworkDetailSelection, setArtworkWorkspace, setItems]);
 
   const {
@@ -451,7 +451,7 @@ const App: React.FC = () => {
 
     const deleteTargetId = itemToDelete.artworkId || itemToDelete.id;
     setDeleteConfirmation(null);
-    setArtworkDetailSelection((prev) => (prev?.artworkId === id ? null : prev));
+    setArtworkDetailSelection((prev) => (prev?.artworkClientId === id ? null : prev));
     updateSavedArtworkInState(id, {
       clientState: {
         deleteStatus: 'pending',

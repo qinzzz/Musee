@@ -188,8 +188,8 @@ describe('useArtworkLibrary', () => {
 
     const selection = result.current.buildArtworkDetailSelection(result.current.items[0], result.current.items);
     expect(selection).toEqual({
-      artworkId: 'server-1',
-      navigationItemIds: ['server-1', 'server-2'],
+      artworkClientId: 'server-1',
+      navigationItemClientIds: ['server-1', 'server-2'],
     });
 
     act(() => {

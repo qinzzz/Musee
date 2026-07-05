@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import { ArtworkClassification } from '../../types';
 import { fetchAndPersistInsights } from '../../api/artworks';
 import type { ArtworkDetailItem, ArtworkSessionMembership, IdentifyAgainHints } from '../types';
+import { getArtworkClientId } from '../../lib/artworkIdentity';
 import { useArtworkCommunity } from '../hooks/useArtworkCommunity';
 import { useArtworkDetailMedia } from '../hooks/useArtworkDetailMedia';
 import { useArtworkDetailEditor } from '../hooks/useArtworkDetailEditor';
@@ -137,7 +138,7 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
   useEffect(() => {
     setInsights([]);
     onRightModeChange('metadata'); // Reset to metadata view for the new piece
-  }, [item.id]);
+  }, [item.clientId, item.id]);
 
   // Sync persisted insights from parent updates; backfill on first open if missing
   useEffect(() => {
@@ -155,7 +156,7 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
     return () => {
       isCurrent = false;
     };
-  }, [item.id, item.artworkId, item.insights, item.artistName]);
+  }, [item.clientId, item.id, item.artworkId, item.insights, item.artistName]);
 
   const displayLocation = useMemo(
     () => getArtworkDisplayLocation(item.location),
@@ -177,7 +178,7 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
     [item.sessionLinks, sessionTitleById],
   );
   const navigationItems = item.navigationItems;
-  const navigationIndex = navigationItems?.findIndex(i => i.id === item.id) ?? -1;
+  const navigationIndex = navigationItems?.findIndex((navItem) => getArtworkClientId(navItem) === getArtworkClientId(item)) ?? -1;
   const currentClassification = item.classification || 'unsorted';
   const isInitialIdentifying = Boolean(item.isAnalyzing && item.analysisStatus !== 'reidentifying');
   const isReidentifying = Boolean(item.isAnalyzing && item.analysisStatus === 'reidentifying');

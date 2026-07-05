@@ -3,6 +3,7 @@ import { getItemSequenceNumberForSession, getSessionItemTimestamp } from './sess
 import { getSessionEventArtworkIds } from './sessionEventArtworks';
 import { compareSessionEvents } from './sessionOrdering';
 import type { SessionRenderBlock, SessionStreamMessage, SessionSummary } from '../types';
+import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 function getArtworkEventSourceForSession(
   item: GalleryItem,
@@ -58,6 +59,7 @@ export function buildSessionRenderBlocks(
   const itemsByArtworkId = new Map<string, GalleryItem>();
   const itemsById = new Map<string, GalleryItem>();
   activeSessionSummary.items.forEach((item) => {
+    itemsById.set(getArtworkClientId(item), item);
     itemsById.set(item.id, item);
     if (item.artworkId) {
       itemsByArtworkId.set(item.artworkId, item);
@@ -82,7 +84,7 @@ export function buildSessionRenderBlocks(
         .map(resolveArtwork)
         .filter((item): item is GalleryItem => Boolean(item));
 
-      items.forEach((item) => usedItemIds.add(item.id));
+      items.forEach((item) => usedItemIds.add(getArtworkClientId(item)));
 
       // Only an artwork-bearing event becomes an "input" block (the artwork
       // chip + thumbnails). A text-only user message falls through to a plain
@@ -128,7 +130,7 @@ export function buildSessionRenderBlocks(
   }
 
   const orphanItems = [...activeSessionSummary.items]
-    .filter((item) => !usedItemIds.has(item.id))
+    .filter((item) => !usedItemIds.has(getArtworkClientId(item)))
     .sort((a, b) => {
       const aSequence = getItemSequenceNumberForSession(a, sessionId);
       const bSequence = getItemSequenceNumberForSession(b, sessionId);

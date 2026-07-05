@@ -13,6 +13,7 @@ import {
 } from '../../lib/appNavigation';
 import type { GalleryItem } from '../../types';
 import type { ArtworkDetailSelection } from '../../artwork/types';
+import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 type UseDetailNavigationOptions = {
   activeTab: AppTab;
@@ -57,7 +58,7 @@ export function useDetailNavigation({
     window.history.pushState(
       {
         view: 'artwork',
-        artworkId: item.id,
+        artworkClientId: getArtworkClientId(item),
         artworkContext: context,
         activeTab,
         collectTab,

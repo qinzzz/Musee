@@ -25,7 +25,7 @@ export type NavigationHistoryState =
     }
   | {
       view: 'artwork';
-      artworkId: string;
+      artworkClientId: string;
       artworkContext: ArtworkDetailContext;
       activeTab: AppTab;
       collectTab: CollectTab;
