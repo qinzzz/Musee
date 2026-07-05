@@ -297,8 +297,8 @@ describe('useArtworkIngest', () => {
     expect(mockAnalyzeArtworkFromExisting).toHaveBeenCalledWith('saved-1', {
       labelFile: null,
     });
+    expect(result.current.state.items[0].id).toMatch(/^upload-placeholder-/);
     expect(result.current.state.items[0]).toMatchObject({
-      id: 'saved-1',
       artistName: 'Claude Monet',
       artworkName: 'Water Lilies',
       analysisStatus: 'analyzed',
@@ -327,8 +327,8 @@ describe('useArtworkIngest', () => {
       expect(result.current.state.items[0].analysisStatus).toBe('failed');
     });
 
+    expect(result.current.state.items[0].id).toMatch(/^upload-placeholder-/);
     expect(result.current.state.items[0]).toMatchObject({
-      id: 'saved-1',
       analysisStatus: 'failed',
       analysisError: 'Analysis failed hard',
       syncStatus: 'synced',
@@ -363,6 +363,18 @@ describe('useArtworkIngest', () => {
         expect.stringMatching(/^evt-/),
       );
     });
+
+    expect(spies.appendSessionEvents).toHaveBeenCalledWith(
+      'visit-1',
+      [
+        expect.objectContaining({
+          role: 'user',
+          type: 'text',
+          localOrder: expect.any(Number),
+        }),
+      ],
+      { persist: false },
+    );
 
     expect(mockAnalyzeArtworkFromExisting).toHaveBeenCalled();
     expect(spies.triggerUploadCommentary).not.toHaveBeenCalled();
@@ -458,7 +470,7 @@ describe('useArtworkIngest', () => {
     });
   });
 
-  it('remaps the open artwork detail selection from placeholder id to persisted id', async () => {
+  it('keeps the open artwork detail selection on the stable client id after persistence', async () => {
     const deferredAnalysis = createDeferred<ReturnType<typeof createAnalysis>>();
     mockSaveArtworkUpload.mockResolvedValue(createSavedUpload());
     mockAnalyzeArtworkFromExisting.mockReturnValue(deferredAnalysis.promise);
@@ -495,11 +507,67 @@ describe('useArtworkIngest', () => {
 
     await waitFor(() => {
       expect(result.current.state.artworkDetailSelection).toEqual({
-        artworkId: 'saved-1',
-        navigationItemIds: ['saved-1'],
+        artworkId: placeholderId,
+        navigationItemIds: [placeholderId],
       });
-      expect(result.current.state.items[0].id).toBe('saved-1');
+      expect(result.current.state.items[0].id).toBe(placeholderId);
+      expect(result.current.state.items[0].artworkId).toBe('artwork-1');
       expect(result.current.state.items[0].analysisStatus).toBe('analyzed');
     });
+  });
+
+  it('keeps stable client ids for batch uploads while assigning persisted artwork ids separately', async () => {
+    mockSaveArtworkUpload
+      .mockResolvedValueOnce({
+        ...createSavedUpload(),
+        id: 'saved-1',
+        session_links: [{ session_id: 'visit-1', sequence_number: 0, source: 'upload' }],
+      })
+      .mockResolvedValueOnce({
+        ...createSavedUpload(),
+        id: 'saved-2',
+        session_links: [{ session_id: 'visit-1', sequence_number: 1, source: 'upload' }],
+      });
+    mockAnalyzeArtworkFromExisting
+      .mockResolvedValueOnce(createAnalysis({ artwork_id: 'saved-1' }))
+      .mockResolvedValueOnce(createAnalysis({ artwork_id: 'saved-2' }));
+
+    const { result, spies } = renderUseArtworkIngest({
+      activeTab: 'newSession',
+      isComposingNewSession: false,
+      items: [],
+    });
+
+    await act(async () => {
+      await result.current.api.processArtworkFiles([
+        createFile('batch-one.jpg'),
+        createFile('batch-two.jpg'),
+      ], 'gallery');
+    });
+
+    const ids = result.current.state.items.map((item) => item.id);
+    expect(ids).toHaveLength(2);
+    expect(ids.every((id) => id.startsWith('upload-placeholder-'))).toBe(true);
+    expect(result.current.state.items.map((item) => item.artworkId)).toEqual(['saved-1', 'saved-2']);
+    expect(spies.appendSessionEvents).toHaveBeenNthCalledWith(
+      1,
+      'visit-1',
+      [
+        expect.objectContaining({
+          artworkIds: expect.arrayContaining(ids),
+        }),
+      ],
+      { persist: false },
+    );
+    expect(spies.appendSessionEvents).toHaveBeenNthCalledWith(
+      2,
+      'visit-1',
+      [
+        expect.objectContaining({
+          artworkIds: ['saved-1', 'saved-2'],
+        }),
+      ],
+      { persist: false },
+    );
   });
 });

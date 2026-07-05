@@ -145,9 +145,9 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
       setInsights(item.insights!);
       return;
     }
-    if (!item.id || !item.artistName || item.artistName.toLowerCase() === 'unknown') return;
+    if (!(item.artworkId || item.id) || !item.artistName || item.artistName.toLowerCase() === 'unknown') return;
     let isCurrent = true;
-    fetchAndPersistInsights(item.id)
+    fetchAndPersistInsights(item.artworkId || item.id)
       .then((pts) => {
         if (isCurrent) setInsights(pts);
       })
@@ -155,7 +155,7 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
     return () => {
       isCurrent = false;
     };
-  }, [item.id, item.insights, item.artistName]);
+  }, [item.id, item.artworkId, item.insights, item.artistName]);
 
   const displayLocation = useMemo(
     () => getArtworkDisplayLocation(item.location),

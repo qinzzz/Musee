@@ -8,6 +8,7 @@ import {
 import { fetchAndPersistInsights } from '../../api/artworks';
 import { hasUsableCommentaryContext } from '../../session/lib/commentary';
 import { buildSessionLink, itemBelongsToSession, newSessionEventId } from '../../session/lib/sessionLinks';
+import { nextLocalOrder } from '../../session/lib/sessionOrdering';
 import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../../session/types';
 import type { ArtworkWorkspace, GalleryItem, TagCoordinate } from '../../types';
 import type { ArtworkStatePatch } from '../../artwork/lib/artworkState';
@@ -284,7 +285,6 @@ export function useArtworkIngest({
   ): GalleryItem => {
     const reconciled: GalleryItem = {
       ...placeholder,
-      id: persistedItem.id,
       artworkId: persistedItem.artworkId,
       sessionLinks: persistedItem.sessionLinks,
       location: persistedItem.location,
@@ -298,24 +298,8 @@ export function useArtworkIngest({
     };
 
     setItems((prev) => prev.map((item) => (item.id === placeholder.id ? reconciled : item)));
-    setVisit((prev) => ({
-      ...prev,
-      itemIds: prev.itemIds.map((id) => (id === placeholder.id ? persistedItem.id : id)),
-    }));
-    if (artworkDetailSelection?.artworkId === placeholder.id) {
-      setArtworkDetailSelection((prev) => {
-        if (!prev || prev.artworkId !== placeholder.id) return prev;
-        return {
-          ...prev,
-          artworkId: persistedItem.id,
-          navigationItemIds: prev.navigationItemIds?.map((id) => (
-            id === placeholder.id ? persistedItem.id : id
-          )),
-        };
-      });
-    }
     return reconciled;
-  }, [artworkDetailSelection?.artworkId, setArtworkDetailSelection, setItems, setVisit]);
+  }, [setItems]);
 
   const ensureSessionDraft = useCallback((sessionId: string) => {
     const now = Date.now();
@@ -423,8 +407,8 @@ export function useArtworkIngest({
         // Local-only optimistic rendering; the prepared-session flow persists
         // the whole batch as one canonical user_input event after all resolve.
         appendSessionEvents(context.sessionId, [
-              { id: `capture-${placeholder.id}`, role: 'user', text: '', type: 'artwork_capture', artworkId: persistedItem.artworkId!, triggerEventId: context.userInputEventId, createdAt: Date.now() },
-              { id: `card-${placeholder.id}`, role: 'model', text: '', type: 'artwork_card', artworkId: persistedItem.artworkId!, triggerEventId: context.userInputEventId, createdAt: Date.now() + 1 },
+              { id: `capture-${placeholder.id}`, role: 'user', text: '', type: 'artwork_capture', artworkId: persistedItem.artworkId!, triggerEventId: context.userInputEventId, createdAt: Date.now(), localOrder: nextLocalOrder() },
+              { id: `card-${placeholder.id}`, role: 'model', text: '', type: 'artwork_card', artworkId: persistedItem.artworkId!, triggerEventId: context.userInputEventId, createdAt: Date.now() + 1, localOrder: nextLocalOrder() },
         ], { persist: false });
         maybeResolveLocation(persistedItem.id, uploadEntry.coords);
         persistedSessionItems.push(liveItem);
@@ -616,6 +600,7 @@ export function useArtworkIngest({
               type: 'text',
               artworkIds: [placeholder.id],
               createdAt: getNextLocalSessionEventCreatedAt(sessionStreams[sessionId] || []),
+              localOrder: nextLocalOrder(),
               payload: {
                 artworks: [{ artwork_id: placeholder.id, source }],
               },
@@ -650,6 +635,7 @@ export function useArtworkIngest({
               type: 'text',
               artworkIds: [persistedItem.artworkId!],
               createdAt: getNextLocalSessionEventCreatedAt(sessionStreams[sessionId] || []),
+              localOrder: nextLocalOrder(),
               payload: {
                 artworks: [{ artwork_id: persistedItem.artworkId!, source }],
               },
@@ -696,6 +682,7 @@ export function useArtworkIngest({
                     type: 'text' as const,
                     artworkIds: [persistedItem.artworkId!],
                     createdAt: getNextLocalSessionEventCreatedAt(sessionStreams[sessionId] || []),
+                    localOrder: nextLocalOrder(),
                     payload: {
                       artworks: [{
                         artwork_id: persistedItem.artworkId!,
@@ -770,6 +757,7 @@ export function useArtworkIngest({
             type: 'text',
             artworkIds: placeholders.map((placeholder) => placeholder.id),
             createdAt: getNextLocalSessionEventCreatedAt(sessionStreams[batchSessionId] || []),
+            localOrder: nextLocalOrder(),
             payload: {
               artworks: placeholders.map((placeholder) => ({
                 artwork_id: placeholder.id,
@@ -854,6 +842,7 @@ export function useArtworkIngest({
               type: 'text',
               artworkIds: inputEntries.map((entry) => entry.artworkId),
               createdAt: getNextLocalSessionEventCreatedAt(sessionStreams[batchSessionId] || []),
+              localOrder: nextLocalOrder(),
               payload: {
                 artworks: inputEntries.map((entry) => ({
                   artwork_id: entry.artworkId,

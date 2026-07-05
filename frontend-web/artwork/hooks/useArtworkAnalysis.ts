@@ -33,7 +33,8 @@ export function useArtworkAnalysis({
   const [isHeaderIdentifyingAgain, setIsHeaderIdentifyingAgain] = useState(false);
 
   const hydrateInsights = useCallback((itemId: string) => {
-    fetchAndPersistInsights(itemId)
+    const targetItem = artworkDetailItem?.id === itemId ? artworkDetailItem : null;
+    fetchAndPersistInsights(targetItem?.artworkId || itemId)
       .then((insights) => {
         if (insights.length > 0) {
           updateSavedArtworkInState(itemId, {
@@ -42,7 +43,7 @@ export function useArtworkAnalysis({
         }
       })
       .catch(() => {});
-  }, [updateSavedArtworkInState]);
+  }, [artworkDetailItem, updateSavedArtworkInState]);
 
   const handleRetryAnalysis = useCallback(async (item: GalleryItem) => {
     const itemId = item.id;
