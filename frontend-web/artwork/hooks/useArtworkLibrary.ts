@@ -329,12 +329,15 @@ export function useArtworkLibrary({
   const handleUpdateClassification = async (itemId: string, classification: ArtworkClassification) => {
     const previous = items.find((item) => item.id === itemId)?.classification || 'unsorted';
     if (previous === classification) return;
+    const targetItem = items.find((item) => item.id === itemId);
+    const backendArtworkId = targetItem?.artworkId || targetItem?.id;
+    if (!backendArtworkId) return;
 
     setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, classification } : item));
     setProfileRefreshKey((prev) => prev + 1);
 
     try {
-      await updateArtworkClassification(itemId, classification);
+      await updateArtworkClassification(backendArtworkId, classification);
     } catch (error) {
       console.error('Failed to update artwork classification:', error);
       setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, classification: previous } : item));
