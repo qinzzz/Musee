@@ -157,6 +157,7 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
       isCurrent = false;
     };
   }, [item.clientId, item.id, item.artworkId, item.insights, item.artistName]);
+  }, [item.clientId, item.id, item.artworkId, item.insights, item.artistName]);
 
   const displayLocation = useMemo(
     () => getArtworkDisplayLocation(item.location),
