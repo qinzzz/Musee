@@ -16,6 +16,7 @@ import {
 function createItem(overrides: Partial<GalleryItem> = {}): GalleryItem {
   return {
     id: 'art-1',
+    clientId: 'art-1',
     artworkId: 'art-1',
     url: 'https://example.com/art.jpg',
     keywords: ['#line'],
@@ -94,8 +95,8 @@ describe('artworkState helpers', () => {
       createItem({ id: 'art-2', artworkId: 'art-2', artworkName: 'Second' }),
     ];
     const selection: ArtworkDetailSelection = {
-      artworkId: 'art-2',
-      navigationItemIds: ['art-1', 'art-2'],
+      artworkClientId: 'art-2',
+      navigationItemClientIds: ['art-1', 'art-2'],
       is_liked: true,
     };
 

@@ -1,5 +1,6 @@
 type ArtworkBootstrapCacheItem = {
   id: string;
+  clientId?: string;
   artworkId?: string;
   sessionId?: string;
   url: string;
@@ -32,13 +33,14 @@ type ArtworkBootstrapCacheItem = {
 };
 
 type ArtworkBootstrapCachePayload = {
-  version: 2 | 3;
+  version: 2 | 3 | 4;
   userId: string;
   updatedAt: number;
   items: ArtworkBootstrapCacheItem[];
 };
 
-const ARTWORK_BOOTSTRAP_CACHE_KEY = 'musee_artwork_bootstrap_v3';
+const ARTWORK_BOOTSTRAP_CACHE_KEY = 'musee_artwork_bootstrap_v4';
+const PREVIOUS_ARTWORK_BOOTSTRAP_CACHE_KEY = 'musee_artwork_bootstrap_v3';
 const LEGACY_ARTWORK_BOOTSTRAP_CACHE_KEY = 'musee_artwork_bootstrap_v2';
 const ARTWORK_BOOTSTRAP_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -46,11 +48,12 @@ function readArtworkBootstrapCache(userId: string): ArtworkBootstrapCacheItem[] 
   try {
     const raw =
       localStorage.getItem(ARTWORK_BOOTSTRAP_CACHE_KEY) ||
+      localStorage.getItem(PREVIOUS_ARTWORK_BOOTSTRAP_CACHE_KEY) ||
       localStorage.getItem(LEGACY_ARTWORK_BOOTSTRAP_CACHE_KEY);
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as ArtworkBootstrapCachePayload;
-    if (parsed.version !== 2 && parsed.version !== 3) return null;
+    if (parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4) return null;
     if (parsed.userId !== userId) return null;
     if (!Array.isArray(parsed.items)) return null;
     if (Date.now() - parsed.updatedAt > ARTWORK_BOOTSTRAP_CACHE_TTL_MS) return null;
@@ -77,7 +80,7 @@ function readArtworkBootstrapCache(userId: string): ArtworkBootstrapCacheItem[] 
 
 function writeArtworkBootstrapCache(userId: string, items: ArtworkBootstrapCacheItem[]) {
   const payload: ArtworkBootstrapCachePayload = {
-    version: 3,
+    version: 4,
     userId,
     updatedAt: Date.now(),
     items,

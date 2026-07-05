@@ -20,6 +20,7 @@ import {
   splitArtworkListItem,
 } from '../lib/artworkState';
 import { buildSessionLink, getPrimarySessionId } from '../../session/lib/sessionLinks';
+import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 type UseArtworkLibraryOptions = {
   userId: string;
@@ -30,7 +31,7 @@ type UseArtworkLibraryOptions = {
 };
 
 function getServerItemKeys(item: GalleryItem): string[] {
-  const keys = [item.id];
+  const keys = [item.id, getArtworkClientId(item)];
   if (item.artworkId) {
     keys.push(item.artworkId);
   }
@@ -77,6 +78,7 @@ function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
   return buildArtworkListItem(
     {
       id: item.id,
+      clientId: item.id,
       artworkId: item.id,
       url: imageUrl,
       artistName: item.artist_name,
@@ -127,6 +129,7 @@ function mapCachedArtworkToGalleryItem(item: ArtworkBootstrapCacheItem): Gallery
   return buildArtworkListItem(
     {
       id: item.id,
+      clientId: item.clientId,
       artworkId: item.artworkId,
       url: item.url,
       artistName: item.artistName,
@@ -169,6 +172,7 @@ function mapGalleryItemToCacheItem(item: GalleryItem): ArtworkBootstrapCacheItem
   const { record, clientState } = splitArtworkListItem(item);
   return {
     id: record.id,
+    clientId: record.clientId,
     artworkId: record.artworkId,
     url: record.url,
     artistName: record.artistName,
@@ -221,7 +225,7 @@ function resolveArtworkDetailNavigationItems(
   navigationItemIds?: string[],
 ): GalleryItem[] {
   if (navigationItemIds && navigationItemIds.length > 0) {
-    const itemsById = new Map(items.map((item) => [item.id, item] as const));
+    const itemsById = new Map(items.map((item) => [getArtworkClientId(item), item] as const));
     const resolved = navigationItemIds
       .map((itemId) => itemsById.get(itemId))
       .filter((item): item is GalleryItem => Boolean(item));
@@ -310,12 +314,12 @@ export function useArtworkLibrary({
   }, [artworkDetailSelection, items]);
 
   const buildArtworkDetailSelection = (item: GalleryItem, allItems?: GalleryItem[]): ArtworkDetailSelection => ({
-    artworkId: item.id,
-    navigationItemIds: allItems?.map((entry) => entry.id),
+    artworkClientId: getArtworkClientId(item),
+    navigationItemClientIds: allItems?.map((entry) => getArtworkClientId(entry)),
   });
 
   const restoreArtworkFromHistory = (artworkId: string, context: ArtworkDetailContext) => {
-    const sourceItem = items.find((item) => item.id === artworkId || item.artworkId === artworkId);
+    const sourceItem = items.find((item) => getArtworkClientId(item) === artworkId || item.id === artworkId || item.artworkId === artworkId);
     if (!sourceItem) {
       setArtworkDetailSelection(null);
       onArtworkDetailContextChange?.(null);

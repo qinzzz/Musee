@@ -4,10 +4,17 @@ import type {
   GalleryItem,
 } from '../../types';
 import type { ArtworkDetailItem, ArtworkDetailSelection } from '../types';
+import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 const DEFAULT_CLIENT_STATE: ArtworkClientState = {
   syncStatus: 'synced',
 };
+
+function compactClientState(clientState: ArtworkClientState): ArtworkClientState {
+  return Object.fromEntries(
+    Object.entries(clientState).filter(([, value]) => value !== undefined),
+  ) as ArtworkClientState;
+}
 
 export type ArtworkStatePatch = {
   record?: Partial<ArtworkRecord>;
@@ -20,6 +27,7 @@ export function buildArtworkListItem(
 ): GalleryItem {
   return {
     ...record,
+    clientId: record.clientId || record.id,
     ...clientState,
   };
 }
@@ -41,7 +49,7 @@ export function splitArtworkListItem(item: GalleryItem): {
 
   return {
     record,
-    clientState: {
+    clientState: compactClientState({
       isAnalyzing,
       streamingText,
       analysisStatus,
@@ -49,7 +57,7 @@ export function splitArtworkListItem(item: GalleryItem): {
       deleteStatus,
       syncStatus,
       isDeletedPlaceholder,
-    },
+    }),
   };
 }
 
@@ -76,7 +84,7 @@ export function updateArtworkInList(
   patch: ArtworkStatePatch,
 ): GalleryItem[] {
   return items.map((item) => {
-    if (item.id !== targetId && item.artworkId !== targetId) return item;
+    if (getArtworkClientId(item) !== targetId && item.id !== targetId && item.artworkId !== targetId) return item;
     return mergeArtworkState(item, patch);
   });
 }
@@ -98,7 +106,7 @@ export function getArtworkFailureMessage(
 }
 
 export function selectArtworkById(items: GalleryItem[], artworkId: string): GalleryItem | null {
-  return items.find((item) => item.id === artworkId || item.artworkId === artworkId) || null;
+  return items.find((item) => getArtworkClientId(item) === artworkId || item.id === artworkId || item.artworkId === artworkId) || null;
 }
 
 export function resolveArtworkDetailItem(
@@ -108,7 +116,7 @@ export function resolveArtworkDetailItem(
 ): ArtworkDetailItem | null {
   if (!selection) return null;
 
-  const sourceItem = selectArtworkById(items, selection.artworkId);
+  const sourceItem = selectArtworkById(items, selection.artworkClientId);
   if (!sourceItem) return null;
 
   return {
@@ -116,7 +124,7 @@ export function resolveArtworkDetailItem(
     navigationItems: resolveNavigationItems(
       sourceItem,
       items,
-      selection.navigationItemIds,
+      selection.navigationItemClientIds,
     ),
     is_liked: selection.is_liked,
   };

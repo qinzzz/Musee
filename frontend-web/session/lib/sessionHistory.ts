@@ -2,6 +2,7 @@ import type { GalleryItem } from '../../types';
 import type { SessionStreamMessage } from '../types';
 import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from './sessionEventArtworks';
 import { compareSessionEvents } from './sessionOrdering';
+import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 const compareSessionHistoryOrder = compareSessionEvents;
 
@@ -34,6 +35,7 @@ export function serializeSessionHistory(
   items.forEach((item) => {
     if (item.artworkId) byId.set(item.artworkId, item);
     byId.set(item.id, item);
+    byId.set(getArtworkClientId(item), item);
   });
 
   const out: { role: 'user' | 'model'; text: string }[] = [];

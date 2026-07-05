@@ -7,6 +7,7 @@ import type {
   CollectTab,
   NavigationHistoryState,
 } from '../../lib/appNavigation';
+import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 type UseArtworkDetailPagerOptions = {
   activeTab: AppTab;
@@ -27,7 +28,7 @@ export function useArtworkDetailPager({
     if (!artworkDetailItem || !artworkDetailItem.navigationItems || artworkDetailItem.navigationItems.length <= 1) return;
 
     const allItems = artworkDetailItem.navigationItems;
-    const currentIndex = allItems.findIndex((item) => item.id === artworkDetailItem.id);
+    const currentIndex = allItems.findIndex((item) => getArtworkClientId(item) === getArtworkClientId(artworkDetailItem));
 
     if (currentIndex === -1) return;
 
@@ -37,15 +38,15 @@ export function useArtworkDetailPager({
 
     const nextItem = allItems[nextIndex];
     setArtworkDetailSelection({
-      artworkId: nextItem.id,
-      navigationItemIds: allItems.map((item) => item.id),
+      artworkClientId: getArtworkClientId(nextItem),
+      navigationItemClientIds: allItems.map((item) => getArtworkClientId(item)),
     });
 
     if (artworkDetailContext && window.history.state?.view === 'artwork') {
       window.history.replaceState(
         {
           view: 'artwork',
-          artworkId: nextItem.id,
+          artworkClientId: getArtworkClientId(nextItem),
           artworkContext: artworkDetailContext,
           activeTab,
           collectTab,

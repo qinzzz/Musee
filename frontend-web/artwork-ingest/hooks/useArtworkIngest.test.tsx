@@ -145,8 +145,8 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
     const [items, setItems] = React.useState<GalleryItem[]>(options.items ?? []);
     const [artworkWorkspace, setArtworkWorkspace] = React.useState<ArtworkWorkspace>({ id: 'initial', itemIds: [], globalConversation: [] });
     const [artworkDetailSelection, setArtworkDetailSelection] = React.useState<{
-      artworkId: string;
-      navigationItemIds?: string[];
+      artworkClientId: string;
+      navigationItemClientIds?: string[];
     } | null>(null);
     const [tagPositions, setTagPositions] = React.useState<Record<string, TagCoordinate>>({});
     const [sessionDrafts, setSessionDrafts] = React.useState<SessionDraft[]>([]);
@@ -495,8 +495,8 @@ describe('useArtworkIngest', () => {
 
     act(() => {
       result.current.actions.setArtworkDetailSelection({
-        artworkId: placeholderId,
-        navigationItemIds: [placeholderId],
+        artworkClientId: placeholderId,
+        navigationItemClientIds: [placeholderId],
       });
     });
 
@@ -507,8 +507,8 @@ describe('useArtworkIngest', () => {
 
     await waitFor(() => {
       expect(result.current.state.artworkDetailSelection).toEqual({
-        artworkId: placeholderId,
-        navigationItemIds: [placeholderId],
+        artworkClientId: placeholderId,
+        navigationItemClientIds: [placeholderId],
       });
       expect(result.current.state.items[0].id).toBe(placeholderId);
       expect(result.current.state.items[0].artworkId).toBe('artwork-1');

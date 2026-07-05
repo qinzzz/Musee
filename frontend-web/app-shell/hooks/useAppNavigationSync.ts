@@ -76,7 +76,7 @@ export function useAppNavigationSync({
       onSetCaptureState(null);
       onSetArtistPageContext(null);
       onSetMovementPageContext(null);
-      onRestoreArtworkFromHistory(historyState.artworkId, historyState.artworkContext);
+      onRestoreArtworkFromHistory(historyState.artworkClientId, historyState.artworkContext);
       return;
     }
 

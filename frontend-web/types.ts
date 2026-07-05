@@ -50,6 +50,7 @@ export interface SessionLink {
 
 export interface ArtworkRecord {
   id: string;
+  clientId?: string;
   url: string;
   keywords: string[];
   vibe: AestheticVibe;
@@ -99,7 +100,7 @@ export interface CuratorConversation {
   id: string;
   title: string;          // First user message, truncated to 60 chars
   messages: Message[];
-  itemIds: string[];      // Artwork IDs in context when conversation started
+  itemIds: string[];      // Stable client IDs in context when conversation started
   createdAt: number;
   updatedAt: number;
 }

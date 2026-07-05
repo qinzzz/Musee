@@ -7,8 +7,7 @@ import {
 } from '../../api/analysis';
 import { fetchAndPersistInsights } from '../../api/artworks';
 import { hasUsableCommentaryContext } from '../../session/lib/commentary';
-import { buildSessionLink, itemBelongsToSession, newSessionEventId } from '../../session/lib/sessionLinks';
-import { nextLocalOrder } from '../../session/lib/sessionOrdering';
+import { buildSessionLink, itemBelongsToSession } from '../../session/lib/sessionLinks';
 import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../../session/types';
 import type { ArtworkWorkspace, GalleryItem, TagCoordinate } from '../../types';
 import type { ArtworkStatePatch } from '../../artwork/lib/artworkState';
@@ -24,11 +23,20 @@ import {
 import {
   buildUploadLocationString,
   createPersistedUploadItem,
-  createUploadPlaceholder,
 } from '../lib/placeholders';
+import {
+  buildArtworkInputEvent,
+  buildPersistedSessionArtworkEntries,
+  buildPreparedUploadDisplayEvents,
+  buildStagedPendingUploads,
+  buildUploadPlaceholders,
+  getNextSessionArtworkSequenceNumber,
+  prepareUploadCandidates,
+} from '../lib/uploadWorkflow';
 import type {
   CaptureSubmission,
   IngestMode,
+  PreparedUploadCandidate,
   PreparedUploadIngestResult,
   PreparedSessionUploadEntry,
   PreparedUploadSessionContext,
@@ -84,29 +92,14 @@ type AnalyzePersistedUploadOptions = {
   previewUrl?: string;
 };
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => resolve(event.target?.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
+type UploadProcessOptions = {
+  labelFile?: File | null;
+};
 
-function getNextLocalSessionEventCreatedAt(messages: SessionStreamMessage[]): number {
-  const lastCreatedAt = messages.reduce((max, message) => Math.max(max, message.createdAt || 0), 0);
-  return Math.max(Date.now(), lastCreatedAt + 1);
-}
-
-function getNextSessionArtworkSequenceNumber(items: GalleryItem[], sessionId: string): number {
-  const maxSequenceNumber = items.reduce((max, item) => {
-    const link = item.sessionLinks?.find((sessionLink) => sessionLink.sessionId === sessionId);
-    return typeof link?.sequenceNumber === 'number'
-      ? Math.max(max, link.sequenceNumber)
-      : max;
-  }, -1);
-  return maxSequenceNumber + 1;
-}
+type BatchPersistedUpload = {
+  item: GalleryItem;
+  candidate: PreparedUploadCandidate;
+};
 
 function buildAnalyzedItem(
   baseItem: GalleryItem,
@@ -250,7 +243,7 @@ export function useArtworkIngest({
       ...prev,
       itemIds: prev.itemIds.filter((id) => id !== placeholderId),
     }));
-    setArtworkDetailSelection((prev) => (prev?.artworkId === placeholderId ? null : prev));
+    setArtworkDetailSelection((prev) => (prev?.artworkClientId === placeholderId ? null : prev));
   }, [setArtworkDetailSelection, setItems, setVisit]);
 
   const persistRawArtwork = useCallback(async (options: {
@@ -378,15 +371,18 @@ export function useArtworkIngest({
 
       try {
         const sequenceNumber = context.getSequenceNumber(uploadEntry.id);
-        const placeholder = createUploadPlaceholder({
+        const placeholder = buildUploadPlaceholders([{
+          file: uploadEntry.file,
           previewUrl: uploadEntry.previewUrl,
           mode: uploadEntry.mode,
           timestamp: uploadEntry.timestamp,
           photoTime: uploadEntry.photoTime,
+          coords: uploadEntry.coords,
           location: uploadEntry.location,
+        }], {
           sessionId: context.sessionId,
-          sequenceNumber,
-        });
+          startingSequenceNumber: sequenceNumber,
+        })[0];
         placeholderId = placeholder.id;
         setItems((prev) => [placeholder, ...prev]);
         setVisit((prev) => ({ ...prev, itemIds: [...prev.itemIds, placeholder.id] }));
@@ -406,10 +402,11 @@ export function useArtworkIngest({
         const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
         // Local-only optimistic rendering; the prepared-session flow persists
         // the whole batch as one canonical user_input event after all resolve.
-        appendSessionEvents(context.sessionId, [
-              { id: `capture-${placeholder.id}`, role: 'user', text: '', type: 'artwork_capture', artworkId: persistedItem.artworkId!, triggerEventId: context.userInputEventId, createdAt: Date.now(), localOrder: nextLocalOrder() },
-              { id: `card-${placeholder.id}`, role: 'model', text: '', type: 'artwork_card', artworkId: persistedItem.artworkId!, triggerEventId: context.userInputEventId, createdAt: Date.now() + 1, localOrder: nextLocalOrder() },
-        ], { persist: false });
+        appendSessionEvents(
+          context.sessionId,
+          buildPreparedUploadDisplayEvents(placeholder.id, persistedItem.artworkId!, context.userInputEventId),
+          { persist: false },
+        );
         maybeResolveLocation(persistedItem.id, uploadEntry.coords);
         persistedSessionItems.push(liveItem);
 
@@ -460,6 +457,312 @@ export function useArtworkIngest({
     setVisit,
   ]);
 
+  const processSinglePreparedUpload = useCallback(async (
+    preparedUpload: PreparedUploadCandidate,
+    mode: IngestMode,
+    isLibraryOnlyUpload: boolean,
+    collectionUploadSuccessMessage: string,
+    options?: UploadProcessOptions,
+  ) => {
+    setIsAnalyzing(true);
+    let placeholder: GalleryItem | null = null;
+    let persistedItemId: string | null = null;
+    let userInputEventId: string | undefined;
+
+    try {
+      const { sessionId, isNew } = isLibraryOnlyUpload
+        ? { sessionId: undefined, isNew: false }
+        : resolveUploadSession();
+
+      if (isNew && sessionId) {
+        ensureSessionDraft(sessionId);
+      }
+      const sessionArtworkSequenceNumber = sessionId
+        ? getNextSessionArtworkSequenceNumber(items, sessionId)
+        : 0;
+
+      placeholder = buildUploadPlaceholders([preparedUpload], {
+        sessionId,
+        startingSequenceNumber: sessionArtworkSequenceNumber,
+      })[0];
+
+      if (sessionId) {
+        const optimisticEvent = buildArtworkInputEvent([placeholder.id], {
+          mode,
+          history: sessionStreams[sessionId] || [],
+        });
+        userInputEventId = optimisticEvent.id;
+        appendSessionEvents(sessionId, [optimisticEvent], { persist: false });
+      }
+
+      setItems((prev) => [placeholder!, ...prev]);
+      if (sessionId) {
+        setVisit((prev) => ({ ...prev, itemIds: [...prev.itemIds, placeholder!.id] }));
+      }
+
+      const persistedItem = await persistRawArtwork({
+        file: preparedUpload.file,
+        previewUrl: preparedUpload.previewUrl,
+        mode,
+        timestamp: preparedUpload.timestamp,
+        photoTime: preparedUpload.photoTime,
+        coords: preparedUpload.coords,
+        location: preparedUpload.location,
+        sessionId,
+        sequenceNumber: sessionArtworkSequenceNumber,
+      });
+      persistedItemId = persistedItem.id;
+      const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
+
+      if (sessionId) {
+        const localInputEvent = buildArtworkInputEvent([persistedItem.artworkId!], {
+          mode,
+          history: sessionStreams[sessionId] || [],
+          eventId: userInputEventId!,
+        });
+        appendSessionEvents(sessionId, [localInputEvent], { persist: false });
+        void persistSessionArtworkInput(
+          sessionId,
+          [{ artworkId: persistedItem.artworkId!, source: mode === 'camera' ? 'capture' : 'upload' }],
+          userInputEventId!,
+        );
+      }
+
+      if (isLibraryOnlyUpload) {
+        showToast(collectionUploadSuccessMessage, 'success');
+      }
+
+      maybeResolveLocation(persistedItem.id, preparedUpload.coords);
+
+      const { analysis, resolvedItem } = await analyzePersistedUpload({
+        persistedItem,
+        liveItem,
+        sessionId,
+        sequenceNumber: sessionArtworkSequenceNumber,
+        mode,
+        labelFile: options?.labelFile || null,
+        previewUrl: preparedUpload.previewUrl,
+      });
+
+      if (sessionId && hasUsableCommentaryContext(analysis)) {
+        const sessionItems = [
+          resolvedItem,
+          ...items.filter((entry) => entry.id !== placeholder.id && entry.id !== persistedItem.id),
+        ]
+          .filter((item) => itemBelongsToSession(item, sessionId));
+        const history = userInputEventId
+          ? [
+              ...(sessionStreams[sessionId] || []),
+              buildArtworkInputEvent([persistedItem.artworkId!], {
+                mode,
+                history: sessionStreams[sessionId] || [],
+                eventId: userInputEventId,
+              }),
+            ]
+          : sessionStreams[sessionId] || [];
+        triggerUploadCommentary(sessionId, [resolvedItem], sessionItems, history, userInputEventId);
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
+      if (placeholder && persistedItemId) {
+        const message = error instanceof Error ? error.message : 'Analysis failed.';
+        markArtworkAnalysisFailed(persistedItemId, message);
+      } else if (placeholder) {
+        removeUploadPlaceholder(placeholder.id);
+      }
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [
+    analyzePersistedUpload,
+    appendSessionEvents,
+    ensureSessionDraft,
+    items,
+    markArtworkAnalysisFailed,
+    maybeResolveLocation,
+    persistRawArtwork,
+    persistSessionArtworkInput,
+    reconcilePlaceholderWithSavedArtwork,
+    removeUploadPlaceholder,
+    resolveUploadSession,
+    setIsAnalyzing,
+    setItems,
+    setVisit,
+    showToast,
+    triggerUploadCommentary,
+    sessionStreams,
+  ]);
+
+  const processBatchPreparedUploads = useCallback(async (
+    preparedUploads: PreparedUploadCandidate[],
+    mode: IngestMode,
+    isLibraryOnlyUpload: boolean,
+    collectionUploadSuccessMessage: string,
+  ) => {
+    setIsAnalyzing(true);
+    try {
+      const anchorCandidate = preparedUploads[0];
+      const { sessionId: batchSessionId, isNew } = isLibraryOnlyUpload
+        ? { sessionId: undefined, isNew: false }
+        : resolveUploadSession();
+
+      if (isNew && batchSessionId) {
+        ensureSessionDraft(batchSessionId);
+      }
+
+      if (batchSessionId) {
+        setVisit((prev) => ({ ...prev, id: batchSessionId, itemIds: [], globalConversation: [] }));
+      }
+      const batchSequenceStart = batchSessionId
+        ? getNextSessionArtworkSequenceNumber(items, batchSessionId)
+        : 0;
+
+      const placeholders = buildUploadPlaceholders(preparedUploads, {
+        sessionId: batchSessionId,
+        startingSequenceNumber: batchSequenceStart,
+      });
+
+      let batchUserInputEventId: string | undefined;
+      let batchLocalInputEvent: SessionStreamMessage | undefined;
+      if (batchSessionId && placeholders.length > 0) {
+        batchLocalInputEvent = buildArtworkInputEvent(
+          placeholders.map((placeholder) => placeholder.id),
+          {
+            mode,
+            history: sessionStreams[batchSessionId] || [],
+          },
+        );
+        batchUserInputEventId = batchLocalInputEvent.id;
+        appendSessionEvents(batchSessionId, [batchLocalInputEvent], { persist: false });
+      }
+
+      if (placeholders.length > 0) {
+        setItems((prev) => [...placeholders, ...prev]);
+        if (batchSessionId) {
+          setVisit((prev) => ({
+            ...prev,
+            itemIds: [...prev.itemIds, ...placeholders.map((item) => item.id)],
+          }));
+        }
+      }
+
+      const persistedUploads: BatchPersistedUpload[] = [];
+
+      for (let index = 0; index < preparedUploads.length; index += 1) {
+        const entry = preparedUploads[index];
+        const placeholder = placeholders[index];
+        try {
+          const persistedItem = await persistRawArtwork({
+            file: entry.file,
+            previewUrl: entry.previewUrl,
+            mode,
+            timestamp: entry.timestamp,
+            photoTime: entry.photoTime,
+            coords: entry.coords,
+            location: entry.location,
+            sessionId: batchSessionId,
+            sequenceNumber: batchSequenceStart + index,
+          });
+          const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
+          persistedUploads.push({
+            item: liveItem,
+            candidate: entry,
+          });
+        } catch (error) {
+          console.error('Failed to save artwork before analysis:', error);
+          removeUploadPlaceholder(placeholder.id);
+        }
+      }
+
+      const persistedItems = persistedUploads.map((entry) => entry.item);
+      if (persistedItems.length > 0) {
+        if (batchSessionId) {
+          const inputEntries = buildPersistedSessionArtworkEntries(persistedItems, batchSessionId);
+          batchLocalInputEvent = buildArtworkInputEvent(
+            inputEntries.map((entry) => entry.artworkId),
+            {
+              mode,
+              history: sessionStreams[batchSessionId] || [],
+              eventId: batchUserInputEventId!,
+            },
+          );
+          appendSessionEvents(batchSessionId, [batchLocalInputEvent], { persist: false });
+          void persistSessionArtworkInput(batchSessionId, inputEntries, batchUserInputEventId!);
+        }
+        if (isLibraryOnlyUpload) {
+          showToast(collectionUploadSuccessMessage, 'success');
+        }
+      }
+
+      if (anchorCandidate?.coords?.latitude !== undefined && anchorCandidate.coords.longitude !== undefined) {
+        resolveMuseum(anchorCandidate.coords.latitude, anchorCandidate.coords.longitude)
+          .then(({ city, country, museum }) => {
+            const resolvedLocation = buildUploadLocationString(
+              { latitude: anchorCandidate.coords!.latitude, longitude: anchorCandidate.coords!.longitude },
+              { city, country, museum },
+            );
+            setItems((prev) => prev.map((item) => (
+              persistedUploads.some((upload) => upload.item.id === item.id)
+                ? { ...item, location: resolvedLocation }
+                : item
+            )));
+          })
+          .catch(() => {});
+      }
+
+      const analyzedArtworks: GalleryItem[] = [];
+      for (const entry of persistedUploads) {
+        try {
+          const { analysis, resolvedItem } = await analyzePersistedUpload({
+            persistedItem: entry.item,
+            liveItem: entry.item,
+            sessionId: batchSessionId,
+            sequenceNumber: entry.item.sessionLinks?.[0]?.sequenceNumber,
+            mode,
+            previewUrl: entry.candidate.previewUrl,
+          });
+          if (hasUsableCommentaryContext(analysis)) {
+            analyzedArtworks.push(resolvedItem);
+          }
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : 'Analysis failed.';
+          markArtworkAnalysisFailed(entry.item.id, errMsg || 'Analysis failed.');
+        }
+      }
+
+      if (batchSessionId && analyzedArtworks.length > 0) {
+        const history = batchLocalInputEvent
+          ? [...(sessionStreams[batchSessionId] || []), batchLocalInputEvent]
+          : sessionStreams[batchSessionId] || [];
+        triggerUploadCommentary(batchSessionId, analyzedArtworks, analyzedArtworks, history, batchUserInputEventId);
+      }
+      if (batchSessionId && persistedItems.length >= 2) {
+        setFilteredSessionId(batchSessionId);
+      }
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [
+    analyzePersistedUpload,
+    appendSessionEvents,
+    ensureSessionDraft,
+    items,
+    markArtworkAnalysisFailed,
+    persistRawArtwork,
+    persistSessionArtworkInput,
+    reconcilePlaceholderWithSavedArtwork,
+    removeUploadPlaceholder,
+    resolveMuseum,
+    resolveUploadSession,
+    setFilteredSessionId,
+    setIsAnalyzing,
+    setItems,
+    setVisit,
+    showToast,
+    triggerUploadCommentary,
+    sessionStreams,
+  ]);
+
   const processArtworkFiles = useCallback(async (
     rawFiles: File[],
     mode: IngestMode = 'camera',
@@ -502,31 +805,11 @@ export function useArtworkIngest({
         showToast('Only the first 5 artworks can be added to a new session.', 'info');
       }
 
-      const stagedEntries = await Promise.all(filesToStage.map(async (file) => {
-        const metadata = mode === 'gallery'
-          ? await readExifMetadata(file)
-          : { latitude: undefined, longitude: undefined, timestamp: undefined };
-        const coords = {
-          latitude: options?.captureCoords?.latitude ?? metadata.latitude,
-          longitude: options?.captureCoords?.longitude ?? metadata.longitude,
-        };
-        const timestamp = metadata.timestamp || Date.now();
-        const photoTime = formatPhotoTime(timestamp);
-        const previewUrl = await readFileAsDataUrl(file);
-
-        return {
-          id: `upload-${Math.random().toString(36).substring(2, 11)}`,
-          kind: 'upload' as const,
-          file,
-          previewUrl,
-          mode,
-          timestamp,
-          photoTime,
-          coords,
-          location: buildUploadLocationString(coords),
-          label: file.name.replace(/\.[^/.]+$/, '') || 'New upload',
-          sublabel: mode === 'camera' ? 'Camera capture' : photoTime,
-        };
+      const stagedEntries = buildStagedPendingUploads(await prepareUploadCandidates(filesToStage, mode, {
+        captureCoords: options?.captureCoords,
+        readExifMetadata,
+        formatPhotoTime,
+        buildUploadLocationString,
       }));
 
       startTransition(() => {
@@ -550,360 +833,28 @@ export function useArtworkIngest({
     inFlightUploadKeysRef.current.add(uploadKey);
 
     try {
+      const preparedUploads = await prepareUploadCandidates(files, mode, {
+        captureCoords: options?.captureCoords,
+        readExifMetadata,
+        formatPhotoTime,
+        buildUploadLocationString,
+      });
+
       if (files.length === 1) {
-        const file = files[0];
-        const metadata = mode === 'gallery'
-          ? await readExifMetadata(file)
-          : { latitude: undefined, longitude: undefined, timestamp: undefined };
-        const coords = {
-          latitude: options?.captureCoords?.latitude ?? metadata.latitude,
-          longitude: options?.captureCoords?.longitude ?? metadata.longitude,
-        };
-        const photoTimestamp = metadata.timestamp || Date.now();
-        const photoTime = formatPhotoTime(photoTimestamp);
-        const previewUrl = await readFileAsDataUrl(file);
-
-        setIsAnalyzing(true);
-        let placeholder: GalleryItem | null = null;
-        let persistedItemId: string | null = null;
-        let userInputEventId: string | undefined;
-
-        try {
-          const { sessionId, isNew } = isLibraryOnlyUpload
-            ? { sessionId: undefined, isNew: false }
-            : resolveUploadSession();
-
-          if (isNew && sessionId) {
-            ensureSessionDraft(sessionId);
-          }
-          const sessionArtworkSequenceNumber = sessionId
-            ? getNextSessionArtworkSequenceNumber(items, sessionId)
-            : 0;
-
-          placeholder = createUploadPlaceholder({
-            previewUrl,
-            mode,
-            timestamp: photoTimestamp,
-            photoTime,
-            location: buildUploadLocationString(coords),
-            sessionId,
-            sequenceNumber: sessionArtworkSequenceNumber,
-          });
-
-          if (sessionId) {
-            userInputEventId = newSessionEventId();
-            const source = mode === 'camera' ? 'capture' : 'upload';
-            appendSessionEvents(sessionId, [{
-              id: userInputEventId,
-              role: 'user',
-              text: '',
-              type: 'text',
-              artworkIds: [placeholder.id],
-              createdAt: getNextLocalSessionEventCreatedAt(sessionStreams[sessionId] || []),
-              localOrder: nextLocalOrder(),
-              payload: {
-                artworks: [{ artwork_id: placeholder.id, source }],
-              },
-            }], { persist: false });
-          }
-
-          setItems((prev) => [placeholder!, ...prev]);
-          if (sessionId) {
-            setVisit((prev) => ({ ...prev, itemIds: [...prev.itemIds, placeholder!.id] }));
-          }
-
-          const persistedItem = await persistRawArtwork({
-            file,
-            previewUrl,
-            mode,
-            timestamp: photoTimestamp,
-            photoTime,
-            coords,
-            location: buildUploadLocationString(coords),
-            sessionId,
-            sequenceNumber: sessionArtworkSequenceNumber,
-          });
-          persistedItemId = persistedItem.id;
-          const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
-
-          if (sessionId) {
-            const source = mode === 'camera' ? 'capture' : 'upload';
-            const localInputEvent: SessionStreamMessage = {
-              id: userInputEventId!,
-              role: 'user',
-              text: '',
-              type: 'text',
-              artworkIds: [persistedItem.artworkId!],
-              createdAt: getNextLocalSessionEventCreatedAt(sessionStreams[sessionId] || []),
-              localOrder: nextLocalOrder(),
-              payload: {
-                artworks: [{ artwork_id: persistedItem.artworkId!, source }],
-              },
-            };
-            appendSessionEvents(sessionId, [
-              localInputEvent,
-            ], { persist: false });
-            void persistSessionArtworkInput(
-              sessionId,
-              [{ artworkId: persistedItem.artworkId!, source }],
-              userInputEventId!,
-            );
-          }
-
-          if (isLibraryOnlyUpload) {
-            showToast(collectionUploadSuccessMessage, 'success');
-          }
-
-          maybeResolveLocation(persistedItem.id, coords);
-
-          const { analysis, resolvedItem } = await analyzePersistedUpload({
-            persistedItem,
-            liveItem,
-            sessionId,
-            sequenceNumber: sessionArtworkSequenceNumber,
-            mode,
-            labelFile: options?.labelFile || null,
-            previewUrl,
-          });
-
-          if (sessionId && hasUsableCommentaryContext(analysis)) {
-            const sessionItems = [
-              resolvedItem,
-              ...items.filter((entry) => entry.id !== placeholder.id && entry.id !== persistedItem.id),
-            ]
-              .filter((item) => itemBelongsToSession(item, sessionId));
-            const history = userInputEventId
-              ? [
-                  ...(sessionStreams[sessionId] || []),
-                  {
-                    id: userInputEventId,
-                    role: 'user' as const,
-                    text: '',
-                    type: 'text' as const,
-                    artworkIds: [persistedItem.artworkId!],
-                    createdAt: getNextLocalSessionEventCreatedAt(sessionStreams[sessionId] || []),
-                    localOrder: nextLocalOrder(),
-                    payload: {
-                      artworks: [{
-                        artwork_id: persistedItem.artworkId!,
-                        source: mode === 'camera' ? 'capture' : 'upload',
-                      }],
-                    },
-                  },
-                ]
-              : sessionStreams[sessionId] || [];
-            triggerUploadCommentary(sessionId, [resolvedItem], sessionItems, history, userInputEventId);
-          }
-        } catch (error) {
-          console.error('Upload failed:', error);
-          if (placeholder && persistedItemId) {
-            const message = error instanceof Error ? error.message : 'Analysis failed.';
-            markArtworkAnalysisFailed(persistedItemId, message);
-          } else if (placeholder) {
-            removeUploadPlaceholder(placeholder.id);
-          }
-        } finally {
-          setIsAnalyzing(false);
-        }
+        await processSinglePreparedUpload(
+          preparedUploads[0],
+          mode,
+          isLibraryOnlyUpload,
+          collectionUploadSuccessMessage,
+          { labelFile: options?.labelFile || null },
+        );
       } else {
-        setIsAnalyzing(true);
-
-        const memoryFiles = await Promise.all(files.map(async (file) => {
-          const metadata = await readExifMetadata(file);
-          const previewUrl = await readFileAsDataUrl(file);
-          return { file, previewUrl, metadata };
-        }));
-
-        const anchorMeta = memoryFiles[0]?.metadata;
-        const { sessionId: batchSessionId, isNew } = activeTab === 'collect'
-          ? { sessionId: undefined, isNew: false }
-          : resolveUploadSession();
-
-        if (isNew && batchSessionId) {
-          ensureSessionDraft(batchSessionId);
-        }
-
-        if (batchSessionId) {
-          setVisit((prev) => ({ ...prev, id: batchSessionId, itemIds: [], globalConversation: [] }));
-        }
-        const batchSequenceStart = batchSessionId
-          ? getNextSessionArtworkSequenceNumber(items, batchSessionId)
-          : 0;
-
-        const placeholders = memoryFiles.map((entry, index) => {
-          const itemTime = entry.metadata.timestamp || Date.now();
-          return createUploadPlaceholder({
-            previewUrl: entry.previewUrl,
-            mode,
-            timestamp: itemTime,
-            photoTime: formatPhotoTime(itemTime),
-            location: buildUploadLocationString({
-              latitude: entry.metadata.latitude,
-              longitude: entry.metadata.longitude,
-            }),
-            sessionId: batchSessionId,
-            sequenceNumber: batchSequenceStart + index,
-          });
-        });
-
-        let batchUserInputEventId: string | undefined;
-        let batchLocalInputEvent: SessionStreamMessage | undefined;
-        if (batchSessionId && placeholders.length > 0) {
-          batchUserInputEventId = newSessionEventId();
-          batchLocalInputEvent = {
-            id: batchUserInputEventId,
-            role: 'user',
-            text: '',
-            type: 'text',
-            artworkIds: placeholders.map((placeholder) => placeholder.id),
-            createdAt: getNextLocalSessionEventCreatedAt(sessionStreams[batchSessionId] || []),
-            localOrder: nextLocalOrder(),
-            payload: {
-              artworks: placeholders.map((placeholder) => ({
-                artwork_id: placeholder.id,
-                source: mode === 'camera' ? 'capture' : 'upload',
-              })),
-            },
-          };
-          appendSessionEvents(batchSessionId, [batchLocalInputEvent], { persist: false });
-        }
-
-        if (placeholders.length > 0) {
-          setItems((prev) => [...placeholders, ...prev]);
-          if (batchSessionId) {
-            setVisit((prev) => ({
-              ...prev,
-              itemIds: [...prev.itemIds, ...placeholders.map((item) => item.id)],
-            }));
-          }
-        }
-
-        const persistedUploads: Array<{
-          item: GalleryItem;
-          placeholder: GalleryItem;
-          file: File;
-          previewUrl: string;
-          metadata: { latitude?: number; longitude?: number; timestamp?: number };
-        }> = [];
-
-        for (let index = 0; index < memoryFiles.length; index += 1) {
-          const entry = memoryFiles[index];
-          const placeholder = placeholders[index];
-          const itemTime = entry.metadata.timestamp || Date.now();
-          const photoTime = formatPhotoTime(itemTime);
-          const coords = {
-            latitude: entry.metadata.latitude,
-            longitude: entry.metadata.longitude,
-          };
-          try {
-            const persistedItem = await persistRawArtwork({
-              file: entry.file,
-              previewUrl: entry.previewUrl,
-              mode,
-              timestamp: itemTime,
-              photoTime,
-              coords,
-              location: buildUploadLocationString(coords),
-              sessionId: batchSessionId,
-              sequenceNumber: batchSequenceStart + index,
-            });
-            const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
-            persistedUploads.push({
-              item: liveItem,
-              placeholder,
-              file: entry.file,
-              previewUrl: entry.previewUrl,
-              metadata: entry.metadata,
-            });
-          } catch (error) {
-            console.error('Failed to save artwork before analysis:', error);
-            removeUploadPlaceholder(placeholder.id);
-          }
-        }
-
-        const persistedItems = persistedUploads.map((entry) => entry.item);
-        if (persistedItems.length > 0) {
-          if (batchSessionId) {
-            const inputEntries = persistedUploads
-              .map((entry) => {
-                const link = entry.item.sessionLinks?.find((sessionLink) => sessionLink.sessionId === batchSessionId);
-                const source: 'upload' | 'capture' | 'library' = link?.source === 'library'
-                  ? 'library'
-                  : link?.source === 'camera'
-                    ? 'capture'
-                    : 'upload';
-                return { artworkId: entry.item.artworkId!, source };
-              })
-              .filter((entry) => entry.artworkId);
-            batchLocalInputEvent = {
-              id: batchUserInputEventId!,
-              role: 'user',
-              text: '',
-              type: 'text',
-              artworkIds: inputEntries.map((entry) => entry.artworkId),
-              createdAt: getNextLocalSessionEventCreatedAt(sessionStreams[batchSessionId] || []),
-              localOrder: nextLocalOrder(),
-              payload: {
-                artworks: inputEntries.map((entry) => ({
-                  artwork_id: entry.artworkId,
-                  source: entry.source,
-                })),
-              },
-            };
-            appendSessionEvents(batchSessionId, [batchLocalInputEvent], { persist: false });
-            void persistSessionArtworkInput(batchSessionId, inputEntries, batchUserInputEventId!);
-          }
-          if (isLibraryOnlyUpload) {
-            showToast(collectionUploadSuccessMessage, 'success');
-          }
-        }
-
-        if (anchorMeta?.latitude !== undefined && anchorMeta.longitude !== undefined) {
-          resolveMuseum(anchorMeta.latitude, anchorMeta.longitude)
-            .then(({ city, country, museum }) => {
-              const resolvedLocation = buildUploadLocationString(
-                { latitude: anchorMeta.latitude, longitude: anchorMeta.longitude },
-                { city, country, museum },
-              );
-              setItems((prev) => prev.map((item) => (
-                persistedUploads.some((upload) => upload.item.id === item.id)
-                  ? { ...item, location: resolvedLocation }
-                  : item
-              )));
-            })
-            .catch(() => {});
-        }
-
-        const analyzedArtworks: GalleryItem[] = [];
-        for (const entry of persistedUploads) {
-          try {
-            const { analysis, resolvedItem } = await analyzePersistedUpload({
-              persistedItem: entry.item,
-              liveItem: entry.item,
-              sessionId: batchSessionId,
-              sequenceNumber: entry.item.sessionLinks?.[0]?.sequenceNumber,
-              mode,
-              previewUrl: entry.previewUrl,
-            });
-            if (hasUsableCommentaryContext(analysis)) {
-              analyzedArtworks.push(resolvedItem);
-            }
-          } catch (error) {
-            const errMsg = error instanceof Error ? error.message : 'Analysis failed.';
-            markArtworkAnalysisFailed(entry.item.id, errMsg || 'Analysis failed.');
-          }
-        }
-
-        if (batchSessionId && analyzedArtworks.length > 0) {
-          const history = batchLocalInputEvent
-            ? [...(sessionStreams[batchSessionId] || []), batchLocalInputEvent]
-            : sessionStreams[batchSessionId] || [];
-          triggerUploadCommentary(batchSessionId, analyzedArtworks, analyzedArtworks, history, batchUserInputEventId);
-        }
-        if (batchSessionId && persistedItems.length >= 2) {
-          setFilteredSessionId(batchSessionId);
-        }
-        setIsAnalyzing(false);
+        await processBatchPreparedUploads(
+          preparedUploads,
+          mode,
+          isLibraryOnlyUpload,
+          collectionUploadSuccessMessage,
+        );
       }
     } finally {
       inFlightUploadKeysRef.current.delete(uploadKey);
@@ -911,29 +862,12 @@ export function useArtworkIngest({
     }
   }, [
     activeTab,
-    analyzePersistedUpload,
-    appendSessionEvents,
-    defaultSessionTitle,
-    ensureSessionDraft,
     isComposingNewSession,
-    items,
-    markArtworkAnalysisFailed,
-    maybeResolveLocation,
     pendingSessionArtworks,
-    persistRawArtwork,
-    persistSessionArtworkInput,
-    reconcilePlaceholderWithSavedArtwork,
-    removeUploadPlaceholder,
-    resolveMuseum,
-    resolveUploadSession,
-    setFilteredSessionId,
-    setIsAnalyzing,
-    setItems,
     setPendingSessionArtworks,
-    setVisit,
     showToast,
-    triggerUploadCommentary,
-    sessionStreams,
+    processBatchPreparedUploads,
+    processSinglePreparedUpload,
   ]);
 
   const handleFileUpload = useCallback(async (

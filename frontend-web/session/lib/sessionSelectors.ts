@@ -7,6 +7,7 @@ import type {
   SessionStreamMessage,
 } from '../types';
 import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from './sessionEventArtworks';
+import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 type SessionMembership = {
   sessionId: string;
@@ -204,6 +205,7 @@ export function buildActiveSessionStream({
   const itemsById = new Map<string, GalleryItem>();
 
   activeSessionSummary.items.forEach((item) => {
+    itemsById.set(getArtworkClientId(item), item);
     itemsById.set(item.id, item);
     if (item.artworkId) {
       itemsByArtworkId.set(item.artworkId, item);
@@ -232,7 +234,7 @@ export function buildActiveSessionStream({
   }
 
   const artworkEntries: ActiveSessionStreamEntry[] = activeSessionSummary.items.map((item) => ({
-    id: `artwork-${item.id}`,
+    id: `artwork-${getArtworkClientId(item)}`,
     createdAt: (item.artworkId && captureTimeByArtworkId.get(item.artworkId)) || getSessionItemTimestamp(item),
     type: 'artwork',
     item,

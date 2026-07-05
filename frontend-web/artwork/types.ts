@@ -1,8 +1,8 @@
 import type { GalleryItem } from '../types';
 
 export type ArtworkDetailSelection = {
-  artworkId: string;
-  navigationItemIds?: string[];
+  artworkClientId: string;
+  navigationItemClientIds?: string[];
   is_liked?: boolean;
 };
 

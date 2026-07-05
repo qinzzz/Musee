@@ -60,13 +60,13 @@ describe('useArtworkDetailPager', () => {
     });
 
     expect(setArtworkDetailSelection).toHaveBeenCalledWith({
-      artworkId: 'a2',
-      navigationItemIds: ['a1', 'a2', 'a3'],
+      artworkClientId: 'a2',
+      navigationItemClientIds: ['a1', 'a2', 'a3'],
     });
     expect(replaceStateSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         view: 'artwork',
-        artworkId: 'a2',
+        artworkClientId: 'a2',
       }),
       '',
       '/saved',
