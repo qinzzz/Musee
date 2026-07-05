@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 
 import { cloudflare } from "@cloudflare/vite-plugin";
 
-export default defineConfig(() => ({
+export default defineConfig(({ mode }) => ({
   server: {
     port: 3000,
     host: '0.0.0.0',
@@ -26,7 +26,8 @@ export default defineConfig(() => ({
       },
     },
   },
-  plugins: [react(), cloudflare()],
+  // The Cloudflare plugin crashes under vitest's dev server, so test mode skips it.
+  plugins: mode === 'test' ? [react()] : [react(), cloudflare()],
   test: {
     environment: 'jsdom',
     globals: true,
