@@ -80,8 +80,6 @@ export function useSessionWorkspace({
     deleteConfirmation,
     defaultSessionTitle,
     initialIsComposingNewSession,
-    sessionDraftsStorageKey: 'musee_session_drafts',
-    sessionStreamsStorageKey: 'musee_session_streams',
     sessionGoalsStorageKey: 'musee_session_goals',
     persistedSessionsStorageKey: 'musee_persisted_sessions',
   });
@@ -202,10 +200,15 @@ export function useSessionWorkspace({
           };
         });
         const dbMessageIds = new Set(normalizedDbMessages.map((message) => message.id));
+        // Reconciliation: the backend is canonical for confirmed history — the
+        // fetch replaces it wholesale (id match wins). Only the optimistic
+        // overlay survives: local events with no sequenceNumber yet whose POST
+        // hasn't been confirmed by this fetch (in-flight user messages, pending
+        // commentary, local-only capture/card markers). They keep rendering via
+        // localOrder until a later fetch returns them with a real sequence.
         const pendingLocalOnlyMessages = existing.filter((message) => (
           !dbMessageIds.has(message.id)
-          && message.type === 'artwork_commentary'
-          && message.payload?.status === 'pending'
+          && typeof message.sequenceNumber !== 'number'
         ));
         const nextMessages = [...normalizedDbMessages, ...pendingLocalOnlyMessages].sort(compareSessionEvents);
         if (

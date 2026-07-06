@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionState } from './useSessionState';
+import type { SessionStreamMessage } from '../types';
 
 const { mockFetchSessions } = vi.hoisted(() => ({
   mockFetchSessions: vi.fn(),
@@ -9,6 +10,18 @@ const { mockFetchSessions } = vi.hoisted(() => ({
 vi.mock('../api/sessions', () => ({
   fetchSessions: mockFetchSessions,
 }));
+
+function renderSessionState() {
+  return renderHook(() => useSessionState({
+    userId: 'user-1',
+    items: [],
+    artworksLoaded: true,
+    deleteConfirmation: null,
+    defaultSessionTitle: 'Untitled Session',
+    sessionGoalsStorageKey: 'test_session_goals',
+    persistedSessionsStorageKey: 'test_persisted_sessions',
+  }));
+}
 
 describe('useSessionState', () => {
   beforeEach(() => {
@@ -29,17 +42,7 @@ describe('useSessionState', () => {
       },
     ]);
 
-    const { result } = renderHook(() => useSessionState({
-      userId: 'user-1',
-      items: [],
-      artworksLoaded: true,
-      deleteConfirmation: null,
-      defaultSessionTitle: 'Untitled Session',
-      sessionDraftsStorageKey: 'test_session_drafts',
-      sessionStreamsStorageKey: 'test_session_streams',
-      sessionGoalsStorageKey: 'test_session_goals',
-      persistedSessionsStorageKey: 'test_persisted_sessions',
-    }));
+    const { result } = renderSessionState();
 
     await waitFor(() => {
       expect(result.current.persistedSessions).toEqual([
@@ -68,114 +71,34 @@ describe('useSessionState', () => {
     });
   });
 
-  it('migrates cached session stream turnId values into triggerEventId', async () => {
+  it('keeps session streams memory-only: no hydration from and no writes to localStorage', async () => {
     mockFetchSessions.mockResolvedValue([]);
-    localStorage.setItem('test_session_streams', JSON.stringify({
-      'session-1': [
-        {
-          id: 'msg-1',
-          role: 'user',
-          text: 'hello',
-          turnId: 'legacy-turn',
-          createdAt: 123,
-        },
-      ],
+    localStorage.setItem('musee_session_streams', JSON.stringify({
+      'session-1': [{ id: 'ghost', role: 'user', text: 'stale', createdAt: 1 }],
     }));
+    localStorage.setItem('musee_session_drafts', JSON.stringify([
+      { id: 'session-ghost', title: 'Stale draft', createdAt: 1, updatedAt: 1 },
+    ]));
 
-    const { result } = renderHook(() => useSessionState({
-      userId: 'user-1',
-      items: [],
-      artworksLoaded: true,
-      deleteConfirmation: null,
-      defaultSessionTitle: 'Untitled Session',
-      sessionDraftsStorageKey: 'test_session_drafts',
-      sessionStreamsStorageKey: 'test_session_streams',
-      sessionGoalsStorageKey: 'test_session_goals',
-      persistedSessionsStorageKey: 'test_persisted_sessions',
-    }));
+    const { result } = renderSessionState();
+
+    expect(result.current.sessionStreams).toEqual({});
+    expect(result.current.sessionDrafts).toEqual([]);
 
     await waitFor(() => {
-      expect(result.current.sessionStreams['session-1']).toEqual([
-        expect.objectContaining({
-          id: 'msg-1',
-          triggerEventId: 'legacy-turn',
-        }),
-      ]);
-      expect(result.current.persistedSessionsHydrated).toBe(true);
+      expect(localStorage.getItem('musee_session_streams')).toBeNull();
+      expect(localStorage.getItem('musee_session_drafts')).toBeNull();
     });
-  });
 
-  it('hydrates cached canonical user_input messages with triggerEventId from their own id', async () => {
-    mockFetchSessions.mockResolvedValue([]);
-    localStorage.setItem('test_session_streams', JSON.stringify({
-      'session-1': [
-        {
-          id: 'evt-1',
-          role: 'user',
-          text: 'compare these different native community artworks',
-          type: 'text',
-          createdAt: 123,
-        },
-      ],
-    }));
-
-    const { result } = renderHook(() => useSessionState({
-      userId: 'user-1',
-      items: [],
-      artworksLoaded: true,
-      deleteConfirmation: null,
-      defaultSessionTitle: 'Untitled Session',
-      sessionDraftsStorageKey: 'test_session_drafts',
-      sessionStreamsStorageKey: 'test_session_streams',
-      sessionGoalsStorageKey: 'test_session_goals',
-      persistedSessionsStorageKey: 'test_persisted_sessions',
-    }));
-
-    await waitFor(() => {
-      expect(result.current.sessionStreams['session-1']).toEqual([
-        expect.objectContaining({
-          id: 'evt-1',
-          triggerEventId: 'evt-1',
-        }),
-      ]);
+    const message: SessionStreamMessage = { id: 'm1', role: 'user', text: 'hi', createdAt: 10 };
+    act(() => {
+      result.current.setSessionStreams({ 'session-1': [message] });
+      result.current.setSessionDrafts([{ id: 'session-1', title: 'Draft', createdAt: 10, updatedAt: 10 }]);
     });
-  });
 
-  it('normalizes cached artwork_capture user messages back into visible text messages', async () => {
-    mockFetchSessions.mockResolvedValue([]);
-    localStorage.setItem('test_session_streams', JSON.stringify({
-      'session-1': [
-        {
-          id: 'evt-2',
-          role: 'user',
-          text: 'tell me about these artworks',
-          type: 'artwork_capture',
-          createdAt: 321,
-        },
-      ],
-    }));
-
-    const { result } = renderHook(() => useSessionState({
-      userId: 'user-1',
-      items: [],
-      artworksLoaded: true,
-      deleteConfirmation: null,
-      defaultSessionTitle: 'Untitled Session',
-      sessionDraftsStorageKey: 'test_session_drafts',
-      sessionStreamsStorageKey: 'test_session_streams',
-      sessionGoalsStorageKey: 'test_session_goals',
-      persistedSessionsStorageKey: 'test_persisted_sessions',
-    }));
-
-    await waitFor(() => {
-      expect(result.current.sessionStreams['session-1']).toEqual([
-        expect.objectContaining({
-          id: 'evt-2',
-          type: 'text',
-          triggerEventId: 'evt-2',
-        }),
-      ]);
-    });
+    expect(result.current.sessionStreams['session-1']).toEqual([message]);
+    expect(localStorage.getItem('musee_session_streams')).toBeNull();
+    expect(localStorage.getItem('musee_session_drafts')).toBeNull();
   });
 
   it('hydrates cached persisted sessions before the server refresh resolves', async () => {
@@ -194,17 +117,7 @@ describe('useSessionState', () => {
       ],
     }));
 
-    const { result } = renderHook(() => useSessionState({
-      userId: 'user-1',
-      items: [],
-      artworksLoaded: true,
-      deleteConfirmation: null,
-      defaultSessionTitle: 'Untitled Session',
-      sessionDraftsStorageKey: 'test_session_drafts',
-      sessionStreamsStorageKey: 'test_session_streams',
-      sessionGoalsStorageKey: 'test_session_goals',
-      persistedSessionsStorageKey: 'test_persisted_sessions',
-    }));
+    const { result } = renderSessionState();
 
     expect(result.current.persistedSessions).toEqual([
       expect.objectContaining({

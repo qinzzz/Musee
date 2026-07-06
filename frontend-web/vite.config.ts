@@ -1,10 +1,20 @@
 import path from 'path';
-import { defineConfig } from 'vite';
+import { defineConfig, type PluginOption } from 'vite';
 import react from '@vitejs/plugin-react';
 
-import { cloudflare } from "@cloudflare/vite-plugin";
+async function resolvePlugins(mode: string): Promise<PluginOption[]> {
+  // The Cloudflare plugin crashes under vitest's dev server, and its module
+  // graph requires node:module.registerHooks (Node >= 22.15) at import time —
+  // so it must be imported lazily, only when actually used. A static import
+  // would break test/dev on older Node even with the mode guard.
+  if (mode === 'test') {
+    return [react()];
+  }
+  const { cloudflare } = await import('@cloudflare/vite-plugin');
+  return [react(), cloudflare()];
+}
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(async ({ mode }) => ({
   server: {
     port: 3000,
     host: '0.0.0.0',
@@ -26,8 +36,7 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  // The Cloudflare plugin crashes under vitest's dev server, so test mode skips it.
-  plugins: mode === 'test' ? [react()] : [react(), cloudflare()],
+  plugins: await resolvePlugins(mode),
   test: {
     environment: 'jsdom',
     globals: true,

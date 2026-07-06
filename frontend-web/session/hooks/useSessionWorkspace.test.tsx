@@ -316,6 +316,67 @@ describe('useSessionWorkspace', () => {
     });
   });
 
+  it('refetch replaces confirmed history but keeps the whole unconfirmed optimistic overlay', async () => {
+    // In-flight optimistic events: no sequenceNumber yet, POSTs not confirmed.
+    const inFlightUserMessage = createSessionMessage({
+      id: 'local-user', role: 'user', text: 'just sent', createdAt: 300, localOrder: 5,
+    });
+    const pendingCommentary = createSessionMessage({
+      id: 'local-commentary', role: 'model', text: '', type: 'artwork_commentary',
+      payload: { status: 'pending' }, createdAt: 301, localOrder: 6,
+    });
+    // Confirmed on a previous fetch, but no longer returned by the backend →
+    // backend wins for confirmed history; it must be dropped.
+    const staleConfirmed = createSessionMessage({
+      id: 'stale-confirmed', role: 'model', text: 'deleted upstream', createdAt: 100, sequenceNumber: 9,
+    });
+    const sessionStateMock = createSessionStateMock({
+      sessionStreams: { 'session-1': [staleConfirmed, inFlightUserMessage, pendingCommentary] },
+      setSessionStreams: vi.fn(),
+    });
+
+    mockUseSessionState.mockReturnValue(sessionStateMock);
+    mockUsePreparedSessionStaging.mockReturnValue({
+      pendingSessionArtworks: [],
+      newSessionDraftMessage: '',
+      isSubmittingPreparedSession: false,
+      setIsSubmittingPreparedSession: vi.fn(),
+      resetPreparedSessionState: vi.fn(),
+    });
+    mockUseSessionMessaging.mockReturnValue({
+      appendSessionEvents: vi.fn(),
+      sendSessionInquiryToSession: vi.fn(),
+    });
+    mockUseSessionActions.mockReturnValue({});
+    mockUseSessionStartFlow.mockReturnValue({ submitPreparedSession: vi.fn() });
+
+    mockFetchSessionMessages.mockResolvedValue([
+      { id: 'db-1', role: 'user', content: 'question', type: 'text', sequence_number: 1, created_at: 150 },
+      { id: 'db-2', role: 'model', content: 'answer', sequence_number: 2, created_at: 200 },
+    ]);
+
+    renderUseSessionWorkspace({
+      activeTab: 'newSession',
+      sessionStateOverrides: sessionStateMock,
+    });
+
+    await waitFor(() => {
+      expect(sessionStateMock.setSessionStreams).toHaveBeenCalled();
+    });
+
+    const updater = sessionStateMock.setSessionStreams.mock.calls[0][0] as (
+      prev: Record<string, SessionStreamMessage[]>
+    ) => Record<string, SessionStreamMessage[]>;
+
+    const next = updater({ 'session-1': [staleConfirmed, inFlightUserMessage, pendingCommentary] });
+    expect(next['session-1'].map((m) => m.id)).toEqual([
+      'db-1',        // canonical, seq 1
+      'db-2',        // canonical, seq 2
+      'local-user',  // unconfirmed overlay survives, ordered by localOrder
+      'local-commentary',
+    ]);
+  });
+
   it('maps canonical user_input DB events back into visible text messages', async () => {
     const sessionStateMock = createSessionStateMock({
       sessionStreams: { 'session-1': [] },
