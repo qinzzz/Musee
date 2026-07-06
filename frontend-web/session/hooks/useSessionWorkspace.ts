@@ -82,7 +82,6 @@ export function useSessionWorkspace({
     deleteConfirmation,
     defaultSessionTitle,
     initialIsComposingNewSession,
-    sessionGoalsStorageKey: 'musee_session_goals',
     persistedSessionsStorageKey: 'musee_persisted_sessions',
   });
 
@@ -255,10 +254,10 @@ export function useSessionWorkspace({
     sessionUserId: userId,
     sessionSummaries: sessionState.sessionSummaries,
     persistedSessions: sessionState.persistedSessions,
-    sessionDrafts: sessionState.sessionDrafts,
     editingSessionTitle: sessionState.editingSessionTitle,
     showToast,
     refreshPersistedSessions: sessionState.refreshPersistedSessions,
+    renamePersistedSession: sessionState.renamePersistedSession,
     resetPreparedSessionState: prepared.resetPreparedSessionState,
     isViewingSession: (sessionId) => activeTab === 'newSession' && sessionState.activeSessionSummary?.id === sessionId,
     setItems,

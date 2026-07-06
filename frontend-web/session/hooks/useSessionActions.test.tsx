@@ -43,14 +43,15 @@ function createPersistedSession(overrides: Partial<SessionRecord> = {}): Session
 type HarnessOptions = {
   sessionSummaries?: SessionSummary[];
   persistedSessions?: SessionRecord[];
-  sessionDrafts?: Array<{ id: string; title: string; createdAt: number; updatedAt: number }>;
   editingSessionTitle?: string;
   isViewingSession?: (sessionId: string) => boolean;
+  renamePersistedSession?: (sessionId: string, title: string) => Promise<void>;
 };
 
 function renderUseSessionActions(options: HarnessOptions = {}) {
   const showToast = vi.fn();
   const refreshPersistedSessions = vi.fn();
+  const renamePersistedSession = vi.fn(options.renamePersistedSession ?? (async () => {}));
   const resetPreparedSessionState = vi.fn();
   const setItems = vi.fn();
   const setSessionDrafts = vi.fn();
@@ -70,10 +71,10 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
     sessionUserId: 'user-1',
     sessionSummaries: options.sessionSummaries ?? [createSessionSummary()],
     persistedSessions: options.persistedSessions ?? [createPersistedSession()],
-    sessionDrafts: options.sessionDrafts ?? [],
     editingSessionTitle: options.editingSessionTitle ?? 'Renamed Session',
     showToast,
     refreshPersistedSessions,
+    renamePersistedSession,
     resetPreparedSessionState,
     isViewingSession: options.isViewingSession ?? (() => false),
     setItems,
@@ -95,6 +96,7 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
     spies: {
       showToast,
       refreshPersistedSessions,
+      renamePersistedSession,
       resetPreparedSessionState,
       setItems,
       setSessionDrafts,
@@ -124,9 +126,7 @@ describe('useSessionActions', () => {
     vi.clearAllMocks();
   });
 
-  it('persists renames for server-side sessions even when they have zero artworks', async () => {
-    mockUpdateSession.mockResolvedValue({ ok: true });
-
+  it('delegates persisted renames to the query-layer optimistic rename', async () => {
     const { result, spies } = renderUseSessionActions({
       sessionSummaries: [createSessionSummary({ items: [] })],
       persistedSessions: [createPersistedSession()],
@@ -136,59 +136,41 @@ describe('useSessionActions', () => {
       await result.current.saveSessionTitle('session-1', 'Museum Visit');
     });
 
-    expect(mockUpdateSession).toHaveBeenCalledWith('session-1', 'user-1', 'Museum Visit');
-    expect(spies.refreshPersistedSessions).toHaveBeenCalledTimes(1);
+    expect(spies.renamePersistedSession).toHaveBeenCalledWith('session-1', 'Museum Visit');
+    // Drafts are pre-persist-only; persisted renames must not write one.
+    expect(spies.setSessionDrafts).not.toHaveBeenCalled();
     expect(spies.setItems).not.toHaveBeenCalled();
   });
 
-  it('optimistically updates the local session title before persisted rename completes', async () => {
-    let resolveRename!: (value: unknown) => void;
-    mockUpdateSession.mockReturnValue(new Promise((resolve) => {
-      resolveRename = resolve;
-    }));
-
-    const { result, spies } = renderUseSessionActions();
-
-    const renamePromise = act(async () => {
-      await result.current.saveSessionTitle('session-1', 'Museum Visit');
-    });
-
-    expect(spies.setSessionDrafts).toHaveBeenCalledTimes(1);
-    expect(mockUpdateSession).toHaveBeenCalledWith('session-1', 'user-1', 'Museum Visit');
-    expect(spies.refreshPersistedSessions).not.toHaveBeenCalled();
-
-    const optimisticUpdater = spies.setSessionDrafts.mock.calls[0][0] as Function;
-    expect(optimisticUpdater([])).toEqual([
-      expect.objectContaining({ id: 'session-1', title: 'Museum Visit' }),
-    ]);
-
-    resolveRename({ ok: true });
-    await renamePromise;
-
-    expect(spies.refreshPersistedSessions).toHaveBeenCalledTimes(1);
-  });
-
-  it('rolls back an optimistic persisted rename when the API request fails', async () => {
-    mockUpdateSession.mockRejectedValue(new Error('rename failed'));
-
-    const previousDraft = {
-      id: 'session-1',
-      title: 'Previous Draft',
-      createdAt: 10,
-      updatedAt: 20,
-    };
+  it('propagates a failed persisted rename without touching drafts', async () => {
     const { result, spies } = renderUseSessionActions({
-      sessionDrafts: [previousDraft],
+      renamePersistedSession: async () => {
+        throw new Error('rename failed');
+      },
     });
 
     await act(async () => {
       await expect(result.current.saveSessionTitle('session-1', 'Museum Visit')).rejects.toThrow('rename failed');
     });
 
-    expect(spies.setSessionDrafts).toHaveBeenCalledTimes(2);
-    const rollbackUpdater = spies.setSessionDrafts.mock.calls[1][0] as Function;
-    expect(rollbackUpdater([{ ...previousDraft, title: 'Museum Visit', updatedAt: 30 }])).toEqual([previousDraft]);
-    expect(spies.refreshPersistedSessions).not.toHaveBeenCalled();
+    expect(spies.setSessionDrafts).not.toHaveBeenCalled();
+  });
+
+  it('writes the title to a draft for not-yet-persisted sessions without calling the API', async () => {
+    const { result, spies } = renderUseSessionActions({
+      persistedSessions: [],
+    });
+
+    await act(async () => {
+      await result.current.saveSessionTitle('session-1', 'Museum Visit');
+    });
+
+    expect(spies.renamePersistedSession).not.toHaveBeenCalled();
+    expect(spies.setSessionDrafts).toHaveBeenCalledTimes(1);
+    const updater = spies.setSessionDrafts.mock.calls[0][0] as Function;
+    expect(updater([])).toEqual([
+      expect.objectContaining({ id: 'session-1', title: 'Museum Visit' }),
+    ]);
   });
 
   it('resets the current session view before deleting the session being viewed', async () => {

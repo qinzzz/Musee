@@ -60,7 +60,7 @@ function createSessionSummary(overrides: Partial<SessionSummary> = {}): SessionS
 function renderAppViewport(options: {
   isPersistedSessionId?: (sessionId: string) => boolean;
 }) {
-  const setSessionGoals = vi.fn();
+  const setSessionGoal = vi.fn();
   const setSessionGoalDismissed = vi.fn();
   const setSessionGoalInput = vi.fn();
   const onSaveSessionGoal = vi.fn().mockResolvedValue(undefined);
@@ -134,7 +134,7 @@ function renderAppViewport(options: {
         setArtworkDetailRightMode: vi.fn(),
         handleIdentifyAgain: vi.fn(),
         handleRetryAnalysis: vi.fn(),
-        setSessionGoals,
+        setSessionGoal,
         isPersistedSessionId: options.isPersistedSessionId ?? (() => false),
         refreshPersistedSessions,
         saveSessionTitle: vi.fn(),
@@ -161,7 +161,7 @@ function renderAppViewport(options: {
   );
 
   return {
-    setSessionGoals,
+    setSessionGoal,
     setSessionGoalDismissed,
     setSessionGoalInput,
     onSaveSessionGoal,
@@ -179,7 +179,7 @@ describe('AppViewport goal persistence', () => {
     fireEvent.click(screen.getByText('save-goal'));
 
     expect(spies.setSessionGoalInput).toHaveBeenCalledWith('');
-    expect(spies.setSessionGoals).toHaveBeenCalled();
+    expect(spies.setSessionGoal).toHaveBeenCalled();
     expect(spies.setSessionGoalDismissed).toHaveBeenCalled();
     expect(spies.onSaveSessionGoal).not.toHaveBeenCalled();
     expect(spies.refreshPersistedSessions).not.toHaveBeenCalled();
