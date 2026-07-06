@@ -14,6 +14,7 @@ type UseSessionActionsOptions = {
   sessionUserId: string;
   sessionSummaries: SessionSummary[];
   persistedSessions: SessionRecord[];
+  sessionDrafts: SessionDraft[];
   editingSessionTitle: string;
   showToast: ShowToast;
   refreshPersistedSessions: () => void;
@@ -38,6 +39,7 @@ export function useSessionActions({
   sessionUserId,
   sessionSummaries,
   persistedSessions,
+  sessionDrafts,
   editingSessionTitle,
   showToast,
   refreshPersistedSessions,
@@ -71,14 +73,10 @@ export function useSessionActions({
     const trimmedTitle = nextTitle.trim() || defaultSessionTitle;
     const currentSummary = sessionSummaries.find((summary) => summary.id === sessionId);
     const isPersistedSession = persistedSessions.some((session) => session.id === sessionId);
+    const previousDraft = sessionDrafts.find((draft) => draft.id === sessionId);
 
     if (!currentSummary || trimmedTitle === currentSummary.title) {
       return;
-    }
-
-    if (isPersistedSession) {
-      await updateSession(sessionId, sessionUserId, trimmedTitle);
-      refreshPersistedSessions();
     }
 
     setSessionDrafts((prev) => {
@@ -91,10 +89,31 @@ export function useSessionActions({
       }
       return [{ id: sessionId, title: trimmedTitle, createdAt: now, updatedAt: now }, ...prev];
     });
+
+    if (!isPersistedSession) {
+      return;
+    }
+
+    try {
+      await updateSession(sessionId, sessionUserId, trimmedTitle);
+      refreshPersistedSessions();
+    } catch (error) {
+      setSessionDrafts((prev) => {
+        if (previousDraft) {
+          const hasDraft = prev.some((draft) => draft.id === sessionId);
+          return hasDraft
+            ? prev.map((draft) => (draft.id === sessionId ? previousDraft : draft))
+            : [previousDraft, ...prev];
+        }
+        return prev.filter((draft) => draft.id !== sessionId);
+      });
+      throw error;
+    }
   }, [
     defaultSessionTitle,
     persistedSessions,
     refreshPersistedSessions,
+    sessionDrafts,
     sessionUserId,
     setSessionDrafts,
     sessionSummaries,

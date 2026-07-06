@@ -141,6 +141,33 @@ This is not only a product feature enabler. It is also a structural cleanup that
 - chronology
 - rendered session UI
 
+### Future: immutable artwork display snapshots
+
+Status: deferred
+
+Session events should eventually store a minimal immutable display snapshot for any referenced artwork.
+
+The goal is not to duplicate the full artwork record into every event. The goal is to preserve enough historical display context for chat/session history to be reconstructed from the event stream even if the live artwork record changes or is deleted.
+
+Suggested snapshot shape:
+
+- artwork id
+- display title
+- artist name
+- thumbnail or image reference, subject to product retention policy
+- source type such as upload, camera, library, or collection
+
+Target rendering behavior:
+
+- prefer live artwork data when the artwork still exists
+- fall back to the event snapshot when live artwork data is unavailable
+- fall back to a generic deleted-artwork placeholder when policy or missing data prevents snapshot display
+
+Before implementing this, decide the deletion policy:
+
+- should deleted artwork history keep the old thumbnail/details?
+- or should deletion intentionally remove visual details everywhere and only preserve a placeholder?
+
 ## 0.15 AI Job Layer
 
 Status: deferred until the session event model exists
