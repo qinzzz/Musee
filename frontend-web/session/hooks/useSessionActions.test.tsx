@@ -43,6 +43,7 @@ function createPersistedSession(overrides: Partial<SessionRecord> = {}): Session
 type HarnessOptions = {
   sessionSummaries?: SessionSummary[];
   persistedSessions?: SessionRecord[];
+  sessionDrafts?: Array<{ id: string; title: string; createdAt: number; updatedAt: number }>;
   editingSessionTitle?: string;
   isViewingSession?: (sessionId: string) => boolean;
 };
@@ -69,6 +70,7 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
     sessionUserId: 'user-1',
     sessionSummaries: options.sessionSummaries ?? [createSessionSummary()],
     persistedSessions: options.persistedSessions ?? [createPersistedSession()],
+    sessionDrafts: options.sessionDrafts ?? [],
     editingSessionTitle: options.editingSessionTitle ?? 'Renamed Session',
     showToast,
     refreshPersistedSessions,
@@ -137,6 +139,56 @@ describe('useSessionActions', () => {
     expect(mockUpdateSession).toHaveBeenCalledWith('session-1', 'user-1', 'Museum Visit');
     expect(spies.refreshPersistedSessions).toHaveBeenCalledTimes(1);
     expect(spies.setItems).not.toHaveBeenCalled();
+  });
+
+  it('optimistically updates the local session title before persisted rename completes', async () => {
+    let resolveRename!: (value: unknown) => void;
+    mockUpdateSession.mockReturnValue(new Promise((resolve) => {
+      resolveRename = resolve;
+    }));
+
+    const { result, spies } = renderUseSessionActions();
+
+    const renamePromise = act(async () => {
+      await result.current.saveSessionTitle('session-1', 'Museum Visit');
+    });
+
+    expect(spies.setSessionDrafts).toHaveBeenCalledTimes(1);
+    expect(mockUpdateSession).toHaveBeenCalledWith('session-1', 'user-1', 'Museum Visit');
+    expect(spies.refreshPersistedSessions).not.toHaveBeenCalled();
+
+    const optimisticUpdater = spies.setSessionDrafts.mock.calls[0][0] as Function;
+    expect(optimisticUpdater([])).toEqual([
+      expect.objectContaining({ id: 'session-1', title: 'Museum Visit' }),
+    ]);
+
+    resolveRename({ ok: true });
+    await renamePromise;
+
+    expect(spies.refreshPersistedSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls back an optimistic persisted rename when the API request fails', async () => {
+    mockUpdateSession.mockRejectedValue(new Error('rename failed'));
+
+    const previousDraft = {
+      id: 'session-1',
+      title: 'Previous Draft',
+      createdAt: 10,
+      updatedAt: 20,
+    };
+    const { result, spies } = renderUseSessionActions({
+      sessionDrafts: [previousDraft],
+    });
+
+    await act(async () => {
+      await expect(result.current.saveSessionTitle('session-1', 'Museum Visit')).rejects.toThrow('rename failed');
+    });
+
+    expect(spies.setSessionDrafts).toHaveBeenCalledTimes(2);
+    const rollbackUpdater = spies.setSessionDrafts.mock.calls[1][0] as Function;
+    expect(rollbackUpdater([{ ...previousDraft, title: 'Museum Visit', updatedAt: 30 }])).toEqual([previousDraft]);
+    expect(spies.refreshPersistedSessions).not.toHaveBeenCalled();
   });
 
   it('resets the current session view before deleting the session being viewed', async () => {

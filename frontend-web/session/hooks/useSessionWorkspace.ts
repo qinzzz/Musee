@@ -242,6 +242,7 @@ export function useSessionWorkspace({
     sessionUserId: userId,
     sessionSummaries: sessionState.sessionSummaries,
     persistedSessions: sessionState.persistedSessions,
+    sessionDrafts: sessionState.sessionDrafts,
     editingSessionTitle: sessionState.editingSessionTitle,
     showToast,
     refreshPersistedSessions: sessionState.refreshPersistedSessions,
