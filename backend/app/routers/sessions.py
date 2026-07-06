@@ -192,7 +192,7 @@ async def delete_session(
 
 
 @router.get("/sessions")
-async def list_sessions(
+def list_sessions(
     user_id: str = Query(...),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),

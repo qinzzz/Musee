@@ -49,7 +49,7 @@ async def _run_artist_bio_with_status_recovery(artwork_id: str, artist_entity_id
 
 
 @router.get("/artworks")
-async def get_artworks(
+def get_artworks(
     user_id: str = Query(...),
     recognized_only: Optional[bool] = None,
     limit: int = Query(50, le=100),
