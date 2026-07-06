@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
-import { fetchSessionEvents } from '../api/sessions';
 import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from '../lib/sessionEventArtworks';
 import { parseServerTimestamp } from '../../lib/time';
 import { compareSessionEvents } from '../lib/sessionOrdering';
 import { usePreparedSessionStaging } from './usePreparedSessionStaging';
 import { useSessionActions } from './useSessionActions';
 import { useSessionMessaging } from './useSessionMessaging';
+import { useSessionEventsQuery } from './useSessionEventsQuery';
 import { useSessionStartFlow } from './useSessionStartFlow';
 import { useSessionState } from './useSessionState';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
@@ -155,81 +155,92 @@ export function useSessionWorkspace({
     sessionState.activeSessionSummary ? sessionState.streamingSessionResponses[sessionState.activeSessionSummary.id] : '',
   ]);
 
+  const activeSessionId = sessionState.activeSessionSummary?.id || null;
+
+  // Canonical events come from the shared query layer; cached data repaints a
+  // re-opened session immediately while the refetch confirms it.
+  const { events: canonicalSessionEvents } = useSessionEventsQuery({
+    sessionId: activeSessionId,
+    enabled: activeTab === 'newSession',
+  });
+
   useEffect(() => {
     if (activeTab !== 'newSession') return;
     if (sessionStreamScrollRef.current) sessionStreamScrollRef.current.scrollTop = 0;
-    if (!sessionState.activeSessionSummary?.id) return;
-    const sessionId = sessionState.activeSessionSummary.id;
-    fetchSessionEvents(sessionId).then(dbMessages => {
-      if (!dbMessages.length) return;
-      if (dbMessages.some((message) => (
-        (message.event_type === 'artwork_commentary' || message.type === 'artwork_commentary')
-        && (message.payload as Record<string, unknown> | undefined)?.status !== 'pending'
-      ))) {
-        sessionState.setStreamingSessionResponses((prev) => {
-          if (!(sessionId in prev)) {
-            return prev;
-          }
-          const next = { ...prev };
-          delete next[sessionId];
-          return next;
-        });
-      }
-      sessionState.setSessionStreams(prev => {
-        const existing = prev[sessionId] || [];
-        const normalizedDbMessages: SessionStreamMessage[] = dbMessages.map(m => {
-          const artworkIds = getSessionEventArtworkIds(m);
-          const canonicalEventType = m.event_type || m.type;
-          const frontendMessageType: SessionStreamMessage['type'] =
-            canonicalEventType === 'artwork_commentary'
-              ? 'artwork_commentary'
-              : canonicalEventType === 'user_input'
-                ? 'text'
-                : (m.type || 'text') as SessionStreamMessage['type'];
-          return {
-            id: m.id || `db-${Date.now()}-${Math.random()}`,
-            role: m.role as 'user' | 'model',
-            text: m.content || '',
-            type: frontendMessageType,
-            artworkId: getPrimarySessionEventArtworkId(m),
-            artworkIds: artworkIds.length ? artworkIds : undefined,
-            payload: m.payload as Record<string, unknown> | undefined,
-            triggerEventId: m.trigger_event_id || (canonicalEventType === 'user_input' ? m.id : undefined) || m.turn_id || undefined,
-            sequenceNumber: typeof m.sequence_number === 'number' ? m.sequence_number : undefined,
-            createdAt: parseServerTimestamp(m.created_at as unknown as string),
-          };
-        });
-        const dbMessageIds = new Set(normalizedDbMessages.map((message) => message.id));
-        // Reconciliation: the backend is canonical for confirmed history — the
-        // fetch replaces it wholesale (id match wins). Only the optimistic
-        // overlay survives: local events with no sequenceNumber yet whose POST
-        // hasn't been confirmed by this fetch (in-flight user messages, pending
-        // commentary, local-only capture/card markers). They keep rendering via
-        // localOrder until a later fetch returns them with a real sequence.
-        const pendingLocalOnlyMessages = existing.filter((message) => (
-          !dbMessageIds.has(message.id)
-          && typeof message.sequenceNumber !== 'number'
-        ));
-        const nextMessages = [...normalizedDbMessages, ...pendingLocalOnlyMessages].sort(compareSessionEvents);
-        if (
-          nextMessages.length === existing.length
-          && nextMessages.every((message, index) => {
-            const previous = existing[index];
-            return previous
-              && previous.id === message.id
-              && previous.createdAt === message.createdAt
-              && previous.sequenceNumber === message.sequenceNumber
-              && previous.triggerEventId === message.triggerEventId
-              && previous.text === message.text
-              && previous.type === message.type;
-          })
-        ) {
+  }, [activeTab, activeSessionId, sessionStreamScrollRef]);
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const sessionId = activeSessionId;
+    const dbMessages = canonicalSessionEvents;
+    if (!dbMessages?.length) return;
+    if (dbMessages.some((message) => (
+      (message.event_type === 'artwork_commentary' || message.type === 'artwork_commentary')
+      && (message.payload as Record<string, unknown> | undefined)?.status !== 'pending'
+    ))) {
+      sessionState.setStreamingSessionResponses((prev) => {
+        if (!(sessionId in prev)) {
           return prev;
         }
-        return { ...prev, [sessionId]: nextMessages };
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
       });
-    }).catch(() => {});
-  }, [activeTab, sessionStreamScrollRef, sessionState.activeSessionSummary?.id, sessionState.setSessionStreams]);
+    }
+    sessionState.setSessionStreams(prev => {
+      const existing = prev[sessionId] || [];
+      const normalizedDbMessages: SessionStreamMessage[] = dbMessages.map(m => {
+        const artworkIds = getSessionEventArtworkIds(m);
+        const canonicalEventType = m.event_type || m.type;
+        const frontendMessageType: SessionStreamMessage['type'] =
+          canonicalEventType === 'artwork_commentary'
+            ? 'artwork_commentary'
+            : canonicalEventType === 'user_input'
+              ? 'text'
+              : (m.type || 'text') as SessionStreamMessage['type'];
+        return {
+          id: m.id || `db-${Date.now()}-${Math.random()}`,
+          role: m.role as 'user' | 'model',
+          text: m.content || '',
+          type: frontendMessageType,
+          artworkId: getPrimarySessionEventArtworkId(m),
+          artworkIds: artworkIds.length ? artworkIds : undefined,
+          payload: m.payload as Record<string, unknown> | undefined,
+          triggerEventId: m.trigger_event_id || (canonicalEventType === 'user_input' ? m.id : undefined) || m.turn_id || undefined,
+          sequenceNumber: typeof m.sequence_number === 'number' ? m.sequence_number : undefined,
+          createdAt: parseServerTimestamp(m.created_at as unknown as string),
+        };
+      });
+      const dbMessageIds = new Set(normalizedDbMessages.map((message) => message.id));
+      // Reconciliation: the backend is canonical for confirmed history — the
+      // fetch replaces it wholesale (id match wins). Only the optimistic
+      // overlay survives: local events with no sequenceNumber yet whose POST
+      // hasn't been confirmed by this fetch (in-flight user messages, pending
+      // commentary, local-only capture/card markers). They keep rendering via
+      // localOrder until a later fetch returns them with a real sequence.
+      const pendingLocalOnlyMessages = existing.filter((message) => (
+        !dbMessageIds.has(message.id)
+        && typeof message.sequenceNumber !== 'number'
+      ));
+      const nextMessages = [...normalizedDbMessages, ...pendingLocalOnlyMessages].sort(compareSessionEvents);
+      if (
+        nextMessages.length === existing.length
+        && nextMessages.every((message, index) => {
+          const previous = existing[index];
+          return previous
+            && previous.id === message.id
+            && previous.createdAt === message.createdAt
+            && previous.sequenceNumber === message.sequenceNumber
+            && previous.triggerEventId === message.triggerEventId
+            && previous.text === message.text
+            && previous.type === message.type;
+        })
+      ) {
+        return prev;
+      }
+      return { ...prev, [sessionId]: nextMessages };
+    });
+  }, [activeSessionId, canonicalSessionEvents, sessionState.setSessionStreams, sessionState.setStreamingSessionResponses]);
 
   useEffect(() => {
     if (!sessionState.editingSessionId || !renameInputRef.current) return;

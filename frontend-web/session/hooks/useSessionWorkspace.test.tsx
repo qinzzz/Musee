@@ -1,3 +1,5 @@
+import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionWorkspace } from './useSessionWorkspace';
@@ -163,6 +165,12 @@ function renderUseSessionWorkspace(options?: {
     analysisPromise: Promise.resolve([]),
   });
 
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+  });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
   const hook = renderHook(() => useSessionWorkspace({
     userId: 'user-1',
     items: [],
@@ -182,7 +190,7 @@ function renderUseSessionWorkspace(options?: {
     clearShellOverlays,
     showToast,
     ingestPreparedUploads,
-  }));
+  }), { wrapper });
 
   return {
     ...hook,

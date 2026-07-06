@@ -41,11 +41,11 @@ export interface StartSessionWithArtworksPayload {
   artwork_ids: string[];
 }
 
-const inFlightSessionListRequests = new Map<string, Promise<SessionRecord[]>>();
-
 export async function fetchSessionEvents(sessionId: string): Promise<SessionEventPayload[]> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/events`, { timeout: 10000 });
-  if (!response.ok) return [];
+  if (!response.ok) {
+    throw new Error(`API error (${response.status}): failed to fetch session events`);
+  }
   return response.json();
 }
 
@@ -59,26 +59,18 @@ export async function setSessionGoal(sessionId: string, goal: string): Promise<v
   }).catch(() => {});
 }
 
+// Request dedupe lives in the shared query layer (see useSessionsQuery);
+// this stays a plain fetch. A non-OK response throws so callers keep their
+// last-good data instead of treating an outage as an empty session list.
 export async function fetchSessions(userId: string): Promise<SessionRecord[]> {
-  const existing = inFlightSessionListRequests.get(userId);
-  if (existing) {
-    return existing;
-  }
-
-  const request = fetchWithTimeout(
+  const response = await fetchWithTimeout(
     `${API_BASE_URL}/sessions?user_id=${encodeURIComponent(userId)}`,
     {},
-  )
-    .then(async (response) => {
-      if (!response.ok) return [];
-      return response.json();
-    })
-    .finally(() => {
-      inFlightSessionListRequests.delete(userId);
-    });
-
-  inFlightSessionListRequests.set(userId, request);
-  return request;
+  );
+  if (!response.ok) {
+    throw new Error(`API error (${response.status}): failed to fetch sessions`);
+  }
+  return response.json();
 }
 
 export async function appendSessionEvents(sessionId: string, events: SessionEventPayload[]): Promise<void> {

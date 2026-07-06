@@ -1,3 +1,5 @@
+import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionState } from './useSessionState';
@@ -12,6 +14,12 @@ vi.mock('../api/sessions', () => ({
 }));
 
 function renderSessionState() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+  });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
   return renderHook(() => useSessionState({
     userId: 'user-1',
     items: [],
@@ -20,7 +28,7 @@ function renderSessionState() {
     defaultSessionTitle: 'Untitled Session',
     sessionGoalsStorageKey: 'test_session_goals',
     persistedSessionsStorageKey: 'test_persisted_sessions',
-  }));
+  }), { wrapper });
 }
 
 describe('useSessionState', () => {
