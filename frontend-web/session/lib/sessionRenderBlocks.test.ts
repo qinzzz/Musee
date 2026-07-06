@@ -111,10 +111,7 @@ describe('buildSessionRenderBlocks', () => {
     expect(blocks[1].type).toBe('commentary');
   });
 
-  it('keeps a reply at its sequence position even when its trigger renders no block, and a new (unsaved) message stays last', () => {
-    // An upload user_input whose artworks do not resolve to items → produces no
-    // input block. Its reply must still render at its seq position, and a
-    // brand-new optimistic message (no sequence_number) must remain at the bottom.
+  it('renders deleted placeholders for artwork user input whose artworks no longer resolve', () => {
     const uploadInput = createMessage({
       id: 'evt-upload',
       role: 'user',
@@ -148,8 +145,54 @@ describe('buildSessionRenderBlocks', () => {
     });
 
     const order = blocks.map((block) => block.id);
-    expect(order).toEqual(['evt-upload-reply', 'evt-new']);
+    expect(order).toEqual(['evt-upload', 'evt-upload-reply', 'evt-new']);
     expect(order[order.length - 1]).toBe('evt-new');
+    expect(blocks[0]).toMatchObject({
+      type: 'input',
+      id: 'evt-upload',
+      sourceLabel: 'Uploaded an artwork',
+    });
+    if (blocks[0].type !== 'input') {
+      throw new Error('expected input block');
+    }
+    expect(blocks[0].items).toHaveLength(1);
+    expect(blocks[0].items[0]).toMatchObject({
+      id: 'deleted-artwork-missing-artwork',
+      artworkId: 'missing-artwork',
+      artworkName: 'Deleted artwork',
+      isDeletedPlaceholder: true,
+    });
+  });
+
+  it('does not mark unresolved artwork ids as deleted before artwork loading completes', () => {
+    const uploadInput = createMessage({
+      id: 'evt-upload',
+      role: 'user',
+      text: '',
+      triggerEventId: 'evt-upload',
+      artworkIds: ['missing-artwork'],
+      sequenceNumber: 1,
+      createdAt: 100,
+      payload: { artworks: [{ artwork_id: 'missing-artwork', source: 'upload' }] },
+    });
+    const uploadReply = createMessage({
+      id: 'evt-upload-reply',
+      role: 'model',
+      type: 'artwork_commentary',
+      text: 'reply about the upload',
+      triggerEventId: 'evt-upload',
+      sequenceNumber: 2,
+      createdAt: 200,
+      payload: { status: 'completed' },
+    });
+
+    const blocks = buildSessionRenderBlocks(
+      createSummary(),
+      { 'session-1': [uploadReply, uploadInput] },
+      { artworksLoaded: false },
+    );
+
+    expect(blocks.map((block) => block.id)).toEqual(['evt-upload-reply']);
   });
 
   it('keeps artwork user input, its text, and triggered commentary together', () => {

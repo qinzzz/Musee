@@ -5,6 +5,66 @@ import { compareSessionEvents } from './sessionOrdering';
 import type { SessionRenderBlock, SessionStreamMessage, SessionSummary } from '../types';
 import { getArtworkClientId } from '../../lib/artworkIdentity';
 
+function normalizeEventSource(source: unknown): 'library' | 'upload' | 'camera' {
+  if (source === 'library' || source === 'upload' || source === 'camera') {
+    return source;
+  }
+  if (source === 'capture') {
+    return 'camera';
+  }
+  return 'camera';
+}
+
+function getArtworkEventSourceFromPayload(
+  message: SessionStreamMessage,
+  artworkId: string,
+): 'library' | 'upload' | 'camera' {
+  const artworks = Array.isArray(message.payload?.artworks) ? message.payload.artworks : [];
+  const match = artworks.find((entry) => (
+    entry
+    && typeof entry === 'object'
+    && 'artwork_id' in entry
+    && entry.artwork_id === artworkId
+  ));
+
+  if (match && typeof match === 'object' && 'source' in match) {
+    return normalizeEventSource(match.source);
+  }
+
+  return normalizeEventSource(message.payload?.source);
+}
+
+function buildDeletedArtworkPlaceholder(
+  artworkId: string,
+  sessionId: string,
+  message: SessionStreamMessage,
+): GalleryItem {
+  return {
+    id: `deleted-artwork-${artworkId}`,
+    artworkId,
+    url: '',
+    keywords: [],
+    vibe: {
+      backgroundColor: '#ffffff',
+      padding: 4,
+      borderRadius: '12px',
+      borderType: 'solid',
+      accentColor: '#000000',
+    },
+    timestamp: message.createdAt,
+    sessionCapturedAt: message.createdAt,
+    sessionLinks: [{
+      sessionId,
+      sequenceNumber: message.sequenceNumber,
+      source: getArtworkEventSourceFromPayload(message, artworkId),
+    }],
+    conversation: [],
+    artworkName: 'Deleted artwork',
+    syncStatus: 'synced',
+    isDeletedPlaceholder: true,
+  };
+}
+
 function getArtworkEventSourceForSession(
   item: GalleryItem,
   sessionId: string,
@@ -46,11 +106,13 @@ function getCommentaryStatus(message: SessionStreamMessage): 'pending' | 'comple
 export function buildSessionRenderBlocks(
   activeSessionSummary: SessionSummary | null,
   sessionStreams: Record<string, SessionStreamMessage[]>,
+  options: { artworksLoaded?: boolean } = {},
 ): SessionRenderBlock[] {
   if (!activeSessionSummary) {
     return [];
   }
 
+  const artworksLoaded = options.artworksLoaded ?? true;
   const sessionId = activeSessionSummary.id;
   // No need to pre-sort: blocks are sorted once at the end, and the build loop
   // is order-independent (used-item tracking is a Set).
@@ -81,7 +143,13 @@ export function buildSessionRenderBlocks(
     if (message.role === 'user') {
       const artworkIds = getSessionEventArtworkIds(message);
       const items = artworkIds
-        .map(resolveArtwork)
+        .map((artworkId) => {
+          const artwork = resolveArtwork(artworkId);
+          if (artwork) return artwork;
+          return artworksLoaded
+            ? buildDeletedArtworkPlaceholder(artworkId, sessionId, message)
+            : null;
+        })
         .filter((item): item is GalleryItem => Boolean(item));
 
       items.forEach((item) => usedItemIds.add(getArtworkClientId(item)));
