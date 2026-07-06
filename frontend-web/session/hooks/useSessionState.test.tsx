@@ -38,6 +38,7 @@ describe('useSessionState', () => {
       sessionDraftsStorageKey: 'test_session_drafts',
       sessionStreamsStorageKey: 'test_session_streams',
       sessionGoalsStorageKey: 'test_session_goals',
+      persistedSessionsStorageKey: 'test_persisted_sessions',
     }));
 
     await waitFor(() => {
@@ -90,6 +91,7 @@ describe('useSessionState', () => {
       sessionDraftsStorageKey: 'test_session_drafts',
       sessionStreamsStorageKey: 'test_session_streams',
       sessionGoalsStorageKey: 'test_session_goals',
+      persistedSessionsStorageKey: 'test_persisted_sessions',
     }));
 
     await waitFor(() => {
@@ -126,6 +128,7 @@ describe('useSessionState', () => {
       sessionDraftsStorageKey: 'test_session_drafts',
       sessionStreamsStorageKey: 'test_session_streams',
       sessionGoalsStorageKey: 'test_session_goals',
+      persistedSessionsStorageKey: 'test_persisted_sessions',
     }));
 
     await waitFor(() => {
@@ -161,6 +164,7 @@ describe('useSessionState', () => {
       sessionDraftsStorageKey: 'test_session_drafts',
       sessionStreamsStorageKey: 'test_session_streams',
       sessionGoalsStorageKey: 'test_session_goals',
+      persistedSessionsStorageKey: 'test_persisted_sessions',
     }));
 
     await waitFor(() => {
@@ -171,6 +175,63 @@ describe('useSessionState', () => {
           triggerEventId: 'evt-2',
         }),
       ]);
+    });
+  });
+
+  it('hydrates cached persisted sessions before the server refresh resolves', async () => {
+    let resolveFetch!: (value: Array<{ id: string; user_id: string; title: string }>) => void;
+    mockFetchSessions.mockReturnValue(new Promise((resolve) => {
+      resolveFetch = resolve;
+    }));
+    localStorage.setItem('test_persisted_sessions', JSON.stringify({
+      userId: 'user-1',
+      sessions: [
+        {
+          id: 'session-1',
+          user_id: 'user-1',
+          title: 'Cached Session',
+        },
+      ],
+    }));
+
+    const { result } = renderHook(() => useSessionState({
+      userId: 'user-1',
+      items: [],
+      artworksLoaded: true,
+      deleteConfirmation: null,
+      defaultSessionTitle: 'Untitled Session',
+      sessionDraftsStorageKey: 'test_session_drafts',
+      sessionStreamsStorageKey: 'test_session_streams',
+      sessionGoalsStorageKey: 'test_session_goals',
+      persistedSessionsStorageKey: 'test_persisted_sessions',
+    }));
+
+    expect(result.current.persistedSessions).toEqual([
+      expect.objectContaining({
+        id: 'session-1',
+        title: 'Cached Session',
+      }),
+    ]);
+    expect(result.current.persistedSessionsHydrated).toBe(false);
+
+    await act(async () => {
+      resolveFetch([
+        {
+          id: 'session-1',
+          user_id: 'user-1',
+          title: 'Server Session',
+        },
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.persistedSessions).toEqual([
+        expect.objectContaining({
+          id: 'session-1',
+          title: 'Server Session',
+        }),
+      ]);
+      expect(result.current.persistedSessionsHydrated).toBe(true);
     });
   });
 });

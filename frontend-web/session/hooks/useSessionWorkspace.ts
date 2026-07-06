@@ -83,6 +83,7 @@ export function useSessionWorkspace({
     sessionDraftsStorageKey: 'musee_session_drafts',
     sessionStreamsStorageKey: 'musee_session_streams',
     sessionGoalsStorageKey: 'musee_session_goals',
+    persistedSessionsStorageKey: 'musee_persisted_sessions',
   });
 
   const prepared = usePreparedSessionStaging({

@@ -26,6 +26,7 @@ type UseSessionStateOptions = {
   sessionDraftsStorageKey: string;
   sessionStreamsStorageKey: string;
   sessionGoalsStorageKey: string;
+  persistedSessionsStorageKey: string;
 };
 
 function normalizeCachedSessionStreams(
@@ -52,6 +53,31 @@ function normalizeCachedSessionStreams(
   );
 }
 
+type CachedPersistedSessionsPayload = {
+  userId: string;
+  sessions: SessionRecord[];
+};
+
+function readCachedPersistedSessions(
+  storageKey: string,
+  userId: string,
+): SessionRecord[] {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as CachedPersistedSessionsPayload | SessionRecord[];
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+    if (parsed.userId !== userId || !Array.isArray(parsed.sessions)) {
+      return [];
+    }
+    return parsed.sessions;
+  } catch {
+    return [];
+  }
+}
+
 export function useSessionState({
   userId,
   items,
@@ -62,6 +88,7 @@ export function useSessionState({
   sessionDraftsStorageKey,
   sessionStreamsStorageKey,
   sessionGoalsStorageKey,
+  persistedSessionsStorageKey,
 }: UseSessionStateOptions) {
   const [sessionSearch, setSessionSearch] = useState('');
   const [filteredSessionId, setFilteredSessionId] = useState<string | null>(null);
@@ -97,7 +124,9 @@ export function useSessionState({
       return {};
     }
   });
-  const [persistedSessions, setPersistedSessions] = useState<SessionRecord[]>([]);
+  const [persistedSessions, setPersistedSessions] = useState<SessionRecord[]>(() => (
+    readCachedPersistedSessions(persistedSessionsStorageKey, userId)
+  ));
   const [persistedSessionsHydrated, setPersistedSessionsHydrated] = useState(false);
 
   useEffect(() => {
@@ -111,6 +140,17 @@ export function useSessionState({
   useEffect(() => {
     localStorage.setItem(sessionGoalsStorageKey, JSON.stringify(sessionGoals));
   }, [sessionGoals, sessionGoalsStorageKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(persistedSessionsStorageKey, JSON.stringify({
+        userId,
+        sessions: persistedSessions,
+      }));
+    } catch {
+      // Ignore storage quota/private browsing failures.
+    }
+  }, [persistedSessions, persistedSessionsStorageKey, userId]);
 
   const refreshPersistedSessions = () => {
     let cancelled = false;
@@ -134,10 +174,10 @@ export function useSessionState({
   };
 
   useEffect(() => {
-    setPersistedSessions([]);
+    setPersistedSessions(readCachedPersistedSessions(persistedSessionsStorageKey, userId));
     setPersistedSessionsHydrated(false);
     return refreshPersistedSessions();
-  }, [userId]);
+  }, [persistedSessionsStorageKey, userId]);
 
   const sessionSummaries = useMemo(() => {
     return buildSessionSummaries({
