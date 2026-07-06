@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { deleteSession, type SessionRecord, updateSession } from '../api/sessions';
+import { deleteSession, type SessionRecord } from '../api/sessions';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import type { SessionDraft, SessionStreamMessage, SessionSummary } from '../types';
 import { itemBelongsToSession, updateSessionLinkForItem } from '../lib/sessionLinks';
@@ -16,10 +16,10 @@ type UseSessionActionsOptions = {
   sessionUserId: string;
   sessionSummaries: SessionSummary[];
   persistedSessions: SessionRecord[];
-  sessionDrafts: SessionDraft[];
   editingSessionTitle: string;
   showToast: ShowToast;
   refreshPersistedSessions: () => void;
+  renamePersistedSession: (sessionId: string, title: string) => Promise<void>;
   resetPreparedSessionState: () => void;
   isViewingSession: (sessionId: string) => boolean;
   setItems: Dispatch<SetStateAction<GalleryItem[]>>;
@@ -41,10 +41,10 @@ export function useSessionActions({
   sessionUserId,
   sessionSummaries,
   persistedSessions,
-  sessionDrafts,
   editingSessionTitle,
   showToast,
   refreshPersistedSessions,
+  renamePersistedSession,
   resetPreparedSessionState,
   isViewingSession,
   setItems,
@@ -75,12 +75,20 @@ export function useSessionActions({
     const trimmedTitle = nextTitle.trim() || defaultSessionTitle;
     const currentSummary = sessionSummaries.find((summary) => summary.id === sessionId);
     const isPersistedSession = persistedSessions.some((session) => session.id === sessionId);
-    const previousDraft = sessionDrafts.find((draft) => draft.id === sessionId);
 
     if (!currentSummary || trimmedTitle === currentSummary.title) {
       return;
     }
 
+    if (isPersistedSession) {
+      // Backend-owned title: the query layer paints the rename optimistically,
+      // reconciles via invalidation, and rolls back on failure. Drafts are not
+      // an overlay for persisted sessions.
+      await renamePersistedSession(sessionId, trimmedTitle);
+      return;
+    }
+
+    // Pre-persist sessions: the draft is the only place a title can live.
     setSessionDrafts((prev) => {
       const now = Date.now();
       const existingDraft = prev.find((draft) => draft.id === sessionId);
@@ -91,32 +99,10 @@ export function useSessionActions({
       }
       return [{ id: sessionId, title: trimmedTitle, createdAt: now, updatedAt: now }, ...prev];
     });
-
-    if (!isPersistedSession) {
-      return;
-    }
-
-    try {
-      await updateSession(sessionId, sessionUserId, trimmedTitle);
-      refreshPersistedSessions();
-    } catch (error) {
-      setSessionDrafts((prev) => {
-        if (previousDraft) {
-          const hasDraft = prev.some((draft) => draft.id === sessionId);
-          return hasDraft
-            ? prev.map((draft) => (draft.id === sessionId ? previousDraft : draft))
-            : [previousDraft, ...prev];
-        }
-        return prev.filter((draft) => draft.id !== sessionId);
-      });
-      throw error;
-    }
   }, [
     defaultSessionTitle,
     persistedSessions,
-    refreshPersistedSessions,
-    sessionDrafts,
-    sessionUserId,
+    renamePersistedSession,
     setSessionDrafts,
     sessionSummaries,
   ]);

@@ -5,12 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionState } from './useSessionState';
 import type { SessionStreamMessage } from '../types';
 
-const { mockFetchSessions } = vi.hoisted(() => ({
+const { mockFetchSessions, mockUpdateSession } = vi.hoisted(() => ({
   mockFetchSessions: vi.fn(),
+  mockUpdateSession: vi.fn(),
 }));
 
 vi.mock('../api/sessions', () => ({
   fetchSessions: mockFetchSessions,
+  updateSession: mockUpdateSession,
 }));
 
 function renderSessionState() {
@@ -26,7 +28,6 @@ function renderSessionState() {
     artworksLoaded: true,
     deleteConfirmation: null,
     defaultSessionTitle: 'Untitled Session',
-    sessionGoalsStorageKey: 'test_session_goals',
     persistedSessionsStorageKey: 'test_persisted_sessions',
   }), { wrapper });
 }
@@ -107,6 +108,109 @@ describe('useSessionState', () => {
     expect(result.current.sessionStreams['session-1']).toEqual([message]);
     expect(localStorage.getItem('musee_session_streams')).toBeNull();
     expect(localStorage.getItem('musee_session_drafts')).toBeNull();
+  });
+
+  it('renames a persisted session optimistically and rolls back on failure', async () => {
+    mockFetchSessions.mockResolvedValue([
+      { id: 'session-1', user_id: 'user-1', title: 'Frank Stella' },
+    ]);
+
+    const { result } = renderSessionState();
+
+    await waitFor(() => {
+      expect(result.current.persistedSessions[0]?.title).toBe('Frank Stella');
+    });
+
+    // Success path: title paints immediately, then the refetch confirms it.
+    let resolveRename!: (value: unknown) => void;
+    mockUpdateSession.mockReturnValue(new Promise((resolve) => {
+      resolveRename = resolve;
+    }));
+    let renamePromise!: Promise<void>;
+    act(() => {
+      renamePromise = result.current.renamePersistedSession('session-1', 'Museum Visit');
+    });
+
+    await waitFor(() => {
+      expect(result.current.persistedSessions[0]?.title).toBe('Museum Visit');
+    });
+    expect(mockUpdateSession).toHaveBeenCalledWith('session-1', 'user-1', 'Museum Visit');
+
+    mockFetchSessions.mockResolvedValue([
+      { id: 'session-1', user_id: 'user-1', title: 'Museum Visit' },
+    ]);
+    await act(async () => {
+      resolveRename({ ok: true });
+      await renamePromise;
+    });
+    await waitFor(() => {
+      expect(result.current.persistedSessions[0]?.title).toBe('Museum Visit');
+    });
+
+    // Failure path: optimistic title rolls back to the last confirmed value.
+    mockUpdateSession.mockRejectedValue(new Error('rename failed'));
+    await act(async () => {
+      await expect(
+        result.current.renamePersistedSession('session-1', 'Doomed Title'),
+      ).rejects.toThrow('rename failed');
+    });
+    expect(result.current.persistedSessions[0]?.title).toBe('Museum Visit');
+  });
+
+  it('derives session goals from backend records with a memory-only override', async () => {
+    localStorage.setItem('musee_session_goals', JSON.stringify({ 'session-1': 'stale local goal' }));
+    mockFetchSessions.mockResolvedValue([
+      {
+        id: 'session-1',
+        user_id: 'user-1',
+        title: 'Frank Stella',
+        metadata: { user_goal: 'Study color fields' },
+      },
+    ]);
+
+    const { result } = renderSessionState();
+
+    // Backend is canonical: the goal comes from the session record, and the
+    // retired localStorage key is cleared, not read.
+    await waitFor(() => {
+      expect(result.current.sessionGoals['session-1']).toBe('Study color fields');
+      expect(localStorage.getItem('musee_session_goals')).toBeNull();
+    });
+
+    // Saving a goal for a persisted session paints immediately (optimistic
+    // patch into the query cache) without persisting locally.
+    act(() => {
+      result.current.setSessionGoal('session-1', 'Compare brushwork');
+    });
+    await waitFor(() => {
+      expect(result.current.sessionGoals['session-1']).toBe('Compare brushwork');
+    });
+    expect(localStorage.getItem('musee_session_goals')).toBeNull();
+
+    // The backend always wins on refetch: a change made on another device is
+    // never masked by the local copy.
+    mockFetchSessions.mockResolvedValue([
+      {
+        id: 'session-1',
+        user_id: 'user-1',
+        title: 'Frank Stella',
+        metadata: { user_goal: 'Changed on another device' },
+      },
+    ]);
+    act(() => {
+      result.current.refreshPersistedSessions();
+    });
+    await waitFor(() => {
+      expect(result.current.sessionGoals['session-1']).toBe('Changed on another device');
+    });
+
+    // Goals for not-yet-persisted sessions live in the memory-only draft map.
+    act(() => {
+      result.current.setSessionGoal('draft-1', 'Pre-persist goal');
+    });
+    await waitFor(() => {
+      expect(result.current.sessionGoals['draft-1']).toBe('Pre-persist goal');
+    });
   });
 
   it('hydrates cached persisted sessions before the server refresh resolves', async () => {

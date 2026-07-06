@@ -111,9 +111,10 @@ function createSessionStateMock(overrides: Record<string, unknown> = {}) {
     sessionGoalInput: '',
     setSessionGoalInput: vi.fn(),
     sessionGoals: {},
-    setSessionGoals: vi.fn(),
+    setSessionGoal: vi.fn(),
     pendingDeleteSessionSummary: null,
     refreshPersistedSessions: vi.fn(),
+    renamePersistedSession: vi.fn(),
     ...overrides,
   };
 }
