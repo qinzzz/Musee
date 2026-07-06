@@ -30,6 +30,7 @@ function createItem(id: string, overrides: Partial<GalleryItem> = {}): GalleryIt
 describe('useArtworkSelection', () => {
   it('clears selection after adding selected artworks to a board', async () => {
     const onAddItemsToBoard = vi.fn().mockResolvedValue(undefined);
+    const onDeleteArtworks = vi.fn().mockResolvedValue(undefined);
     const items = [createItem('a1'), createItem('a2')];
 
     const { result } = renderHook(() =>
@@ -39,6 +40,7 @@ describe('useArtworkSelection', () => {
         searchedSavedItems: items,
         items,
         onAddItemsToBoard,
+        onDeleteArtworks,
       }),
     );
 
@@ -54,5 +56,35 @@ describe('useArtworkSelection', () => {
     expect(onAddItemsToBoard).toHaveBeenCalledWith('board-1', ['a1', 'a2']);
     expect(result.current.selectedArtworkIds).toEqual([]);
     expect(result.current.isApplyingBoard).toBe(false);
+  });
+
+  it('keeps selection while delegating bulk delete confirmation', async () => {
+    const onAddItemsToBoard = vi.fn().mockResolvedValue(undefined);
+    const onDeleteArtworks = vi.fn().mockResolvedValue(undefined);
+    const items = [createItem('a1'), createItem('a2')];
+
+    const { result } = renderHook(() =>
+      useArtworkSelection({
+        collectTab: 'saved',
+        savedLayout: 'grid',
+        searchedSavedItems: items,
+        items,
+        onAddItemsToBoard,
+        onDeleteArtworks,
+      }),
+    );
+
+    act(() => {
+      result.current.toggleArtworkSelection('a1');
+      result.current.toggleArtworkSelection('a2');
+    });
+
+    await act(async () => {
+      await result.current.handleDeleteSelection();
+    });
+
+    expect(onDeleteArtworks).toHaveBeenCalledWith(['a1', 'a2']);
+    expect(result.current.selectedArtworkIds).toEqual(['a1', 'a2']);
+    expect(result.current.isDeletingSelection).toBe(false);
   });
 });
