@@ -23,35 +23,16 @@ type UseSessionStateOptions = {
   deleteConfirmation: DeleteConfirmation;
   defaultSessionTitle: string;
   initialIsComposingNewSession?: boolean;
-  sessionDraftsStorageKey: string;
-  sessionStreamsStorageKey: string;
   sessionGoalsStorageKey: string;
   persistedSessionsStorageKey: string;
 };
 
-function normalizeCachedSessionStreams(
-  raw: Record<string, Array<SessionStreamMessage & { turnId?: string }>>,
-): Record<string, SessionStreamMessage[]> {
-  return Object.fromEntries(
-    Object.entries(raw).map(([sessionId, entries]) => [
-      sessionId,
-      (entries || []).map((entry) => {
-        const isCanonicalUserInputMessage =
-          entry.role === 'user'
-          && Boolean(entry.text)
-          && (entry.type === 'text' || entry.type === undefined || entry.type === 'artwork_capture');
-        return {
-          ...entry,
-          type: isCanonicalUserInputMessage ? 'text' : entry.type,
-          triggerEventId:
-            entry.triggerEventId
-            || entry.turnId
-            || (isCanonicalUserInputMessage ? entry.id : undefined),
-        };
-      }),
-    ]),
-  );
-}
+// Storage policy: the backend is canonical for session events; the DB fetch is
+// the recovery mechanism after a reload. Session streams (canonical fetched
+// events + the optimistic pending overlay) and pre-persist session drafts are
+// therefore memory-only — persisting them would only create ghosts that
+// contradict the fetch. These keys held them historically; clear them once.
+const LEGACY_SESSION_STORAGE_KEYS = ['musee_session_streams', 'musee_session_drafts'];
 
 type CachedPersistedSessionsPayload = {
   userId: string;
@@ -85,8 +66,6 @@ export function useSessionState({
   deleteConfirmation,
   defaultSessionTitle,
   initialIsComposingNewSession = false,
-  sessionDraftsStorageKey,
-  sessionStreamsStorageKey,
   sessionGoalsStorageKey,
   persistedSessionsStorageKey,
 }: UseSessionStateOptions) {
@@ -96,22 +75,11 @@ export function useSessionState({
   const [openSessionMenuId, setOpenSessionMenuId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionTitle, setEditingSessionTitle] = useState('');
-  const [sessionDrafts, setSessionDrafts] = useState<SessionDraft[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(sessionDraftsStorageKey) || '[]');
-    } catch {
-      return [];
-    }
-  });
-  const [sessionStreams, setSessionStreams] = useState<Record<string, SessionStreamMessage[]>>(() => {
-    try {
-      return normalizeCachedSessionStreams(
-        JSON.parse(localStorage.getItem(sessionStreamsStorageKey) || '{}'),
-      );
-    } catch {
-      return {};
-    }
-  });
+  // Memory-only: provisional UI state until the first persisted commit.
+  const [sessionDrafts, setSessionDrafts] = useState<SessionDraft[]>([]);
+  // Memory-only: canonical fetched events + optimistic pending overlay, merged
+  // per session. Reload recovery is the DB fetch, never local storage.
+  const [sessionStreams, setSessionStreams] = useState<Record<string, SessionStreamMessage[]>>({});
   const [streamingSessionResponses, setStreamingSessionResponses] = useState<Record<string, string>>({});
   const [sessionGoalDismissed, setSessionGoalDismissed] = useState<Set<string>>(new Set());
   const [sessionGoalInput, setSessionGoalInput] = useState('');
@@ -130,12 +98,13 @@ export function useSessionState({
   const [persistedSessionsHydrated, setPersistedSessionsHydrated] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem(sessionDraftsStorageKey, JSON.stringify(sessionDrafts));
-  }, [sessionDrafts, sessionDraftsStorageKey]);
-
-  useEffect(() => {
-    localStorage.setItem(sessionStreamsStorageKey, JSON.stringify(sessionStreams));
-  }, [sessionStreams, sessionStreamsStorageKey]);
+    // One-time cleanup of the retired stream/draft persistence.
+    try {
+      LEGACY_SESSION_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    } catch {
+      // Ignore storage failures (private browsing etc.).
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(sessionGoalsStorageKey, JSON.stringify(sessionGoals));

@@ -88,6 +88,10 @@ function writeArtworkBootstrapCache(userId: string, items: ArtworkBootstrapCache
 
   try {
     localStorage.setItem(ARTWORK_BOOTSTRAP_CACHE_KEY, JSON.stringify(payload));
+    // Once the current version is written, the older generations are dead
+    // weight — drop them instead of letting them accumulate forever.
+    localStorage.removeItem(PREVIOUS_ARTWORK_BOOTSTRAP_CACHE_KEY);
+    localStorage.removeItem(LEGACY_ARTWORK_BOOTSTRAP_CACHE_KEY);
   } catch {
     // Ignore storage quota/private browsing failures.
   }
