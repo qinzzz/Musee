@@ -2,8 +2,10 @@ import React from 'react';
 import type { SessionSummary } from '../../session/types';
 
 export type DeleteConfirmationState = {
-  id: string;
-  type: 'item' | 'session';
+  type: 'item' | 'items' | 'session';
+  id?: string;
+  ids?: string[];
+  count?: number;
 } | null;
 
 type Props = {
@@ -12,6 +14,7 @@ type Props = {
   showCaptureExitModal: boolean;
   onCloseDeleteConfirmation: () => void;
   onConfirmDeleteItem: (id: string) => void;
+  onConfirmDeleteItems: (ids: string[]) => void;
   onConfirmDeleteSession: (id: string) => void;
   onCancelCaptureExit: () => void;
   onConfirmCaptureExit: () => void;
@@ -23,6 +26,7 @@ export default function AppConfirmationLayer({
   showCaptureExitModal,
   onCloseDeleteConfirmation,
   onConfirmDeleteItem,
+  onConfirmDeleteItems,
   onConfirmDeleteSession,
   onCancelCaptureExit,
   onConfirmCaptureExit,
@@ -42,11 +46,17 @@ export default function AppConfirmationLayer({
               </svg>
             </div>
             <h3 className="mb-3 text-xl font-serif text-neutral-900">
-              {deleteConfirmation.type === 'item' ? 'Remove Artwork?' : 'Delete Session?'}
+              {deleteConfirmation.type === 'item'
+                ? 'Delete Artwork?'
+                : deleteConfirmation.type === 'items'
+                  ? 'Delete Artworks?'
+                  : 'Delete Session?'}
             </h3>
             <p className="mb-8 text-sm leading-relaxed text-neutral-500">
               {deleteConfirmation.type === 'item'
-                ? 'This will permanently remove this artwork and its curated analysis from your Musee.'
+                ? 'This will permanently delete this artwork and its curated analysis from Musee.'
+                : deleteConfirmation.type === 'items'
+                  ? `This will permanently delete ${deleteConfirmation.count || deleteConfirmation.ids?.length || 0} selected ${deleteConfirmation.count === 1 ? 'artwork' : 'artworks'} and their curated analysis from Musee.`
                 : `This will permanently delete ${pendingDeleteSessionSummary?.title || 'this session'} and its reflections from Musee. The ${pendingDeleteSessionSummary?.artworkCount || 0} ${pendingDeleteSessionSummary?.artworkCount === 1 ? 'artwork will stay' : 'artworks will stay'} in your library.`}
             </p>
             <div className="flex space-x-3">
@@ -59,10 +69,14 @@ export default function AppConfirmationLayer({
               <button
                 onClick={() => {
                   if (deleteConfirmation.type === 'item') {
-                    onConfirmDeleteItem(deleteConfirmation.id);
+                    onConfirmDeleteItem(deleteConfirmation.id!);
                     return;
                   }
-                  onConfirmDeleteSession(deleteConfirmation.id);
+                  if (deleteConfirmation.type === 'items') {
+                    onConfirmDeleteItems(deleteConfirmation.ids || []);
+                    return;
+                  }
+                  onConfirmDeleteSession(deleteConfirmation.id!);
                 }}
                 className="flex-1 rounded-full bg-neutral-900 px-6 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-black"
               >

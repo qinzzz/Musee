@@ -4,6 +4,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
 import { getCurrentUser, getOrCreateUserId, getUserQuota, logout, type UserQuota } from './api/auth';
 import {
+  batchDeleteArtworks,
   deleteArtwork,
   type SmartCollection,
 } from './api/artworks';
@@ -12,7 +13,7 @@ import IdentifyAgainModal from './components/IdentifyAgainModal';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import AddFromLibraryModal from './components/AddFromLibraryModal';
 import AppSidebar from './app-shell/components/AppSidebar';
-import AppConfirmationLayer from './app-shell/components/AppConfirmationLayer';
+import AppConfirmationLayer, { type DeleteConfirmationState } from './app-shell/components/AppConfirmationLayer';
 import AppViewport from './app-shell/components/AppViewport';
 import LoginModal from './app-shell/components/LoginModal';
 import UserSettingsModal from './app-shell/components/UserSettingsModal';
@@ -106,7 +107,7 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(getCurrentUser());
   const sessionUserId = currentUser?.user_id || USER_ID;
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string, type: 'item' | 'session' } | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState>(null);
   const [artistPageContext, setArtistPageContext] = useState<ArtistPageContext | null>(initialNavigationState.artistPageContext);
   const [movementPageContext, setMovementPageContext] = useState<SmartCollection | null>(null);
   const [artworkDetailContext, setArtworkDetailContext] = useState<ArtworkDetailContext | null>(null);
@@ -442,36 +443,75 @@ const App: React.FC = () => {
     setDeleteConfirmation({ id, type: 'item' });
   };
 
-  const confirmDeleteItem = async (id: string) => {
-    const itemToDelete = items.find(item => item.id === id);
-    if (!itemToDelete) {
+  const handleDeleteItems = (itemIds: string[]) => {
+    if (itemIds.length === 0) return;
+    setDeleteConfirmation({
+      type: 'items',
+      ids: itemIds,
+      count: itemIds.length,
+    });
+  };
+
+  const performDeleteItems = async (itemIds: string[]) => {
+    const targetItems = itemIds
+      .map((itemId) => items.find((item) => item.id === itemId))
+      .filter((item): item is GalleryItem => Boolean(item));
+
+    if (targetItems.length === 0) {
       setDeleteConfirmation(null);
       return;
     }
 
-    const deleteTargetId = itemToDelete.artworkId || itemToDelete.id;
-    setDeleteConfirmation(null);
-    setArtworkDetailSelection((prev) => (prev?.artworkClientId === id ? null : prev));
-    updateSavedArtworkInState(id, {
-      clientState: {
-        deleteStatus: 'pending',
-      },
+    targetItems.forEach((item) => {
+      updateSavedArtworkInState(item.id, {
+        clientState: {
+          deleteStatus: 'pending',
+        },
+      });
     });
 
     try {
-      await deleteArtwork(deleteTargetId, sessionUserId);
-      removeArtworkLocally(id);
-      showToast('Artwork deleted', 'success');
-      console.log(`Successfully deleted artwork: ${id}`);
-    } catch (error) {
-      console.error("Failed to delete artwork:", error);
-      updateSavedArtworkInState(id, {
-        clientState: {
-          deleteStatus: undefined,
-        },
+      if (targetItems.length === 1) {
+        const targetItem = targetItems[0];
+        setArtworkDetailSelection((prev) => (prev?.artworkClientId === targetItem.id ? null : prev));
+        await deleteArtwork(targetItem.artworkId || targetItem.id, sessionUserId);
+      } else {
+        await batchDeleteArtworks(
+          targetItems.map((item) => item.artworkId || item.id),
+          sessionUserId,
+        );
+      }
+
+      targetItems.forEach((item) => {
+        removeArtworkLocally(item.id);
       });
-      showToast('Could not delete artwork', 'info');
+      showToast(
+        targetItems.length === 1 ? 'Artwork deleted' : `${targetItems.length} artworks deleted`,
+        'success',
+      );
+      console.log(`Successfully deleted artworks: ${targetItems.map((item) => item.id).join(', ')}`);
+    } catch (error) {
+      console.error('Failed to delete artworks:', error);
+      targetItems.forEach((item) => {
+        updateSavedArtworkInState(item.id, {
+          clientState: {
+            deleteStatus: undefined,
+          },
+        });
+      });
+      showToast(targetItems.length === 1 ? 'Could not delete artwork' : 'Could not delete artworks', 'info');
+      throw error;
     }
+  };
+
+  const confirmDeleteItem = async (id: string) => {
+    setDeleteConfirmation(null);
+    await performDeleteItems([id]);
+  };
+
+  const confirmDeleteItems = async (ids: string[]) => {
+    setDeleteConfirmation(null);
+    await performDeleteItems(ids);
   };
 
   const {
@@ -645,6 +685,7 @@ const App: React.FC = () => {
     deleteBoard,
     addItemsToBoard,
     handleDeleteItem,
+    handleDeleteItems,
     setIsUnsortedFlowOpen,
     handleToggleLike,
     handleSessionInquiry,
@@ -777,6 +818,7 @@ const App: React.FC = () => {
           showCaptureExitModal={showCaptureExitModal}
           onCloseDeleteConfirmation={() => setDeleteConfirmation(null)}
           onConfirmDeleteItem={confirmDeleteItem}
+          onConfirmDeleteItems={confirmDeleteItems}
           onConfirmDeleteSession={confirmDeleteSession}
           onCancelCaptureExit={handleCancelCaptureExit}
           onConfirmCaptureExit={handleConfirmCaptureExit}
