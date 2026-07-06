@@ -154,8 +154,9 @@ export function buildSessionSummaries({
     const latestItem = sortedItems[sortedItems.length - 1];
     const firstItem = sortedItems[0];
     const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
-    const resolvedTitle = draft?.title || location || null;
-    const titlePending = !persistedSessionsHydrated && !resolvedTitle;
+    const draftTitle = draft?.title || null;
+    const resolvedTitle = draftTitle || (persistedSessionsHydrated ? location : null);
+    const titlePending = !persistedSessionsHydrated && !draftTitle;
     const title = resolvedTitle || resolvedDefaultSessionTitle;
     const lastArtworkTimestamp = latestItem ? getSessionItemTimestamp(latestItem) : 0;
     const updatedAt = Math.max(draft?.updatedAt || 0, lastArtworkTimestamp);
