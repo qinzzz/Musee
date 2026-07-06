@@ -9,6 +9,7 @@
     "preview": "npm run build && wrangler dev",
     "test": "vitest",
     "test:run": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:coverage": "vitest run --coverage",
     "test:pr": "npm run test:run && npm run build",
     "deploy": "npm run build && wrangler deploy"

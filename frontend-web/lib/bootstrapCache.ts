@@ -28,7 +28,7 @@ type ArtworkBootstrapCacheItem = {
   insights?: Array<{ title: string; text: string }>;
   artistEntityId?: string;
   classification?: 'unsorted' | 'love' | 'respect' | 'not_for_me';
-  analysisStatus?: 'pending' | 'analyzing' | 'failed' | 'analyzed';
+  analysisStatus?: 'pending' | 'analyzing' | 'reidentifying' | 'failed' | 'analyzed';
   analysisError?: string;
 };
 

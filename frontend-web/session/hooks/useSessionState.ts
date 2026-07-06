@@ -14,7 +14,9 @@ import type {
   SessionStreamMessage,
 } from '../types';
 
-type DeleteConfirmation = { id: string; type: 'item' | 'session' } | null;
+import type { DeleteConfirmationState } from '../../app-shell/components/AppConfirmationLayer';
+
+type DeleteConfirmation = DeleteConfirmationState;
 
 type UseSessionStateOptions = {
   userId: string;

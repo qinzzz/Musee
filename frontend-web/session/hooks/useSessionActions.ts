@@ -5,7 +5,9 @@ import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import type { SessionDraft, SessionStreamMessage, SessionSummary } from '../types';
 import { itemBelongsToSession, updateSessionLinkForItem } from '../lib/sessionLinks';
 
-type DeleteConfirmation = { id: string; type: 'item' | 'session' } | null;
+import type { DeleteConfirmationState } from '../../app-shell/components/AppConfirmationLayer';
+
+type DeleteConfirmation = DeleteConfirmationState;
 type ToastType = 'info' | 'success';
 type ShowToast = (message: string, type?: ToastType) => void;
 

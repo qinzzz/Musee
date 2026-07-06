@@ -1,3 +1,5 @@
+import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useArtworkLibrary } from './useArtworkLibrary';
@@ -27,6 +29,15 @@ vi.mock('../../lib/bootstrapCache', () => ({
   readArtworkBootstrapCache: mockReadArtworkBootstrapCache,
   writeArtworkBootstrapCache: mockWriteArtworkBootstrapCache,
 }));
+
+function createQueryWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+  });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -139,7 +150,7 @@ describe('useArtworkLibrary', () => {
       userId: 'user-1',
       showToast: vi.fn(),
       onTagPositionsLoaded: tagUpdater,
-    }));
+    }), { wrapper: createQueryWrapper() });
 
     expect(result.current.items[0].artistName).toBe('Cached Artist');
 
@@ -180,7 +191,7 @@ describe('useArtworkLibrary', () => {
       userId: 'user-1',
       showToast: vi.fn(),
       onArtworkDetailContextChange,
-    }));
+    }), { wrapper: createQueryWrapper() });
 
     await waitFor(() => {
       expect(result.current.items).toHaveLength(2);
@@ -217,7 +228,7 @@ describe('useArtworkLibrary', () => {
       showToast: vi.fn(),
       onMissingArtworkFromHistory,
       onArtworkDetailContextChange,
-    }));
+    }), { wrapper: createQueryWrapper() });
 
     await waitFor(() => {
       expect(result.current.artworksLoaded).toBe(true);
@@ -243,7 +254,7 @@ describe('useArtworkLibrary', () => {
     const { result } = renderHook(() => useArtworkLibrary({
       userId: 'user-1',
       showToast,
-    }));
+    }), { wrapper: createQueryWrapper() });
 
     await waitFor(() => {
       expect(result.current.items).toHaveLength(1);
@@ -261,7 +272,7 @@ describe('useArtworkLibrary', () => {
     const { result } = renderHook(() => useArtworkLibrary({
       userId: 'user-1',
       showToast: vi.fn(),
-    }));
+    }), { wrapper: createQueryWrapper() });
 
     await waitFor(() => {
       expect(result.current.items).toHaveLength(1);
@@ -299,7 +310,7 @@ describe('useArtworkLibrary', () => {
     const { result } = renderHook(() => useArtworkLibrary({
       userId: 'user-1',
       showToast: vi.fn(),
-    }));
+    }), { wrapper: createQueryWrapper() });
 
     await waitFor(() => {
       expect(result.current.items).toHaveLength(2);
@@ -320,5 +331,22 @@ describe('useArtworkLibrary', () => {
     });
 
     expect(result.current.artworkDetailItem?.navigationItems?.[1].artworkName).toBe('Updated Second Work');
+  });
+
+  it('keeps the bootstrap paint and reports loaded when the fetch fails', async () => {
+    mockReadArtworkBootstrapCache.mockReturnValue(createCacheItem());
+    mockFetchUserArtworks.mockRejectedValue(new Error('offline'));
+
+    const { result } = renderHook(() => useArtworkLibrary({
+      userId: 'user-1',
+      showToast: vi.fn(),
+    }), { wrapper: createQueryWrapper() });
+
+    await waitFor(() => {
+      expect(result.current.artworksLoaded).toBe(true);
+    });
+
+    expect(result.current.items.map((item) => item.id)).toEqual(['cached-1']);
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to load previous artworks:', expect.any(Error));
   });
 });

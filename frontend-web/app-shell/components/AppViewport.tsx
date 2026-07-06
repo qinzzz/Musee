@@ -290,6 +290,7 @@ export default function AppViewport({
               activeSessionSummary={activeSessionSummary}
               activeSessionStream={activeSessionStream}
               sessionRenderBlocks={activeSessionRenderBlocks}
+              sessionTitleById={sessionTitleById}
               artworkDetailItem={artworkDetailItem}
               artworkHeaderActions={artworkHeaderActions}
               artworkHeaderEditToken={artworkHeaderEditToken}
