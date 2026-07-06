@@ -190,6 +190,29 @@ export async function deleteArtwork(artworkId: string, userId: string): Promise<
   return response.json();
 }
 
+export async function batchDeleteArtworks(
+  artworkIds: string[],
+  userId: string,
+): Promise<{ message: string; deleted_count: number }> {
+  if (artworkIds.length === 0) {
+    return { message: 'No artworks to delete', deleted_count: 0 };
+  }
+
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/artworks/batch-delete?user_id=${encodeURIComponent(userId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(artworkIds),
+    },
+  );
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
+  return response.json();
+}
+
 export async function fetchSmartCollections(userId: string): Promise<SmartCollection[]> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/smart-collections?user_id=${encodeURIComponent(userId)}`);
   if (!response.ok) {

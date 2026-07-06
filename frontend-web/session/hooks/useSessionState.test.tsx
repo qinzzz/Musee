@@ -73,7 +73,6 @@ describe('useSessionState', () => {
 
   it('keeps session streams memory-only: no hydration from and no writes to localStorage', async () => {
     mockFetchSessions.mockResolvedValue([]);
-    // A stale stream cache from an older app version must be ignored…
     localStorage.setItem('musee_session_streams', JSON.stringify({
       'session-1': [{ id: 'ghost', role: 'user', text: 'stale', createdAt: 1 }],
     }));
@@ -86,13 +85,11 @@ describe('useSessionState', () => {
     expect(result.current.sessionStreams).toEqual({});
     expect(result.current.sessionDrafts).toEqual([]);
 
-    // …and the retired keys are cleaned up on mount.
     await waitFor(() => {
       expect(localStorage.getItem('musee_session_streams')).toBeNull();
       expect(localStorage.getItem('musee_session_drafts')).toBeNull();
     });
 
-    // Mutating streams/drafts must not re-create any persistence.
     const message: SessionStreamMessage = { id: 'm1', role: 'user', text: 'hi', createdAt: 10 };
     act(() => {
       result.current.setSessionStreams({ 'session-1': [message] });

@@ -10,6 +10,7 @@ type Params = {
   searchedSavedItems: GalleryItem[];
   items: GalleryItem[];
   onAddItemsToBoard: (boardId: string, itemIds: string[]) => Promise<void>;
+  onDeleteArtworks: (itemIds: string[]) => void | Promise<void>;
 };
 
 export function useArtworkSelection({
@@ -18,9 +19,11 @@ export function useArtworkSelection({
   searchedSavedItems,
   items,
   onAddItemsToBoard,
+  onDeleteArtworks,
 }: Params) {
   const [selectedArtworkIds, setSelectedArtworkIds] = useState<string[]>([]);
   const [isApplyingBoard, setIsApplyingBoard] = useState(false);
+  const [isDeletingSelection, setIsDeletingSelection] = useState(false);
 
   useEffect(() => {
     if (collectTab !== 'saved' || savedLayout !== 'grid') {
@@ -62,11 +65,24 @@ export function useArtworkSelection({
     }
   };
 
+  const handleDeleteSelection = async () => {
+    if (selectedArtworkIds.length === 0) return;
+
+    setIsDeletingSelection(true);
+    try {
+      await onDeleteArtworks(selectedArtworkIds);
+    } finally {
+      setIsDeletingSelection(false);
+    }
+  };
+
   return {
     selectedArtworkIds,
     isApplyingBoard,
+    isDeletingSelection,
     toggleArtworkSelection,
     clearArtworkSelection,
     handleAddSelectionToBoard,
+    handleDeleteSelection,
   };
 }

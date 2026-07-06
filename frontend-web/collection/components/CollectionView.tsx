@@ -49,6 +49,7 @@ type CollectionViewProps = {
   onOpenArtist: (artistEntityId: string, artistName: string) => void;
   onInterpretArtwork: (item: GalleryItem, context?: { items: GalleryItem[]; label: string }) => void;
   onDeleteItem: (id: string) => void;
+  onDeleteItems: (itemIds: string[]) => void | Promise<void>;
   onStartUnsortedFlow: () => void;
 };
 
@@ -90,6 +91,7 @@ export default function CollectionView({
   onOpenArtist,
   onInterpretArtwork,
   onDeleteItem,
+  onDeleteItems,
   onStartUnsortedFlow,
 }: CollectionViewProps) {
   if (artworkDetailItem) {
@@ -150,6 +152,7 @@ export default function CollectionView({
         onOpenArtist={onOpenArtist}
         onInterpret={onInterpretArtwork}
         onDelete={onDeleteItem}
+        onDeleteArtworks={onDeleteItems}
         onStartUnsortedFlow={onStartUnsortedFlow}
       />
     </div>
