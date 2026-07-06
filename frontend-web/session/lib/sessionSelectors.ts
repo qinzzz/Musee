@@ -91,7 +91,6 @@ export function buildSessionSummaries({
   const resolvedDefaultSessionTitle = defaultSessionTitle ?? 'Untitled Session';
   const resolvedSessionSearch = sessionSearch ?? '';
   const grouped = new Map<string, GalleryItem[]>();
-  const persistedSessionMap = new Map(persistedSessions.map((session) => [session.id, session]));
 
   items.forEach((item) => {
     const memberships = getItemSessionMemberships(item);
@@ -104,11 +103,44 @@ export function buildSessionSummaries({
   const summaries: SessionSummary[] = [];
   const knownIds = new Set<string>();
 
+  persistedSessions.forEach((session) => {
+    const persistedUpdatedAt = session.updated_at ? new Date(session.updated_at).getTime() : Date.now();
+    const sessionItems = grouped.get(session.id) || [];
+    const sortedItems = [...sessionItems].sort((a, b) => {
+      const aSequence = getItemSequenceNumberForSession(a, session.id);
+      const bSequence = getItemSequenceNumberForSession(b, session.id);
+      if (aSequence !== null && bSequence !== null && aSequence !== bSequence) {
+        return aSequence - bSequence;
+      }
+      if (aSequence !== null && bSequence === null) return -1;
+      if (aSequence === null && bSequence !== null) return 1;
+      return getSessionItemTimestamp(a) - getSessionItemTimestamp(b);
+    });
+    const latestItem = sortedItems[sortedItems.length - 1];
+    const firstItem = sortedItems[0];
+    const draft = resolvedSessionDrafts.find((entry) => entry.id === session.id);
+    const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
+    summaries.push({
+      id: session.id,
+      title: session.title || draft?.title || resolvedDefaultSessionTitle,
+      titlePending: false,
+      location,
+      artworkCount: sortedItems.length,
+      updatedAt: Math.max(persistedUpdatedAt, draft?.updatedAt || 0, latestItem ? getSessionItemTimestamp(latestItem) : 0),
+      dateLabel: draft
+        ? new Date(draft.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : (latestItem?.photoTime
+          ? parseDisplayDate(latestItem.photoTime)
+          : new Date(Math.max(persistedUpdatedAt, draft?.updatedAt || persistedUpdatedAt)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+      items: sortedItems,
+    });
+    knownIds.add(session.id);
+  });
+
   grouped.forEach((sessionItems, id) => {
+    if (knownIds.has(id)) return;
     knownIds.add(id);
     const draft = resolvedSessionDrafts.find((entry) => entry.id === id);
-    const persistedSession = persistedSessionMap.get(id);
-    const persistedUpdatedAt = persistedSession?.updated_at ? new Date(persistedSession.updated_at).getTime() : 0;
     const sortedItems = [...sessionItems].sort((a, b) => {
       const aSequence = getItemSequenceNumberForSession(a, id);
       const bSequence = getItemSequenceNumberForSession(b, id);
@@ -119,19 +151,14 @@ export function buildSessionSummaries({
       if (aSequence === null && bSequence !== null) return 1;
       return getSessionItemTimestamp(a) - getSessionItemTimestamp(b);
     });
-
     const latestItem = sortedItems[sortedItems.length - 1];
     const firstItem = sortedItems[0];
     const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
-    const resolvedTitle =
-      persistedSession?.title ||
-      draft?.title ||
-      location ||
-      null;
+    const resolvedTitle = draft?.title || location || null;
     const titlePending = !persistedSessionsHydrated && !resolvedTitle;
     const title = resolvedTitle || resolvedDefaultSessionTitle;
     const lastArtworkTimestamp = latestItem ? getSessionItemTimestamp(latestItem) : 0;
-    const updatedAt = Math.max(draft?.updatedAt || 0, persistedUpdatedAt, lastArtworkTimestamp);
+    const updatedAt = Math.max(draft?.updatedAt || 0, lastArtworkTimestamp);
 
     summaries.push({
       id,
@@ -145,23 +172,6 @@ export function buildSessionSummaries({
         : (latestItem?.photoTime ? parseDisplayDate(latestItem.photoTime) : null),
       items: sortedItems,
     });
-  });
-
-  persistedSessions.forEach((session) => {
-    if (knownIds.has(session.id)) return;
-    const persistedUpdatedAt = session.updated_at ? new Date(session.updated_at).getTime() : Date.now();
-    const draft = resolvedSessionDrafts.find((entry) => entry.id === session.id);
-    summaries.push({
-      id: session.id,
-      title: session.title || draft?.title || resolvedDefaultSessionTitle,
-      titlePending: false,
-      location: null,
-      artworkCount: 0,
-      updatedAt: Math.max(persistedUpdatedAt, draft?.updatedAt || 0),
-      dateLabel: new Date(Math.max(persistedUpdatedAt, draft?.updatedAt || persistedUpdatedAt)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      items: [],
-    });
-    knownIds.add(session.id);
   });
 
   resolvedSessionDrafts.forEach((draft) => {
