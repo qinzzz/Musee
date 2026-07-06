@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.database.connection import get_db
 from app.database.connection import SessionLocal
@@ -49,7 +49,7 @@ async def _run_artist_bio_with_status_recovery(artwork_id: str, artist_entity_id
 
 
 @router.get("/artworks")
-async def get_artworks(
+def get_artworks(
     user_id: str = Query(...),
     recognized_only: Optional[bool] = None,
     limit: int = Query(50, le=100),
@@ -57,7 +57,14 @@ async def get_artworks(
     db: Session = Depends(get_db),
 ):
     try:
-        query = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id)
+        query = (
+            db.query(SavedArtwork)
+            .options(
+                selectinload(SavedArtwork.session_links),
+                selectinload(SavedArtwork.artwork_tags),
+            )
+            .filter(SavedArtwork.user_id == user_id)
+        )
         if recognized_only is not None:
             query = query.filter(SavedArtwork.is_recognized == (1 if recognized_only else 0))
         artworks = query.order_by(SavedArtwork.created_at.desc()).offset(offset).limit(limit).all()

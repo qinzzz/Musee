@@ -98,7 +98,7 @@ async def create_collection(request: CollectionCreate, db: Session = Depends(get
 
 
 @router.get("/collections")
-async def get_collections(user_id: str, db: Session = Depends(get_db)):
+def get_collections(user_id: str, db: Session = Depends(get_db)):
     """Get all collections for a user"""
     try:
         collections = (
