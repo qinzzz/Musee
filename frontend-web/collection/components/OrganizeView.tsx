@@ -35,7 +35,6 @@ interface Props {
   onOpenArtist: (artistEntityId: string, artistName: string) => void;
   onInterpret: (item: GalleryItem, context?: { items: GalleryItem[]; label: string }) => void;
   onDelete: (id: string) => void;
-  onDeleteArtworks: (itemIds: string[]) => void | Promise<void>;
   onStartUnsortedFlow: () => void;
 }
 
@@ -60,7 +59,6 @@ export default function OrganizeView({
   onOpenArtist,
   onInterpret,
   onDelete,
-  onDeleteArtworks,
   onStartUnsortedFlow,
 }: Props) {
   const [savedLayout, setSavedLayout] = useState<SavedLayout>('grid');
@@ -133,18 +131,15 @@ export default function OrganizeView({
   const {
     selectedArtworkIds,
     isApplyingBoard,
-    isDeletingSelection,
     toggleArtworkSelection,
     clearArtworkSelection,
     handleAddSelectionToBoard,
-    handleDeleteSelection,
   } = useArtworkSelection({
     collectTab,
     savedLayout,
     searchedSavedItems,
     items,
     onAddItemsToBoard,
-    onDeleteArtworks,
   });
 
   return (
@@ -201,9 +196,7 @@ export default function OrganizeView({
               normalizedCollectionSearch={normalizedCollectionSearch}
               onClearArtworkSelection={clearArtworkSelection}
               isApplyingBoard={isApplyingBoard}
-              isDeletingSelection={isDeletingSelection}
               onAddSelectionToBoard={handleAddSelectionToBoard}
-              onDeleteSelection={handleDeleteSelection}
               onOpenCreateBoardModal={openCreateBoardModal}
             />
           )}

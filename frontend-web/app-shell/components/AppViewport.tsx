@@ -120,7 +120,6 @@ type ViewportMutationProps = {
   deleteBoard: (boardId: string) => Promise<void>;
   addItemsToBoard: (boardId: string, itemIds: string[]) => Promise<void>;
   handleDeleteItem: (id: string) => void;
-  handleDeleteItems: (itemIds: string[]) => void | Promise<void>;
   setIsUnsortedFlowOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleToggleLike: (id: string) => void;
   handleSessionInquiry: (text: string) => Promise<boolean>;
@@ -223,7 +222,6 @@ export default function AppViewport({
     deleteBoard,
     addItemsToBoard,
     handleDeleteItem,
-    handleDeleteItems,
     setIsUnsortedFlowOpen,
     handleToggleLike,
     handleSessionInquiry,
@@ -457,7 +455,6 @@ export default function AppViewport({
                 }, context?.items);
               }}
               onDeleteItem={handleDeleteItem}
-              onDeleteItems={handleDeleteItems}
               onStartUnsortedFlow={() => setIsUnsortedFlowOpen(true)}
             />
           </Suspense>

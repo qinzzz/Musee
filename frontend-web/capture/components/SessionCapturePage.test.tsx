@@ -56,22 +56,6 @@ function installMediaMocks() {
     configurable: true,
     value: vi.fn().mockResolvedValue(undefined),
   });
-  Object.defineProperty(HTMLVideoElement.prototype, 'videoWidth', {
-    configurable: true,
-    get: () => 320,
-  });
-  Object.defineProperty(HTMLVideoElement.prototype, 'videoHeight', {
-    configurable: true,
-    get: () => 560,
-  });
-  Object.defineProperty(HTMLDivElement.prototype, 'clientWidth', {
-    configurable: true,
-    get: () => 320,
-  });
-  Object.defineProperty(HTMLDivElement.prototype, 'clientHeight', {
-    configurable: true,
-    get: () => 560,
-  });
 
   Object.defineProperty(HTMLDivElement.prototype, 'setPointerCapture', {
     configurable: true,
@@ -117,7 +101,7 @@ describe('SessionCapturePage', () => {
     vi.clearAllMocks();
   });
 
-  it('switches the active target hint and keeps capture enabled before artwork capture', async () => {
+  it('switches the active target hint and keeps analyze disabled before artwork capture', async () => {
     render(
       <SessionCapturePage
         onClose={vi.fn()}
@@ -127,39 +111,15 @@ describe('SessionCapturePage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Drag or tap Capture for artwork')).toBeTruthy();
+      expect(screen.getByText('Drag to capture artwork')).toBeTruthy();
     });
 
-    const captureButtons = screen.getAllByRole('button', { name: 'Capture' });
-    expect(captureButtons.every((button) => !(button as HTMLButtonElement).disabled)).toBe(true);
+    const analyzeButtons = screen.getAllByRole('button', { name: 'Analyze' });
+    expect(analyzeButtons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Label - Optional' }));
 
-    expect(screen.getByText('Drag or tap Capture for label')).toBeTruthy();
-  });
-
-  it('uses the capture CTA before switching to analyze after artwork capture', async () => {
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
-
-    render(
-      <SessionCapturePage
-        onClose={vi.fn()}
-        onDirtyChange={vi.fn()}
-        onSubmit={onSubmit}
-      />,
-    );
-
-    await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: 'Capture' }).length).toBeGreaterThan(0);
-    });
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Capture' })[0]);
-
-    await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: 'Analyze' }).length).toBeGreaterThan(0);
-    });
-
-    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText('Drag to capture label')).toBeTruthy();
   });
 
   it('computes an inset interactive region that excludes edge-swipe gutters on mobile', () => {

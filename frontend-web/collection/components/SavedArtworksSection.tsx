@@ -34,9 +34,7 @@ type Props = {
   normalizedCollectionSearch: string;
   onClearArtworkSelection: () => void;
   isApplyingBoard: boolean;
-  isDeletingSelection: boolean;
   onAddSelectionToBoard: (boardId: string) => Promise<void>;
-  onDeleteSelection: () => Promise<void>;
   onOpenCreateBoardModal: (options?: { itemIds?: string[]; onCreated?: (board: Board) => void }) => void;
 };
 
@@ -66,9 +64,7 @@ export default function SavedArtworksSection({
   normalizedCollectionSearch,
   onClearArtworkSelection,
   isApplyingBoard,
-  isDeletingSelection,
   onAddSelectionToBoard,
-  onDeleteSelection,
   onOpenCreateBoardModal,
 }: Props) {
   return (
@@ -224,7 +220,7 @@ export default function SavedArtworksSection({
               <div className="whitespace-nowrap text-[13px] font-semibold text-neutral-900">{selectedArtworkIds.length} selected</div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" className="min-w-[160px] justify-between gap-3" disabled={isApplyingBoard || isDeletingSelection}>
+                  <Button variant="secondary" className="min-w-[160px] justify-between gap-3" disabled={isApplyingBoard}>
                     <span>{isApplyingBoard ? 'Saving…' : 'Add to board'}</span>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="6 9 12 15 18 9" />
@@ -258,16 +254,8 @@ export default function SavedArtworksSection({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button
-                onClick={() => void onDeleteSelection()}
-                variant="secondary"
-                className="gap-2"
-                disabled={isApplyingBoard || isDeletingSelection}
-              >
-                {isDeletingSelection ? 'Deleting…' : 'Delete'}
-              </Button>
-              <Button onClick={onClearArtworkSelection} variant="ghost" className="px-0 font-medium" disabled={isApplyingBoard || isDeletingSelection}>
-                Clear
+              <Button onClick={onClearArtworkSelection} variant="ghost" className="px-0 font-medium">
+                Cancel
               </Button>
             </div>
           </div>

@@ -36,23 +36,6 @@ type CameraState = 'loading' | 'ready' | 'denied' | 'error';
 const MIN_CAPTURE_SIZE = 24;
 const MOBILE_EDGE_GESTURE_GUTTER = 28;
 
-const CAMERA_ICON = (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M4 7h3l1.5-2h7L17 7h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
-    <circle cx="12" cy="13" r="4" />
-  </svg>
-);
-
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -555,24 +538,6 @@ const SessionCapturePage: React.FC<Props> = ({
     setCameraMessage(nextSlot.kind === 'artwork' ? 'Artwork captured.' : 'Label captured.');
   }, [captureRectFromStillPhoto, captureRectFromVideoFrame, replaceSlot]);
 
-  const captureActiveTargetFromViewport = React.useCallback(async () => {
-    if (cameraState !== 'ready' || isSubmitting || isCapturing) return;
-
-    const videoRect = getInteractiveVideoRect();
-    if (!videoRect) {
-      setCameraMessage('Camera is not ready yet.');
-      return;
-    }
-
-    setIsCapturing(true);
-    setCameraMessage('Capturing photo…');
-    try {
-      await captureRect(videoRect);
-    } finally {
-      setIsCapturing(false);
-    }
-  }, [cameraState, captureRect, getInteractiveVideoRect, isCapturing, isSubmitting]);
-
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (cameraState !== 'ready' || isSubmitting || isCapturing) return;
 
@@ -659,18 +624,6 @@ const SessionCapturePage: React.FC<Props> = ({
       setIsSubmitting(false);
     }
   };
-
-  const handlePrimaryAction = async () => {
-    if (!artworkSlot) {
-      await captureActiveTargetFromViewport();
-      return;
-    }
-
-    await handleSubmit();
-  };
-
-  const primaryCtaLabel = artworkSlot ? 'Analyze' : 'Capture';
-  const primaryCtaDisabled = artworkSlot ? isSubmitting : cameraState !== 'ready' || isCapturing || isSubmitting;
 
   const renderMobileTargetChip = (
     kind: CaptureTarget,
@@ -791,7 +744,7 @@ const SessionCapturePage: React.FC<Props> = ({
       <div className="hidden items-center justify-between border-b border-neutral-200 px-4 py-4 sm:px-6 lg:flex">
         <div>
           <p className="text-[18px] font-semibold">Capture</p>
-          <p className="mt-1 text-[12px] text-neutral-500">Drag to frame the active target or tap Capture.</p>
+          <p className="mt-1 text-[12px] text-neutral-500">Drag to frame the active target.</p>
         </div>
         <button
           type="button"
@@ -877,7 +830,7 @@ const SessionCapturePage: React.FC<Props> = ({
 
             {!activeSlot && cameraState === 'ready' ? (
               <div className="pointer-events-none absolute right-4 top-4 flex h-11 items-center rounded-full bg-black/45 px-4 text-[11px] font-medium text-white backdrop-blur">
-                {isCapturing ? 'Capturing photo…' : `Drag or tap Capture for ${activeTarget}`}
+                {isCapturing ? 'Capturing photo…' : `Drag to capture ${activeTarget}`}
               </div>
             ) : null}
 
@@ -891,16 +844,11 @@ const SessionCapturePage: React.FC<Props> = ({
             <div className="absolute bottom-6 left-4 right-4 z-10 lg:hidden">
               <button
                 type="button"
-                onClick={() => void handlePrimaryAction()}
-                disabled={primaryCtaDisabled}
+                onClick={() => void handleSubmit()}
+                disabled={!artworkSlot || isSubmitting}
                 className="flex w-full items-center justify-center rounded-full bg-white px-5 py-3 text-[13px] font-medium text-neutral-900 transition-opacity disabled:bg-white/70 disabled:text-neutral-500"
               >
-                {isSubmitting ? 'Preparing capture…' : (
-                  <>
-                    {!artworkSlot ? <span className="mr-2">{CAMERA_ICON}</span> : null}
-                    {primaryCtaLabel}
-                  </>
-                )}
+                {isSubmitting ? 'Preparing capture…' : 'Analyze'}
               </button>
             </div>
           </div>
@@ -917,16 +865,11 @@ const SessionCapturePage: React.FC<Props> = ({
           <div className="mt-auto border-t border-neutral-200 px-4 py-4 sm:px-6">
             <button
               type="button"
-              onClick={() => void handlePrimaryAction()}
-              disabled={primaryCtaDisabled}
+              onClick={() => void handleSubmit()}
+              disabled={!artworkSlot || isSubmitting}
               className="flex w-full items-center justify-center rounded-full bg-neutral-900 px-5 py-3 text-[13px] font-medium text-white transition-opacity disabled:opacity-30"
             >
-              {isSubmitting ? 'Preparing capture…' : (
-                <>
-                  {!artworkSlot ? <span className="mr-2">{CAMERA_ICON}</span> : null}
-                  {primaryCtaLabel}
-                </>
-              )}
+              {isSubmitting ? 'Preparing capture…' : 'Analyze'}
             </button>
           </div>
         </div>

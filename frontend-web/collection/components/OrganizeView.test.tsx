@@ -70,7 +70,6 @@ function renderOrganizeView(props: Partial<React.ComponentProps<typeof OrganizeV
       onRenameBoard={vi.fn()}
       onDeleteBoard={vi.fn()}
       onAddItemsToBoard={vi.fn()}
-      onDeleteArtworks={vi.fn().mockResolvedValue(undefined)}
       onOpenArtist={vi.fn()}
       onInterpret={vi.fn()}
       onDelete={vi.fn()}
