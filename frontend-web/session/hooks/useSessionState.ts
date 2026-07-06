@@ -220,8 +220,8 @@ export function useSessionState({
   }, [activeSessionSummary, artworksLoaded, sessionStreams]);
 
   const activeSessionRenderBlocks = useMemo<SessionRenderBlock[]>(() => {
-    return buildSessionRenderBlocks(activeSessionSummary, sessionStreams);
-  }, [activeSessionSummary, sessionStreams]);
+    return buildSessionRenderBlocks(activeSessionSummary, sessionStreams, { artworksLoaded });
+  }, [activeSessionSummary, artworksLoaded, sessionStreams]);
 
   useEffect(() => {
     if (isComposingNewSession) return;
