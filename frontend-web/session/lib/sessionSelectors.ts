@@ -120,10 +120,12 @@ export function buildSessionSummaries({
     const firstItem = sortedItems[0];
     const draft = resolvedSessionDrafts.find((entry) => entry.id === session.id);
     const location = parseDisplayLocation(firstItem?.location || latestItem?.location);
+    const draftTitle = draft?.title || null;
+    const resolvedTitle = draftTitle || (persistedSessionsHydrated ? session.title : null) || resolvedDefaultSessionTitle;
     summaries.push({
       id: session.id,
-      title: session.title || draft?.title || resolvedDefaultSessionTitle,
-      titlePending: false,
+      title: resolvedTitle,
+      titlePending: !persistedSessionsHydrated && !draftTitle,
       location,
       artworkCount: sortedItems.length,
       updatedAt: Math.max(persistedUpdatedAt, draft?.updatedAt || 0, latestItem ? getSessionItemTimestamp(latestItem) : 0),

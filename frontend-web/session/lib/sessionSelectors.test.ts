@@ -67,6 +67,35 @@ describe('buildSessionSummaries', () => {
     });
   });
 
+  it('does not use cached persisted session title while backend session titles are still hydrating', () => {
+    const persistedSessions: SessionRecord[] = [
+      {
+        id: 'session-1',
+        user_id: 'user-1',
+        title: 'Cached MoMA Visit',
+        updated_at: '2026-07-05T12:00:00Z',
+      },
+    ];
+
+    const summaries = buildSessionSummaries({
+      items: [createItem({
+        location: JSON.stringify({ museum: 'Fallback Museum', city: 'New York' }),
+      })],
+      persistedSessions,
+      persistedSessionsHydrated: false,
+      sessionDrafts: [],
+      defaultSessionTitle: 'Untitled Session',
+      sessionSearch: '',
+    });
+
+    expect(summaries[0]).toMatchObject({
+      id: 'session-1',
+      title: 'Untitled Session',
+      titlePending: true,
+      location: 'Fallback Museum, New York',
+    });
+  });
+
   it('stops marking the title as pending after persisted session hydration completes', () => {
     const summaries = buildSessionSummaries({
       items: [createItem()],

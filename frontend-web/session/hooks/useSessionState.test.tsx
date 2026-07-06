@@ -126,6 +126,11 @@ describe('useSessionState', () => {
       }),
     ]);
     expect(result.current.persistedSessionsHydrated).toBe(false);
+    expect(result.current.sessionSummaries[0]).toMatchObject({
+      id: 'session-1',
+      title: 'Untitled Session',
+      titlePending: true,
+    });
 
     await act(async () => {
       resolveFetch([
@@ -145,6 +150,11 @@ describe('useSessionState', () => {
         }),
       ]);
       expect(result.current.persistedSessionsHydrated).toBe(true);
+      expect(result.current.sessionSummaries[0]).toMatchObject({
+        id: 'session-1',
+        title: 'Server Session',
+        titlePending: false,
+      });
     });
   });
 });
