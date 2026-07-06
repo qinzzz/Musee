@@ -8,7 +8,7 @@ import {
   deleteArtwork,
   type SmartCollection,
 } from './api/artworks';
-import { setSessionGoal } from './session/api/sessions';
+import { setSessionGoal as patchSessionGoal } from './session/api/sessions';
 import IdentifyAgainModal from './components/IdentifyAgainModal';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import AddFromLibraryModal from './components/AddFromLibraryModal';
@@ -318,7 +318,7 @@ const App: React.FC = () => {
       sessionGoalInput,
       setSessionGoalInput,
       sessionGoals,
-      setSessionGoals,
+      setSessionGoal,
       persistedSessions,
       sessionSummaries,
       activeSessionSummary,
@@ -666,14 +666,14 @@ const App: React.FC = () => {
     setArtworkDetailRightMode,
     handleIdentifyAgain,
     handleRetryAnalysis,
-    setSessionGoals,
+    setSessionGoal,
     isPersistedSessionId: (sessionId: string) => persistedSessions.some((session) => session.id === sessionId),
     refreshPersistedSessions,
     saveSessionTitle,
     showToast,
     createSessionDraft,
     setSessionGoalInput,
-    onSaveSessionGoal: setSessionGoal,
+    onSaveSessionGoal: patchSessionGoal,
     setSessionGoalDismissed,
     setNewSessionDraftMessage,
     setIsLibraryPickerOpen,
