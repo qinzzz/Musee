@@ -1,50 +1,43 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-describe('fetchSessions', () => {
+// Request dedupe moved to the shared query layer (useSessionsQuery); the API
+// functions are plain fetches that throw on non-OK responses so callers keep
+// their last-good data instead of treating an outage as an empty list.
+describe('sessions api', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();
-    localStorage.clear();
   });
 
-  it('deduplicates concurrent session list requests for the same user', async () => {
-    const fetchSpy = vi.fn().mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      return new Response(JSON.stringify([{ id: 'session-1', user_id: 'user-1', title: 'Session 1' }]), {
+  it('fetchSessions returns the parsed session list', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ id: 'session-1', user_id: 'user-1', title: 'Session 1' }]), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      });
-    });
+      }),
+    );
     vi.stubGlobal('fetch', fetchSpy);
 
     const { fetchSessions } = await import('./sessions');
 
-    const [first, second] = await Promise.all([
-      fetchSessions('user-1'),
-      fetchSessions('user-1'),
+    await expect(fetchSessions('user-1')).resolves.toEqual([
+      { id: 'session-1', user_id: 'user-1', title: 'Session 1' },
     ]);
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(first).toEqual(second);
-    expect(first).toEqual([{ id: 'session-1', user_id: 'user-1', title: 'Session 1' }]);
   });
 
-  it('starts a new request after the previous one settles', async () => {
-    const fetchSpy = vi
-      .fn()
-      .mockImplementation(() =>
-        Promise.resolve(new Response(JSON.stringify([{ id: 'session-1', user_id: 'user-1', title: 'Session 1' }]), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }))
-      );
-    vi.stubGlobal('fetch', fetchSpy);
+  it('fetchSessions throws on a non-OK response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('boom', { status: 500 })));
 
     const { fetchSessions } = await import('./sessions');
 
-    await fetchSessions('user-1');
-    await fetchSessions('user-1');
+    await expect(fetchSessions('user-1')).rejects.toThrow('API error (500)');
+  });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  it('fetchSessionEvents throws on a non-OK response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('boom', { status: 502 })));
+
+    const { fetchSessionEvents } = await import('./sessions');
+
+    await expect(fetchSessionEvents('session-1')).rejects.toThrow('API error (502)');
   });
 });

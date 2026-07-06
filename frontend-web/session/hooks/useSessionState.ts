@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { GalleryItem } from '../../types';
-import { fetchSessions, type SessionRecord } from '../api/sessions';
+import { useSessionsQuery } from './useSessionsQuery';
 import {
   buildActiveSessionStream,
   buildSessionSummaries,
@@ -33,31 +33,6 @@ type UseSessionStateOptions = {
 // therefore memory-only — persisting them would only create ghosts that
 // contradict the fetch. These keys held them historically; clear them once.
 const LEGACY_SESSION_STORAGE_KEYS = ['musee_session_streams', 'musee_session_drafts'];
-
-type CachedPersistedSessionsPayload = {
-  userId: string;
-  sessions: SessionRecord[];
-};
-
-function readCachedPersistedSessions(
-  storageKey: string,
-  userId: string,
-): SessionRecord[] {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as CachedPersistedSessionsPayload | SessionRecord[];
-    if (Array.isArray(parsed)) {
-      return parsed;
-    }
-    if (parsed.userId !== userId || !Array.isArray(parsed.sessions)) {
-      return [];
-    }
-    return parsed.sessions;
-  } catch {
-    return [];
-  }
-}
 
 export function useSessionState({
   userId,
@@ -92,10 +67,14 @@ export function useSessionState({
       return {};
     }
   });
-  const [persistedSessions, setPersistedSessions] = useState<SessionRecord[]>(() => (
-    readCachedPersistedSessions(persistedSessionsStorageKey, userId)
-  ));
-  const [persistedSessionsHydrated, setPersistedSessionsHydrated] = useState(false);
+  const {
+    sessions: persistedSessions,
+    sessionsHydrated: persistedSessionsHydrated,
+    refreshSessions: refreshPersistedSessions,
+  } = useSessionsQuery({
+    userId,
+    storageKey: persistedSessionsStorageKey,
+  });
 
   useEffect(() => {
     // One-time cleanup of the retired stream/draft persistence.
@@ -109,44 +88,6 @@ export function useSessionState({
   useEffect(() => {
     localStorage.setItem(sessionGoalsStorageKey, JSON.stringify(sessionGoals));
   }, [sessionGoals, sessionGoalsStorageKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(persistedSessionsStorageKey, JSON.stringify({
-        userId,
-        sessions: persistedSessions,
-      }));
-    } catch {
-      // Ignore storage quota/private browsing failures.
-    }
-  }, [persistedSessions, persistedSessionsStorageKey, userId]);
-
-  const refreshPersistedSessions = () => {
-    let cancelled = false;
-
-    fetchSessions(userId)
-      .then((sessions) => {
-        if (!cancelled) {
-          setPersistedSessions(sessions);
-          setPersistedSessionsHydrated(true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPersistedSessionsHydrated(true);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  };
-
-  useEffect(() => {
-    setPersistedSessions(readCachedPersistedSessions(persistedSessionsStorageKey, userId));
-    setPersistedSessionsHydrated(false);
-    return refreshPersistedSessions();
-  }, [persistedSessionsStorageKey, userId]);
 
   const sessionSummaries = useMemo(() => {
     return buildSessionSummaries({
