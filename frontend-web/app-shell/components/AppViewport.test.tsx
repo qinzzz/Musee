@@ -70,7 +70,7 @@ function renderAppViewport(options: {
     <AppViewport
       shell={{
         activeTab: 'newSession',
-        collectTab: 'all',
+        collectTab: 'saved',
         learningInitialGuide: null,
         userId: 'user-1',
         headerMenuButton: null,
@@ -85,6 +85,8 @@ function renderAppViewport(options: {
         isComposingNewSession: false,
         activeSessionSummary: createSessionSummary(),
         activeSessionStream: [],
+        activeSessionRenderBlocks: [],
+        sessionTitleById: {},
         artworkDetailItem: null,
         artworkHeaderActions: null,
         artworkHeaderEditToken: 0,
@@ -126,6 +128,7 @@ function renderAppViewport(options: {
       actions={{
         updateItemMetadata: vi.fn(),
         handleUpdateClassification: vi.fn(),
+        handleDeleteItems: vi.fn(),
         setDeleteConfirmation: vi.fn(),
         handleNavigateArtworkDetail: vi.fn(),
         setArtworkDetailRightMode: vi.fn(),
