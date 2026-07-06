@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { GalleryItem } from '../../types';
+import type { SessionRecord } from '../api/sessions';
 import { useSessionsQuery } from './useSessionsQuery';
 import {
   buildActiveSessionStream,
@@ -14,7 +15,9 @@ import type {
   SessionStreamMessage,
 } from '../types';
 
-type DeleteConfirmation = { id: string; type: 'item' | 'session' } | null;
+import type { DeleteConfirmationState } from '../../app-shell/components/AppConfirmationLayer';
+
+type DeleteConfirmation = DeleteConfirmationState;
 
 type UseSessionStateOptions = {
   userId: string;
@@ -23,16 +26,31 @@ type UseSessionStateOptions = {
   deleteConfirmation: DeleteConfirmation;
   defaultSessionTitle: string;
   initialIsComposingNewSession?: boolean;
-  sessionGoalsStorageKey: string;
   persistedSessionsStorageKey: string;
 };
 
-// Storage policy: the backend is canonical for session events; the DB fetch is
-// the recovery mechanism after a reload. Session streams (canonical fetched
-// events + the optimistic pending overlay) and pre-persist session drafts are
-// therefore memory-only — persisting them would only create ghosts that
-// contradict the fetch. These keys held them historically; clear them once.
-const LEGACY_SESSION_STORAGE_KEYS = ['musee_session_streams', 'musee_session_drafts'];
+// Storage policy: the backend is canonical for session events, goals, and
+// titles; the DB fetch is the recovery mechanism after a reload. Session
+// streams (canonical fetched events + the optimistic pending overlay),
+// pre-persist session drafts, and goal overrides are therefore memory-only —
+// persisting them would only create ghosts that contradict the fetch. These
+// keys held them historically; clear them once.
+const LEGACY_SESSION_STORAGE_KEYS = [
+  'musee_session_streams',
+  'musee_session_drafts',
+  'musee_session_goals',
+];
+
+function readServerSessionGoals(sessions: SessionRecord[]): Record<string, string> {
+  const goals: Record<string, string> = {};
+  sessions.forEach((session) => {
+    const goal = (session.metadata as Record<string, unknown> | null | undefined)?.user_goal;
+    if (typeof goal === 'string' && goal.trim()) {
+      goals[session.id] = goal;
+    }
+  });
+  return goals;
+}
 
 export function useSessionState({
   userId,
@@ -41,7 +59,6 @@ export function useSessionState({
   deleteConfirmation,
   defaultSessionTitle,
   initialIsComposingNewSession = false,
-  sessionGoalsStorageKey,
   persistedSessionsStorageKey,
 }: UseSessionStateOptions) {
   const [sessionSearch, setSessionSearch] = useState('');
@@ -58,26 +75,23 @@ export function useSessionState({
   const [streamingSessionResponses, setStreamingSessionResponses] = useState<Record<string, string>>({});
   const [sessionGoalDismissed, setSessionGoalDismissed] = useState<Set<string>>(new Set());
   const [sessionGoalInput, setSessionGoalInput] = useState('');
-  const [sessionGoals, setSessionGoals] = useState<Record<string, string>>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem(sessionGoalsStorageKey) || '{}');
-      const { '': _dropped, ...clean } = raw;
-      return clean;
-    } catch {
-      return {};
-    }
-  });
+  // Memory-only goals for sessions that don't exist in the backend yet
+  // (pre-persist drafts). Persisted-session goals live on the session record
+  // (metadata.user_goal) and are optimistically patched into the query cache.
+  const [draftSessionGoals, setDraftSessionGoals] = useState<Record<string, string>>({});
   const {
     sessions: persistedSessions,
     sessionsHydrated: persistedSessionsHydrated,
     refreshSessions: refreshPersistedSessions,
+    renameSession: renamePersistedSession,
+    setSessionGoalLocally,
   } = useSessionsQuery({
     userId,
     storageKey: persistedSessionsStorageKey,
   });
 
   useEffect(() => {
-    // One-time cleanup of the retired stream/draft persistence.
+    // One-time cleanup of the retired stream/draft/goal persistence.
     try {
       LEGACY_SESSION_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
     } catch {
@@ -85,9 +99,28 @@ export function useSessionState({
     }
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(sessionGoalsStorageKey, JSON.stringify(sessionGoals));
-  }, [sessionGoals, sessionGoalsStorageKey]);
+  const serverSessionGoals = useMemo(
+    () => readServerSessionGoals(persistedSessions),
+    [persistedSessions],
+  );
+
+  // Server precedence: a backend goal always wins, so a local draft-goal can
+  // never mask a change made on another device. Draft goals only fill in for
+  // sessions the backend doesn't know yet.
+  const sessionGoals = useMemo(
+    () => ({ ...draftSessionGoals, ...serverSessionGoals }),
+    [draftSessionGoals, serverSessionGoals],
+  );
+
+  const setSessionGoal = useCallback((sessionId: string, goal: string) => {
+    if (persistedSessions.some((session) => session.id === sessionId)) {
+      // Optimistic paint into the query cache; the caller PATCHes the backend
+      // and invalidates, and the refetch reconciles either way.
+      setSessionGoalLocally(sessionId, goal);
+      return;
+    }
+    setDraftSessionGoals((prev) => ({ ...prev, [sessionId]: goal }));
+  }, [persistedSessions, setSessionGoalLocally]);
 
   const sessionSummaries = useMemo(() => {
     return buildSessionSummaries({
@@ -163,9 +196,10 @@ export function useSessionState({
     sessionGoalInput,
     setSessionGoalInput,
     sessionGoals,
-    setSessionGoals,
+    setSessionGoal,
     persistedSessions,
     persistedSessionsHydrated,
+    renamePersistedSession,
     sessionSummaries,
     activeSessionSummary,
     pendingDeleteSessionSummary,

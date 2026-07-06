@@ -101,7 +101,7 @@ type ViewportMutationProps = {
   setArtworkDetailRightMode: React.Dispatch<React.SetStateAction<'metadata' | 'community'>>;
   handleIdentifyAgain: (hints?: { artistName?: string; artworkName?: string; additionalClue?: string }) => Promise<void>;
   handleRetryAnalysis: (item: GalleryItem) => Promise<void>;
-  setSessionGoals: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  setSessionGoal: (sessionId: string, goal: string) => void;
   isPersistedSessionId: (sessionId: string) => boolean;
   refreshPersistedSessions: () => void;
   saveSessionTitle: (sessionId: string, nextTitle: string) => Promise<void>;
@@ -204,7 +204,7 @@ export default function AppViewport({
     setArtworkDetailRightMode,
     handleIdentifyAgain,
     handleRetryAnalysis,
-    setSessionGoals,
+    setSessionGoal,
     isPersistedSessionId,
     refreshPersistedSessions,
     saveSessionTitle,
@@ -290,6 +290,7 @@ export default function AppViewport({
               activeSessionSummary={activeSessionSummary}
               activeSessionStream={activeSessionStream}
               sessionRenderBlocks={activeSessionRenderBlocks}
+              sessionTitleById={sessionTitleById}
               artworkDetailItem={artworkDetailItem}
               artworkHeaderActions={artworkHeaderActions}
               artworkHeaderEditToken={artworkHeaderEditToken}
@@ -333,7 +334,7 @@ export default function AppViewport({
               onOpenSessionFromInterpretation={handleSelectSessionSummary}
               onSaveExistingGoal={(newGoal) => {
                 const sid = activeSessionSummary.id;
-                setSessionGoals(prev => ({ ...prev, [sid]: newGoal }));
+                setSessionGoal(sid, newGoal);
                 if (!isPersistedSessionId(sid)) {
                   return;
                 }
@@ -355,7 +356,7 @@ export default function AppViewport({
               onSubmitGoal={(goal) => {
                 const sid = activeSessionSummary.id || createSessionDraft();
                 setSessionGoalInput('');
-                setSessionGoals(prev => ({ ...prev, [sid]: goal }));
+                setSessionGoal(sid, goal);
                 setSessionGoalDismissed(prev => new Set([...prev, sid]));
                 if (!isPersistedSessionId(sid)) {
                   return;

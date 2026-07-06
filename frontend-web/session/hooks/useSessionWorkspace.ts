@@ -21,7 +21,9 @@ import type {
   SessionStreamMessage,
 } from '../types';
 
-type DeleteConfirmation = { id: string; type: 'item' | 'session' } | null;
+import type { DeleteConfirmationState } from '../../app-shell/components/AppConfirmationLayer';
+
+type DeleteConfirmation = DeleteConfirmationState;
 type AppTab = 'newSession' | 'collect' | 'profile' | 'learn';
 type ToastType = 'info' | 'success';
 type ShowToast = (message: string, type?: ToastType) => void;
@@ -80,7 +82,6 @@ export function useSessionWorkspace({
     deleteConfirmation,
     defaultSessionTitle,
     initialIsComposingNewSession,
-    sessionGoalsStorageKey: 'musee_session_goals',
     persistedSessionsStorageKey: 'musee_persisted_sessions',
   });
 
@@ -253,10 +254,10 @@ export function useSessionWorkspace({
     sessionUserId: userId,
     sessionSummaries: sessionState.sessionSummaries,
     persistedSessions: sessionState.persistedSessions,
-    sessionDrafts: sessionState.sessionDrafts,
     editingSessionTitle: sessionState.editingSessionTitle,
     showToast,
     refreshPersistedSessions: sessionState.refreshPersistedSessions,
+    renamePersistedSession: sessionState.renamePersistedSession,
     resetPreparedSessionState: prepared.resetPreparedSessionState,
     isViewingSession: (sessionId) => activeTab === 'newSession' && sessionState.activeSessionSummary?.id === sessionId,
     setItems,
