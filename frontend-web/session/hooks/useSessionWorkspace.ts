@@ -21,7 +21,9 @@ import type {
   SessionStreamMessage,
 } from '../types';
 
-type DeleteConfirmation = { id: string; type: 'item' | 'session' } | null;
+import type { DeleteConfirmationState } from '../../app-shell/components/AppConfirmationLayer';
+
+type DeleteConfirmation = DeleteConfirmationState;
 type AppTab = 'newSession' | 'collect' | 'profile' | 'learn';
 type ToastType = 'info' | 'success';
 type ShowToast = (message: string, type?: ToastType) => void;

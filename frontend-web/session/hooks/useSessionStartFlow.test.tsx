@@ -215,7 +215,7 @@ describe('useSessionStartFlow', () => {
       }),
     );
 
-    const ingestContext = spies.ingestPreparedUploads.mock.calls[0][1] as PreparedUploadSessionContext;
+    const ingestContext = vi.mocked(spies.ingestPreparedUploads).mock.calls[0][1] as PreparedUploadSessionContext;
     expect(ingestContext.getSequenceNumber('entry-library')).toBe(0);
     expect(ingestContext.getSequenceNumber('entry-upload')).toBe(1);
 
