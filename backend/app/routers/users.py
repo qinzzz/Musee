@@ -219,9 +219,9 @@ async def get_user_quota(
 ):
     """Return tier, artwork usage, and limit for the given user."""
     require_same_user(current_user, user_id)
-    user = db.query(User).filter(User.user_id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Unknown users (e.g. anonymous visitors before their first action
+    # creates a row) get the default free-tier quotas with zero usage, so
+    # clients can always render meters.
     usage = get_account_usage(db, user_id)
     # Legacy top-level keys (stored artworks) kept for existing clients.
     stored = usage["quotas"].get("stored_artworks", {})
