@@ -219,16 +219,15 @@ export default function SavedArtworksSection({
         )}
 
         {savedLayout === 'grid' && selectedArtworkIds.length > 0 && (
-          <div className="pointer-events-none sticky bottom-5 z-[69] flex min-h-[72px] items-end px-4 sm:px-8 md:px-0">
-            <div className="pointer-events-auto inline-flex max-w-full items-center gap-4 rounded-[78px] border border-neutral-200 bg-white px-6 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
-              <div className="whitespace-nowrap text-[13px] font-semibold text-neutral-900">{selectedArtworkIds.length} selected</div>
+          <div className="pointer-events-none sticky bottom-5 z-[69] flex min-h-[72px] items-end justify-center px-5 md:justify-start md:px-0">
+            <div className="pointer-events-auto inline-flex w-[calc(100vw-40px)] max-w-full items-center gap-3 rounded-[78px] border border-neutral-200 bg-white px-5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] md:w-auto md:gap-4 md:px-6">
+              <div className="min-w-0 flex-1 whitespace-nowrap text-[13px] font-semibold text-neutral-900 md:flex-none">
+                {selectedArtworkIds.length} selected
+              </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" className="min-w-[160px] justify-between gap-3" disabled={isApplyingBoard || isDeletingSelection}>
-                    <span>{isApplyingBoard ? 'Saving…' : 'Add to board'}</span>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
+                  <Button variant="secondary" className="shrink-0 px-4" disabled={isApplyingBoard || isDeletingSelection}>
+                    <span>{isApplyingBoard ? 'Saving…' : '+ Add to board'}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-[180px]">
@@ -261,13 +260,31 @@ export default function SavedArtworksSection({
               <Button
                 onClick={() => void onDeleteSelection()}
                 variant="secondary"
-                className="gap-2"
+                className="h-10 w-10 shrink-0 rounded-full p-0 text-neutral-900"
                 disabled={isApplyingBoard || isDeletingSelection}
+                aria-label={isDeletingSelection ? 'Deleting selected artworks' : 'Delete selected artworks'}
+                title={isDeletingSelection ? 'Deleting…' : 'Delete'}
               >
-                {isDeletingSelection ? 'Deleting…' : 'Delete'}
+                <svg className="h-[17px] w-[17px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="#111111" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4h8v2" />
+                  <path d="M6.5 6l1 14h9l1-14" />
+                  <path d="M10 11v5" />
+                  <path d="M14 11v5" />
+                </svg>
               </Button>
-              <Button onClick={onClearArtworkSelection} variant="ghost" className="px-0 font-medium" disabled={isApplyingBoard || isDeletingSelection}>
-                Clear
+              <Button
+                onClick={onClearArtworkSelection}
+                variant="ghost"
+                className="h-10 w-10 shrink-0 rounded-full p-0 text-neutral-900"
+                disabled={isApplyingBoard || isDeletingSelection}
+                aria-label="Clear selected artworks"
+                title="Clear"
+              >
+                <svg className="h-[17px] w-[17px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="#111111" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12" />
+                  <path d="M18 6L6 18" />
+                </svg>
               </Button>
             </div>
           </div>
