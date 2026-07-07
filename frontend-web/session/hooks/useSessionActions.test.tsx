@@ -53,7 +53,7 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
   const refreshPersistedSessions = vi.fn();
   const renamePersistedSession = vi.fn(options.renamePersistedSession ?? (async () => {}));
   const resetPreparedSessionState = vi.fn();
-  const setItems = vi.fn();
+  const updateArtworkSessionLinks = vi.fn();
   const setSessionDrafts = vi.fn();
   const setSessionStreams = vi.fn();
   const setStreamingSessionResponses = vi.fn();
@@ -77,7 +77,7 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
     renamePersistedSession,
     resetPreparedSessionState,
     isViewingSession: options.isViewingSession ?? (() => false),
-    setItems,
+    updateArtworkSessionLinks,
     setSessionDrafts,
     setSessionStreams,
     setStreamingSessionResponses,
@@ -98,7 +98,7 @@ function renderUseSessionActions(options: HarnessOptions = {}) {
       refreshPersistedSessions,
       renamePersistedSession,
       resetPreparedSessionState,
-      setItems,
+      updateArtworkSessionLinks,
       setSessionDrafts,
       setSessionStreams,
       setStreamingSessionResponses,
@@ -139,7 +139,7 @@ describe('useSessionActions', () => {
     expect(spies.renamePersistedSession).toHaveBeenCalledWith('session-1', 'Museum Visit');
     // Drafts are pre-persist-only; persisted renames must not write one.
     expect(spies.setSessionDrafts).not.toHaveBeenCalled();
-    expect(spies.setItems).not.toHaveBeenCalled();
+    expect(spies.updateArtworkSessionLinks).not.toHaveBeenCalled();
   });
 
   it('propagates a failed persisted rename without touching drafts', async () => {

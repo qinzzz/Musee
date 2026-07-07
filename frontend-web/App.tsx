@@ -133,7 +133,12 @@ const App: React.FC = () => {
 
   const {
     items,
-    setItems,
+    patchArtwork,
+    addLocalArtworks,
+    replaceArtwork,
+    removeArtwork,
+    updateArtworkSessionLinks,
+    refreshArtworks,
     artworksLoaded,
     profileRefreshKey,
     artworkDetailItem,
@@ -289,7 +294,7 @@ const App: React.FC = () => {
     renameInputRef,
     sessionStreamScrollRef,
     sessionStreamEndRef,
-    setItems,
+    updateArtworkSessionLinks,
     setVisit: setArtworkWorkspace,
     setDeleteConfirmation,
     setActiveTab,
@@ -368,13 +373,13 @@ const App: React.FC = () => {
   } = sessionWorkspace;
 
   const removeArtworkLocally = React.useCallback((itemId: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== itemId));
+    removeArtwork(itemId);
     setArtworkWorkspace((prev) => ({
       ...prev,
       itemIds: prev.itemIds.filter((id) => id !== itemId),
     }));
     setArtworkDetailSelection((prev) => (prev?.artworkClientId === itemId ? null : prev));
-  }, [setArtworkDetailSelection, setArtworkWorkspace, setItems]);
+  }, [removeArtwork, setArtworkDetailSelection, setArtworkWorkspace]);
 
   const {
     updateSavedArtworkInState,
@@ -392,7 +397,10 @@ const App: React.FC = () => {
     items,
     sessionStreams,
     setPendingSessionArtworks,
-    setItems,
+    patchArtwork,
+    addLocalArtworks,
+    replaceArtwork,
+    removeArtwork,
     setVisit: setArtworkWorkspace,
     artworkDetailSelection,
     setArtworkDetailSelection,
@@ -485,6 +493,7 @@ const App: React.FC = () => {
       targetItems.forEach((item) => {
         removeArtworkLocally(item.id);
       });
+      refreshArtworks();
       showToast(
         targetItems.length === 1 ? 'Artwork deleted' : `${targetItems.length} artworks deleted`,
         'success',

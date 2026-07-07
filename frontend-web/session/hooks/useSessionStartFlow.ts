@@ -5,7 +5,7 @@ import type {
   PreparedUploadIngestResult,
   PreparedUploadSessionContext,
 } from '../../artwork-ingest/types';
-import type { ArtworkWorkspace, GalleryItem } from '../../types';
+import type { ArtworkWorkspace, GalleryItem, SessionLink } from '../../types';
 import { startSessionWithArtworks } from '../api/sessions';
 import { buildPreparedSessionFallbackPrompt } from '../lib/preparedSession';
 import { newSessionEventId, updateSessionLinkForItem } from '../lib/sessionLinks';
@@ -26,7 +26,7 @@ type UseSessionStartFlowOptions = {
   setIsSubmittingPreparedSession: Dispatch<SetStateAction<boolean>>;
   refreshPersistedSessions: () => void;
   setSessionDrafts: Dispatch<SetStateAction<SessionDraft[]>>;
-  setItems: Dispatch<SetStateAction<GalleryItem[]>>;
+  updateArtworkSessionLinks: (sessionId: string, resolveLink: (item: GalleryItem) => SessionLink | null | undefined) => void;
   setActiveTab: Dispatch<SetStateAction<AppTab>>;
   setFilteredSessionId: Dispatch<SetStateAction<string | null>>;
   setIsComposingNewSession: Dispatch<SetStateAction<boolean>>;
@@ -66,7 +66,7 @@ export function useSessionStartFlow({
   setIsSubmittingPreparedSession,
   refreshPersistedSessions,
   setSessionDrafts,
-  setItems,
+  updateArtworkSessionLinks,
   setActiveTab,
   setFilteredSessionId,
   setIsComposingNewSession,
@@ -119,16 +119,15 @@ export function useSessionStartFlow({
       const now = Date.now();
       let streamCursor = now;
       const batchUserInputEventId = newSessionEventId();
-      setItems((prev) => prev.map((item) => {
+      updateArtworkSessionLinks(sessionId, (item) => {
         const matchingEntry = libraryEntries.find((entry) => entry.artwork.id === item.id);
-        if (!matchingEntry) return item;
-        const sequenceNumber = getSequenceNumber(matchingEntry.id);
-        return updateSessionLinkForItem(item, sessionId, () => ({
+        if (!matchingEntry) return undefined;
+        return {
           sessionId,
-          sequenceNumber,
+          sequenceNumber: getSequenceNumber(matchingEntry.id),
           source: 'library',
-        }));
-      }));
+        };
+      });
 
       libraryEntries.forEach((entry) => {
         const artworkId = entry.artwork.artworkId || entry.artwork.id;
@@ -312,7 +311,7 @@ export function useSessionStartFlow({
     setFilteredSessionId,
     setIsComposingNewSession,
     setIsSubmittingPreparedSession,
-    setItems,
+    updateArtworkSessionLinks,
     setVisit,
     setSessionDrafts,
     showToast,

@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { deleteSession, type SessionRecord } from '../api/sessions';
-import type { ArtworkWorkspace, GalleryItem } from '../../types';
+import type { ArtworkWorkspace, GalleryItem, SessionLink } from '../../types';
 import type { SessionDraft, SessionStreamMessage, SessionSummary } from '../types';
-import { itemBelongsToSession, updateSessionLinkForItem } from '../lib/sessionLinks';
+import { itemBelongsToSession } from '../lib/sessionLinks';
 
 import type { DeleteConfirmationState } from '../../app-shell/components/AppConfirmationLayer';
 
@@ -22,7 +22,7 @@ type UseSessionActionsOptions = {
   renamePersistedSession: (sessionId: string, title: string) => Promise<void>;
   resetPreparedSessionState: () => void;
   isViewingSession: (sessionId: string) => boolean;
-  setItems: Dispatch<SetStateAction<GalleryItem[]>>;
+  updateArtworkSessionLinks: (sessionId: string, resolveLink: (item: GalleryItem) => SessionLink | null | undefined) => void;
   setSessionDrafts: Dispatch<SetStateAction<SessionDraft[]>>;
   setSessionStreams: Dispatch<SetStateAction<Record<string, SessionStreamMessage[]>>>;
   setStreamingSessionResponses: Dispatch<SetStateAction<Record<string, string>>>;
@@ -47,7 +47,7 @@ export function useSessionActions({
   renamePersistedSession,
   resetPreparedSessionState,
   isViewingSession,
-  setItems,
+  updateArtworkSessionLinks,
   setSessionDrafts,
   setSessionStreams,
   setStreamingSessionResponses,
@@ -133,11 +133,9 @@ export function useSessionActions({
   ]);
 
   const removeSessionLocally = useCallback((sessionId: string) => {
-    setItems((prev) => prev.map((item) => (
-      itemBelongsToSession(item, sessionId)
-        ? updateSessionLinkForItem(item, sessionId, () => null)
-        : item
-    )));
+    updateArtworkSessionLinks(sessionId, (item) => (
+      itemBelongsToSession(item, sessionId) ? null : undefined
+    ));
     setSessionDrafts((prev) => prev.filter((draft) => draft.id !== sessionId));
     setSessionStreams((prev) => {
       const next = { ...prev };
@@ -160,7 +158,7 @@ export function useSessionActions({
     });
   }, [
     setFilteredSessionId,
-    setItems,
+    updateArtworkSessionLinks,
     setPendingDeletedSessionIds,
     setStreamingSessionResponses,
     setVisit,
