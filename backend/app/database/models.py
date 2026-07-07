@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, SmallInteger, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint, Index
+from sqlalchemy import Column, Date, Integer, SmallInteger, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.connection import Base
@@ -598,4 +598,32 @@ class TasteProfile(Base):
             "narrative_summary": self.narrative_summary,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class DailyUsage(Base):
+    """Per-user, per-day usage rollup for quota checks.
+
+    ai_usage stays the token ledger (source of truth); this table exists so
+    quota decisions are an O(1) primary-key read instead of a SUM over a
+    growing ledger. Rows are written via atomic upsert in the same
+    transaction as the tracked action.
+    """
+
+    __tablename__ = "daily_usage"
+
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), primary_key=True)
+    day = Column(Date, primary_key=True)
+    tokens_in = Column(Integer, nullable=False, server_default='0')
+    tokens_out = Column(Integer, nullable=False, server_default='0')
+    artworks_uploaded = Column(Integer, nullable=False, server_default='0')
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "day": self.day.isoformat() if self.day else None,
+            "tokens_in": self.tokens_in,
+            "tokens_out": self.tokens_out,
+            "artworks_uploaded": self.artworks_uploaded,
         }

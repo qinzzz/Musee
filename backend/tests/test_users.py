@@ -49,18 +49,18 @@ def test_admin_set_tier(client):
     uid = user["user_id"]
 
     # Wrong secret
-    r = client.post("/api/admin/set-tier", json={"user_id": uid, "tier": "member", "admin_secret": "wrong"})
+    r = client.post("/api/admin/set-tier", json={"user_id": uid, "tier": "unlimited", "admin_secret": "wrong"})
     assert r.status_code == 403
 
     # Correct secret
-    r = client.post("/api/admin/set-tier", json={"user_id": uid, "tier": "member", "admin_secret": "test-secret"})
+    r = client.post("/api/admin/set-tier", json={"user_id": uid, "tier": "unlimited", "admin_secret": "test-secret"})
     assert r.status_code == 200
-    assert r.json()["tier"] == "member"
+    assert r.json()["tier"] == "unlimited"
 
     # Verify quota updated
     r = client.get(f"/api/users/{uid}/quota")
-    assert r.json()["tier"] == "member"
-    assert r.json()["limit"] == 200
+    assert r.json()["tier"] == "unlimited"
+    assert r.json()["limit"] is None  # unlimited tier is unmetered
 
 
 def test_admin_set_tier_invalid(client):

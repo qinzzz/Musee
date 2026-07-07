@@ -7,6 +7,7 @@ from typing import Optional
 
 from app.database.connection import SessionLocal
 from app.database.models import AIUsage
+from app.services.quota_service import record_token_usage
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,13 @@ def finish_ai_usage(
         usage.error_message = error_message[:2000] if error_message else None
         usage.completed_at = datetime.now(UTC)
         db.commit()
+        if usage.user_id and status == "succeeded":
+            record_token_usage(
+                db,
+                usage.user_id,
+                tokens_in=input_tokens or 0,
+                tokens_out=output_tokens or 0,
+            )
     except Exception as exc:
         if db:
             db.rollback()

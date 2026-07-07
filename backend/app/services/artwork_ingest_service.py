@@ -22,6 +22,8 @@ from app.services.session_service import (
 from app.services.artwork_entity_service import upsert_artist_entity, upsert_artwork_entity
 from app.utils.image_processing import reverse_geocode
 
+from app.services.quota_service import record_artwork_upload
+
 logger = logging.getLogger(__name__)
 
 
@@ -110,6 +112,7 @@ def create_saved_artwork_record_sync(
         local_db.add(artwork)
         local_db.commit()
         local_db.refresh(artwork)
+        record_artwork_upload(local_db, user_id)
         log_artwork_event(
             local_db,
             artwork_id=str(artwork.id),
@@ -213,6 +216,7 @@ def save_analyzed_artwork_record_sync(
                 local_db.commit()
             else:
                 raise
+        record_artwork_upload(local_db, user_id)
         local_db.refresh(artwork)
         log_artwork_event(
             local_db,
