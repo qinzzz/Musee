@@ -153,6 +153,9 @@ class Collection(Base):
     """Database model for collections"""
 
     __tablename__ = "collections"
+    __table_args__ = (
+        Index("idx_collections_user_id", "user_id"),
+    )
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
@@ -235,6 +238,9 @@ class Session(Base):
     """Database model for exploration sessions / visits"""
 
     __tablename__ = "sessions"
+    __table_args__ = (
+        Index("idx_sessions_user_updated", "user_id", "updated_at"),
+    )
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
@@ -321,6 +327,13 @@ class SessionEvent(Base):
     payload         = Column(JSON, nullable=True)
     sequence_number = Column(Integer, nullable=False)
     created_at      = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        # The ordering invariant the whole event architecture leans on:
+        # confirmed history is totally ordered per session. Enforced here so a
+        # concurrent-append race can never mint duplicate sequence numbers.
+        UniqueConstraint("session_id", "sequence_number", name="uq_session_events_session_sequence"),
+    )
 
     session = relationship("Session", back_populates="events")
 
