@@ -774,7 +774,7 @@ const App: React.FC = () => {
             pendingDeletedSessionIds={pendingDeletedSessionIds}
             currentUsername={currentUser?.username}
             isAuthenticated={Boolean(currentUser)}
-            accountUsageSlot={currentUser ? <AccountUsageMeter userId={sessionUserId} /> : null}
+            accountUsageSlot={<AccountUsageMeter userId={sessionUserId} />}
             userAvatar={userAvatar}
             renameInputRef={renameInputRef}
             navigationItems={sidebarNavigationItems}
