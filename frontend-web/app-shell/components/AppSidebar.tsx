@@ -36,6 +36,7 @@ type Props = {
   currentUsername?: string | null;
   isAuthenticated: boolean;
   userAvatar: React.ReactNode;
+  accountUsageSlot?: React.ReactNode;
   renameInputRef: React.RefObject<HTMLInputElement | null>;
   navigationItems: AppSidebarNavItem[];
   onRecentsOpenChange: (open: boolean) => void;
@@ -114,6 +115,7 @@ const AppSidebar: React.FC<Props> = ({
   currentUsername,
   isAuthenticated,
   userAvatar,
+  accountUsageSlot,
   renameInputRef,
   navigationItems,
   onRecentsOpenChange,
@@ -330,6 +332,7 @@ const AppSidebar: React.FC<Props> = ({
               <>
                 <div className="fixed inset-0 z-[var(--z-floating-backdrop)]" onClick={() => onUserMenuOpenChange(false)} />
                 <div className="absolute bottom-3 left-full z-[var(--z-floating)] ml-3 w-[240px] rounded-2xl border border-neutral-200 bg-white p-4 shadow-xl">
+                  {accountUsageSlot}
                   <div>
                     <label className="text-[10px] font-medium text-neutral-400">Language</label>
                     <DropdownMenu>
@@ -489,6 +492,7 @@ const AppSidebar: React.FC<Props> = ({
             <>
               <div className="fixed inset-0 z-[var(--z-floating-backdrop)]" onClick={() => onUserMenuOpenChange(false)} />
               <div className="absolute bottom-full left-3 right-3 mb-2 z-[var(--z-floating)] bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                {accountUsageSlot}
                 <div>
                   <label className="text-[10px] font-medium text-neutral-400">Language</label>
                   <DropdownMenu>

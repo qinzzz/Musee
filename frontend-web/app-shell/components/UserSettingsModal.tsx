@@ -1,11 +1,11 @@
 import React from 'react';
-import type { UserQuota } from '../../api/auth';
+import type { AccountUsage } from '../../api/account';
 
 type Props = {
   open: boolean;
   mode: 'account' | 'personalization' | null;
   currentUser: any;
-  quotaInfo: UserQuota | null;
+  usage: AccountUsage | null;
   language: string;
   onClose: () => void;
   onLanguageChange: (language: string) => void;
@@ -16,13 +16,17 @@ const UserSettingsModal: React.FC<Props> = ({
   open,
   mode,
   currentUser,
-  quotaInfo,
+  usage,
   language,
   onClose,
   onLanguageChange,
   onLogout,
 }) => {
   if (!open || !mode) return null;
+
+  const tier = usage?.tier;
+  const stored = usage?.quotas?.stored_artworks;
+  const quotaInfo = stored ? { tier: tier ?? 'free', used: stored.used, limit: stored.limit } : null;
 
   return (
     <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-6">

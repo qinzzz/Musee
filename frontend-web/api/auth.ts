@@ -43,19 +43,3 @@ export function getCurrentUser(): any | null {
 
 export { getOrCreateUserId };
 
-export interface UserQuota {
-  tier: 'free' | 'member' | 'power';
-  used: number;
-  limit: number | null;
-}
-
-export async function getUserQuota(userId: string): Promise<UserQuota> {
-  const response = await fetch(`${API_BASE_URL}/users/${encodeURIComponent(userId)}/quota`, {
-    headers: (() => {
-      const token = localStorage.getItem(AUTH_TOKEN_KEY);
-      return token ? { Authorization: `Bearer ${token}` } : {};
-    })(),
-  });
-  if (!response.ok) throw new Error(`API error (${response.status})`);
-  return response.json();
-}

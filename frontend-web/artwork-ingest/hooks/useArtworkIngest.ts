@@ -12,6 +12,7 @@ import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '
 import type { ArtworkWorkspace, GalleryItem, TagCoordinate } from '../../types';
 import type { ArtworkStatePatch } from '../../artwork/lib/artworkState';
 import { mergeArtworkState } from '../../artwork/lib/artworkState';
+import { parseQuotaError } from '../../api/account';
 import { buildUnsupportedUploadMessage, isSupportedUploadImage } from '../../lib/uploadValidation';
 import { createLocationResolver } from '../lib/location';
 import {
@@ -428,8 +429,14 @@ export function useArtworkIngest({
             }),
         );
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Analysis failed.';
+        const quotaError = parseQuotaError(error);
+        const message = quotaError
+          ? quotaError.message
+          : (error instanceof Error ? error.message : 'Analysis failed.');
         console.error('Failed to save/analyze staged upload:', error);
+        if (quotaError) {
+          showToast(quotaError.message, 'info');
+        }
         if (placeholderId && persistedItemId) {
           markArtworkAnalysisFailed(persistedItemId, message);
         } else if (placeholderId) {
@@ -565,8 +572,13 @@ export function useArtworkIngest({
       }
     } catch (error) {
       console.error('Upload failed:', error);
+      const quotaError = parseQuotaError(error);
+      if (quotaError) {
+        showToast(quotaError.message, 'info');
+      }
       if (placeholder && persistedItemId) {
-        const message = error instanceof Error ? error.message : 'Analysis failed.';
+        const message = quotaError?.message
+          || (error instanceof Error ? error.message : 'Analysis failed.');
         markArtworkAnalysisFailed(persistedItemId, message);
       } else if (placeholder) {
         removeUploadPlaceholder(placeholder.id);
@@ -671,6 +683,10 @@ export function useArtworkIngest({
           });
         } catch (error) {
           console.error('Failed to save artwork before analysis:', error);
+          const quotaError = parseQuotaError(error);
+          if (quotaError) {
+            showToast(quotaError.message, 'info');
+          }
           removeUploadPlaceholder(placeholder.id);
         }
       }
