@@ -13,6 +13,7 @@ import IdentifyAgainModal from './components/IdentifyAgainModal';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import AddFromLibraryModal from './components/AddFromLibraryModal';
 import AppSidebar from './app-shell/components/AppSidebar';
+import AccountUsageMeter from './app-shell/components/AccountUsageMeter';
 import AppConfirmationLayer, { type DeleteConfirmationState } from './app-shell/components/AppConfirmationLayer';
 import AppViewport from './app-shell/components/AppViewport';
 import LoginModal from './app-shell/components/LoginModal';
@@ -773,6 +774,7 @@ const App: React.FC = () => {
             pendingDeletedSessionIds={pendingDeletedSessionIds}
             currentUsername={currentUser?.username}
             isAuthenticated={Boolean(currentUser)}
+            accountUsageSlot={currentUser ? <AccountUsageMeter userId={sessionUserId} /> : null}
             userAvatar={userAvatar}
             renameInputRef={renameInputRef}
             navigationItems={sidebarNavigationItems}
