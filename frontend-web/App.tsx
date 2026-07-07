@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useRef, useEffect } from 'react';
 import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
-import { getCurrentUser, getOrCreateUserId, getUserQuota, logout, type UserQuota } from './api/auth';
+import { getCurrentUser, getOrCreateUserId, logout } from './api/auth';
 import {
   batchDeleteArtworks,
   deleteArtwork,
@@ -14,6 +14,7 @@ import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import AddFromLibraryModal from './components/AddFromLibraryModal';
 import AppSidebar from './app-shell/components/AppSidebar';
 import AccountUsageMeter from './app-shell/components/AccountUsageMeter';
+import { useAccountUsageQuery } from './app-shell/hooks/useAccountUsageQuery';
 import AppConfirmationLayer, { type DeleteConfirmationState } from './app-shell/components/AppConfirmationLayer';
 import AppViewport from './app-shell/components/AppViewport';
 import LoginModal from './app-shell/components/LoginModal';
@@ -108,6 +109,9 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(getCurrentUser());
   const sessionUserId = currentUser?.user_id || USER_ID;
+  // Single cached account-usage fetch, shared with the user-menu meter via
+  // the query layer; the meter's mount-on-open refetch keeps both current.
+  const { usage: accountUsage } = useAccountUsageQuery(sessionUserId);
   const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState>(null);
   const [artistPageContext, setArtistPageContext] = useState<ArtistPageContext | null>(initialNavigationState.artistPageContext);
   const [movementPageContext, setMovementPageContext] = useState<SmartCollection | null>(null);
@@ -227,7 +231,6 @@ const App: React.FC = () => {
 
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
-  const [quotaInfo, setQuotaInfo] = useState<UserQuota | null>(null);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
   const [likedIds, setLikedIds] = useState<Set<string>>(() => {
@@ -441,12 +444,6 @@ const App: React.FC = () => {
   useEffect(() => {
     setArtworkDetailRightMode('metadata');
   }, [artworkDetailItem?.id]);
-
-  useEffect(() => {
-    if (currentUser?.user_id) {
-      getUserQuota(currentUser.user_id).then(setQuotaInfo).catch(() => {});
-    }
-  }, [currentUser?.user_id]);
 
   const handleDeleteItem = (id: string) => {
     setDeleteConfirmation({ id, type: 'item' });
@@ -745,7 +742,7 @@ const App: React.FC = () => {
           open={Boolean(showAccountModal)}
           mode={showAccountModal}
           currentUser={currentUser}
-          quotaInfo={quotaInfo}
+          usage={accountUsage ?? null}
           language={language}
           onClose={() => setShowAccountModal(null)}
           onLanguageChange={(nextLanguage) => {
