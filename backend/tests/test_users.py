@@ -39,9 +39,15 @@ def test_quota_free_tier(client):
     assert data["used"] == 0
 
 
-def test_quota_not_found(client):
+def test_quota_unknown_user_gets_defaults(client):
+    # Anonymous visitors have no row until their first action; they still
+    # get the default free-tier quotas so clients can render meters.
     r = client.get("/api/users/no-such-user/quota")
-    assert r.status_code == 404
+    assert r.status_code == 200
+    data = r.json()
+    assert data["tier"] == "free"
+    assert data["quotas"]["artwork_uploads"]["used"] == 0
+    assert data["used"] == 0
 
 
 def test_admin_set_tier(client):
