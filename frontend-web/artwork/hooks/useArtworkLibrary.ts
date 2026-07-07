@@ -1,19 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { updateArtworkClassification } from '../../api/artworks';
-import type { ArtworkClassification, GalleryItem, TagCoordinate } from '../../types';
+import type { ArtworkClassification, GalleryItem, SessionLink, TagCoordinate } from '../../types';
 import type { ArtworkDetailContext } from '../../lib/appNavigation';
 import {
   readArtworkBootstrapCache,
   writeArtworkBootstrapCache,
 } from '../../lib/bootstrapCache';
 import type { ArtworkDetailItem, ArtworkDetailSelection } from '../types';
-import { resolveArtworkDetailItem } from '../lib/artworkState';
+import { resolveArtworkDetailItem, updateArtworkInList, type ArtworkStatePatch } from '../lib/artworkState';
 import {
   mapCachedArtworkToGalleryItem,
   mapGalleryItemToCacheItem,
 } from '../lib/artworkMapping';
 import { useArtworksQuery } from './useArtworksQuery';
-import { getPrimarySessionId } from '../../session/lib/sessionLinks';
+import { getPrimarySessionId, updateSessionLinkForItem } from '../../session/lib/sessionLinks';
 import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 type UseArtworkLibraryOptions = {
@@ -32,6 +32,31 @@ function getServerItemKeys(item: GalleryItem): string[] {
   return keys;
 }
 
+// Transient client state a refetch must not clobber: an in-flight delete, and
+// live streaming text (richer than the server's coarse analyzing status). A
+// terminal server analysis state (analyzed/failed) always wins.
+function preserveTransientClientState(
+  previous: GalleryItem | undefined,
+  serverItem: GalleryItem,
+): GalleryItem {
+  if (!previous) return serverItem;
+  const patch: Partial<GalleryItem> = {};
+  // Client identity is stable across the local->server transition; UI
+  // references (detail selection, navigation) must survive a refetch.
+  if (previous.clientId && previous.clientId !== serverItem.clientId) {
+    patch.clientId = previous.clientId;
+  }
+  if (previous.deleteStatus) {
+    patch.deleteStatus = previous.deleteStatus;
+  }
+  const serverIsTerminal = serverItem.analysisStatus === 'analyzed' || serverItem.analysisStatus === 'failed';
+  if (!serverIsTerminal && previous.isAnalyzing && previous.streamingText) {
+    patch.isAnalyzing = true;
+    patch.streamingText = previous.streamingText;
+  }
+  return Object.keys(patch).length ? { ...serverItem, ...patch } : serverItem;
+}
+
 function mergeServerItemsWithLocalItems(
   previousItems: GalleryItem[],
   serverItems: GalleryItem[],
@@ -46,7 +71,18 @@ function mergeServerItemsWithLocalItems(
     return !getServerItemKeys(item).some((key) => serverKeys.has(key));
   });
 
-  return [...preservedLocalItems, ...serverItems];
+  const previousByKey = new Map<string, GalleryItem>();
+  previousItems.forEach((item) => {
+    getServerItemKeys(item).forEach((key) => previousByKey.set(key, item));
+  });
+  const reconciledServerItems = serverItems.map((serverItem) => {
+    const previous = getServerItemKeys(serverItem)
+      .map((key) => previousByKey.get(key))
+      .find(Boolean);
+    return preserveTransientClientState(previous, serverItem);
+  });
+
+  return [...preservedLocalItems, ...reconciledServerItems];
 }
 
 function seedTagPositionsFromItems(
@@ -110,7 +146,38 @@ export function useArtworkLibrary({
   const [artworkDetailSelection, setArtworkDetailSelection] = useState<ArtworkDetailSelection | null>(null);
   const tagPositionsLoadedRef = useRef(onTagPositionsLoaded);
 
-  const { serverItems, artworksLoaded, artworksError } = useArtworksQuery(userId);
+  const { serverItems, artworksLoaded, artworksError, refreshArtworks } = useArtworksQuery(userId);
+
+  // The narrow write API for artwork state. Everything outside this hook goes
+  // through these intent mutators (or the handlers below) instead of a raw
+  // setItems, so the record/client-state invariants hold structurally.
+  const patchArtwork = useCallback((targetId: string, patch: ArtworkStatePatch) => {
+    setItems((prev) => updateArtworkInList(prev, targetId, patch));
+  }, []);
+
+  const addLocalArtworks = useCallback((newItems: GalleryItem[]) => {
+    setItems((prev) => [...newItems, ...prev]);
+  }, []);
+
+  const replaceArtwork = useCallback((targetId: string, next: GalleryItem) => {
+    setItems((prev) => prev.map((item) => (item.id === targetId ? next : item)));
+  }, []);
+
+  const removeArtwork = useCallback((targetId: string) => {
+    setItems((prev) => prev.filter((item) => item.id !== targetId));
+  }, []);
+
+  // resolveLink returns a link to set, null to detach, or undefined to skip.
+  const updateArtworkSessionLinks = useCallback((
+    sessionId: string,
+    resolveLink: (item: GalleryItem) => SessionLink | null | undefined,
+  ) => {
+    setItems((prev) => prev.map((item) => {
+      const decision = resolveLink(item);
+      if (decision === undefined) return item;
+      return updateSessionLinkForItem(item, sessionId, () => decision);
+    }));
+  }, []);
 
   useEffect(() => {
     tagPositionsLoadedRef.current = onTagPositionsLoaded;
@@ -189,6 +256,7 @@ export function useArtworkLibrary({
 
     try {
       await updateArtworkClassification(backendArtworkId, classification);
+      refreshArtworks();
     } catch (error) {
       console.error('Failed to update artwork classification:', error);
       setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, classification: previous } : item));
@@ -213,7 +281,12 @@ export function useArtworkLibrary({
 
   return {
     items,
-    setItems,
+    patchArtwork,
+    addLocalArtworks,
+    replaceArtwork,
+    removeArtwork,
+    updateArtworkSessionLinks,
+    refreshArtworks,
     artworksLoaded,
     profileRefreshKey,
     artworkDetailItem,

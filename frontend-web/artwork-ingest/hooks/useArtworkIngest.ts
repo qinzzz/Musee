@@ -11,7 +11,7 @@ import { buildSessionLink, itemBelongsToSession } from '../../session/lib/sessio
 import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../../session/types';
 import type { ArtworkWorkspace, GalleryItem, TagCoordinate } from '../../types';
 import type { ArtworkStatePatch } from '../../artwork/lib/artworkState';
-import { mergeArtworkState, updateArtworkInList } from '../../artwork/lib/artworkState';
+import { mergeArtworkState } from '../../artwork/lib/artworkState';
 import { buildUnsupportedUploadMessage, isSupportedUploadImage } from '../../lib/uploadValidation';
 import { createLocationResolver } from '../lib/location';
 import {
@@ -54,7 +54,10 @@ type UseArtworkIngestOptions = {
   items: GalleryItem[];
   sessionStreams: Record<string, SessionStreamMessage[]>;
   setPendingSessionArtworks: Dispatch<SetStateAction<PendingSessionArtwork[]>>;
-  setItems: Dispatch<SetStateAction<GalleryItem[]>>;
+  patchArtwork: (targetId: string, patch: ArtworkStatePatch) => void;
+  addLocalArtworks: (items: GalleryItem[]) => void;
+  replaceArtwork: (targetId: string, next: GalleryItem) => void;
+  removeArtwork: (targetId: string) => void;
   setVisit: Dispatch<SetStateAction<ArtworkWorkspace>>;
   artworkDetailSelection: ArtworkDetailSelection | null;
   setArtworkDetailSelection: Dispatch<SetStateAction<ArtworkDetailSelection | null>>;
@@ -146,7 +149,10 @@ export function useArtworkIngest({
   items,
   sessionStreams,
   setPendingSessionArtworks,
-  setItems,
+  patchArtwork,
+  addLocalArtworks,
+  replaceArtwork,
+  removeArtwork,
   setVisit,
   artworkDetailSelection,
   setArtworkDetailSelection,
@@ -165,12 +171,7 @@ export function useArtworkIngest({
   const inFlightUploadKeysRef = useRef<Set<string>>(new Set());
   const resolveMuseum = useMemo(() => createLocationResolver(), []);
 
-  const updateSavedArtworkInState = useCallback((
-    targetId: string,
-    patch: ArtworkStatePatch,
-  ) => {
-    setItems((prev) => updateArtworkInList(prev, targetId, patch));
-  }, [setItems]);
+  const updateSavedArtworkInState = patchArtwork;
 
   const markArtworkAnalysisFailed = useCallback((
     itemId: string,
@@ -238,13 +239,13 @@ export function useArtworkIngest({
   }, [parseAnalysis, setTagPositions, updateSavedArtworkInState]);
 
   const removeUploadPlaceholder = useCallback((placeholderId: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== placeholderId));
+    removeArtwork(placeholderId);
     setVisit((prev) => ({
       ...prev,
       itemIds: prev.itemIds.filter((id) => id !== placeholderId),
     }));
     setArtworkDetailSelection((prev) => (prev?.artworkClientId === placeholderId ? null : prev));
-  }, [setArtworkDetailSelection, setItems, setVisit]);
+  }, [removeArtwork, setArtworkDetailSelection, setVisit]);
 
   const persistRawArtwork = useCallback(async (options: {
     file: File;
@@ -290,9 +291,9 @@ export function useArtworkIngest({
       isAnalyzing: true,
     };
 
-    setItems((prev) => prev.map((item) => (item.id === placeholder.id ? reconciled : item)));
+    replaceArtwork(placeholder.id, reconciled);
     return reconciled;
-  }, [setItems]);
+  }, [replaceArtwork]);
 
   const ensureSessionDraft = useCallback((sessionId: string) => {
     const now = Date.now();
@@ -384,7 +385,7 @@ export function useArtworkIngest({
           startingSequenceNumber: sequenceNumber,
         })[0];
         placeholderId = placeholder.id;
-        setItems((prev) => [placeholder, ...prev]);
+        addLocalArtworks([placeholder]);
         setVisit((prev) => ({ ...prev, itemIds: [...prev.itemIds, placeholder.id] }));
 
         const persistedItem = await persistRawArtwork({
@@ -453,7 +454,7 @@ export function useArtworkIngest({
     persistRawArtwork,
     reconcilePlaceholderWithSavedArtwork,
     removeUploadPlaceholder,
-    setItems,
+    addLocalArtworks,
     setVisit,
   ]);
 
@@ -495,7 +496,7 @@ export function useArtworkIngest({
         appendSessionEvents(sessionId, [optimisticEvent], { persist: false });
       }
 
-      setItems((prev) => [placeholder!, ...prev]);
+      addLocalArtworks([placeholder!]);
       if (sessionId) {
         setVisit((prev) => ({ ...prev, itemIds: [...prev.itemIds, placeholder!.id] }));
       }
@@ -586,7 +587,7 @@ export function useArtworkIngest({
     removeUploadPlaceholder,
     resolveUploadSession,
     setIsAnalyzing,
-    setItems,
+    addLocalArtworks,
     setVisit,
     showToast,
     triggerUploadCommentary,
@@ -637,7 +638,7 @@ export function useArtworkIngest({
       }
 
       if (placeholders.length > 0) {
-        setItems((prev) => [...placeholders, ...prev]);
+        addLocalArtworks(placeholders);
         if (batchSessionId) {
           setVisit((prev) => ({
             ...prev,
@@ -701,11 +702,9 @@ export function useArtworkIngest({
               { latitude: anchorCandidate.coords!.latitude, longitude: anchorCandidate.coords!.longitude },
               { city, country, museum },
             );
-            setItems((prev) => prev.map((item) => (
-              persistedUploads.some((upload) => upload.item.id === item.id)
-                ? { ...item, location: resolvedLocation }
-                : item
-            )));
+            persistedUploads.forEach((upload) => {
+              patchArtwork(upload.item.id, { record: { location: resolvedLocation } });
+            });
           })
           .catch(() => {});
       }
@@ -756,7 +755,8 @@ export function useArtworkIngest({
     resolveUploadSession,
     setFilteredSessionId,
     setIsAnalyzing,
-    setItems,
+    addLocalArtworks,
+    patchArtwork,
     setVisit,
     showToast,
     triggerUploadCommentary,

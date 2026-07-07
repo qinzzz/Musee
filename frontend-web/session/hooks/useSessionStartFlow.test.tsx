@@ -73,7 +73,7 @@ function createDeferred<T>() {
 function renderUseSessionStartFlow(options: HarnessOptions = {}) {
   const refreshPersistedSessions = vi.fn();
   const setSessionDrafts = vi.fn();
-  const setItems = vi.fn();
+  const updateArtworkSessionLinks = vi.fn();
   const setActiveTab = vi.fn();
   const setFilteredSessionId = vi.fn();
   const setIsComposingNewSession = vi.fn();
@@ -100,7 +100,7 @@ function renderUseSessionStartFlow(options: HarnessOptions = {}) {
       setIsSubmittingPreparedSession,
       refreshPersistedSessions,
       setSessionDrafts,
-      setItems,
+      updateArtworkSessionLinks,
       setActiveTab,
       setFilteredSessionId,
       setIsComposingNewSession,
@@ -126,7 +126,7 @@ function renderUseSessionStartFlow(options: HarnessOptions = {}) {
     spies: {
       refreshPersistedSessions,
       setSessionDrafts,
-      setItems,
+      updateArtworkSessionLinks,
       setActiveTab,
       setFilteredSessionId,
       setIsComposingNewSession,

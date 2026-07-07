@@ -2,6 +2,7 @@ import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { useArtworkIngest } from './useArtworkIngest';
+import { updateArtworkInList } from '../../artwork/lib/artworkState';
 import type { ArtworkWorkspace, GalleryItem, TagCoordinate } from '../../types';
 import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../../session/types';
 
@@ -162,7 +163,10 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       items,
       sessionStreams: options.sessionStreams ?? {},
       setPendingSessionArtworks,
-      setItems,
+      patchArtwork: (targetId, patch) => setItems((prev) => updateArtworkInList(prev, targetId, patch)),
+      addLocalArtworks: (newItems) => setItems((prev) => [...newItems, ...prev]),
+      replaceArtwork: (targetId, next) => setItems((prev) => prev.map((item) => (item.id === targetId ? next : item))),
+      removeArtwork: (targetId) => setItems((prev) => prev.filter((item) => item.id !== targetId)),
         setVisit: setArtworkWorkspace,
       artworkDetailSelection,
       setArtworkDetailSelection,

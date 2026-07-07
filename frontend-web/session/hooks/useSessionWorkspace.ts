@@ -9,7 +9,7 @@ import { useSessionMessaging } from './useSessionMessaging';
 import { useSessionEventsQuery } from './useSessionEventsQuery';
 import { useSessionStartFlow } from './useSessionStartFlow';
 import { useSessionState } from './useSessionState';
-import type { ArtworkWorkspace, GalleryItem } from '../../types';
+import type { ArtworkWorkspace, GalleryItem, SessionLink } from '../../types';
 import type { ArtworkDetailItem } from '../../artwork/types';
 import type {
   PreparedSessionUploadEntry,
@@ -40,7 +40,7 @@ type UseSessionWorkspaceOptions = {
   renameInputRef: RefObject<HTMLInputElement | null>;
   sessionStreamScrollRef: RefObject<HTMLDivElement | null>;
   sessionStreamEndRef: RefObject<HTMLDivElement | null>;
-  setItems: Dispatch<SetStateAction<GalleryItem[]>>;
+  updateArtworkSessionLinks: (sessionId: string, resolveLink: (item: GalleryItem) => SessionLink | null | undefined) => void;
   setVisit: Dispatch<SetStateAction<ArtworkWorkspace>>;
   setDeleteConfirmation: Dispatch<SetStateAction<DeleteConfirmation>>;
   setActiveTab: Dispatch<SetStateAction<AppTab>>;
@@ -64,7 +64,7 @@ export function useSessionWorkspace({
   renameInputRef,
   sessionStreamScrollRef,
   sessionStreamEndRef,
-  setItems,
+  updateArtworkSessionLinks,
   setVisit,
   setDeleteConfirmation,
   setActiveTab,
@@ -260,7 +260,7 @@ export function useSessionWorkspace({
     renamePersistedSession: sessionState.renamePersistedSession,
     resetPreparedSessionState: prepared.resetPreparedSessionState,
     isViewingSession: (sessionId) => activeTab === 'newSession' && sessionState.activeSessionSummary?.id === sessionId,
-    setItems,
+    updateArtworkSessionLinks,
     setSessionDrafts: sessionState.setSessionDrafts,
     setSessionStreams: sessionState.setSessionStreams,
     setStreamingSessionResponses: sessionState.setStreamingSessionResponses,
@@ -294,7 +294,7 @@ export function useSessionWorkspace({
     setIsSubmittingPreparedSession: prepared.setIsSubmittingPreparedSession,
     refreshPersistedSessions: sessionState.refreshPersistedSessions,
     setSessionDrafts: sessionState.setSessionDrafts,
-    setItems,
+    updateArtworkSessionLinks,
     setActiveTab,
     setFilteredSessionId: sessionState.setFilteredSessionId,
     setIsComposingNewSession: sessionState.setIsComposingNewSession,

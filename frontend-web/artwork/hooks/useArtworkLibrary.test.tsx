@@ -155,8 +155,7 @@ describe('useArtworkLibrary', () => {
     expect(result.current.items[0].artistName).toBe('Cached Artist');
 
     act(() => {
-      result.current.setItems((prev) => [
-        ...prev,
+      result.current.addLocalArtworks([
         createGalleryItem({
           id: 'pending-1',
           artworkId: 'pending-1',
@@ -325,9 +324,7 @@ describe('useArtworkLibrary', () => {
     expect(result.current.artworkDetailItem?.navigationItems?.[1].artworkName).toBe('Second Work');
 
     act(() => {
-      result.current.setItems((prev) => prev.map((item) => (
-        item.id === 'server-2' ? { ...item, artworkName: 'Updated Second Work' } : item
-      )));
+      result.current.patchArtwork('server-2', { record: { artworkName: 'Updated Second Work' } });
     });
 
     expect(result.current.artworkDetailItem?.navigationItems?.[1].artworkName).toBe('Updated Second Work');
@@ -348,5 +345,60 @@ describe('useArtworkLibrary', () => {
 
     expect(result.current.items.map((item) => item.id)).toEqual(['cached-1']);
     expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to load previous artworks:', expect.any(Error));
+  });
+
+  it('background refetch preserves in-flight client state, but a terminal server state wins', async () => {
+    mockFetchUserArtworks.mockResolvedValue({
+      items: [createServerRecord({ id: 'server-1', analysis_status: 'analyzing' })],
+    });
+
+    const { result } = renderHook(() => useArtworkLibrary({
+      userId: 'user-1',
+      showToast: vi.fn(),
+    }), { wrapper: createQueryWrapper() });
+
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(1);
+    });
+
+    act(() => {
+      result.current.patchArtwork('server-1', {
+        clientState: {
+          isAnalyzing: true,
+          streamingText: 'Impressionist brushwork emerging…',
+          deleteStatus: 'pending',
+        },
+      });
+    });
+
+    // Refetch while the server still reports 'analyzing': the richer local
+    // streaming text and the in-flight delete marker must survive.
+    act(() => {
+      result.current.refreshArtworks();
+    });
+    await waitFor(() => {
+      expect(mockFetchUserArtworks).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      const item = result.current.items[0];
+      expect(item.streamingText).toBe('Impressionist brushwork emerging…');
+      expect(item.isAnalyzing).toBe(true);
+      expect(item.deleteStatus).toBe('pending');
+    });
+
+    // Refetch after the server reaches a terminal state: server wins for the
+    // analysis fields, while the unrelated in-flight delete marker survives.
+    mockFetchUserArtworks.mockResolvedValue({
+      items: [createServerRecord({ id: 'server-1', analysis_status: 'analyzed' })],
+    });
+    act(() => {
+      result.current.refreshArtworks();
+    });
+    await waitFor(() => {
+      const item = result.current.items[0];
+      expect(item.isAnalyzing).toBe(false);
+      expect(item.streamingText).toBeUndefined();
+      expect(item.deleteStatus).toBe('pending');
+    });
   });
 });

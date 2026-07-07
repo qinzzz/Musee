@@ -146,7 +146,7 @@ function renderUseSessionWorkspace(options?: {
   mockUseSessionActions.mockReturnValue(sessionActions);
   mockUseSessionStartFlow.mockReturnValue({ submitPreparedSession });
 
-  const setItems = vi.fn();
+  const updateArtworkSessionLinks = vi.fn();
   const setVisit = vi.fn();
   const setDeleteConfirmation = vi.fn();
   const setActiveTab = vi.fn();
@@ -184,7 +184,7 @@ function renderUseSessionWorkspace(options?: {
     renameInputRef: { current: renameInput },
     sessionStreamScrollRef: { current: sessionStreamScroll },
     sessionStreamEndRef: { current: sessionStreamEnd },
-    setItems,
+    updateArtworkSessionLinks,
     setVisit,
     setDeleteConfirmation,
     setActiveTab,
@@ -201,7 +201,7 @@ function renderUseSessionWorkspace(options?: {
     sessionActions,
     messaging,
     spies: {
-      setItems,
+      updateArtworkSessionLinks,
       setVisit,
       setDeleteConfirmation,
       setActiveTab,
