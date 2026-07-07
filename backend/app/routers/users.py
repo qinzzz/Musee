@@ -3,17 +3,15 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
 
+from app.config.plans import PLANS
+from app.services.quota_service import get_account_usage
+
 from app.database.connection import get_db
 from app.database.models import User, SavedArtwork
 from app.utils.auth_utils import get_current_user, require_same_user
 
 router = APIRouter()
 
-TIER_ARTWORK_LIMIT: dict[str, int | None] = {
-    "free":   20,
-    "member": 200,
-    "power":  None,
-}
 
 
 class CreateUserRequest(BaseModel):
@@ -224,10 +222,10 @@ async def get_user_quota(
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    tier = user.tier or "free"
-    limit = TIER_ARTWORK_LIMIT.get(tier, TIER_ARTWORK_LIMIT["free"])
-    used = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).count()
-    return {"tier": tier, "used": used, "limit": limit}
+    usage = get_account_usage(db, user_id)
+    # Legacy top-level keys (stored artworks) kept for existing clients.
+    stored = usage["quotas"].get("stored_artworks", {})
+    return {**usage, "used": stored.get("used"), "limit": stored.get("limit")}
 
 
 class SetTierRequest(BaseModel):
@@ -243,8 +241,8 @@ async def admin_set_tier(request: SetTierRequest, db: Session = Depends(get_db))
     expected = os.environ.get("ADMIN_SECRET", "")
     if not expected or request.admin_secret != expected:
         raise HTTPException(status_code=403, detail="Forbidden")
-    if request.tier not in TIER_ARTWORK_LIMIT:
-        raise HTTPException(status_code=400, detail=f"Invalid tier. Must be one of: {list(TIER_ARTWORK_LIMIT.keys())}")
+    if request.tier not in PLANS:
+        raise HTTPException(status_code=400, detail=f"Invalid tier. Must be one of: {list(PLANS.keys())}")
     user = db.query(User).filter(User.user_id == request.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

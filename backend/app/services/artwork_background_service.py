@@ -17,15 +17,14 @@ from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, star
 from app.services.artwork_analysis_service import determine_ai_provider
 from app.services.openai_api_client import OpenAIAPIClient
 
+from app.config.plans import ARTWORK_UPLOADS, STORED_ARTWORKS
+from app.services.quota_service import check_quota
+
 logger = logging.getLogger(__name__)
 
 ACTIVE_ARTWORK_TASKS: set[asyncio.Task] = set()
 
-TIER_ARTWORK_LIMIT: dict[str, int | None] = {
-    "free": 20,
-    "member": 200,
-    "power": None,
-}
+
 
 DIM_ANALYSIS_PROMPT = """\
 You are an art analysis assistant. Given an artwork's metadata, score it on five taste dimensions.
@@ -57,29 +56,34 @@ def track_artwork_task(task: asyncio.Task) -> asyncio.Task:
     return task
 
 
-def get_quota(tier: str) -> int | None:
-    return TIER_ARTWORK_LIMIT.get(tier or "free", TIER_ARTWORK_LIMIT["free"])
-
-
 def check_artwork_quota(user_id: str, db: Session) -> None:
+    """Guard for artwork-creating endpoints.
+
+    Policy lives in app/config/plans.py; this just surfaces blocking
+    decisions as the HTTP 402 contract the frontend already understands.
+    """
     user = db.query(UserModel).filter(UserModel.user_id == user_id).first()
     tier = (user.tier if user else None) or "free"
-    limit = get_quota(tier)
-    if limit is None:
-        return
 
-    count = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).count()
-    if count >= limit:
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "code": "quota_exceeded",
-                "tier": tier,
-                "limit": limit,
-                "used": count,
-                "message": f"You've reached the {tier} plan limit of {limit} artworks.",
-            },
-        )
+    for quota in (STORED_ARTWORKS, ARTWORK_UPLOADS):
+        decision = check_quota(db, user_id, quota)
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    **decision.to_error_body(),
+                    "code": "quota_exceeded",  # legacy alias of error_code
+                    "tier": tier,
+                    "message": _quota_message(quota, decision),
+                },
+            )
+
+
+def _quota_message(quota: str, decision) -> str:
+    limit = decision.status.limit
+    if quota == ARTWORK_UPLOADS:
+        return f"You have reached today's limit of {limit} artwork uploads."
+    return f"You have reached the limit of {limit} stored artworks."
 
 
 async def do_dimension_analysis(entity_id: str) -> None:
