@@ -67,10 +67,12 @@ def get_artworks(
         )
         if recognized_only is not None:
             query = query.filter(SavedArtwork.is_recognized == (1 if recognized_only else 0))
+        total = query.order_by(None).count()
         artworks = query.order_by(SavedArtwork.created_at.desc()).offset(offset).limit(limit).all()
         return {
             "items": [a.to_dict() for a in artworks],
             "count": len(artworks),
+            "total": total,
             "offset": offset,
             "limit": limit,
         }
