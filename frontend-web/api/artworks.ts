@@ -48,18 +48,40 @@ export type ArtistRow = ArtistEntity & {
   artwork_count: number;
 };
 
-export async function fetchUserArtworks(userId: string): Promise<any> {
-  const params = new URLSearchParams({
-    user_id: userId,
-    limit: '100',
-  });
+const ARTWORKS_PAGE_SIZE = 100;
 
-  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks?${params.toString()}`);
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API error (${response.status}): ${errorText}`);
+// The app deliberately holds the complete library in memory (session
+// grouping, boards, artist rollups all join against it), so this pages
+// through the backend until exhausted — fetch pagination only; the UI
+// still receives one complete list.
+export async function fetchUserArtworks(userId: string): Promise<any> {
+  const items: any[] = [];
+  let offset = 0;
+
+  for (;;) {
+    const params = new URLSearchParams({
+      user_id: userId,
+      limit: String(ARTWORKS_PAGE_SIZE),
+      offset: String(offset),
+    });
+
+    const response = await fetchWithTimeout(`${API_BASE_URL}/artworks?${params.toString()}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error (${response.status}): ${errorText}`);
+    }
+    const page = await response.json();
+    const pageItems: any[] = Array.isArray(page?.items) ? page.items : [];
+    items.push(...pageItems);
+    offset += pageItems.length;
+
+    const total = typeof page?.total === 'number' ? page.total : undefined;
+    const exhausted = pageItems.length < ARTWORKS_PAGE_SIZE
+      || (total !== undefined && offset >= total);
+    if (exhausted) break;
   }
-  return response.json();
+
+  return { items };
 }
 
 export async function fetchInsights(

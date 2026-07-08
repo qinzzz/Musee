@@ -16,6 +16,7 @@ def test_get_artworks_returns_user_items(client, db):
     assert response.status_code == 200
     payload = response.json()
     assert payload["count"] == 2
+    assert payload["total"] == 2
     assert {item["id"] for item in payload["items"]} == {"art-1", "art-2"}
 
 
