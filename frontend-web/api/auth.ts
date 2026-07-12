@@ -1,4 +1,4 @@
-import { API_BASE_URL, AUTH_TOKEN_KEY, USER_INFO_KEY, getOrCreateUserId } from './core';
+import { API_BASE_URL, AUTH_TOKEN_KEY, USER_ID_KEY, USER_INFO_KEY, getOrCreateUserId } from './core';
 
 export async function loginWithGoogle(idToken: string, anonymousUserId?: string): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/auth/google`, {
@@ -24,7 +24,7 @@ export async function loginWithGoogle(idToken: string, anonymousUserId?: string)
   }
   if (data.user) {
     localStorage.setItem(USER_INFO_KEY, JSON.stringify(data.user));
-    localStorage.setItem('musee_user_id', data.user.user_id);
+    localStorage.setItem(USER_ID_KEY, data.user.user_id);
   }
 
   return data;
@@ -33,7 +33,7 @@ export async function loginWithGoogle(idToken: string, anonymousUserId?: string)
 export function logout() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(USER_INFO_KEY);
-  localStorage.removeItem('musee_user_id');
+  localStorage.removeItem(USER_ID_KEY);
 }
 
 export function getCurrentUser(): any | null {
@@ -42,4 +42,3 @@ export function getCurrentUser(): any | null {
 }
 
 export { getOrCreateUserId };
-

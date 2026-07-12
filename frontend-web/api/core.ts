@@ -13,7 +13,9 @@ const API_BASE_URL = resolveApiBaseUrl();
 const API_TIMEOUT = 185000;
 const AUTH_TOKEN_KEY = 'musee_auth_token';
 const USER_INFO_KEY = 'musee_user_info';
+const USER_ID_KEY = 'musee_user_id';
 const DEV_FIXED_USER_ID = import.meta.env.VITE_DEV_USER_ID || 'musee-dev-user';
+const DEV_FREE_TIER_USER_ID = import.meta.env.VITE_DEV_FREE_TIER_USER_ID || 'musee-dev-user-freetier';
 
 function getLanguage(): string | null {
   return localStorage.getItem('musee_language');
@@ -90,21 +92,26 @@ function resolveImageUrl(photoUri: string | undefined): string {
 }
 
 function getOrCreateUserId(): string {
-  const storageKey = 'musee_user_id';
-
   if (import.meta.env.DEV) {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(storageKey, DEV_FIXED_USER_ID);
+    if (typeof window === 'undefined') {
+      return DEV_FIXED_USER_ID;
     }
+
+    const storedUserId = localStorage.getItem(USER_ID_KEY);
+    if (storedUserId) {
+      return storedUserId;
+    }
+
+    localStorage.setItem(USER_ID_KEY, DEV_FIXED_USER_ID);
     return DEV_FIXED_USER_ID;
   }
 
-  let userId = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
+  let userId = typeof window !== 'undefined' ? localStorage.getItem(USER_ID_KEY) : null;
 
   if (!userId) {
     userId = `web-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
     if (typeof window !== 'undefined') {
-      localStorage.setItem(storageKey, userId);
+      localStorage.setItem(USER_ID_KEY, userId);
       console.log('Generated new persistent user ID:', userId);
     }
   }
@@ -117,7 +124,9 @@ export {
   API_TIMEOUT,
   AUTH_TOKEN_KEY,
   USER_INFO_KEY,
+  USER_ID_KEY,
   DEV_FIXED_USER_ID,
+  DEV_FREE_TIER_USER_ID,
   getLanguage,
   fetchWithTimeout,
   getBaseDomain,

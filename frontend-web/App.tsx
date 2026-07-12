@@ -3,6 +3,7 @@ import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
 import { getCurrentUser, getOrCreateUserId, logout } from './api/auth';
+import { AUTH_TOKEN_KEY, DEV_FIXED_USER_ID, DEV_FREE_TIER_USER_ID, USER_ID_KEY, USER_INFO_KEY } from './api/core';
 import {
   batchDeleteArtworks,
   deleteArtwork,
@@ -45,6 +46,11 @@ type ToastAction = {
   label: string;
   onClick: () => void;
 };
+
+const DEV_PROFILE_OPTIONS = [
+  { id: DEV_FIXED_USER_ID, label: 'Unlimited' },
+  { id: DEV_FREE_TIER_USER_ID, label: 'Free' },
+];
 
 // Helper to format date strings to (Month Day, Year) without time
 export const formatDisplayDate = (dateStr: string | null | undefined): string | null => {
@@ -249,6 +255,44 @@ const App: React.FC = () => {
     setCurrentUser(null);
     window.location.reload();
   };
+
+  const handleSwitchDevProfile = (nextUserId: string) => {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(USER_INFO_KEY);
+    localStorage.setItem(USER_ID_KEY, nextUserId);
+    window.location.reload();
+  };
+
+  const devProfileSwitcherSlot = import.meta.env.DEV ? (
+    <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50/70 p-3">
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-700">Dev profile</p>
+        <p className="mt-0.5 truncate text-[11px] text-amber-900/70">{sessionUserId}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {DEV_PROFILE_OPTIONS.map((profile) => {
+          const isActive = sessionUserId === profile.id;
+          return (
+            <button
+              key={profile.id}
+              type="button"
+              onClick={() => {
+                if (isActive) return;
+                handleSwitchDevProfile(profile.id);
+              }}
+              className={`rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                isActive
+                  ? 'bg-amber-900 text-white shadow-sm'
+                  : 'bg-white text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100'
+              }`}
+            >
+              {profile.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
 
   const handleToggleLike = (id: string) => {
     setLikedIds(prev => {
@@ -772,6 +816,7 @@ const App: React.FC = () => {
             currentUsername={currentUser?.username}
             isAuthenticated={Boolean(currentUser)}
             accountUsageSlot={<AccountUsageMeter userId={sessionUserId} />}
+            devProfileSwitcherSlot={devProfileSwitcherSlot}
             userAvatar={userAvatar}
             renameInputRef={renameInputRef}
             navigationItems={sidebarNavigationItems}
