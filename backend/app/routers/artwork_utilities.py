@@ -16,7 +16,6 @@ from app.services.artwork_utilities_service import (
     define_aesthetic_term,
     generate_speech_audio,
     generate_summary,
-    get_artwork_insights,
     get_available_identities_payload,
     get_available_providers_payload,
     initialize_ai_services,
@@ -41,12 +40,6 @@ initialize_ai_services(
 
 class DefineTermRequest(BaseModel):
     tag: str
-
-
-class InsightsRequest(BaseModel):
-    artist_name: str
-    artwork_name: str
-    language: Optional[str] = None
 
 
 class GenerateSpeechRequest(BaseModel):
@@ -212,20 +205,6 @@ async def define_aesthetic_term_route(
 ):
     ai_provider = determine_ai_provider(model)
     return await define_aesthetic_term(tag=request.tag, ai_provider=ai_provider)
-
-
-@router.post("/artwork-insights")
-async def artwork_insights(
-    request: InsightsRequest = Body(...),
-    model: Optional[AIProvider] = Query(None),
-):
-    ai_provider = determine_ai_provider(model)
-    return await get_artwork_insights(
-        artist_name=request.artist_name,
-        artwork_name=request.artwork_name,
-        language=request.language,
-        ai_provider=ai_provider,
-    )
 
 
 @router.post("/generate-speech")

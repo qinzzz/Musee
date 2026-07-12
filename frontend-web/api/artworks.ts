@@ -84,32 +84,16 @@ export async function fetchUserArtworks(userId: string): Promise<any> {
   return { items };
 }
 
-export async function fetchInsights(
-  artistName: string,
-  artworkName: string,
-  language?: string,
-): Promise<Array<{ title: string; text: string }>> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/artwork-insights`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ artist_name: artistName, artwork_name: artworkName, language: language || null }),
-    timeout: 30000,
-  });
-  if (!response.ok) return [];
-  const data = await response.json();
-  return data.points ?? [];
-}
-
-export async function fetchAndPersistInsights(
+export async function getArtworkFunFacts(
   artworkId: string,
   language?: string,
 ): Promise<Array<{ title: string; text: string }>> {
-  const url = new URL(`${API_BASE_URL}/artworks/${artworkId}/insights`);
+  const url = new URL(`${API_BASE_URL}/artworks/${artworkId}/fun-facts`);
   if (language) url.searchParams.set('language', language);
   const response = await fetchWithTimeout(url.toString(), { method: 'POST', timeout: 30000 });
   if (!response.ok) return [];
   const data = await response.json();
-  return data.insights ?? [];
+  return data.fun_facts ?? [];
 }
 
 export async function fetchArtistProfile(artistEntityId: string): Promise<import('../types').ArtistEntity | null> {

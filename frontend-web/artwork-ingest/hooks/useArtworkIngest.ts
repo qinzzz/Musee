@@ -5,7 +5,7 @@ import {
   saveArtworkUpload,
   type ArtworkAnalysisResult,
 } from '../../api/analysis';
-import { fetchAndPersistInsights } from '../../api/artworks';
+import { getArtworkFunFacts } from '../../api/artworks';
 import { hasUsableCommentaryContext } from '../../session/lib/commentary';
 import { buildSessionLink, itemBelongsToSession } from '../../session/lib/sessionLinks';
 import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../../session/types';
@@ -322,11 +322,11 @@ export function useArtworkIngest({
       .catch(() => {});
   }, [resolveMuseum, updateSavedArtworkInState]);
 
-  const maybeHydrateInsights = useCallback((itemId: string) => {
-    fetchAndPersistInsights(itemId).then((insights) => {
-      if (insights.length > 0) {
+  const maybeHydrateFunFacts = useCallback((itemId: string) => {
+    getArtworkFunFacts(itemId).then((funFacts) => {
+      if (funFacts.length > 0) {
         updateSavedArtworkInState(itemId, {
-          record: { insights },
+          record: { insights: funFacts },
         });
       }
     }).catch(() => {});
@@ -354,11 +354,11 @@ export function useArtworkIngest({
 
     const resolvedItem = buildAnalyzedItem(liveItem, analysis, parseAnalysis, analysisUpdates);
     if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-      maybeHydrateInsights(persistedItem.id);
+      maybeHydrateFunFacts(persistedItem.id);
     }
 
     return { analysis, resolvedItem };
-  }, [applyArtworkAnalysisResult, defaultSessionTitle, maybeHydrateInsights, parseAnalysis]);
+  }, [applyArtworkAnalysisResult, defaultSessionTitle, maybeHydrateFunFacts, parseAnalysis]);
 
   const ingestPreparedUploads = useCallback(async (
     uploadEntries: PreparedSessionUploadEntry[],

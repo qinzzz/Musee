@@ -9,7 +9,7 @@ import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '
 const {
   mockAnalyzeArtworkFromExisting,
   mockSaveArtworkUpload,
-  mockFetchAndPersistInsights,
+  mockGetArtworkFunFacts,
   mockHasUsableCommentaryContext,
   mockNormalizeUploadFile,
   mockReadExifMetadata,
@@ -19,7 +19,7 @@ const {
 } = vi.hoisted(() => ({
   mockAnalyzeArtworkFromExisting: vi.fn(),
   mockSaveArtworkUpload: vi.fn(),
-  mockFetchAndPersistInsights: vi.fn(),
+  mockGetArtworkFunFacts: vi.fn(),
   mockHasUsableCommentaryContext: vi.fn(),
   mockNormalizeUploadFile: vi.fn(),
   mockReadExifMetadata: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock('../../api/analysis', () => ({
 }));
 
 vi.mock('../../api/artworks', () => ({
-  fetchAndPersistInsights: mockFetchAndPersistInsights,
+  getArtworkFunFacts: mockGetArtworkFunFacts,
 }));
 
 vi.mock('../../session/lib/commentary', () => ({
@@ -232,7 +232,7 @@ describe('useArtworkIngest', () => {
       country: 'United States',
       museum: 'SFMOMA',
     }));
-    mockFetchAndPersistInsights.mockResolvedValue([]);
+    mockGetArtworkFunFacts.mockResolvedValue([]);
     mockHasUsableCommentaryContext.mockReturnValue(true);
   });
 

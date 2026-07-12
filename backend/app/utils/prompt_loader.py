@@ -437,12 +437,12 @@ def get_explore_deepdive_prompt(
 
 
 @lru_cache(maxsize=1)
-def _load_insights_template() -> str:
-    return _load_prompt_file(INSTRUCTIONS_DIR / "insights.txt")
+def _load_fun_facts_template() -> str:
+    return _load_prompt_file(INSTRUCTIONS_DIR / "fun_facts.txt")
 
 
-def get_insights_prompt(artist_name: str, artwork_name: str, language: str = None) -> str:
-    template = _inject_identity(_load_insights_template(), COMPANION_IDENTITY)
+def get_fun_facts_prompt(artist_name: str, artwork_name: str, language: str = None) -> str:
+    template = _inject_identity(_load_fun_facts_template(), COMPANION_IDENTITY)
     lang_instr = _build_language_instruction(language)
     return (template
         .replace("{artist_name}", artist_name)

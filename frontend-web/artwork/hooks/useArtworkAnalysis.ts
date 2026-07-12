@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { analyzeArtworkFromExisting } from '../../api/analysis';
-import { fetchAndPersistInsights } from '../../api/artworks';
+import { getArtworkFunFacts } from '../../api/artworks';
 import type { GalleryItem } from '../../types';
 import type { ArtworkAnalysisResult } from '../../api/analysis';
 import type { ArtworkDetailItem, IdentifyAgainHints, IdentifyAgainValues } from '../types';
@@ -32,13 +32,13 @@ export function useArtworkAnalysis({
   const [headerIdentifyAgainError, setHeaderIdentifyAgainError] = useState<string | null>(null);
   const [isHeaderIdentifyingAgain, setIsHeaderIdentifyingAgain] = useState(false);
 
-  const hydrateInsights = useCallback((itemId: string) => {
+  const hydrateFunFacts = useCallback((itemId: string) => {
     const targetItem = artworkDetailItem?.id === itemId ? artworkDetailItem : null;
-    fetchAndPersistInsights(targetItem?.artworkId || itemId)
-      .then((insights) => {
-        if (insights.length > 0) {
+    getArtworkFunFacts(targetItem?.artworkId || itemId)
+      .then((funFacts) => {
+        if (funFacts.length > 0) {
           updateSavedArtworkInState(itemId, {
-            record: { insights },
+            record: { insights: funFacts },
           });
         }
       })
@@ -63,12 +63,12 @@ export function useArtworkAnalysis({
         sessionLinks: item.sessionLinks,
       });
       if (analysis.artist_name && analysis.artist_name !== 'Unknown Artist') {
-        hydrateInsights(itemId);
+        hydrateFunFacts(itemId);
       }
     } catch {
       markArtworkAnalysisFailed(itemId, 'Retry failed.');
     }
-  }, [applyArtworkAnalysisResult, hydrateInsights, markArtworkAnalysisFailed, updateSavedArtworkInState]);
+  }, [applyArtworkAnalysisResult, hydrateFunFacts, markArtworkAnalysisFailed, updateSavedArtworkInState]);
 
   const handleIdentifyAgain = useCallback(async (hints?: IdentifyAgainHints) => {
     if (!artworkDetailItem?.artworkId) return;
@@ -91,13 +91,13 @@ export function useArtworkAnalysis({
       applyArtworkAnalysisResult(targetItem.id, result, {
         referenceUrls: result.reference_urls || [],
       });
-      hydrateInsights(targetItem.id);
+      hydrateFunFacts(targetItem.id);
     } catch (error) {
       console.error('Failed to identify artwork again:', error);
       markArtworkAnalysisFailed(targetItem.id, 'Identify again failed.');
       throw error;
     }
-  }, [applyArtworkAnalysisResult, artworkDetailItem, hydrateInsights, markArtworkAnalysisFailed, updateSavedArtworkInState]);
+  }, [applyArtworkAnalysisResult, artworkDetailItem, hydrateFunFacts, markArtworkAnalysisFailed, updateSavedArtworkInState]);
 
   const openHeaderIdentifyAgainModal = useCallback(() => {
     if (!artworkDetailItem || artworkDetailItem.isAnalyzing || artworkDetailItem.deleteStatus === 'pending') return;

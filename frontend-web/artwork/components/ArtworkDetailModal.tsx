@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { ArtworkClassification } from '../../types';
-import { fetchAndPersistInsights } from '../../api/artworks';
+import { getArtworkFunFacts } from '../../api/artworks';
 import type { ArtworkDetailItem, ArtworkSessionMembership, IdentifyAgainHints } from '../types';
 import { getArtworkClientId } from '../../lib/artworkIdentity';
 import { useArtworkCommunity } from '../hooks/useArtworkCommunity';
@@ -39,7 +39,7 @@ interface Props {
   editRequestToken?: number;
 }
 const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, onNavigate, rightMode, onRightModeChange, onIdentifyAgain, onRetryAnalysis, onDelete, userId, onNavigateToArtist, onNavigateToSession, sessionTitleById, isInline, onUpdateClassification, editRequestToken }) => {
-  const [insights, setInsights] = useState<Array<{ title: string; text: string }>>([]);
+  const [funFacts, setFunFacts] = useState<Array<{ title: string; text: string }>>([]);
   const [isRetryingAnalysis, setIsRetryingAnalysis] = useState(false);
   const canRetryAnalysis = Boolean(
     onRetryAnalysis &&
@@ -136,21 +136,27 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
 
   // Sync internal state when navigating between items in a session
   useEffect(() => {
-    setInsights([]);
+    setFunFacts([]);
     onRightModeChange('metadata'); // Reset to metadata view for the new piece
   }, [item.clientId, item.id]);
 
-  // Sync persisted insights from parent updates; backfill on first open if missing
+  // Sync persisted fun facts from parent updates; backfill on first open if missing.
   useEffect(() => {
     if ((item.insights ?? []).length > 0) {
-      setInsights(item.insights!);
+      setFunFacts(item.insights!);
       return;
     }
-    if (!(item.artworkId || item.id) || !item.artistName || item.artistName.toLowerCase() === 'unknown') return;
+    const normalizedArtistName = item.artistName?.trim().toLowerCase() ?? '';
+    if (
+      !(item.artworkId || item.id)
+      || !normalizedArtistName
+      || normalizedArtistName === 'unknown'
+      || normalizedArtistName === 'unknown artist'
+    ) return;
     let isCurrent = true;
-    fetchAndPersistInsights(item.artworkId || item.id)
-      .then((pts) => {
-        if (isCurrent) setInsights(pts);
+    getArtworkFunFacts(item.artworkId || item.id)
+      .then((facts) => {
+        if (isCurrent) setFunFacts(facts);
       })
       .catch(() => {});
     return () => {
@@ -433,7 +439,7 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
                 displayDescription={displayDescription}
                 formatArtworkDisplayDate={formatArtworkDisplayDate}
                 sessionMemberships={sessionMemberships}
-                insights={insights}
+                funFacts={funFacts}
                 markdownComponents={markdownComponents}
                 isFailureAlertDismissed={isFailureAlertDismissed}
                 setIsFailureAlertDismissed={setIsFailureAlertDismissed}
