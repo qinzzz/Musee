@@ -157,36 +157,45 @@ def run_dimension_analysis_bg(entity_id: str) -> None:
     asyncio.run(do_dimension_analysis(entity_id))
 
 
-async def do_insights(
+async def generate_fun_facts(
     artwork_id: str,
     artist_name: str,
     artwork_name: str,
     language: Optional[str],
 ) -> None:
-    if not artist_name or artist_name.lower() in ("unknown", "unknown artist", ""):
+    with SessionLocal() as db:
+        artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+        if not artwork or artwork.insights:
+            return
+
+        artist = artwork.artist_name or artist_name or ""
+        title = artwork.artwork_name or artwork_name or "Untitled"
+        user_id = artwork.user_id
+
+    if not artist or artist.lower() in ("unknown", "unknown artist", ""):
         return
 
     usage_id = None
     try:
         ai_service = AIServiceFactory.get_service(determine_ai_provider(None))
         usage_id = start_ai_usage(
-            user_id=None,
-            job_type="artwork_insights",
+            user_id=user_id,
+            job_type="artwork_fun_facts",
             model=get_ai_model_name(ai_service),
             subject_type="artwork",
             subject_id=artwork_id,
         )
-        points = await ai_service.get_insights(
-            artist_name=artist_name,
-            artwork_name=artwork_name or "Untitled",
+        fun_facts = await ai_service.get_fun_facts(
+            artist_name=artist,
+            artwork_name=title,
             language=language,
         )
         succeed_ai_usage(usage_id)
         with SessionLocal() as db:
             artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
-            if artwork:
-                artwork.insights = points
+            if artwork and not artwork.insights:
+                artwork.insights = fun_facts
                 db.commit()
     except Exception as exc:
         fail_ai_usage(usage_id, exc)
-        logger.warning("Insights bg task failed for %s: %s", artwork_id, exc)
+        logger.warning("Fun facts bg task failed for %s: %s", artwork_id, exc)

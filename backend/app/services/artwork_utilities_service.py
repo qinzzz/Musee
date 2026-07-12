@@ -328,38 +328,6 @@ async def define_aesthetic_term(*, tag: str, ai_provider: AIProvider) -> dict:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-async def get_artwork_insights(
-    *,
-    artist_name: str,
-    artwork_name: str,
-    language: Optional[str],
-    ai_provider: AIProvider,
-) -> dict:
-    if not artist_name or artist_name.lower() in ("unknown", "unknown artist", ""):
-        return {"points": []}
-
-    ai_service = AIServiceFactory.get_service(ai_provider)
-    usage_id = start_ai_usage(
-        user_id=None,
-        job_type="artwork_insights",
-        model=get_ai_model_name(ai_service, ai_provider.value),
-        subject_type="artwork_metadata",
-        subject_id=f"{artist_name}:{artwork_name}",
-    )
-    try:
-        points = await ai_service.get_insights(
-            artist_name=artist_name,
-            artwork_name=artwork_name or "Untitled",
-            language=language,
-        )
-        succeed_ai_usage(usage_id)
-        return {"points": points}
-    except Exception as exc:
-        fail_ai_usage(usage_id, exc)
-        logger.exception("Unlock points failed")
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
 async def generate_speech_audio(*, text: str, ai_provider: AIProvider) -> bytes:
     ai_service = AIServiceFactory.get_service(ai_provider)
     if not isinstance(ai_service.ai_client, GeminiAPIClient):

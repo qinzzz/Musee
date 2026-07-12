@@ -6,10 +6,10 @@ import type { ArtworkDetailItem } from '../types';
 
 const {
   mockAnalyzeArtworkFromExisting,
-  mockFetchAndPersistInsights,
+  mockGetArtworkFunFacts,
 } = vi.hoisted(() => ({
   mockAnalyzeArtworkFromExisting: vi.fn(),
-  mockFetchAndPersistInsights: vi.fn(),
+  mockGetArtworkFunFacts: vi.fn(),
 }));
 
 vi.mock('../../api/analysis', () => ({
@@ -17,7 +17,7 @@ vi.mock('../../api/analysis', () => ({
 }));
 
 vi.mock('../../api/artworks', () => ({
-  fetchAndPersistInsights: mockFetchAndPersistInsights,
+  getArtworkFunFacts: mockGetArtworkFunFacts,
 }));
 
 function createDeferred<T>() {
@@ -103,7 +103,7 @@ describe('useArtworkAnalysis', () => {
 
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    mockFetchAndPersistInsights.mockResolvedValue([]);
+    mockGetArtworkFunFacts.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -111,9 +111,9 @@ describe('useArtworkAnalysis', () => {
     vi.clearAllMocks();
   });
 
-  it('retries analysis successfully and hydrates insights for known artists', async () => {
+  it('retries analysis successfully and hydrates fun facts for known artists', async () => {
     mockAnalyzeArtworkFromExisting.mockResolvedValue(createAnalysis());
-    mockFetchAndPersistInsights.mockResolvedValue([{ title: 'Insight', text: 'Body' }]);
+    mockGetArtworkFunFacts.mockResolvedValue([{ title: 'Fact', text: 'Body' }]);
 
     const item = createItem();
     const { result, spies } = renderUseArtworkAnalysis(item);
@@ -136,7 +136,7 @@ describe('useArtworkAnalysis', () => {
     });
     await waitFor(() => {
       expect(spies.updateSavedArtworkInState).toHaveBeenCalledWith(item.id, {
-        record: { insights: [{ title: 'Insight', text: 'Body' }] },
+        record: { insights: [{ title: 'Fact', text: 'Body' }] },
       });
     });
   });

@@ -9,7 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import { getTagExplanation } from '../../api/chat';
 
-type InsightPoint = { title: string; text: string };
+type FunFact = { title: string; text: string };
 
 const HoverTag: React.FC<{ tag: string; artworkId?: string }> = ({ tag, artworkId }) => {
   const [explanation, setExplanation] = useState<string | null>(null);
@@ -90,8 +90,8 @@ const HoverTag: React.FC<{ tag: string; artworkId?: string }> = ({ tag, artworkI
   );
 };
 
-const Insight: React.FC<{
-  point: InsightPoint;
+const FunFactItem: React.FC<{
+  point: FunFact;
   index: number;
   colors: { dot: string; bg: string; border: string; text: string };
 }> = ({ point, index, colors }) => {
@@ -200,7 +200,7 @@ type Props = {
   displayDescription?: string;
   formatArtworkDisplayDate: (value?: string | null) => string;
   sessionMemberships: ArtworkSessionMembership[];
-  insights: InsightPoint[];
+  funFacts: FunFact[];
   markdownComponents: React.ComponentProps<typeof ReactMarkdown>['components'];
   isFailureAlertDismissed: boolean;
   setIsFailureAlertDismissed: React.Dispatch<React.SetStateAction<boolean>>;
@@ -236,7 +236,7 @@ export default function ArtworkDetailMetadataPanel({
   displayDescription,
   formatArtworkDisplayDate,
   sessionMemberships,
-  insights,
+  funFacts,
   markdownComponents,
   isFailureAlertDismissed,
   setIsFailureAlertDismissed,
@@ -497,18 +497,18 @@ export default function ArtworkDetailMetadataPanel({
         </div>
       )}
 
-      {insights.length > 0 && (
+      {funFacts.length > 0 && (
         <div className="border-t border-neutral-50 pt-5">
           <p className="mb-3 text-[10px] font-medium tracking-[0.08em] text-neutral-400">Fun facts</p>
           <div className="space-y-1.5">
-            {insights.map((point, index) => {
+            {funFacts.map((point, index) => {
               const colors = [
                 { dot: '#7F77DD', bg: '#EEEDFE', border: '#C5C1F0', text: '#3C3489' },
                 { dot: '#1D9E75', bg: '#E1F5EE', border: '#5DCAA5', text: '#085041' },
                 { dot: '#D85A30', bg: '#FAECE7', border: '#F0997B', text: '#712B13' },
               ];
               const palette = colors[index % colors.length];
-              return <Insight key={index} point={point} index={index} colors={palette} />;
+              return <FunFactItem key={index} point={point} index={index} colors={palette} />;
             })}
           </div>
         </div>

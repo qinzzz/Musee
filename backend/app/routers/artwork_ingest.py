@@ -26,7 +26,7 @@ from app.services.artwork_analysis_service import (
 )
 from app.services.artwork_background_service import (
     check_artwork_quota,
-    do_insights,
+    generate_fun_facts,
     run_dimension_analysis_bg,
     track_artwork_task,
 )
@@ -331,7 +331,7 @@ async def analyze_artwork_unified(
         if existing_artwork.artist_name and existing_artwork.artist_name != "Unknown Artist":
             if background_tasks:
                 background_tasks.add_task(
-                    do_insights,
+                    generate_fun_facts,
                     str(existing_artwork.id),
                     existing_artwork.artist_name,
                     existing_artwork.artwork_name or "Untitled",
@@ -340,7 +340,7 @@ async def analyze_artwork_unified(
             else:
                 track_artwork_task(
                     asyncio.create_task(
-                        do_insights(
+                        generate_fun_facts(
                             str(existing_artwork.id),
                             existing_artwork.artist_name,
                             existing_artwork.artwork_name or "Untitled",
@@ -399,7 +399,7 @@ async def analyze_artwork_unified(
         if artwork_id_result and parsed_result["artist_name"] and parsed_result["artist_name"] != "Unknown Artist":
             track_artwork_task(
                 asyncio.create_task(
-                    do_insights(
+                    generate_fun_facts(
                         artwork_id_result,
                         parsed_result["artist_name"],
                         parsed_result["artwork_name"],

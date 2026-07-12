@@ -52,16 +52,3 @@ def test_remove_background_returns_png_response(client, monkeypatch):
     assert response.content == b"png-bytes"
     assert response.headers["content-type"] == "image/png"
 
-
-def test_artwork_insights_short_circuits_unknown_artist(client):
-    response = client.post(
-        "/api/artwork-insights",
-        json={
-            "artist_name": "Unknown Artist",
-            "artwork_name": "Untitled",
-            "language": "en",
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.json() == {"points": []}

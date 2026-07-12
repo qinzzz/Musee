@@ -124,33 +124,33 @@ def update_artwork_classification_record(
     }
 
 
-async def get_or_create_artwork_insights_payload(
+async def get_or_create_artwork_fun_facts(
     db: Session,
     artwork_id: str,
     language: Optional[str],
-) -> dict:
+) -> list[dict[str, str]]:
     artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
     if artwork.insights:
-        return {"insights": artwork.insights}
+        return artwork.insights
 
-    artist = artwork.artist_name or ""
-    if not artist or artist.lower() in ("unknown", "unknown artist", ""):
-        return {"insights": []}
+    artist = (artwork.artist_name or "").strip()
+    if not artist or artist.lower() in ("unknown", "unknown artist"):
+        return []
 
     ai_provider = determine_ai_provider(None)
     ai_service = AIServiceFactory.get_service(ai_provider)
     usage_id = start_ai_usage(
         user_id=artwork.user_id,
-        job_type="artwork_insights",
+        job_type="artwork_fun_facts",
         model=get_ai_model_name(ai_service, ai_provider.value),
         subject_type="artwork",
         subject_id=artwork_id,
     )
     try:
-        points = await ai_service.get_insights(
+        fun_facts = await ai_service.get_fun_facts(
             artist_name=artist,
             artwork_name=artwork.artwork_name or "Untitled",
             language=language,
@@ -158,9 +158,9 @@ async def get_or_create_artwork_insights_payload(
         succeed_ai_usage(usage_id)
     except Exception as exc:
         fail_ai_usage(usage_id, exc)
-        logger.exception("Insights computation failed for %s", artwork_id)
+        logger.exception("Fun facts computation failed for %s", artwork_id)
         raise HTTPException(status_code=500, detail=str(exc))
 
-    artwork.insights = points
+    artwork.insights = fun_facts
     db.commit()
-    return {"insights": points}
+    return fun_facts

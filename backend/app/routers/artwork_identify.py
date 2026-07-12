@@ -23,7 +23,7 @@ from app.services.artwork_analysis_service import determine_ai_provider, parse_i
 from app.services.artwork_background_service import (
     check_artwork_quota,
     do_dimension_analysis,
-    do_insights,
+    generate_fun_facts,
     run_dimension_analysis_bg,
     track_artwork_task,
 )
@@ -198,7 +198,7 @@ async def analyze_artist(
         if artwork_id and parsed_result["artist_name"] and parsed_result["artist_name"] != "Unknown Artist":
             track_artwork_task(
                 asyncio.create_task(
-                    do_insights(
+                    generate_fun_facts(
                         artwork_id,
                         parsed_result["artist_name"],
                         parsed_result["artwork_name"],
@@ -399,7 +399,7 @@ async def analyze_artist_stream(
                 if parsed_result["artist_name"] and parsed_result["artist_name"] != "Unknown Artist":
                     track_artwork_task(
                         asyncio.create_task(
-                            do_insights(
+                            generate_fun_facts(
                                 artwork_id,
                                 parsed_result["artist_name"],
                                 parsed_result["artwork_name"],
