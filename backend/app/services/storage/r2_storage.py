@@ -10,6 +10,7 @@ from botocore.config import Config
 
 from .base import StorageService
 from app.config.settings import settings
+from app.observability.telemetry import record_storage_operation_duration
 
 logger = logging.getLogger(__name__)
 
@@ -52,39 +53,56 @@ class R2StorageService(StorageService):
 
         logger.info("Uploading image to R2: key=%s size=%d bytes", key, len(data))
         started = time.perf_counter()
-        # boto3 is synchronous; run it in a worker thread so slow R2
-        # transfers don't block the event loop for every other request.
-        await anyio.to_thread.run_sync(
-            partial(
-                self._client.put_object,
-                Bucket=self.bucket_name,
-                Key=key,
-                Body=data,
-                ContentType=self._content_type(ext),
+        success = False
+        try:
+            # boto3 is synchronous; run it in a worker thread so slow R2
+            # transfers don't block the event loop for every other request.
+            await anyio.to_thread.run_sync(
+                partial(
+                    self._client.put_object,
+                    Bucket=self.bucket_name,
+                    Key=key,
+                    Body=data,
+                    ContentType=self._content_type(ext),
+                )
             )
-        )
-        elapsed_ms = (time.perf_counter() - started) * 1000
+            success = True
+        finally:
+            elapsed = time.perf_counter() - started
+            record_storage_operation_duration(elapsed, "save", success)
 
         url = f"{self.public_url}/{key}"
-        logger.info("Saved image to R2 in %.0fms: %s", elapsed_ms, url)
+        logger.info("Saved image to R2 in %.0fms: %s", elapsed * 1000, url)
         return url
 
     async def load(self, uri: str) -> bytes:
         key = uri.removeprefix(self.public_url + "/")
-        response = await anyio.to_thread.run_sync(
-            partial(self._client.get_object, Bucket=self.bucket_name, Key=key)
-        )
-        return await anyio.to_thread.run_sync(response["Body"].read)
+        started = time.perf_counter()
+        success = False
+        try:
+            response = await anyio.to_thread.run_sync(
+                partial(self._client.get_object, Bucket=self.bucket_name, Key=key)
+            )
+            body = await anyio.to_thread.run_sync(response["Body"].read)
+            success = True
+            return body
+        finally:
+            record_storage_operation_duration(
+                time.perf_counter() - started, "load", success
+            )
 
     async def delete(self, uri: str) -> bool:
+        started = time.perf_counter()
         try:
             key = uri.removeprefix(self.public_url + "/")
             await anyio.to_thread.run_sync(
                 partial(self._client.delete_object, Bucket=self.bucket_name, Key=key)
             )
+            record_storage_operation_duration(time.perf_counter() - started, "delete", True)
             logger.info(f"Deleted from R2: {uri}")
             return True
         except Exception as e:
+            record_storage_operation_duration(time.perf_counter() - started, "delete", False)
             logger.error(f"Error deleting from R2: {e}")
             return False
 

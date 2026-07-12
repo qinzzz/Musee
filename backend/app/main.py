@@ -12,6 +12,7 @@ import uvicorn
 from app.config.settings import settings
 from app.database.bootstrap import initialize_database
 from app.middleware.request_timing import add_request_timing_middleware
+from app.observability.telemetry import configure_metrics
 from app.routers import admin_maintenance, artwork_identify, artwork_ingest, artwork_library, artwork_metadata, artwork_mutations, artwork_utilities, auth, collection, session_chat, tag, taste_profile, users
 from app.routers import sessions as sessions_router
 
@@ -138,6 +139,7 @@ def mount_uploads_dir(app: FastAPI) -> None:
 
 def create_app() -> FastAPI:
     log_runtime_configuration()
+    configure_metrics()
     app = FastAPI(
         title="Musee API",
         description="Stateless backend API for Musee artwork analysis application",
