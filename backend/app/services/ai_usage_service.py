@@ -7,6 +7,7 @@ from typing import Optional
 
 from app.database.connection import SessionLocal
 from app.database.models import AIUsage
+from app.observability.telemetry import record_ai_request_duration
 from app.services.quota_service import record_token_usage
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,25 @@ def start_ai_usage(
             db.close()
 
 
+def _record_duration_metric(usage: AIUsage, status: str) -> None:
+    """Emit the LLM latency histogram from the usage row's timestamps."""
+    started_at = usage.started_at
+    completed_at = usage.completed_at
+    if started_at is None or completed_at is None:
+        return
+    # SQLite (tests) returns naive datetimes; rows are always written as UTC
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=UTC)
+    if completed_at.tzinfo is None:
+        completed_at = completed_at.replace(tzinfo=UTC)
+    record_ai_request_duration(
+        (completed_at - started_at).total_seconds(),
+        job_type=usage.job_type,
+        model=usage.model,
+        status=status,
+    )
+
+
 def finish_ai_usage(
     usage_id: Optional[str],
     *,
@@ -88,6 +108,7 @@ def finish_ai_usage(
         usage.error_message = error_message[:2000] if error_message else None
         usage.completed_at = datetime.now(UTC)
         db.commit()
+        _record_duration_metric(usage, status)
         if usage.user_id and status == "succeeded":
             record_token_usage(
                 db,

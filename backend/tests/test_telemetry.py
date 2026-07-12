@@ -82,6 +82,70 @@ def test_latency_view_extends_buckets_past_default_10s(metric_reader):
     assert tuple(points[0].explicit_bounds) == telemetry.LATENCY_BUCKETS_SECONDS
 
 
+def test_records_ai_request_duration_with_labels(metric_reader):
+    # Arrange / Act
+    telemetry.record_ai_request_duration(
+        4.2, job_type="artwork_identification", model="gpt-test", status="succeeded"
+    )
+
+    # Assert
+    metric = _find_metric(metric_reader, telemetry.AI_DURATION_NAME)
+    assert metric is not None
+    points = [
+        p
+        for p in metric.data.data_points
+        if p.attributes.get("job_type") == "artwork_identification"
+    ]
+    assert len(points) == 1
+    assert points[0].attributes["model"] == "gpt-test"
+    assert points[0].attributes["status"] == "succeeded"
+    assert points[0].sum == pytest.approx(4.2)
+
+
+def test_ai_request_duration_defaults_missing_model_to_unknown(metric_reader):
+    # Arrange / Act
+    telemetry.record_ai_request_duration(
+        1.0, job_type="tag_explanation", model=None, status="failed"
+    )
+
+    # Assert
+    metric = _find_metric(metric_reader, telemetry.AI_DURATION_NAME)
+    points = [
+        p
+        for p in metric.data.data_points
+        if p.attributes.get("job_type") == "tag_explanation"
+    ]
+    assert len(points) == 1
+    assert points[0].attributes["model"] == "unknown"
+
+
+def test_ai_usage_lifecycle_emits_duration_metric(metric_reader, db):
+    # Arrange
+    from app.services.ai_usage_service import start_ai_usage, succeed_ai_usage
+
+    usage_id = start_ai_usage(
+        user_id="user-metrics",
+        job_type="session_chat",
+        model="gemini-test",
+    )
+    assert usage_id
+
+    # Act
+    succeed_ai_usage(usage_id, input_tokens=1, output_tokens=2)
+
+    # Assert
+    metric = _find_metric(metric_reader, telemetry.AI_DURATION_NAME)
+    points = [
+        p
+        for p in metric.data.data_points
+        if p.attributes.get("job_type") == "session_chat"
+        and p.attributes.get("model") == "gemini-test"
+    ]
+    assert len(points) == 1
+    assert points[0].attributes["status"] == "succeeded"
+    assert points[0].sum >= 0
+
+
 def test_http_middleware_records_metric_for_real_request(metric_reader, client):
     # Arrange / Act
     response = client.get("/health")

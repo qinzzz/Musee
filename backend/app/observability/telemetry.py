@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 METER_NAME = "musee.backend"
 HTTP_DURATION_NAME = "musee.http.server.duration"
 STORAGE_DURATION_NAME = "musee.storage.operation.duration"
+AI_DURATION_NAME = "musee.ai.request.duration"
 
 DEFAULT_SERVICE_NAME = "musee-backend"
 
@@ -60,7 +61,7 @@ def configure_metrics(metric_readers: Optional[Sequence] = None) -> bool:
             instrument_name=name,
             aggregation=ExplicitBucketHistogramAggregation(LATENCY_BUCKETS_SECONDS),
         )
-        for name in (HTTP_DURATION_NAME, STORAGE_DURATION_NAME)
+        for name in (HTTP_DURATION_NAME, STORAGE_DURATION_NAME, AI_DURATION_NAME)
     ]
     provider = MeterProvider(
         resource=Resource.create(
@@ -107,4 +108,17 @@ def record_storage_operation_duration(
     _histogram(STORAGE_DURATION_NAME, "Object storage operation duration").record(
         seconds,
         {"operation": operation, "success": success},
+    )
+
+
+def record_ai_request_duration(
+    seconds: float, job_type: str, model: Optional[str], status: str
+) -> None:
+    _histogram(AI_DURATION_NAME, "AI/LLM request duration").record(
+        seconds,
+        {
+            "job_type": job_type,
+            "model": model or "unknown",
+            "status": status,
+        },
     )
