@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, Integer, SmallInteger, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint, Index
+from sqlalchemy import Boolean, Column, Date, Integer, SmallInteger, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint, Index, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.connection import Base
@@ -26,7 +26,11 @@ class User(Base):
     last_active = Column(DateTime, server_default=func.now(), onupdate=func.now())
     settings = Column(JSON, nullable=True)  # User preferences and settings
     skill_stats = Column(JSON, nullable=True)  # {"skill_name": {"observations": N, "deepdives": N, "xp": N}}
-    tier = Column(String(20), nullable=False, server_default='free')  # 'free' | 'member' | 'power'
+    tier = Column(String(20), nullable=False, server_default='free')  # matches keys of app.config.plans.PLANS
+    # True once inbox ownership was proven (Google sign-in, or a clicked
+    # verification link). Gates login for password accounts and the
+    # email-based account-linking rules.
+    email_verified = Column(Boolean, nullable=False, server_default=text("false"))
 
     # Relationship to artworks
     artworks = relationship("SavedArtwork", back_populates="user", cascade="all, delete-orphan")
@@ -47,6 +51,7 @@ class User(Base):
             "last_active": self.last_active.isoformat() if self.last_active else None,
             "settings": self.settings,
             "tier": self.tier or "free",
+            "email_verified": bool(self.email_verified),
         }
 
 
@@ -640,3 +645,45 @@ class DailyUsage(Base):
             "tokens_out": self.tokens_out,
             "artworks_uploaded": self.artworks_uploaded,
         }
+
+
+class UserCredential(Base):
+    """Password credential for accounts that use email/password login.
+
+    Deliberately a separate table from users: most accounts (Google,
+    anonymous) never have one, and keeping the hash out of the widely
+    serialized users row makes accidental exposure structurally impossible.
+    """
+
+    __tablename__ = "user_credentials"
+
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), primary_key=True)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class EmailToken(Base):
+    """Single-use emailed proof-of-inbox-ownership tokens.
+
+    One mechanism serves email verification, password reset, and adding a
+    password to a Google-first account. Only the SHA-256 of the token is
+    stored — the raw value exists solely inside the sent email, so a
+    database leak cannot be replayed. A token is valid iff the hash and
+    purpose match, expires_at is in the future, and used_at is NULL;
+    consumption stamps used_at atomically.
+    """
+
+    __tablename__ = "email_tokens"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False, index=True)
+    purpose = Column(String(30), nullable=False)  # 'verify_email' | 'reset_password'
+    token_hash = Column(String(64), nullable=False, unique=True)
+    # Device account to adopt when a verification link is clicked — carried
+    # here because the link often opens in a different browser than the one
+    # that signed up, where localStorage has no device id.
+    anonymous_user_id = Column(String, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)

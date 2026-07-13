@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     google_client_id: Optional[str] = None
     google_vision_api_key: Optional[str] = None
 
+    # Outbound email (email auth flows). Unset key = console-fallback mode:
+    # links are logged instead of sent, so dev/CI need no ESP account.
+    resend_api_key: Optional[str] = None
+    email_from: str = "Musee <login@musee.app>"
+    # Base URL used when building emailed links (verify/reset pages).
+    app_base_url: str = "http://localhost:3000"
+
     # Environment: "dev" or "prod"
     env: str = "dev"
 
