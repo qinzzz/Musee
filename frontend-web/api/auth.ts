@@ -1,5 +1,80 @@
 import { API_BASE_URL, AUTH_TOKEN_KEY, USER_ID_KEY, USER_INFO_KEY, getOrCreateUserId } from './core';
 
+// Persist a login response (google and email flows share the same shape).
+function storeSession(data: any) {
+  if (data.access_token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
+  }
+  if (data.user) {
+    localStorage.setItem(USER_INFO_KEY, JSON.stringify(data.user));
+    localStorage.setItem(USER_ID_KEY, data.user.user_id);
+  }
+}
+
+// Carries the backend's structured error body so the UI can branch on code.
+export class EmailAuthError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+async function postAuth(path: string, body: Record<string, unknown>): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    let code = 'auth_failed';
+    let message = 'Something went wrong. Please try again.';
+    try {
+      const detail = (await response.json())?.detail;
+      if (detail?.error_code) code = detail.error_code;
+      if (detail?.message) message = detail.message;
+    } catch {
+      // Non-JSON error body; keep the generic message.
+    }
+    throw new EmailAuthError(code, message);
+  }
+  return response.json();
+}
+
+export async function signupWithEmail(email: string, password: string): Promise<any> {
+  return postAuth('/auth/signup', {
+    email,
+    password,
+    anonymous_user_id: getOrCreateUserId(),
+  });
+}
+
+export async function loginWithEmail(email: string, password: string): Promise<any> {
+  const data = await postAuth('/auth/login', {
+    email,
+    password,
+    anonymous_user_id: getOrCreateUserId(),
+  });
+  storeSession(data);
+  return data;
+}
+
+export async function verifyEmailToken(token: string): Promise<any> {
+  const data = await postAuth('/auth/verify-email', { token });
+  storeSession(data);
+  return data;
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  await postAuth('/auth/request-password-reset', { email });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<any> {
+  const data = await postAuth('/auth/reset-password', { token, new_password: newPassword });
+  storeSession(data);
+  return data;
+}
+
 export async function loginWithGoogle(idToken: string, anonymousUserId?: string): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/auth/google`, {
     method: 'POST',
@@ -18,15 +93,7 @@ export async function loginWithGoogle(idToken: string, anonymousUserId?: string)
   }
 
   const data = await response.json();
-
-  if (data.access_token) {
-    localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
-  }
-  if (data.user) {
-    localStorage.setItem(USER_INFO_KEY, JSON.stringify(data.user));
-    localStorage.setItem(USER_ID_KEY, data.user.user_id);
-  }
-
+  storeSession(data);
   return data;
 }
 
