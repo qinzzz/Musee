@@ -7,6 +7,7 @@ import '@fontsource/instrument-sans/500.css';
 import '@fontsource/instrument-sans/600.css';
 import '@fontsource/instrument-sans/700.css';
 import App from './App';
+import { ResetPasswordPage, VerifyEmailPage } from './app-shell/components/EmailAuthPages';
 import { createQueryClient } from './lib/queryClient';
 import './index.css';
 
@@ -21,7 +22,13 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      {window.location.pathname === '/verify-email' ? (
+        <VerifyEmailPage />
+      ) : window.location.pathname === '/reset-password' ? (
+        <ResetPasswordPage />
+      ) : (
+        <App />
+      )}
     </QueryClientProvider>
   </React.StrictMode>
 );
