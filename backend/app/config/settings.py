@@ -40,8 +40,14 @@ class Settings(BaseSettings):
     google_client_id: Optional[str] = None
     google_vision_api_key: Optional[str] = None
 
-    # Outbound email (email auth flows). Unset key = console-fallback mode:
-    # links are logged instead of sent, so dev/CI need no ESP account.
+    # Outbound email (email auth flows). Transport is chosen by config:
+    # SMTP when fully configured (host+username+password), else Resend when
+    # the API key is set, else console-fallback mode (links are logged, so
+    # dev/CI need no email setup). Switching providers = changing env vars.
+    smtp_host: Optional[str] = None          # e.g. smtp.gmail.com
+    smtp_port: int = 587                     # STARTTLS
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None      # Gmail: an App Password, not the account password
     resend_api_key: Optional[str] = None
     email_from: str = "Musee <login@musee.app>"
     # Base URL used when building emailed links (verify/reset pages).

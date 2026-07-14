@@ -1,10 +1,15 @@
-"""Outbound email — thin wrapper over the ESP with a console fallback.
+"""Outbound email — one send_email seam, transport chosen by config.
 
-When RESEND_API_KEY is unset (local dev, CI), the message is logged instead
-of sent, so every email flow is fully exercisable with zero external setup:
-the link to click appears in the backend console.
+Precedence: SMTP (host+username+password all set) > Resend (API key set) >
+console fallback (message is logged, not sent, so local dev and CI exercise
+every flow with zero email setup — the link to click appears in the backend
+console). Switching providers is an env-var change; no caller knows or
+cares which transport is active.
 """
+import asyncio
 import logging
+import smtplib
+from email.message import EmailMessage
 from typing import Optional
 
 import httpx
@@ -22,6 +27,10 @@ async def send_email(*, to: str, subject: str, html: str) -> bool:
     Never raises into product flow — a failed send is logged and reported
     as False so callers can surface "try again" without a 500.
     """
+    if settings.smtp_host and settings.smtp_username and settings.smtp_password:
+        # smtplib is synchronous; keep it off the event loop.
+        return await asyncio.to_thread(_send_via_smtp, to, subject, html)
+
     if not settings.resend_api_key:
         logger.info("EMAIL (console fallback) to=%s subject=%r\n%s", to, subject, html)
         return True
@@ -44,6 +53,24 @@ async def send_email(*, to: str, subject: str, html: str) -> bool:
         return True
     except Exception:
         logger.exception("Email send failed for %s", to)
+        return False
+
+
+def _send_via_smtp(to: str, subject: str, html: str) -> bool:
+    message = EmailMessage()
+    message["From"] = settings.email_from
+    message["To"] = to
+    message["Subject"] = subject
+    message.set_content("This email is best viewed in an HTML-capable client.")
+    message.add_alternative(html, subtype="html")
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(settings.smtp_username, settings.smtp_password)
+            smtp.send_message(message)
+        return True
+    except Exception:
+        logger.exception("SMTP send failed for %s", to)
         return False
 
 

@@ -31,3 +31,43 @@ def test_reset_email_adapts_to_google_first_accounts():
     subject, set_html = build_password_reset_email("https://app.test/reset?token=t", has_password=False)
     assert "Set a password" in subject
     assert "signs in with Google" in set_html
+
+
+@pytest.mark.asyncio
+async def test_smtp_transport_selected_when_configured(monkeypatch):
+    from unittest.mock import MagicMock, patch
+
+    from app.config.settings import settings
+    from app.services import email_service
+
+    monkeypatch.setattr(settings, "smtp_host", "smtp.gmail.com")
+    monkeypatch.setattr(settings, "smtp_username", "musee@example.com")
+    monkeypatch.setattr(settings, "smtp_password", "app-password")
+
+    smtp_instance = MagicMock()
+    with patch.object(email_service.smtplib, "SMTP") as mock_smtp:
+        mock_smtp.return_value.__enter__.return_value = smtp_instance
+        ok = await email_service.send_email(to="user@example.com", subject="Hi", html="<p>link</p>")
+
+    assert ok is True
+    smtp_instance.starttls.assert_called_once()
+    smtp_instance.login.assert_called_once_with("musee@example.com", "app-password")
+    (sent_message,) = smtp_instance.send_message.call_args.args
+    assert sent_message["To"] == "user@example.com"
+    assert sent_message["Subject"] == "Hi"
+
+
+@pytest.mark.asyncio
+async def test_smtp_failure_reports_false_without_raising(monkeypatch):
+    from unittest.mock import patch
+
+    from app.config.settings import settings
+    from app.services import email_service
+
+    monkeypatch.setattr(settings, "smtp_host", "smtp.gmail.com")
+    monkeypatch.setattr(settings, "smtp_username", "musee@example.com")
+    monkeypatch.setattr(settings, "smtp_password", "wrong")
+
+    with patch.object(email_service.smtplib, "SMTP", side_effect=OSError("connection refused")):
+        ok = await email_service.send_email(to="user@example.com", subject="Hi", html="<p>x</p>")
+    assert ok is False

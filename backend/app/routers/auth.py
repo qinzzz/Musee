@@ -5,7 +5,8 @@ from typing import Optional
 import logging
 
 from app.database.connection import get_db
-from app.database.models import User, SavedArtwork, Collection, Session as UserSession
+from app.database.models import User, UserCredential
+from app.services.account_service import adopt_anonymous_account
 from app.utils.auth_utils import verify_google_token, create_access_token
 
 router = APIRouter()
@@ -34,10 +35,23 @@ async def google_login(
     user = db.query(User).filter(User.google_id == google_id).first()
     
     if not user and email:
-        # Fallback: find by email (might have been created via some other means or anonymous email entry)
+        # Link by email: Google has verified this address, so whoever holds
+        # the Google account owns it.
         user = db.query(User).filter(User.email == email).first()
         if user:
             user.google_id = google_id
+            if not user.email_verified:
+                # The row was unclaimed territory: a password signup that never
+                # proved the inbox. Google proof wins — drop the unproven
+                # credential so a squatter can't retain a way in.
+                deleted = (
+                    db.query(UserCredential)
+                    .filter(UserCredential.user_id == user.user_id)
+                    .delete()
+                )
+                if deleted:
+                    logger.info(f"Removed unverified password credential from {user.user_id} on Google link")
+            user.email_verified = True
             logger.info(f"Linked existing user {user.user_id} by email to google_id {google_id}")
 
     if not user:
@@ -45,6 +59,7 @@ async def google_login(
         user = User(
             google_id=google_id,
             email=email,
+            email_verified=True,  # Google verified it
             full_name=full_name,
             profile_picture_url=picture,
             username=email.split('@')[0] if email else None
@@ -58,20 +73,9 @@ async def google_login(
         user.profile_picture_url = picture
         logger.info(f"Logging in existing Google user: {user.user_id}")
 
-    # 3. Handle Migration if anonymous_user_id provided
-    if request.anonymous_user_id and request.anonymous_user_id != user.user_id:
-        anon_user = db.query(User).filter(User.user_id == request.anonymous_user_id).first()
-        if anon_user and not anon_user.google_id:
-            logger.info(f"Migrating data from anonymous user {request.anonymous_user_id} to {user.user_id}")
-            
-            # Update Related Data
-            db.query(SavedArtwork).filter(SavedArtwork.user_id == anon_user.user_id).update({SavedArtwork.user_id: user.user_id})
-            db.query(Collection).filter(Collection.user_id == anon_user.user_id).update({Collection.user_id: user.user_id})
-            db.query(UserSession).filter(UserSession.user_id == anon_user.user_id).update({UserSession.user_id: user.user_id})
-            
-            # Delete anonymous user to clean up
-            db.delete(anon_user)
-            logger.info(f"Migration complete. Deleted anonymous user {request.anonymous_user_id}")
+    # 3. Adopt the device account's records, if one was provided
+    if request.anonymous_user_id:
+        adopt_anonymous_account(db, request.anonymous_user_id, user)
 
     db.commit()
     db.refresh(user)
