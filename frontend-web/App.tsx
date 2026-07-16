@@ -639,7 +639,7 @@ const App: React.FC = () => {
     />
   ) : (
     <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[12px] font-bold text-neutral-900">
-      {currentUser ? currentUser.username[0] : 'U'}
+      {(currentUser?.username || currentUser?.full_name || currentUser?.email || 'U')[0].toUpperCase()}
     </div>
   );
 
@@ -813,7 +813,7 @@ const App: React.FC = () => {
             editingSessionTitle={editingSessionTitle}
             openSessionMenuId={openSessionMenuId}
             pendingDeletedSessionIds={pendingDeletedSessionIds}
-            currentUsername={currentUser?.username}
+            currentUsername={currentUser?.username || currentUser?.full_name || currentUser?.email?.split('@')[0]}
             isAuthenticated={Boolean(currentUser)}
             accountUsageSlot={<AccountUsageMeter userId={sessionUserId} />}
             devProfileSwitcherSlot={devProfileSwitcherSlot}
