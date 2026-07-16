@@ -147,7 +147,18 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         if user else None
     )
 
-    # One failure for every wrong-credential case: no oracle for which part failed.
+    # A Google-linked account with no password gets actionable guidance —
+    # signup already discloses existence and method for any email, so this
+    # reveals nothing new. Unknown emails and wrong passwords stay
+    # indistinguishable from each other.
+    if user and user.google_id and not credential:
+        raise HTTPException(status_code=403, detail={
+            "error_code": "password_not_set",
+            "message": "This account signs in with Google. Use the Google button — "
+                       "or set a password to also log in with your email.",
+        })
+
+    # One failure for every other wrong-credential case: no oracle for which part failed.
     if not user or not credential or not verify_password(request.password, credential.password_hash):
         raise HTTPException(status_code=401, detail={"error_code": "invalid_credentials"})
 

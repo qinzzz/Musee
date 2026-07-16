@@ -44,6 +44,7 @@ const LoginModal: React.FC<Props> = ({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [offerSetPassword, setOfferSetPassword] = useState(false);
 
   if (!open) return null;
 
@@ -51,6 +52,7 @@ const LoginModal: React.FC<Props> = ({
     setMode(next);
     setError(null);
     setNotice(null);
+    setOfferSetPassword(false);
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -58,6 +60,7 @@ const LoginModal: React.FC<Props> = ({
     setBusy(true);
     setError(null);
     setNotice(null);
+    setOfferSetPassword(false);
     try {
       if (mode === 'forgot') {
         await requestPasswordReset(email);
@@ -72,6 +75,10 @@ const LoginModal: React.FC<Props> = ({
     } catch (err) {
       if (err instanceof EmailAuthError && err.code === 'email_unverified') {
         setNotice('This email is not verified yet. Check your inbox for the link, or sign up again to resend it.');
+      } else if (err instanceof EmailAuthError && err.code === 'password_not_set') {
+        // Google-first account: guide instead of scold, and offer the fix.
+        setNotice(err.message);
+        setOfferSetPassword(true);
       } else if (err instanceof EmailAuthError) {
         setError(FRIENDLY_ERRORS[err.code] || err.message);
       } else {
@@ -121,6 +128,27 @@ const LoginModal: React.FC<Props> = ({
 
           {error && <p className="text-[12px] font-medium text-red-500">{error}</p>}
           {notice && <p className="text-[12px] font-medium text-neutral-600">{notice}</p>}
+          {offerSetPassword && (
+            <button
+              type="button"
+              disabled={busy}
+              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-[13px] font-semibold text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-50"
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await requestPasswordReset(email);
+                  setNotice('Check your inbox — we sent you a link to set a password.');
+                  setOfferSetPassword(false);
+                } catch {
+                  setError('Something went wrong. Please try again.');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Email me a set-password link
+            </button>
+          )}
 
           <button type="submit" disabled={busy} className={primaryButtonClass}>
             {busy ? '…' : submitLabel}

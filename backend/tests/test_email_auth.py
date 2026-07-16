@@ -134,9 +134,13 @@ class TestAccountUnification:
         user_id = r.json()["user"]["user_id"]
 
         # The unproven credential is gone: attacker's password no longer exists.
+        # (The account is now Google-linked with no credential, so the login
+        # returns the set-password guidance rather than generic 401 — either
+        # way, the password does not work.)
         assert db.query(UserCredential).filter(UserCredential.user_id == user_id).first() is None
         r = client.post("/api/auth/login", json={"email": "victim@example.com", "password": "attacker-pass"})
-        assert r.status_code == 401
+        assert r.status_code == 403
+        assert r.json()["detail"]["error_code"] == "password_not_set"
 
     def test_google_first_user_adds_password_via_reset_flow(self, client, sent_emails, db):
         _google_login(client, "ada@example.com")
@@ -240,3 +244,29 @@ class TestAnonymousAdoption:
         r = _google_login(client, "ada@example.com", anon=other_id)
         assert r.status_code == 200
         assert db.query(User).filter(User.user_id == other_id).first() is not None
+
+
+class TestGoogleFirstLoginGuidance:
+    def test_google_only_account_gets_set_password_guidance(self, client, sent_emails):
+        _google_login(client, "ada@example.com")
+
+        r = client.post("/api/auth/login", json={"email": "ada@example.com", "password": "any-password-1"})
+        assert r.status_code == 403
+        assert r.json()["detail"]["error_code"] == "password_not_set"
+
+    def test_unknown_email_stays_generic(self, client, sent_emails):
+        # The guidance must not widen the login oracle for unregistered emails.
+        r = client.post("/api/auth/login", json={"email": "ghost@example.com", "password": "any-password-1"})
+        assert r.status_code == 401
+        assert r.json()["detail"]["error_code"] == "invalid_credentials"
+
+    def test_google_account_with_password_set_uses_normal_login(self, client, sent_emails):
+        _google_login(client, "ada@example.com")
+        client.post("/api/auth/request-password-reset", json={"email": "ada@example.com"})
+        token = _extract_token(sent_emails[-1]["html"])
+        client.post("/api/auth/reset-password", json={"token": token, "new_password": "my-real-pass"})
+
+        # Wrong password on a credentialed account: generic, not guidance.
+        r = client.post("/api/auth/login", json={"email": "ada@example.com", "password": "wrong-password"})
+        assert r.status_code == 401
+        assert r.json()["detail"]["error_code"] == "invalid_credentials"
