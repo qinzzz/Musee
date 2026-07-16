@@ -104,6 +104,18 @@ describe('LoginModal', () => {
     });
   });
 
+  it('wrong credentials show a specific message, not the generic fallback', async () => {
+    const { EmailAuthError } = await import('../../api/auth');
+    mockLoginWithEmail.mockRejectedValue(new EmailAuthError('invalid_credentials', 'Something went wrong. Please try again.'));
+    renderModal();
+
+    fillAndSubmit('ada@example.com', 'wrong-password');
+
+    await waitFor(() => {
+      expect(screen.getByText('Incorrect email or password.')).toBeTruthy();
+    });
+  });
+
   it('forgot-password flow requests a reset and stays silent about existence', async () => {
     mockRequestPasswordReset.mockResolvedValue(undefined);
     renderModal();

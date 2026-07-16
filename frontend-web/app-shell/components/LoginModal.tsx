@@ -16,6 +16,14 @@ type Props = {
 
 type Mode = 'login' | 'signup' | 'forgot';
 
+// Human copy for error codes the backend intentionally ships bare (the API
+// stays information-free; the UI says what the user needs to hear).
+const FRIENDLY_ERRORS: Record<string, string> = {
+  invalid_credentials: 'Incorrect email or password.',
+  invalid_email: 'That does not look like a valid email address.',
+  rate_limited: 'Too many attempts. Please wait a minute and try again.',
+};
+
 const inputClass =
   'w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-[13px] text-neutral-900 ' +
   'placeholder:text-neutral-400 outline-none transition-colors focus:border-neutral-400';
@@ -65,7 +73,7 @@ const LoginModal: React.FC<Props> = ({
       if (err instanceof EmailAuthError && err.code === 'email_unverified') {
         setNotice('This email is not verified yet. Check your inbox for the link, or sign up again to resend it.');
       } else if (err instanceof EmailAuthError) {
-        setError(err.message);
+        setError(FRIENDLY_ERRORS[err.code] || err.message);
       } else {
         setError('Something went wrong. Please try again.');
       }
