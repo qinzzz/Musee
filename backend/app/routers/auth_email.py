@@ -154,8 +154,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     if user and user.google_id and not credential:
         raise HTTPException(status_code=403, detail={
             "error_code": "password_not_set",
-            "message": "This account signs in with Google. Use the Google button — "
-                       "or set a password to also log in with your email.",
+            "message": "This account signs in with Google. Set a password to log in with email.",
         })
 
     # One failure for every other wrong-credential case: no oracle for which part failed.
