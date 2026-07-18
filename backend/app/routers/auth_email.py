@@ -63,6 +63,7 @@ class RequestPasswordResetRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+    anonymous_user_id: Optional[str] = None
 
 
 def _normalize_email(email: str) -> str:
@@ -147,7 +148,17 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         if user else None
     )
 
-    # One failure for every wrong-credential case: no oracle for which part failed.
+    # A Google-linked account with no password gets actionable guidance —
+    # signup already discloses existence and method for any email, so this
+    # reveals nothing new. Unknown emails and wrong passwords stay
+    # indistinguishable from each other.
+    if user and user.google_id and not credential:
+        raise HTTPException(status_code=403, detail={
+            "error_code": "password_not_set",
+            "message": "This account signs in with Google. Set a password to log in with email.",
+        })
+
+    # One failure for every other wrong-credential case: no oracle for which part failed.
     if not user or not credential or not verify_password(request.password, credential.password_hash):
         raise HTTPException(status_code=401, detail={"error_code": "invalid_credentials"})
 
@@ -228,6 +239,11 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     _set_credential(db, user.user_id, request.new_password)
     # Clicking an emailed link is proof of inbox ownership.
     user.email_verified = True
+    # Reset ends signed-in, so it adopts the device account like every other
+    # door into an account (the id comes from the browser where the form was
+    # filled — the right device for the data).
+    if request.anonymous_user_id:
+        adopt_anonymous_account(db, request.anonymous_user_id, user)
     db.commit()
     db.refresh(user)
     return _login_response(user)

@@ -104,6 +104,41 @@ describe('LoginModal', () => {
     });
   });
 
+  it('wrong credentials show a specific message, not the generic fallback', async () => {
+    const { EmailAuthError } = await import('../../api/auth');
+    mockLoginWithEmail.mockRejectedValue(new EmailAuthError('invalid_credentials', 'Something went wrong. Please try again.'));
+    renderModal();
+
+    fillAndSubmit('ada@example.com', 'wrong-password');
+
+    await waitFor(() => {
+      expect(screen.getByText('Incorrect email or password.')).toBeTruthy();
+    });
+  });
+
+  it('google-first accounts get guidance and a one-click set-password action', async () => {
+    const { EmailAuthError } = await import('../../api/auth');
+    mockLoginWithEmail.mockRejectedValue(new EmailAuthError(
+      'password_not_set',
+      'This account signs in with Google. Use the Google button — or set a password to also log in with your email.',
+    ));
+    mockRequestPasswordReset.mockResolvedValue(undefined);
+    renderModal();
+
+    fillAndSubmit('ada@example.com', 'any-password-1');
+
+    await waitFor(() => {
+      expect(screen.getByText(/signs in with Google/i)).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('Email me a set-password link'));
+
+    await waitFor(() => {
+      expect(mockRequestPasswordReset).toHaveBeenCalledWith('ada@example.com');
+      expect(screen.getByText(/link to set a password/i)).toBeTruthy();
+    });
+  });
+
   it('forgot-password flow requests a reset and stays silent about existence', async () => {
     mockRequestPasswordReset.mockResolvedValue(undefined);
     renderModal();
