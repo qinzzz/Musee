@@ -63,6 +63,7 @@ class RequestPasswordResetRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+    anonymous_user_id: Optional[str] = None
 
 
 def _normalize_email(email: str) -> str:
@@ -238,6 +239,11 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     _set_credential(db, user.user_id, request.new_password)
     # Clicking an emailed link is proof of inbox ownership.
     user.email_verified = True
+    # Reset ends signed-in, so it adopts the device account like every other
+    # door into an account (the id comes from the browser where the form was
+    # filled — the right device for the data).
+    if request.anonymous_user_id:
+        adopt_anonymous_account(db, request.anonymous_user_id, user)
     db.commit()
     db.refresh(user)
     return _login_response(user)

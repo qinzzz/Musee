@@ -70,7 +70,12 @@ export async function requestPasswordReset(email: string): Promise<void> {
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<any> {
-  const data = await postAuth('/auth/reset-password', { token, new_password: newPassword });
+  const data = await postAuth('/auth/reset-password', {
+    token,
+    new_password: newPassword,
+    // Reset ends signed-in; adopt this device's anonymous records like login does.
+    anonymous_user_id: getOrCreateUserId(),
+  });
   storeSession(data);
   return data;
 }

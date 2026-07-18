@@ -41,6 +41,18 @@ describe('email auth api', () => {
     expect(JSON.parse(localStorage.getItem('musee_user_info')!)).toMatchObject({ user_id: 'u1' });
   });
 
+  it('reset sends the device id so this browser\'s records adopt', async () => {
+    localStorage.setItem('musee_user_id', 'device-7');
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse({ access_token: 'j', user: { user_id: 'u9' } }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { resetPassword } = await import('./auth');
+    await resetPassword('tok', 'new-password-1');
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.anonymous_user_id).toBe('device-7');
+  });
+
   it('verify and reset also store the session (auto-login)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
       access_token: 'jwt-456', user: { user_id: 'u2' },

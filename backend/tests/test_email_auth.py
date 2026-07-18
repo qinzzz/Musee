@@ -270,3 +270,27 @@ class TestGoogleFirstLoginGuidance:
         r = client.post("/api/auth/login", json={"email": "ada@example.com", "password": "wrong-password"})
         assert r.status_code == 401
         assert r.json()["detail"]["error_code"] == "invalid_credentials"
+
+
+class TestResetPasswordAdoption:
+    def test_reset_password_adopts_device_account(self, client, sent_emails, db):
+        # Google-first user sets a password from a device holding anonymous data
+        # (the exact funnel the password_not_set guidance sends people through).
+        _google_login(client, "ada@example.com")
+
+        anon = User(user_id="device-9", device_id="device-9", tier="free")
+        db.add(anon)
+        db.flush()
+        db.add(SavedArtwork(id="art-9", photo_uri="r2://a", artist_name="X", artwork_name="Y", user_id="device-9"))
+        db.commit()
+
+        client.post("/api/auth/request-password-reset", json={"email": "ada@example.com"})
+        token = _extract_token(sent_emails[-1]["html"])
+        r = client.post("/api/auth/reset-password", json={
+            "token": token, "new_password": "brand-new-pass", "anonymous_user_id": "device-9",
+        })
+        assert r.status_code == 200
+        user_id = r.json()["user"]["user_id"]
+
+        assert db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).count() == 1
+        assert db.query(User).filter(User.user_id == "device-9").first() is None
