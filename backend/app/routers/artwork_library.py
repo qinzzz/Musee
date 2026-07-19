@@ -9,9 +9,11 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
+from app.config.settings import settings
 from app.database.connection import get_db
 from app.database.connection import SessionLocal
 from app.database.models import ArtistEntity, ArtworkEntity, PublicComment, SavedArtwork, Session as SessionModel, SessionArtwork
+from app.services.artwork_analysis_task_service import get_current_analysis
 from app.services.artwork_entity_service import normalize_entity_name, upsert_artist_entity, upsert_artwork_entity
 from app.services.artwork_enrichment_service import do_artist_bio
 from app.services.session_service import (
@@ -246,6 +248,20 @@ async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
     return artwork.to_dict()
+
+
+@router.get("/artworks/{artwork_id}/analysis")
+async def get_artwork_analysis_debug(artwork_id: str, db: Session = Depends(get_db)):
+    """Internal/debug view of the current artwork-analysis row.
+
+    The analysis payload is internal product data and must not reach end
+    users, so this endpoint simply does not exist in prod — the frontend
+    panel renders nothing when it 404s.
+    """
+    if settings.env == "prod":
+        raise HTTPException(status_code=404, detail="Not found")
+    analysis = get_current_analysis(db, artwork_id)
+    return {"analysis": analysis.to_dict() if analysis else None}
 
 
 @router.get("/artworks/{artwork_id}/community")

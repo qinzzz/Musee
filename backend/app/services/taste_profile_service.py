@@ -10,12 +10,11 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.database.models import ArtworkEntity, SavedArtwork, TasteProfile
+from app.database.models import SavedArtwork, TasteProfile
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import determine_ai_provider
-from app.services.artwork_background_service import do_dimension_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -278,63 +277,6 @@ def match_archetype(scores: dict) -> dict | None:
             best_score = score
             best = archetype
     return best
-
-
-def dimension_scores_payload(entity: ArtworkEntity) -> Dict[str, Any]:
-    return {
-        "dim_figurative_abstract": entity.dim_figurative_abstract,
-        "dim_emotive_conceptual": entity.dim_emotive_conceptual,
-        "dim_serene_intense": entity.dim_serene_intense,
-        "dim_classical_avantgarde": entity.dim_classical_avantgarde,
-        "dim_playful_serious": entity.dim_playful_serious,
-    }
-
-
-async def backfill_entity_dimensions(db: Session, force: bool = False) -> Dict[str, int]:
-    if force:
-        pending = db.query(ArtworkEntity).all()
-        for entity in pending:
-            entity.dim_status = "pending"
-        db.commit()
-    else:
-        pending = (
-            db.query(ArtworkEntity)
-            .filter(ArtworkEntity.dim_status.in_(["pending", "failed", None]))
-            .all()
-        )
-
-    total = len(pending)
-    done = 0
-    failed = 0
-    for entity in pending:
-        try:
-            await do_dimension_analysis(entity.id)
-            db.expire(entity)
-            db.refresh(entity)
-            if entity.dim_status == "done":
-                done += 1
-            else:
-                failed += 1
-        except Exception as exc:
-            logger.warning("Backfill failed for entity %s: %s", entity.id, exc)
-            failed += 1
-    return {"total": total, "done": done, "failed": failed}
-
-
-async def analyze_entity_dimensions(db: Session, entity_id: str) -> Dict[str, Any]:
-    entity = db.query(ArtworkEntity).filter(ArtworkEntity.id == entity_id).first()
-    if not entity:
-        raise HTTPException(status_code=404, detail="Entity not found")
-    if entity.dim_status == "done":
-        entity_db = db.query(ArtworkEntity).filter(ArtworkEntity.id == entity_id).first()
-        return {"status": "already_done", "entity_id": entity_id, "scores": dimension_scores_payload(entity_db)}
-
-    await do_dimension_analysis(entity_id)
-    db.expire_all()
-    entity = db.query(ArtworkEntity).filter(ArtworkEntity.id == entity_id).first()
-    if entity and entity.dim_status == "done":
-        return {"status": "done", "entity_id": entity_id, "scores": dimension_scores_payload(entity)}
-    raise HTTPException(status_code=500, detail="Dimension analysis failed")
 
 
 def get_taste_profile_view(user_id: str, db: Session) -> Dict[str, Any]:

@@ -107,6 +107,12 @@ class SavedArtwork(Base):
         cascade="all, delete-orphan",
         order_by="ArtworkEvent.created_at",
     )
+    analyses = relationship(
+        "ArtworkAnalysis",
+        back_populates="artwork",
+        cascade="all, delete-orphan",
+        order_by="ArtworkAnalysis.created_at",
+    )
 
     def to_dict(self):
         """Convert model to dictionary."""
@@ -616,6 +622,68 @@ class TasteProfile(Base):
             "narrative_summary": self.narrative_summary,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class ArtworkAnalysis(Base):
+    """Versioned artwork-analysis result for a single saved artwork.
+
+    Append-only history: every (re)analysis writes a new row. Exactly one row
+    per artwork is `is_current` (enforced by a partial unique index), and the
+    flag only moves when a run reaches a terminal result (analyzed or
+    unanalyzable) — a failed re-run never shadows an older good result.
+    Deliberately a separate table from saved_artworks: the payload is large,
+    experimental, and hidden from users, so it must not ride along in the
+    widely serialized artwork row.
+    """
+
+    __tablename__ = "artwork_analyses"
+    __table_args__ = (
+        Index("idx_artwork_analyses_artwork_created", "artwork_id", "created_at"),
+        Index(
+            "uq_artwork_analyses_current",
+            "artwork_id",
+            unique=True,
+            postgresql_where=text("is_current"),
+            sqlite_where=text("is_current"),
+        ),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    artwork_id = Column(String, ForeignKey("saved_artworks.id", ondelete="CASCADE"), nullable=False, index=True)
+    is_current = Column(Boolean, nullable=False, server_default=text("false"))
+    analysis_version = Column(String(20), nullable=False)
+    model = Column(String, nullable=True)
+    status = Column(String(20), nullable=False, server_default="processing")
+    analyzability_note = Column(Text, nullable=True)  # only when status='unanalyzable'
+    error = Column(Text, nullable=True)  # only when status='failed'
+    metadata_snapshot = Column(JSON, nullable=True)  # artist/title/year/medium/context fed to the prompt
+    visual_description = Column(Text, nullable=True)
+    dimensions = Column(JSON, nullable=True)  # {dim_key: {"score": 1..5, "evidence": [str]}}
+    tags = Column(JSON, nullable=True)  # {category: [{"label": str, "source": str}]}
+    proposed_categories = Column(JSON, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    artwork = relationship("SavedArtwork", back_populates="analyses")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "artwork_id": self.artwork_id,
+            "is_current": bool(self.is_current),
+            "analysis_version": self.analysis_version,
+            "model": self.model,
+            "status": self.status,
+            "analyzability_note": self.analyzability_note,
+            "error": self.error,
+            "metadata_snapshot": self.metadata_snapshot,
+            "visual_description": self.visual_description,
+            "dimensions": self.dimensions,
+            "tags": self.tags,
+            "proposed_categories": self.proposed_categories,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
         }
 
 

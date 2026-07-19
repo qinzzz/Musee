@@ -5,9 +5,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
+from app.services.artwork_analysis_task_service import backfill_artwork_analyses
 from app.services.taste_profile_service import (
-    analyze_entity_dimensions,
-    backfill_entity_dimensions,
     generate_taste_profile_snapshot,
     get_taste_profile_view,
 )
@@ -19,14 +18,13 @@ class GenerateTasteProfileRequest(BaseModel):
     user_id: str
 
 
-@router.post("/admin/backfill-entity-dimensions")
-async def backfill_dimensions_route(force: bool = False, db: Session = Depends(get_db)):
-    return await backfill_entity_dimensions(db, force=force)
-
-
-@router.post("/entities/{entity_id}/analyze-dimensions")
-async def analyze_entity_dimensions_route(entity_id: str, db: Session = Depends(get_db)):
-    return await analyze_entity_dimensions(db, entity_id)
+@router.post("/admin/backfill-artwork-analyses")
+async def backfill_artwork_analyses_route(
+    limit: int | None = None,
+    force: bool = False,
+    db: Session = Depends(get_db),
+):
+    return await backfill_artwork_analyses(db, limit=limit, force=force)
 
 
 @router.get("/taste-profile")

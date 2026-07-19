@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 
 import { ArtworkClassification } from '../../types';
 import type { ArtworkDetailItem, ArtworkSessionMembership } from '../types';
+import ArtworkAnalysisDebugPanel from './ArtworkAnalysisDebugPanel';
 import ArtworkClassificationChip from '../../components/ArtworkClassificationChip';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -564,6 +565,11 @@ export default function ArtworkDetailMetadataPanel({
           </div>
         </div>
       )}
+
+      <ArtworkAnalysisDebugPanel
+        artworkId={item.artworkId || item.id}
+        isAnalyzing={item.isAnalyzing}
+      />
     </div>
   );
 }

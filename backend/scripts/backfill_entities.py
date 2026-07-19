@@ -5,9 +5,8 @@ then link the artwork and trigger dimension analysis.
 Usage:
     cd backend
     source venv/bin/activate
-    python scripts/backfill_entities.py [--analyze] [--dry-run]
+    python scripts/backfill_entities.py [--dry-run]
 
---analyze  : also trigger dimension analysis for newly created entities
 --dry-run  : print what would happen without writing to DB
 """
 
@@ -33,7 +32,7 @@ def _normalize(s: str) -> str:
     return re.sub(r"\s+", " ", s)
 
 
-def backfill(dry_run: bool = False, analyze: bool = False):
+def backfill(dry_run: bool = False):
     db = SessionLocal()
     try:
         # All artworks without an entity link
@@ -47,7 +46,6 @@ def backfill(dry_run: bool = False, analyze: bool = False):
         created = 0
         linked = 0
         skipped = 0
-        entity_ids_to_analyze = []
 
         for artwork in unlinked:
             artist = (artwork.artist_name or "").strip()
@@ -97,22 +95,9 @@ def backfill(dry_run: bool = False, analyze: bool = False):
             artwork.artwork_entity_id = entity.id
             linked += 1
 
-            if analyze and entity.dim_status in ("pending", None):
-                entity_ids_to_analyze.append(entity.id)
-
         if not dry_run:
             db.commit()
             log.info(f"Done — created {created} new entities, linked {linked} artworks, skipped {skipped} (unknown)")
-
-            if analyze and entity_ids_to_analyze:
-                log.info(f"Triggering dimension analysis for {len(entity_ids_to_analyze)} entities...")
-                from app.routers.artwork import _do_dimension_analysis
-                for eid in entity_ids_to_analyze:
-                    try:
-                        asyncio.run(_do_dimension_analysis(eid))
-                        log.info(f"  analyzed {eid[:8]}")
-                    except Exception as e:
-                        log.warning(f"  failed {eid[:8]}: {e}")
         else:
             log.info(f"[dry-run] would link {linked}, skip {skipped}")
 
@@ -122,7 +107,6 @@ def backfill(dry_run: bool = False, analyze: bool = False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--analyze", action="store_true", help="Run dimension analysis after linking")
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
     args = parser.parse_args()
-    backfill(dry_run=args.dry_run, analyze=args.analyze)
+    backfill(dry_run=args.dry_run)

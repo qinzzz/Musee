@@ -252,6 +252,33 @@ export async function deleteCommunityComment(artworkId: string, commentId: strin
   if (!response.ok) throw new Error(`API error (${response.status})`);
 }
 
+export interface ArtworkAnalysisDebugTag {
+  label: string;
+  source: string;
+}
+
+export interface ArtworkAnalysisDebug {
+  id: string;
+  artwork_id: string;
+  status: string;
+  analysis_version: string;
+  model: string | null;
+  analyzability_note: string | null;
+  error: string | null;
+  visual_description: string | null;
+  dimensions: Record<string, { score: number; evidence: string[] }> | null;
+  tags: Record<string, ArtworkAnalysisDebugTag[]> | null;
+  completed_at: string | null;
+}
+
+/** Internal/debug only: the endpoint 404s in prod, in which case this resolves to null. */
+export async function getArtworkAnalysisDebug(artworkId: string): Promise<ArtworkAnalysisDebug | null> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}/analysis`, { timeout: 15000 });
+  if (!response.ok) return null;
+  const data = await response.json();
+  return data.analysis ?? null;
+}
+
 export async function getTasteProfile(userId: string): Promise<TasteProfileSnapshot> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/taste-profile?user_id=${encodeURIComponent(userId)}`, {});
   if (!response.ok) throw new Error('Failed to load taste profile');
