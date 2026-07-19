@@ -27,10 +27,10 @@ from app.services.artwork_analysis_service import (
 from app.services.artwork_background_service import (
     check_artwork_quota,
     generate_fun_facts,
-    run_dimension_analysis_bg,
     track_artwork_task,
 )
 from app.services.artwork_enrichment_service import run_artist_bio_bg as _run_artist_bio_bg
+from app.services.artwork_analysis_task_service import run_artwork_analysis, run_artwork_analysis_bg
 from app.services.artwork_event_service import (
     ARTWORK_EVENT_IDENTIFICATION_COMPLETED,
     ARTWORK_EVENT_IDENTIFICATION_FAILED,
@@ -315,7 +315,6 @@ async def analyze_artwork_unified(
                 "reference_urls": vision_ref_urls or [],
             },
         )
-        entity_id_fast = bg_ids["entity_id_fast"]
         artist_entity_id_fast = bg_ids["artist_entity_id_fast"]
         linked_artist_entity_id = bg_ids["linked_artist_entity_id"]
         for linked_session_id in _get_artwork_session_ids(db, str(existing_artwork.id)):
@@ -324,10 +323,18 @@ async def analyze_artwork_unified(
         db.commit()
         db.refresh(existing_artwork)
 
-        if entity_id_fast and background_tasks:
-            background_tasks.add_task(run_dimension_analysis_bg, entity_id_fast)
         if artist_entity_id_fast and background_tasks:
             background_tasks.add_task(_run_artist_bio_bg, artist_entity_id_fast)
+        # (Re)identification changes the metadata the taste analysis consumes,
+        # so force a fresh analysis row.
+        if background_tasks:
+            background_tasks.add_task(run_artwork_analysis_bg, str(existing_artwork.id), image_bytes, True)
+        else:
+            track_artwork_task(
+                asyncio.create_task(
+                    run_artwork_analysis(str(existing_artwork.id), image_bytes=image_bytes, force=True)
+                )
+            )
         if existing_artwork.artist_name and existing_artwork.artist_name != "Unknown Artist":
             if background_tasks:
                 background_tasks.add_task(
@@ -392,10 +399,15 @@ async def analyze_artwork_unified(
             vision_ref_urls,
         )
 
-        if entity_id_fast and background_tasks:
-            background_tasks.add_task(run_dimension_analysis_bg, entity_id_fast)
         if artist_entity_id_fast and background_tasks:
             background_tasks.add_task(_run_artist_bio_bg, artist_entity_id_fast)
+        if artwork_id_result:
+            if background_tasks:
+                background_tasks.add_task(run_artwork_analysis_bg, artwork_id_result, image_bytes, False)
+            else:
+                track_artwork_task(
+                    asyncio.create_task(run_artwork_analysis(artwork_id_result, image_bytes=image_bytes))
+                )
         if artwork_id_result and parsed_result["artist_name"] and parsed_result["artist_name"] != "Unknown Artist":
             track_artwork_task(
                 asyncio.create_task(
@@ -604,6 +616,12 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
     )
     db.commit()
     db.refresh(artwork)
+
+    track_artwork_task(
+        asyncio.create_task(
+            run_artwork_analysis(str(artwork.id), image_bytes=image_bytes, force=True)
+        )
+    )
 
     return {
         "artist_name": parsed_result["artist_name"],

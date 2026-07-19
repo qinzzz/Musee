@@ -22,12 +22,11 @@ from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, star
 from app.services.artwork_analysis_service import determine_ai_provider, parse_identify_result, resolve_image_bytes
 from app.services.artwork_background_service import (
     check_artwork_quota,
-    do_dimension_analysis,
     generate_fun_facts,
-    run_dimension_analysis_bg,
     track_artwork_task,
 )
 from app.services.artwork_enrichment_service import do_artist_bio, run_artist_bio_bg
+from app.services.artwork_analysis_task_service import run_artwork_analysis, run_artwork_analysis_bg
 from app.services.artwork_ingest_service import parse_location_value, resolve_location_payload, save_analyzed_artwork_record_sync
 from app.services.artwork_utilities_service import initialize_ai_services
 from app.services.session_service import get_session_context, update_session_narrative_task
@@ -191,10 +190,15 @@ async def analyze_artist(
             "upload",
         )
 
-        if entity_id_fast and background_tasks:
-            background_tasks.add_task(run_dimension_analysis_bg, entity_id_fast)
         if artist_entity_id_fast and background_tasks:
             background_tasks.add_task(run_artist_bio_bg, artist_entity_id_fast)
+        if artwork_id:
+            if background_tasks:
+                background_tasks.add_task(run_artwork_analysis_bg, artwork_id, image_bytes, False)
+            else:
+                track_artwork_task(
+                    asyncio.create_task(run_artwork_analysis(artwork_id, image_bytes=image_bytes))
+                )
         if artwork_id and parsed_result["artist_name"] and parsed_result["artist_name"] != "Unknown Artist":
             track_artwork_task(
                 asyncio.create_task(
@@ -392,10 +396,12 @@ async def analyze_artist_stream(
                             pass
                     raise db_error
 
-                if entity_id:
-                    track_artwork_task(asyncio.create_task(do_dimension_analysis(entity_id)))
                 if artist_entity_id:
                     track_artwork_task(asyncio.create_task(do_artist_bio(artist_entity_id)))
+                if artwork_id:
+                    track_artwork_task(
+                        asyncio.create_task(run_artwork_analysis(artwork_id, image_bytes=image_bytes))
+                    )
                 if parsed_result["artist_name"] and parsed_result["artist_name"] != "Unknown Artist":
                     track_artwork_task(
                         asyncio.create_task(

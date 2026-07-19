@@ -16,6 +16,12 @@ os.environ["ENV"]          = "test"
 os.environ["USE_DATABASE"] = "true"
 os.environ["OPENAI_API_KEY"] = "sk-test"
 os.environ["ADMIN_SECRET"]   = "test-secret"
+# Neutralize email delivery so tests never hit a real SMTP server or ESP
+# when a populated .env is present (env vars take precedence over dotenv).
+os.environ["SMTP_HOST"]      = ""
+os.environ["SMTP_USERNAME"]  = ""
+os.environ["SMTP_PASSWORD"]  = ""
+os.environ["RESEND_API_KEY"] = ""
 # Prevent settings from reading a .env file (which has real postgres URLs)
 os.environ["PYDANTIC_SETTINGS_DOTENV_PATH"] = ""
 

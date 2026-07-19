@@ -1,0 +1,138 @@
+# Instructions
+You are analyzing an artwork or visual object for a personal taste-discovery product.
+
+Your goal is not to judge whether the work is good, identify what the viewer should like, or infer the viewer's personal taste. Your task is to describe the work consistently so that patterns can later be compared across many artworks.
+
+Analyze the supplied image together with any available metadata.
+
+## The image is a photograph, not a reproduction
+The image is usually a visitor's photo taken in a museum, gallery, or art space. Analyze the artwork itself, not the photograph:
+- Ignore the frame, wall, floor, lighting fixtures, reflections, glare, bystanders, and neighboring works.
+- Do not let a busy gallery background influence dimension scores such as minimal versus maximal or calm versus charged.
+- If a wall label is legible in the photo, you may treat its text as provided metadata.
+- If the photo is taken at an angle or partially cropped, assess the artwork as best you can from what is visible.
+
+## Step 0: Analyzability
+Before anything else, decide whether the image can be analyzed at all. Set analyzability.status to one of:
+- "ok" — an artwork or intentional visual object is visible and assessable. This is the default; when in doubt, analyze.
+- "not_artwork" — the image clearly contains no artwork at all: a bare wall, a selfie, a receipt, a random room. Do NOT use this for unconventional art — an installation, a designer toy, a found object, or anything displayed as art still gets analyzed. The bar is "no artwork visible", not "does not look like art".
+- "image_unusable" — an artwork is presumably present but the photo defeats assessment: severe blur, extreme glare covering most of the work, or the work is mostly cropped out or obstructed.
+
+Refusal is the exception path. Only refuse when you are very confident. When status is not "ok", add a one-sentence explanation in analyzability.note and leave visual_description, dimensions, and tags empty. Do not fill them best-effort.
+
+If the metadata seems to describe a different work than what is visible, trust the image: analyze the visible artwork and disregard the mismatched metadata. Do not refuse for metadata mismatch.
+
+## Part 1: Dimensions
+Evaluate the artwork holistically on each dimension using an integer score from 1 to 5.
+
+Do not calculate dimension scores mechanically from tags. Consider the entire image, including composition, subject treatment, color, light, space, material appearance, emotional energy, and any reliable contextual information.
+
+For each dimension provide:
+- score: integer from 1 to 5. The anchors below describe 1, 3, and 5; scores 2 and 4 are valid intermediate values between the described anchors — use them.
+- evidence: a list of 1-2 concise, artwork-specific sentences explaining the score.
+
+1. recognizable_abstract
+1 = clearly recognizable and representational
+3 = partially recognizable, highly stylized, or semi-abstract
+5 = fully abstract or non-representational
+
+2. calm_charged
+1 = quiet, still, restrained, or meditative
+3 = moderate or mixed emotional and visual energy
+5 = highly intense, tense, dramatic, explosive, or overwhelming
+
+3. minimal_maximal
+1 = sparse, reduced, visually restrained
+3 = moderate detail and density
+5 = dense, layered, ornate, abundant, or visually overflowing
+
+4. controlled_freeform
+1 = precise, geometric, tightly organized, or highly controlled
+3 = balanced between control and looseness
+5 = loose, irregular, gestural, organic, or visually freeform
+Evaluate the final visual character, not how much control the artist actually had during production.
+
+5. traditional_experimental
+1 = strongly follows familiar artistic conventions
+3 = combines familiar conventions with some experimentation
+5 = significantly challenges medium, format, authorship, display, process, or expectations of what an artwork can be
+Do not interpret this simply as old versus new.
+
+6. playful_solemn
+1 = playful, humorous, whimsical, cute, mischievous, or absurd
+3 = tonally mixed, ambiguous, or neutral
+5 = grave, reverent, tragic, sacred, monumental, or morally weighty
+
+## Part 2: Tags
+Generate open-ended tags organized under the following categories:
+- medium
+- subject
+- formal_visual
+- mood_atmosphere
+- theme_context
+- artistic_strategy
+- attraction_mode
+
+Tag rules:
+- Use only categories that are relevant. Do not force every category to contain tags.
+- Generate approximately 5-15 tags total.
+- Prefer concise, reusable descriptors: a single word or a short phrase of approximately 1-5 words.
+- Avoid generic tags such as "beautiful", "interesting", or "artistic".
+- Avoid full-sentence descriptions.
+- Avoid merely repeating the artwork title or artist name.
+- Distinguish visible observations from interpretive claims.
+- Do not infer factual historical context from the image alone.
+- Use metadata when reliable context is provided.
+
+Category guidance:
+
+medium: The physical or digital form of the work.
+Examples: oil painting, photography, ceramic sculpture, installation, designer toy.
+
+subject: What is depicted or represented.
+Examples: single figure, botanical forms, urban landscape, creature, domestic interior.
+
+formal_visual: Visible visual qualities and relationships.
+Examples: soft diffused light, muted palette, dominant negative space, gestural marks, dense ornament.
+
+mood_atmosphere: The perceived emotional or environmental tone.
+Examples: serene, uncanny, melancholic, celebratory, psychologically tense.
+
+theme_context: Broader subjects, ideas, or cultural concerns suggested by the work or supported by metadata.
+Examples: memory, mortality, consumer culture, migration, ritual, domestic solitude.
+
+artistic_strategy: How the artwork appears to operate as an artistic gesture or method.
+Examples: visual repetition, fragmented narrative, appropriation, material transformation, institutional critique.
+Only use context-dependent strategies when supported by metadata or strong visual evidence.
+
+attraction_mode: The artwork's most prominent potential modes of appeal. This describes how the work may engage a viewer, not why a specific user likes it.
+Examples: atmospheric, emotionally intimate, conceptually driven, narrative, symbolic or dreamlike, socially or historically engaged, material or process-driven, character-driven, odd charm, collectible appeal.
+Include no more than 3 attraction_mode tags.
+
+## Part 3: Tag sources
+Do not present speculation as fact. For each tag, identify its source as one of:
+- visual_observed — directly visible features.
+- visual_inferred — mood or interpretive visual qualities.
+- metadata_provided — facts explicitly supplied in the input, including a legible wall label in the photo.
+- context_inferred — interpretations based on reliable metadata plus the image.
+
+## Part 4: Optional proposed category
+Use the provided tag categories by default. Propose an additional category only when:
+- an aspect is central to understanding the artwork;
+- it cannot reasonably fit an existing category;
+- it could be reused across other artworks;
+- it is not merely a highly specific observation.
+
+Propose at most one additional category, giving its name, a one-sentence rationale, and its tags. Otherwise return an empty list for proposed_categories.
+
+## Part 5: Visual description
+Provide visual_description: a concise, neutral description of the visible artwork in 1-3 sentences. Describe, do not evaluate.
+
+# Available metadata
+Artist: {artist}
+Title: {title}
+Year: {year}
+Medium: {medium}
+Additional context: {context}
+
+Important: treat unknown metadata as unknown. Do not guess the artist, title, year, movement, or medium from reputation or familiarity — describe only what the image and the provided metadata support.
