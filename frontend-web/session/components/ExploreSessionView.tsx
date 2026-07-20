@@ -4,6 +4,16 @@ import ArtworkDetailModal from '../../artwork/components/ArtworkDetailModal';
 import { GalleryItem, ArtworkClassification } from '../../types';
 import type { ArtistPageContext, ArtworkDetailContext } from '../../lib/appNavigation';
 import { SUPPORTED_UPLOAD_ACCEPT } from '../../lib/uploadValidation';
+import {
+  ARTWORK_CTA_ADD_FROM_COLLECTION,
+  ARTWORK_CTA_SCAN_ARTWORK,
+  ARTWORK_CTA_UPLOAD_PHOTOS,
+} from '../../lib/artworkSourceCtas';
+import {
+  AddFromCollectionIcon,
+  ScanArtworkIcon,
+  UploadPhotosIcon,
+} from '../../components/ArtworkSourceIcons';
 import type { ArtworkDetailItem, IdentifyAgainHints } from '../../artwork/types';
 import type { ActiveSessionStreamEntry, SessionRenderBlock, SessionSummary } from '../types';
 
@@ -328,7 +338,7 @@ export default function ExploreSessionView({
                   onClick={onOpenLibraryPicker}
                   className="mt-5 rounded-full border border-neutral-200 bg-white px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
                 >
-                  Add from library
+                  {ARTWORK_CTA_ADD_FROM_COLLECTION}
                 </button>
               </div>
             </div>
@@ -421,28 +431,22 @@ export default function ExploreSessionView({
                     onClick={onOpenLibraryPicker}
                     className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
                   >
-                    Add from library
+                    <AddFromCollectionIcon />
+                    {ARTWORK_CTA_ADD_FROM_COLLECTION}
                   </button>
                   <button
                     onClick={() => goalGalleryInputRef.current?.click()}
                     className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100"
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="17 8 12 3 7 8" />
-                      <line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                    Upload artworks
+                    <UploadPhotosIcon />
+                    {ARTWORK_CTA_UPLOAD_PHOTOS}
                   </button>
                   <button
                     onClick={onOpenSessionCapture}
                     className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[13px] font-medium"
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                      <circle cx="12" cy="13" r="4" />
-                    </svg>
-                    Camera
+                    <ScanArtworkIcon />
+                    {ARTWORK_CTA_SCAN_ARTWORK}
                   </button>
                 </div>
               </div>

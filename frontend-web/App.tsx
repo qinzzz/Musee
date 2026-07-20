@@ -30,6 +30,7 @@ import { useArtworkLibrary } from './artwork/hooks/useArtworkLibrary';
 import { useArtworkAnalysis } from './artwork/hooks/useArtworkAnalysis';
 import { useBoards } from './boards/hooks/useBoards';
 import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
+import { useAttachLibraryArtworks } from './session/hooks/useAttachLibraryArtworks';
 import { useArtworkIngest } from './artwork-ingest/hooks/useArtworkIngest';
 import type { PreparedSessionUploadEntry, PreparedUploadIngestResult, PreparedUploadSessionContext } from './artwork-ingest/types';
 import {
@@ -420,6 +421,34 @@ const App: React.FC = () => {
     openSessionSummary,
   } = sessionWorkspace;
 
+  // When set, the library picker adds to this ongoing session instead of
+  // staging artworks for a new one.
+  const [libraryPickerSessionId, setLibraryPickerSessionId] = React.useState<string | null>(null);
+
+  const {
+    selectedIds: sessionLibrarySelectedIds,
+    isAttaching: isAttachingLibraryArtworks,
+    toggleSelect: toggleSessionLibrarySelect,
+    resetSelection: resetSessionLibrarySelection,
+    attachSelectionToSession,
+  } = useAttachLibraryArtworks({
+    userId: sessionUserId,
+    items,
+    sessionStreams,
+    updateArtworkSessionLinks,
+    appendSessionEvents,
+    persistSessionArtworkInput,
+    setVisit: setArtworkWorkspace,
+    refreshPersistedSessions,
+    showToast,
+  });
+
+  const openSessionLibraryPicker = React.useCallback(() => {
+    if (!activeSessionSummary) return;
+    setLibraryPickerSessionId(activeSessionSummary.id);
+    setIsLibraryPickerOpen(true);
+  }, [activeSessionSummary, setIsLibraryPickerOpen]);
+
   const removeArtworkLocally = React.useCallback((itemId: string) => {
     removeArtwork(itemId);
     setArtworkWorkspace((prev) => ({
@@ -728,6 +757,7 @@ const App: React.FC = () => {
     setSessionGoalDismissed,
     setNewSessionDraftMessage,
     setIsLibraryPickerOpen,
+    openSessionLibraryPicker,
     removePendingSessionArtwork,
     submitPreparedSession,
     handleFileUpload,
@@ -760,16 +790,28 @@ const App: React.FC = () => {
 
         <AddFromLibraryModal
           open={isLibraryPickerOpen}
-          items={availableLibraryArtworks}
-          selectedIds={pendingLibraryArtworkIds}
+          items={libraryPickerSessionId
+            ? availableLibraryArtworks.filter((item) =>
+                !item.sessionLinks?.some((link) => link.sessionId === libraryPickerSessionId))
+            : availableLibraryArtworks}
+          selectedIds={libraryPickerSessionId ? sessionLibrarySelectedIds : pendingLibraryArtworkIds}
           searchValue={libraryPickerSearch}
           onClose={() => {
             setIsLibraryPickerOpen(false);
             setLibraryPickerSearch('');
+            setLibraryPickerSessionId(null);
+            resetSessionLibrarySelection();
           }}
           onSearchChange={setLibraryPickerSearch}
-          onToggleSelect={stageLibraryArtworkForSession}
-          onConfirm={() => setIsLibraryPickerOpen(false)}
+          onToggleSelect={libraryPickerSessionId ? toggleSessionLibrarySelect : stageLibraryArtworkForSession}
+          onConfirm={() => {
+            if (libraryPickerSessionId && !isAttachingLibraryArtworks) {
+              void attachSelectionToSession(libraryPickerSessionId);
+              setLibraryPickerSessionId(null);
+            }
+            setIsLibraryPickerOpen(false);
+            setLibraryPickerSearch('');
+          }}
         />
 
         <LoginModal
