@@ -27,11 +27,14 @@ const SessionStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit,
 
   const displayLocation = React.useMemo(() => {
     if (!locationStr) return null;
+    // A plain string that looks like serialized JSON must never be shown as-is.
+    const plainString =
+      typeof locationStr === 'string' && !locationStr.trim().startsWith('{') ? locationStr : null;
     try {
       let data: any = null;
       if (typeof locationStr === 'object') {
         data = locationStr;
-      } else if (typeof locationStr === 'string' && locationStr.startsWith('{')) {
+      } else if (typeof locationStr === 'string' && locationStr.trim().startsWith('{')) {
         data = JSON.parse(locationStr);
       }
 
@@ -42,11 +45,11 @@ const SessionStack: React.FC<Props> = ({ items, onOpenExhibition, onResumeVisit,
         if (!data.city && data.country) parts.push(data.country);
         if (data.city && data.country && !data.museum) parts.push(data.country);
 
-        return parts.join(', ');
+        return parts.length > 0 ? parts.join(', ') : null;
       }
-      return typeof locationStr === 'string' ? locationStr : null;
+      return plainString;
     } catch (e) {
-      return typeof locationStr === 'string' ? locationStr : null;
+      return plainString;
     }
   }, [locationStr]);
 

@@ -12,22 +12,29 @@ type ArtworkStreamingFields = {
 export function getArtworkDisplayLocation(location: unknown): string | null {
   if (!location) return null;
 
+  // A plain string that looks like serialized JSON must never be shown as-is.
+  const plainString =
+    typeof location === 'string' && !location.trim().startsWith('{') ? location : null;
+
   try {
     let data: Record<string, unknown> | null = null;
     if (typeof location === 'object') {
       data = location as Record<string, unknown>;
-    } else if (typeof location === 'string' && location.startsWith('{')) {
+    } else if (typeof location === 'string' && location.trim().startsWith('{')) {
       data = JSON.parse(location) as Record<string, unknown>;
     }
 
     if (data) {
-      const parts = [data.museum, data.city, data.country].filter(Boolean);
-      return parts.length > 0 ? parts.join(', ') : ((data.raw as string | undefined) || (typeof location === 'string' ? location : null));
+      const parts = [data.museum, data.city, data.country]
+        .filter((part): part is string => typeof part === 'string' && part.trim().length > 0);
+      if (parts.length > 0) return parts.join(', ');
+      const raw = data.raw;
+      return typeof raw === 'string' && raw.trim().length > 0 ? raw : null;
     }
 
-    return typeof location === 'string' ? location : null;
+    return plainString;
   } catch {
-    return typeof location === 'string' ? location : null;
+    return plainString;
   }
 }
 

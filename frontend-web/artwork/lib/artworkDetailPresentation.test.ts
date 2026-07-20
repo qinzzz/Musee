@@ -18,6 +18,23 @@ describe('artworkDetailPresentation helpers', () => {
     ).toBe('MoMA, New York, USA');
   });
 
+  it('never renders raw json when location fields are empty', () => {
+    const unresolved =
+      '{"city":"","country":"","museum":"","latitude":40.778,"longitude":-73.963,"raw":""}';
+    expect(getArtworkDisplayLocation(unresolved)).toBeNull();
+    expect(
+      getArtworkDisplayLocation({ city: '', country: '', museum: '', latitude: 40.778, longitude: -73.963, raw: '' }),
+    ).toBeNull();
+    // Malformed json-ish strings should be hidden, not shown verbatim
+    expect(getArtworkDisplayLocation('{"city":"New York",')).toBeNull();
+    // Falls back to raw display name when only raw is populated
+    expect(getArtworkDisplayLocation('{"city":"","raw":"Fifth Avenue, New York"}')).toBe(
+      'Fifth Avenue, New York',
+    );
+    // Plain human-entered strings still pass through
+    expect(getArtworkDisplayLocation('The Met, New York')).toBe('The Met, New York');
+  });
+
   it('formats display dates without time noise', () => {
     expect(formatArtworkDisplayDate('2026-06-26T08:00:00.000Z')).toMatch(/2026/);
     expect(formatArtworkDisplayDate('Jun 20, 2026, 08:30')).toBe('Jun 20, 2026');
