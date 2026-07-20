@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import CanvasHeader from '../../components/CanvasHeader';
 import ArtworkDetailModal from '../../artwork/components/ArtworkDetailModal';
 import { GalleryItem, ArtworkClassification } from '../../types';
@@ -73,12 +74,16 @@ type ExploreSessionViewProps = {
   onOpenSessionArtwork: (item: GalleryItem) => void;
 };
 
-const SessionDetailsPanel: React.FC<{
+const SessionDetailsModal: React.FC<{
+  open: boolean;
   title: string;
   goal: string;
+  items: GalleryItem[];
   onSaveTitle: (title: string) => Promise<void>;
   onSaveGoal: (goal: string) => void;
-}> = ({ title, goal, onSaveTitle, onSaveGoal }) => {
+  onOpenArtwork: (item: GalleryItem) => void;
+  onClose: () => void;
+}> = ({ open, title, goal, items, onSaveTitle, onSaveGoal, onOpenArtwork, onClose }) => {
   const [titleDraft, setTitleDraft] = React.useState(title);
   const [goalDraft, setGoalDraft] = React.useState(goal);
   const [isSavingTitle, setIsSavingTitle] = React.useState(false);
@@ -114,41 +119,117 @@ const SessionDetailsPanel: React.FC<{
     onSaveGoal(trimmed);
   };
 
-  return (
-    <div className="rounded-b-[22px] border border-t-0 border-neutral-200 bg-[var(--color-bg-primary)] px-5 py-4 shadow-[0_18px_50px_rgba(0,0,0,0.08)] sm:px-8">
-      <div className="max-w-[560px] space-y-4">
-        <div>
-          <p className="mb-2 text-[11px] font-medium text-neutral-400">Session name</p>
-          <input
-            value={titleDraft}
-            onChange={(event) => setTitleDraft(event.target.value)}
-            onBlur={() => void commitTitle()}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                void commitTitle();
-              }
-              if (event.key === 'Escape') {
-                setTitleDraft(title);
-              }
-            }}
-            disabled={isSavingTitle}
-            className="w-full rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] sm:text-[14px] text-neutral-800 outline-none transition-colors focus:border-neutral-300"
-          />
+  React.useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, open]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/20 p-4 backdrop-blur-[2px] sm:p-6">
+      <button
+        type="button"
+        aria-label="Close session details"
+        className="absolute inset-0"
+        onClick={onClose}
+      />
+      <div className="relative z-10 flex max-h-[84vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.12)]">
+        <div className="flex items-center justify-between px-6 pb-4 pt-6">
+          <h2 className="text-[18px] font-semibold tracking-tight text-neutral-900">Session details</h2>
+          <button
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-700 transition-colors hover:bg-neutral-100"
+            aria-label="Close modal"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
-        <div>
-          <p className="mb-2 text-[11px] font-medium text-neutral-400">Session goal</p>
-          <textarea
-            value={goalDraft}
-            onChange={(event) => setGoalDraft(event.target.value)}
-            onBlur={commitGoal}
-            rows={3}
-            placeholder="Add a focus for this session…"
-            className="w-full resize-none rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] sm:text-[14px] leading-relaxed text-neutral-800 outline-none transition-colors focus:border-neutral-300"
-          />
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-6">
+          <div>
+            <p className="mb-2 text-[11px] font-medium text-neutral-400">Session name</p>
+            <input
+              value={titleDraft}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              onBlur={() => void commitTitle()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void commitTitle();
+                }
+                if (event.key === 'Escape') {
+                  event.stopPropagation();
+                  setTitleDraft(title);
+                }
+              }}
+              disabled={isSavingTitle}
+              className="w-full rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] sm:text-[14px] text-neutral-800 outline-none transition-colors focus:border-neutral-300"
+            />
+          </div>
+          <div>
+            <p className="mb-2 text-[11px] font-medium text-neutral-400">Session goal</p>
+            <textarea
+              value={goalDraft}
+              onChange={(event) => setGoalDraft(event.target.value)}
+              onBlur={commitGoal}
+              rows={3}
+              placeholder="Add a focus for this session…"
+              className="w-full resize-none rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] sm:text-[14px] leading-relaxed text-neutral-800 outline-none transition-colors focus:border-neutral-300"
+            />
+          </div>
+          {items.length > 0 ? (
+            <div>
+              <p className="mb-2 text-[11px] font-medium text-neutral-400">
+                {items.length === 1 ? '1 artwork in this session' : `${items.length} artworks in this session`}
+              </p>
+              <div className="flex flex-wrap gap-2.5">
+                {items.map((item) => (
+                  <button
+                    key={`session-details-${item.id}`}
+                    onClick={() => {
+                      if (item.isDeletedPlaceholder || item.deleteStatus === 'pending') return;
+                      onClose();
+                      onOpenArtwork(item);
+                    }}
+                    className={`shrink-0 overflow-hidden rounded-[18px] border border-neutral-200 bg-white shadow-sm transition-shadow ${
+                      item.isDeletedPlaceholder || item.deleteStatus === 'pending'
+                        ? 'cursor-default opacity-45'
+                        : 'hover:shadow-md'
+                    }`}
+                    style={{ width: '96px', height: '96px' }}
+                    aria-label={item.artworkName || 'Artwork'}
+                  >
+                    {item.isDeletedPlaceholder ? (
+                      <div className="flex h-full w-full items-center justify-center bg-neutral-100 px-2 text-center text-[11px] font-medium text-neutral-400">
+                        Deleted artwork
+                      </div>
+                    ) : (
+                      <img
+                        src={item.url}
+                        alt={item.artworkName || 'Artwork'}
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 
@@ -299,6 +380,7 @@ export default function ExploreSessionView({
           isInline={true}
           onChildClick={() => setSessionDetailsOpen((value) => !value)}
           childExpanded={sessionDetailsOpen}
+          childIndicator="info"
         />
       ) : (
         headerLeftSlot ? (
@@ -310,19 +392,18 @@ export default function ExploreSessionView({
         ) : null
       )}
 
+      <SessionDetailsModal
+        open={showSessionHeader && sessionDetailsOpen}
+        title={activeSessionSummary.title}
+        goal={sessionGoals[activeSessionSummary.id] || ''}
+        items={activeSessionSummary.items}
+        onSaveTitle={onSaveSessionTitle}
+        onSaveGoal={onSaveExistingGoal}
+        onOpenArtwork={onOpenSessionArtwork}
+        onClose={() => setSessionDetailsOpen(false)}
+      />
+
       <div className="relative isolate flex-1 min-h-0 flex flex-col bg-[var(--color-bg-primary)]" style={{ overflow: 'clip' }}>
-        {showSessionHeader && sessionDetailsOpen ? (
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-0">
-            <div className="pointer-events-auto w-full sm:max-w-[640px]">
-              <SessionDetailsPanel
-                title={activeSessionSummary.title}
-                goal={sessionGoals[activeSessionSummary.id] || ''}
-                onSaveTitle={onSaveSessionTitle}
-                onSaveGoal={onSaveExistingGoal}
-              />
-            </div>
-          </div>
-        ) : null}
 
         {sessionRenderBlocks.length === 0 ? (
           sessionGoalDismissed.has(activeSessionSummary.id) ? (
@@ -454,45 +535,6 @@ export default function ExploreSessionView({
           )
         ) : (
           <>
-            {activeSessionSummary.items.length > 0 ? (
-              <div className="shrink-0 border-b border-neutral-100 bg-[var(--color-bg-primary)] px-4 sm:px-10 py-3">
-                <div className="mx-auto w-full max-w-[640px]">
-                  <div
-                    className="flex gap-2.5 overflow-x-auto pb-1"
-                    style={{ scrollbarWidth: 'none' }}
-                  >
-                    {activeSessionSummary.items.map((item) => (
-                      <button
-                        key={`session-strip-${item.id}`}
-                        onClick={() => {
-                          if (item.isDeletedPlaceholder || item.deleteStatus === 'pending') return;
-                          onOpenSessionArtwork(item);
-                        }}
-                        className={`shrink-0 overflow-hidden rounded-[18px] border border-neutral-200 bg-white shadow-sm transition-shadow ${
-                          item.isDeletedPlaceholder || item.deleteStatus === 'pending'
-                            ? 'cursor-default opacity-45'
-                            : 'hover:shadow-md'
-                        }`}
-                        style={{ width: '96px', height: '96px' }}
-                        aria-label={item.artworkName || 'Artwork'}
-                      >
-                        {item.isDeletedPlaceholder ? (
-                          <div className="flex h-full w-full items-center justify-center bg-neutral-100 px-2 text-center text-[11px] font-medium text-neutral-400">
-                            Deleted artwork
-                          </div>
-                        ) : (
-                          <img
-                            src={item.url}
-                            alt={item.artworkName || 'Artwork'}
-                            className="h-full w-full object-cover"
-                          />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : null}
             <div
               ref={sessionStreamScrollRef}
               className="flex-1 overflow-y-auto px-4 sm:px-10 pb-56 pt-3 sm:pt-4"
