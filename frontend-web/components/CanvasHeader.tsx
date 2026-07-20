@@ -10,6 +10,7 @@ interface Props {
   leftSlot?: React.ReactNode;
   onChildClick?: () => void;
   childExpanded?: boolean;
+  childIndicator?: 'chevron' | 'info';
 }
 
 export default function CanvasHeader({
@@ -22,6 +23,7 @@ export default function CanvasHeader({
   leftSlot,
   onChildClick,
   childExpanded = false,
+  childIndicator = 'chevron',
 }: Props) {
   const titleContainerClassName = '[@media(hover:hover)]:group-hover:bg-neutral-100/80';
   const chevronClassName = 'text-neutral-400 [@media(hover:hover)]:group-hover:text-neutral-700';
@@ -42,20 +44,38 @@ export default function CanvasHeader({
             </span>
             {onChildClick ? (
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center transition-colors ${chevronClassName}`}>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className={`transition-transform ${childExpanded ? 'rotate-180' : ''}`}
-                  aria-hidden="true"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
+                {childIndicator === 'info' ? (
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                ) : (
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`transition-transform ${childExpanded ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                )}
               </span>
             ) : null}
           </div>
