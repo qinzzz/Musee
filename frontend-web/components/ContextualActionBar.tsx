@@ -1,6 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { GalleryItem } from '../types';
 import { SUPPORTED_UPLOAD_ACCEPT } from '../lib/uploadValidation';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 import {
   ARTWORK_CTA_ADD_FROM_COLLECTION,
   ARTWORK_CTA_ADD_MENU,
@@ -50,30 +56,7 @@ const ContextualActionBar: React.FC<Props> = ({
   placeholder,
 }) => {
   const [text, setText] = useState('');
-  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const addMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isAddMenuOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!addMenuRef.current?.contains(event.target as Node)) {
-        setIsAddMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsAddMenuOpen(false);
-      }
-    };
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isAddMenuOpen]);
 
   // Scan artwork is the most frequent mid-session action, so it gets its own
   // button next to "+"; the menu holds the bring-in-existing-images actions.
@@ -91,11 +74,6 @@ const ContextualActionBar: React.FC<Props> = ({
       disabled: Boolean(isAnalyzing),
     },
   ];
-
-  const selectAddArtworkAction = (action: (typeof addArtworkActions)[number]) => {
-    setIsAddMenuOpen(false);
-    action.onSelect();
-  };
 
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -179,26 +157,6 @@ const ContextualActionBar: React.FC<Props> = ({
             onSubmit={submit}
             className="relative rounded-[34px] border border-neutral-200 bg-white px-4 sm:px-6 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)]"
           >
-            {isAddMenuOpen && (
-              <div
-                ref={addMenuRef}
-                className="absolute bottom-full left-0 mb-2 w-[260px] rounded-[24px] border border-neutral-200 bg-white p-2 shadow-[0_18px_50px_rgba(0,0,0,0.14)]"
-              >
-                {addArtworkActions.map((action) => (
-                  <button
-                    key={action.label}
-                    type="button"
-                    onClick={() => selectAddArtworkAction(action)}
-                    disabled={action.disabled}
-                    className="flex w-full items-center gap-3 rounded-[18px] px-4 py-3.5 text-left text-[15px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40"
-                  >
-                    {action.icon}
-                    <span>{action.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -210,27 +168,42 @@ const ContextualActionBar: React.FC<Props> = ({
               >
                 <ScanArtworkIcon size={20} />
               </button>
-              <button
-                type="button"
-                onClick={() => setIsAddMenuOpen((open) => !open)}
-                aria-label={ARTWORK_CTA_ADD_MENU}
-                aria-expanded={isAddMenuOpen}
-                className="w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100"
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  className={`transition-transform ${isAddMenuOpen ? 'rotate-45' : ''}`}
-                >
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={ARTWORK_CTA_ADD_MENU}
+                    className="w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100 data-[state=open]:bg-neutral-100 [&[data-state=open]>svg]:rotate-45"
+                  >
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      className="transition-transform"
+                    >
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" align="start" className="w-[240px] p-2">
+                  {addArtworkActions.map((action) => (
+                    <DropdownMenuItem
+                      key={action.label}
+                      disabled={action.disabled}
+                      onSelect={() => action.onSelect()}
+                      className="gap-3 rounded-[14px] px-3.5 py-3 text-[14px] font-medium text-neutral-800"
+                    >
+                      {action.icon}
+                      <span>{action.label}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -239,11 +212,11 @@ const ContextualActionBar: React.FC<Props> = ({
               />
               <button
                 type="submit"
-                className="w-14 h-14 shrink-0 rounded-[18px] bg-neutral-900 text-white flex items-center justify-center disabled:opacity-30"
+                className="w-10 h-10 shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-30"
                 disabled={!text.trim() || isInquiryDisabled}
                 title={isInquiryDisabled ? 'Waiting for response' : 'Send'}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13"/>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"/>
                 </svg>
