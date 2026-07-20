@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import type { GalleryItem } from '../types';
+import { ARTWORK_CTA_ADD_FROM_COLLECTION } from '../lib/artworkSourceCtas';
 
 type AddFromLibraryModalProps = {
   open: boolean;
@@ -82,7 +83,7 @@ export default function AddFromLibraryModal({
         className="relative z-10 flex h-[min(640px,84vh)] w-full max-w-[840px] flex-col overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.12)]"
       >
         <div className="flex items-center justify-between px-6 pb-4 pt-6">
-          <h2 className="text-[18px] font-semibold tracking-tight text-neutral-900">Add from library</h2>
+          <h2 className="text-[18px] font-semibold tracking-tight text-neutral-900">{ARTWORK_CTA_ADD_FROM_COLLECTION}</h2>
           <button
             onClick={onClose}
             className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-700 transition-colors hover:bg-neutral-100"
@@ -99,7 +100,7 @@ export default function AddFromLibraryModal({
           <input
             value={searchValue}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search library"
+            placeholder="Search your collection"
             className="w-full border-0 bg-transparent p-0 text-[16px] text-neutral-900 placeholder:text-neutral-400 outline-none"
           />
         </div>

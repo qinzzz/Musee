@@ -145,6 +145,7 @@ function renderAppViewport(options: {
         setSessionGoalDismissed,
         setNewSessionDraftMessage: vi.fn(),
         setIsLibraryPickerOpen: vi.fn(),
+        openSessionLibraryPicker: vi.fn(),
         removePendingSessionArtwork: vi.fn(),
         submitPreparedSession: vi.fn(),
         handleFileUpload: vi.fn(),

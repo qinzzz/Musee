@@ -112,6 +112,7 @@ type ViewportMutationProps = {
   setSessionGoalDismissed: React.Dispatch<React.SetStateAction<Set<string>>>;
   setNewSessionDraftMessage: React.Dispatch<React.SetStateAction<string>>;
   setIsLibraryPickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  openSessionLibraryPicker: () => void;
   removePendingSessionArtwork: (entryId: string) => void;
   submitPreparedSession: () => Promise<void>;
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
@@ -215,6 +216,7 @@ export default function AppViewport({
     setSessionGoalDismissed,
     setNewSessionDraftMessage,
     setIsLibraryPickerOpen,
+    openSessionLibraryPicker,
     removePendingSessionArtwork,
     submitPreparedSession,
     handleFileUpload,
@@ -530,6 +532,7 @@ export default function AppViewport({
           mode="session"
           onUpload={handleFileUpload}
           onOpenSessionCapture={openSessionCapturePage}
+          onOpenLibraryPicker={openSessionLibraryPicker}
           isAnalyzing={isAnalyzing}
           isInquiryDisabled={isSessionReplyPending}
           onInquiry={handleSessionInquiry}

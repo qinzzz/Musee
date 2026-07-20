@@ -1,6 +1,17 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GalleryItem } from '../types';
 import { SUPPORTED_UPLOAD_ACCEPT } from '../lib/uploadValidation';
+import {
+  ARTWORK_CTA_ADD_FROM_COLLECTION,
+  ARTWORK_CTA_ADD_MENU,
+  ARTWORK_CTA_SCAN_ARTWORK,
+  ARTWORK_CTA_UPLOAD_PHOTOS,
+} from '../lib/artworkSourceCtas';
+import {
+  AddFromCollectionIcon,
+  ScanArtworkIcon,
+  UploadPhotosIcon,
+} from './ArtworkSourceIcons';
 
 export type ActionBarMode = 'session';
 
@@ -8,6 +19,7 @@ interface Props {
   mode: ActionBarMode;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   onOpenSessionCapture: () => void;
+  onOpenLibraryPicker: () => void;
   onInquiry?: (text: string) => Promise<boolean>;
   onLike?: () => void;
   onCollect?: () => void;
@@ -24,6 +36,7 @@ interface Props {
 const ContextualActionBar: React.FC<Props> = ({
   onUpload,
   onOpenSessionCapture,
+  onOpenLibraryPicker,
   onInquiry,
   onLike,
   onCollect,
@@ -37,7 +50,52 @@ const ContextualActionBar: React.FC<Props> = ({
   placeholder,
 }) => {
   const [text, setText] = useState('');
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isAddMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!addMenuRef.current?.contains(event.target as Node)) {
+        setIsAddMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsAddMenuOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isAddMenuOpen]);
+
+  // Scan artwork is the most frequent mid-session action, so it gets its own
+  // button next to "+"; the menu holds the bring-in-existing-images actions.
+  const addArtworkActions = [
+    {
+      label: ARTWORK_CTA_ADD_FROM_COLLECTION,
+      icon: <AddFromCollectionIcon size={18} />,
+      onSelect: onOpenLibraryPicker,
+      disabled: false,
+    },
+    {
+      label: ARTWORK_CTA_UPLOAD_PHOTOS,
+      icon: <UploadPhotosIcon size={18} />,
+      onSelect: () => galleryInputRef.current?.click(),
+      disabled: Boolean(isAnalyzing),
+    },
+  ];
+
+  const selectAddArtworkAction = (action: (typeof addArtworkActions)[number]) => {
+    setIsAddMenuOpen(false);
+    action.onSelect();
+  };
 
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -119,42 +177,69 @@ const ContextualActionBar: React.FC<Props> = ({
 
           <form
             onSubmit={submit}
-            className="rounded-[34px] border border-neutral-200 bg-white px-4 sm:px-6 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)]"
+            className="relative rounded-[34px] border border-neutral-200 bg-white px-4 sm:px-6 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)]"
           >
-            <div className="flex items-center gap-3 mb-3">
-              <button
-                type="button"
-                onClick={() => galleryInputRef.current?.click()}
-                className="flex items-center gap-3 rounded-[18px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[15px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100"
+            {isAddMenuOpen && (
+              <div
+                ref={addMenuRef}
+                className="absolute bottom-full left-0 mb-2 w-[260px] rounded-[24px] border border-neutral-200 bg-white p-2 shadow-[0_18px_50px_rgba(0,0,0,0.14)]"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-                <span>Capture artwork</span>
-              </button>
+                {addArtworkActions.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={() => selectAddArtworkAction(action)}
+                    disabled={action.disabled}
+                    className="flex w-full items-center gap-3 rounded-[18px] px-4 py-3.5 text-left text-[15px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40"
+                  >
+                    {action.icon}
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onOpenSessionCapture}
                 disabled={isAnalyzing}
-                className="rounded-[18px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[15px] font-medium text-neutral-700 flex items-center gap-3"
+                aria-label={ARTWORK_CTA_SCAN_ARTWORK}
+                title={ARTWORK_CTA_SCAN_ARTWORK}
+                className="w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100 disabled:opacity-40"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
-                </svg>
-                <span>Camera</span>
+                <ScanArtworkIcon size={20} />
               </button>
-            </div>
-
-            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsAddMenuOpen((open) => !open)}
+                aria-label={ARTWORK_CTA_ADD_MENU}
+                aria-expanded={isAddMenuOpen}
+                className="w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100"
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  className={`transition-transform ${isAddMenuOpen ? 'rotate-45' : ''}`}
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
               <input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={placeholder || 'Add a reflection, memory, or association...'}
-                className="flex-1 h-14 rounded-full border border-neutral-200 bg-white px-6 text-[16px] text-neutral-700 outline-none placeholder-neutral-400"
+                className="flex-1 min-w-0 h-14 rounded-full border border-neutral-200 bg-white px-6 text-[16px] text-neutral-700 outline-none placeholder-neutral-400"
               />
               <button
                 type="submit"
-                className="w-14 h-14 rounded-[18px] bg-neutral-900 text-white flex items-center justify-center disabled:opacity-30"
+                className="w-14 h-14 shrink-0 rounded-[18px] bg-neutral-900 text-white flex items-center justify-center disabled:opacity-30"
                 disabled={!text.trim() || isInquiryDisabled}
                 title={isInquiryDisabled ? 'Waiting for response' : 'Send'}
               >
