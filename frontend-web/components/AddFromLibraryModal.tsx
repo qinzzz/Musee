@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import type { GalleryItem } from '../types';
 import { ARTWORK_CTA_ADD_FROM_COLLECTION } from '../lib/artworkSourceCtas';
 
+type CollectionView = 'grid' | 'list';
+
 type AddFromLibraryModalProps = {
   open: boolean;
   items: GalleryItem[];
@@ -34,6 +36,7 @@ export default function AddFromLibraryModal({
 }: AddFromLibraryModalProps) {
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
   const [selectedItems, setSelectedItems] = React.useState<GalleryItem[]>([]);
+  const [view, setView] = React.useState<CollectionView>('grid');
 
   // Seed the internal selection each time the modal opens.
   React.useEffect(() => {
@@ -99,7 +102,7 @@ export default function AddFromLibraryModal({
       />
       <div
         ref={dialogRef}
-        className="relative z-10 flex h-[min(640px,84vh)] w-full max-w-[840px] flex-col overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.12)]"
+        className="relative z-10 flex h-[min(700px,84vh)] w-full max-w-[920px] flex-col overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.12)]"
       >
         <div className="flex items-center justify-between px-6 pb-4 pt-6">
           <h2 className="text-[18px] font-semibold tracking-tight text-neutral-900">{ARTWORK_CTA_ADD_FROM_COLLECTION}</h2>
@@ -115,17 +118,50 @@ export default function AddFromLibraryModal({
           </button>
         </div>
 
-        <div className="border-b border-neutral-100 px-6 pb-4">
+        <div className="flex items-center gap-4 border-b border-neutral-100 px-6 pb-4">
           <input
             value={searchValue}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search your collection"
-            className="w-full border-0 bg-transparent p-0 text-[16px] text-neutral-900 placeholder:text-neutral-400 outline-none"
+            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] text-neutral-900 placeholder:text-neutral-400 outline-none"
           />
+          <div className="flex shrink-0 rounded-full bg-neutral-100 p-1" aria-label="Collection layout">
+            <button
+              type="button"
+              aria-label="Show artwork tiles"
+              aria-pressed={view === 'grid'}
+              onClick={() => setView('grid')}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                view === 'grid' ? 'bg-white text-neutral-950 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1" />
+                <rect x="14" y="3.5" width="6.5" height="6.5" rx="1" />
+                <rect x="3.5" y="14" width="6.5" height="6.5" rx="1" />
+                <rect x="14" y="14" width="6.5" height="6.5" rx="1" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              aria-label="Show compact artwork list"
+              aria-pressed={view === 'list'}
+              onClick={() => setView('list')}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                view === 'list' ? 'bg-white text-neutral-950 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <line x1="5" y1="6" x2="19" y2="6" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <line x1="5" y1="18" x2="19" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          <div className="space-y-2.5">
+          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3 sm:grid-cols-3' : 'space-y-2.5'}>
             {filteredItems.length === 0 ? (
               <div className="rounded-[20px] border border-neutral-100 bg-neutral-50 px-5 py-8 text-center text-[14px] text-neutral-500">
                 {items.length === 0 ? 'No saved artworks yet.' : 'No artworks match your search.'}
@@ -135,41 +171,69 @@ export default function AddFromLibraryModal({
                 const isSelected = selectedIds.includes(item.id);
                 const limitReached = !isSelected && selectedCount >= maxSelection;
 
+                const handleClick = () => {
+                  if (!limitReached) toggleSelect(item);
+                };
+
+                if (view === 'grid') {
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={handleClick}
+                      className={`group relative overflow-hidden rounded-[18px] border text-left transition-all ${
+                        isSelected
+                          ? 'border-neutral-950 bg-neutral-950 shadow-[0_8px_20px_rgba(0,0,0,0.12)]'
+                          : 'border-neutral-200 bg-white hover:-translate-y-0.5 hover:border-neutral-400 hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)]'
+                      } ${limitReached ? 'cursor-not-allowed opacity-45' : ''}`}
+                    >
+                      <div className="relative flex h-32 items-center justify-center overflow-hidden bg-neutral-100 p-2">
+                        <img src={item.url} alt={item.artworkName || 'Artwork'} className="h-full w-full object-contain" />
+                        {isSelected && (
+                          <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-950 text-white shadow-sm">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                      <div className={`px-3 pb-3 pt-2.5 ${isSelected ? 'bg-neutral-950' : ''}`}>
+                        <p className={`truncate text-[14px] font-semibold ${isSelected ? 'text-white' : 'text-neutral-900'}`}>
+                          {item.artworkName || 'Untitled'}
+                        </p>
+                        <p className={`mt-0.5 truncate text-[12px] ${isSelected ? 'text-neutral-300' : 'text-neutral-500'}`}>
+                          {formatSecondaryMeta(item)}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                }
+
                 return (
                   <button
                     key={item.id}
-                    onClick={() => {
-                      if (limitReached) return;
-                      toggleSelect(item);
-                    }}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={handleClick}
                     className={`flex w-full items-center gap-3 rounded-[20px] px-3.5 py-3 text-left transition-colors ${
-                      isSelected
-                        ? 'bg-neutral-50'
-                        : 'hover:bg-neutral-50'
+                      isSelected ? 'bg-neutral-50' : 'hover:bg-neutral-50'
                     } ${limitReached ? 'opacity-50' : ''}`}
                   >
-                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-neutral-100">
-                      <img src={item.url} alt={item.artworkName || 'Artwork'} className="h-full w-full object-cover" />
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
+                      <img src={item.url} alt={item.artworkName || 'Artwork'} className="h-full w-full object-contain" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[16px] font-medium text-neutral-900">
-                        {item.artworkName || 'Untitled'}
-                      </p>
-                      <p className="mt-0.5 truncate text-[13px] text-neutral-500">
-                        {formatSecondaryMeta(item)}
-                      </p>
+                      <p className="truncate text-[16px] font-medium text-neutral-900">{item.artworkName || 'Untitled'}</p>
+                      <p className="mt-0.5 truncate text-[13px] text-neutral-500">{formatSecondaryMeta(item)}</p>
                     </div>
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                      {isSelected ? (
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-950 text-white">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </div>
-                      ) : (
-                        <div className="h-7 w-7 rounded-full border border-transparent" />
-                      )}
-                    </div>
+                    {isSelected && (
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-950 text-white">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                    )}
                   </button>
                 );
               })
