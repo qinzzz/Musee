@@ -394,7 +394,7 @@ const App: React.FC = () => {
       isSubmittingPreparedSession,
       pendingLibraryArtworkIds,
       availableLibraryArtworks,
-      stageLibraryArtworkForSession,
+      commitLibrarySelection,
       removePendingSessionArtwork,
       resetPreparedSessionState,
     },
@@ -810,7 +810,8 @@ const App: React.FC = () => {
             ? availableLibraryArtworks.filter((item) =>
                 !item.sessionLinks?.some((link) => link.sessionId === libraryPickerSessionId))
             : availableLibraryArtworks}
-          selectedIds={pendingLibraryArtworkIds}
+          initialSelectedIds={pendingLibraryArtworkIds}
+          maxSelection={Math.max(1, 5 - pendingSessionArtworks.filter((entry) => entry.kind !== 'library').length)}
           searchValue={libraryPickerSearch}
           onClose={() => {
             setIsLibraryPickerOpen(false);
@@ -818,8 +819,8 @@ const App: React.FC = () => {
             setLibraryPickerSessionId(null);
           }}
           onSearchChange={setLibraryPickerSearch}
-          onToggleSelect={stageLibraryArtworkForSession}
-          onConfirm={() => {
+          onConfirm={(selectedItems) => {
+            commitLibrarySelection(selectedItems);
             setIsLibraryPickerOpen(false);
             setLibraryPickerSearch('');
             setLibraryPickerSessionId(null);

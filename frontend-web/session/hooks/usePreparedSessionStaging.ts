@@ -47,26 +47,26 @@ export function usePreparedSessionStaging({
     setLibraryPickerSearch('');
   };
 
-  const stageLibraryArtworkForSession = (item: GalleryItem) => {
+  // Replaces the staged library picks with the picker's confirmed selection,
+  // preserving any staged uploads. Called once on "Add to chat" so selecting
+  // inside the modal doesn't touch the tray until the user commits.
+  const commitLibrarySelection = (selectedItems: GalleryItem[]) => {
     setPendingSessionArtworks((prev) => {
-      if (prev.some((entry) => entry.kind === 'library' && entry.artwork.id === item.id)) {
-        return prev.filter((entry) => !(entry.kind === 'library' && entry.artwork.id === item.id));
-      }
-      if (prev.length >= maxArtworks) {
+      const uploadEntries = prev.filter((entry) => entry.kind !== 'library');
+      const remainingSlots = Math.max(0, maxArtworks - uploadEntries.length);
+      const limited = selectedItems.slice(0, remainingSlots);
+      if (limited.length < selectedItems.length) {
         showToast(`You can add up to ${maxArtworks} artworks at a time.`, 'info');
-        return prev;
       }
-      return [
-        ...prev,
-        {
-          id: `library-${item.id}`,
-          kind: 'library',
-          artwork: item,
-          previewUrl: item.url,
-          label: item.artworkName || 'Untitled',
-          sublabel: item.artistName || item.photoTime || 'Saved artwork',
-        },
-      ];
+      const libraryEntries: PendingSessionArtwork[] = limited.map((item) => ({
+        id: `library-${item.id}`,
+        kind: 'library',
+        artwork: item,
+        previewUrl: item.url,
+        label: item.artworkName || 'Untitled',
+        sublabel: item.artistName || item.photoTime || 'Saved artwork',
+      }));
+      return [...uploadEntries, ...libraryEntries];
     });
   };
 
@@ -88,7 +88,7 @@ export function usePreparedSessionStaging({
     pendingLibraryArtworkIds,
     availableLibraryArtworks,
     resetPreparedSessionState,
-    stageLibraryArtworkForSession,
+    commitLibrarySelection,
     removePendingSessionArtwork,
   };
 }
