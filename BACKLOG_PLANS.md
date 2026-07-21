@@ -979,3 +979,51 @@ Make secondary enrichment jobs behave consistently with the app's provider confi
 - core artwork analysis should remain successful even if this job fails
 - users should not lose the main capture/analyze experience because of this enrichment path
 - taste-profile features should degrade gracefully until dimension enrichment is healthy again
+
+## 12. Inferred-Intent Suggestion Chips for Silent Artwork Adds
+
+Status: deferred
+
+### Problem
+
+When a user adds artworks to a session without typing anything — the most ambiguous moment in the app — the curator either says nothing (collection adds) or streams a one-shot commentary (uploads). Every other interaction (typed inquiry, session goal, scan-with-label) carries explicit intent; a silent add is the one case where the user clearly did something deliberate but told us nothing about why. We currently either waste that moment (silence) or risk a curator monologue that may interleave awkwardly if the user is mid-typing.
+
+Note: the staging tray shipped (section on ongoing-session staging / PR #77) narrows this to genuinely silent sends — batches sent with no message — because the tray now gives users a chance to attach intent before sending. That makes the chips the fallback for the still-ambiguous case rather than firing on every add.
+
+### Concept
+
+For a batch sent to a session with no accompanying message, the curator returns a single structured response:
+
+1. a short (2–3 sentence) commentary reacting to what was added, and
+2. 2–3 inferred "intent" suggestion chips — likely questions or directions the user might want — grounded in session context (the session goal, the artworks already present, and the relationship between the new additions and what's already there).
+
+Tapping a chip inserts it as the user's message and dispatches through the normal inquiry path, so the transcript reads coherently.
+
+### Why this matters
+
+- Targets the highest-ambiguity interaction with an honest "here are candidate intents, pick one" rather than committing to a single guessed reading.
+- Leverages context generic assistants can't: goal + present artworks + the delta the new addition creates. That relational inference ("you've moved from quiet solitary photos to immersive installations — explore why?") is the differentiator.
+- Reduces typing at exactly the wrong time for typing (standing in a gallery, one hand, phone raised) and doubles as capability discovery for new users.
+- Fits the existing event model: chips can ride in the `artwork_commentary` event payload (persist across reloads); a tapped chip dispatches through `sendSessionInquiryToSession`.
+
+### Design rules (guardrails)
+
+1. Suggestions must be specific or they die — require grounding in a named prior work, the session goal, or a concrete tension. Two sharp chips beat three where one is filler; allow the model to return fewer.
+2. No stacking/staleness — only the latest add's chips are actionable; earlier chips collapse into their commentary or disappear. Any typed user message dismisses active chips (the user declared intent).
+3. Respect declared intent — chips only fire for input-less sends. If a message accompanies the add, answer the message, no chips.
+4. Legible transcript — a tapped chip is inserted as the user's visible message, not an invisible trigger.
+5. Latency shaping — one structured generation returns commentary + chips together (no second delayed pop-in). Collection adds are pre-analyzed so this can start immediately; uploads still wait on analysis.
+
+### Open questions
+
+- Should the commentary shrink to a tight observation (2–3 sentences) once chips carry the "what next" weight? Leaning yes.
+- Should chips fire always, or only when the session has a stated goal to anchor them? Leaning always, but goal-gated is the safer first cut.
+
+### Dependency and sequencing
+
+- Builds directly on the shipped staging + single-`user_input`-event batch pipeline; the fallback trigger (`buildStagedSessionAdditionPrompt`) is the natural place the structured response replaces.
+- Superseded the earlier "plain auto-commentary for library adds" idea — go straight to the unified commentary + chips response for both silent uploads and silent collection adds.
+
+### Success metric
+
+- Chip tap-through rate, available from day one.

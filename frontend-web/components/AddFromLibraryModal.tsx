@@ -6,13 +6,14 @@ import { ARTWORK_CTA_ADD_FROM_COLLECTION } from '../lib/artworkSourceCtas';
 type AddFromLibraryModalProps = {
   open: boolean;
   items: GalleryItem[];
-  selectedIds: string[];
+  // Seeds the modal's own selection when it opens; the tray is only touched
+  // on confirm, so selecting inside the modal is non-destructive.
+  initialSelectedIds: string[];
   searchValue: string;
   maxSelection?: number;
   onClose: () => void;
   onSearchChange: (value: string) => void;
-  onToggleSelect: (item: GalleryItem) => void;
-  onConfirm: () => void;
+  onConfirm: (selectedItems: GalleryItem[]) => void;
 };
 
 function formatSecondaryMeta(item: GalleryItem): string {
@@ -24,15 +25,32 @@ function formatSecondaryMeta(item: GalleryItem): string {
 export default function AddFromLibraryModal({
   open,
   items,
-  selectedIds,
+  initialSelectedIds,
   searchValue,
   maxSelection = 5,
   onClose,
   onSearchChange,
-  onToggleSelect,
   onConfirm,
 }: AddFromLibraryModalProps) {
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
+  const [selectedItems, setSelectedItems] = React.useState<GalleryItem[]>([]);
+
+  // Seed the internal selection each time the modal opens.
+  React.useEffect(() => {
+    if (!open) return;
+    setSelectedItems(items.filter((item) => initialSelectedIds.includes(item.id)));
+    // Only re-seed on open; live `items`/`initialSelectedIds` churn shouldn't
+    // reset an in-progress selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const toggleSelect = (item: GalleryItem) => {
+    setSelectedItems((prev) => (
+      prev.some((entry) => entry.id === item.id)
+        ? prev.filter((entry) => entry.id !== item.id)
+        : [...prev, item]
+    ));
+  };
 
   React.useEffect(() => {
     if (!open) return;
@@ -68,6 +86,7 @@ export default function AddFromLibraryModal({
 
   if (!open) return null;
 
+  const selectedIds = selectedItems.map((item) => item.id);
   const selectedCount = selectedIds.length;
 
   return createPortal(
@@ -121,7 +140,7 @@ export default function AddFromLibraryModal({
                     key={item.id}
                     onClick={() => {
                       if (limitReached) return;
-                      onToggleSelect(item);
+                      toggleSelect(item);
                     }}
                     className={`flex w-full items-center gap-3 rounded-[20px] px-3.5 py-3 text-left transition-colors ${
                       isSelected
@@ -170,7 +189,7 @@ export default function AddFromLibraryModal({
               Cancel
             </button>
             <button
-              onClick={onConfirm}
+              onClick={() => onConfirm(selectedItems)}
               disabled={selectedCount === 0}
               className="rounded-full bg-neutral-950 px-5 py-2.5 text-[15px] font-medium text-white transition-opacity disabled:opacity-35"
             >

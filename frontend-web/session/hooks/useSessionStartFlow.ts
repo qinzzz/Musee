@@ -7,6 +7,7 @@ import type {
 } from '../../artwork-ingest/types';
 import type { ArtworkWorkspace, GalleryItem, SessionLink } from '../../types';
 import { startSessionWithArtworks } from '../api/sessions';
+import { buildArtworkInputEntries, buildArtworkRowEvents } from '../lib/batchEvents';
 import { buildPreparedSessionFallbackPrompt } from '../lib/preparedSession';
 import { newSessionEventId, updateSessionLinkForItem } from '../lib/sessionLinks';
 import { nextLocalOrder } from '../lib/sessionOrdering';
@@ -129,13 +130,13 @@ export function useSessionStartFlow({
         };
       });
 
-      libraryEntries.forEach((entry) => {
-        const artworkId = entry.artwork.artworkId || entry.artwork.id;
-        libraryStreamMessages.push(
-          { id: `capture-${sessionId}-${artworkId}`, role: 'user', text: '', type: 'artwork_capture', artworkId, triggerEventId: batchUserInputEventId, createdAt: streamCursor++, localOrder: nextLocalOrder() },
-          { id: `card-${sessionId}-${artworkId}`, role: 'model', text: '', type: 'artwork_card', artworkId, triggerEventId: batchUserInputEventId, createdAt: streamCursor++, localOrder: nextLocalOrder() },
-        );
-      });
+      libraryStreamMessages.push(...buildArtworkRowEvents(
+        sessionId,
+        libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id),
+        batchUserInputEventId,
+        streamCursor,
+      ));
+      streamCursor += libraryStreamMessages.length;
 
       if (libraryStreamMessages.length > 0) {
         // Local-only: these legacy capture/card messages drive optimistic
@@ -174,17 +175,7 @@ export function useSessionStartFlow({
       // Persist the whole prepared batch as ONE canonical user_input event,
       // with each artwork's source. That user_input event becomes the shared
       // parent event id for the row.
-      const inputEntries = resolvedSessionItems
-        .map((item) => {
-          const link = item.sessionLinks?.find((sessionLink) => sessionLink.sessionId === sessionId);
-          const source: 'upload' | 'capture' | 'library' = link?.source === 'library'
-            ? 'library'
-            : link?.source === 'camera'
-              ? 'capture'
-              : 'upload';
-          return { artworkId: item.artworkId || item.id, source };
-        })
-        .filter((entry) => entry.artworkId);
+      const inputEntries = buildArtworkInputEntries(resolvedSessionItems, sessionId);
       void persistSessionArtworkInput(
         sessionId,
         inputEntries,
@@ -205,24 +196,14 @@ export function useSessionStartFlow({
       });
 
       const openingMessage = newSessionDraftMessage.trim();
-      const localInputEntries = resolvedSessionItems
-        .map((item) => {
-          const link = item.sessionLinks?.find((sessionLink) => sessionLink.sessionId === sessionId);
-          const source: 'upload' | 'capture' | 'library' = link?.source === 'library'
-            ? 'library'
-            : link?.source === 'camera'
-              ? 'capture'
-              : 'upload';
-          return { artworkId: item.artworkId || item.id, source };
-        })
-        .filter((entry) => entry.artworkId);
+      
       const localUserInputEvent: SessionStreamMessage = {
         id: batchUserInputEventId,
         role: 'user',
         text: openingMessage,
-        artworkIds: localInputEntries.map((entry) => entry.artworkId),
+        artworkIds: inputEntries.map((entry) => entry.artworkId),
         payload: {
-          artworks: localInputEntries.map((entry) => ({
+          artworks: inputEntries.map((entry) => ({
             artwork_id: entry.artworkId,
             source: entry.source,
           })),
