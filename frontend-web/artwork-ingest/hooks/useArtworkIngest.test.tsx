@@ -54,7 +54,7 @@ vi.mock('../lib/location', () => ({
 
 type HarnessOptions = {
   activeTab?: 'newSession' | 'collect' | 'profile' | 'learn';
-  isComposingNewSession?: boolean;
+  canStageSessionArtworks?: boolean;
   pendingSessionArtworks?: PendingSessionArtwork[];
   items?: GalleryItem[];
   sessionStreams?: Record<string, SessionStreamMessage[]>;
@@ -158,7 +158,7 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       userId: 'user-1',
       defaultSessionTitle: 'Untitled Session',
       activeTab: options.activeTab ?? 'collect',
-      isComposingNewSession: options.isComposingNewSession ?? false,
+      canStageSessionArtworks: options.canStageSessionArtworks ?? false,
       pendingSessionArtworks,
       items,
       sessionStreams: options.sessionStreams ?? {},
@@ -245,7 +245,7 @@ describe('useArtworkIngest', () => {
   it('stages uploads for a new composed session instead of persisting immediately', async () => {
     const { result, spies } = renderUseArtworkIngest({
       activeTab: 'newSession',
-      isComposingNewSession: true,
+      canStageSessionArtworks: true,
       pendingSessionArtworks: [],
     });
 
@@ -271,7 +271,7 @@ describe('useArtworkIngest', () => {
 
     const { result, spies } = renderUseArtworkIngest({
       activeTab: 'collect',
-      isComposingNewSession: false,
+      canStageSessionArtworks: false,
       items: [],
     });
 
@@ -318,7 +318,7 @@ describe('useArtworkIngest', () => {
 
     const { result, spies } = renderUseArtworkIngest({
       activeTab: 'collect',
-      isComposingNewSession: false,
+      canStageSessionArtworks: false,
       items: [],
     });
 
@@ -350,7 +350,7 @@ describe('useArtworkIngest', () => {
 
     const { result, spies } = renderUseArtworkIngest({
       activeTab: 'newSession',
-      isComposingNewSession: false,
+      canStageSessionArtworks: false,
       items: [],
     });
 
@@ -402,7 +402,7 @@ describe('useArtworkIngest', () => {
 
     const { result } = renderUseArtworkIngest({
       activeTab: 'newSession',
-      isComposingNewSession: false,
+      canStageSessionArtworks: false,
       items: [
         createGalleryItem({
           id: 'existing-1',
@@ -438,7 +438,7 @@ describe('useArtworkIngest', () => {
 
     const { result, spies } = renderUseArtworkIngest({
       activeTab: 'collect',
-      isComposingNewSession: false,
+      canStageSessionArtworks: false,
     });
 
     const artwork = createFile('artwork.jpg');
@@ -481,7 +481,7 @@ describe('useArtworkIngest', () => {
 
     const { result } = renderUseArtworkIngest({
       activeTab: 'collect',
-      isComposingNewSession: false,
+      canStageSessionArtworks: false,
       items: [],
     });
 
@@ -538,7 +538,7 @@ describe('useArtworkIngest', () => {
 
     const { result, spies } = renderUseArtworkIngest({
       activeTab: 'newSession',
-      isComposingNewSession: false,
+      canStageSessionArtworks: false,
       items: [],
     });
 

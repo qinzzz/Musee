@@ -53,7 +53,7 @@ export function usePreparedSessionStaging({
         return prev.filter((entry) => !(entry.kind === 'library' && entry.artwork.id === item.id));
       }
       if (prev.length >= maxArtworks) {
-        showToast(`You can add up to ${maxArtworks} artworks to start a session.`, 'info');
+        showToast(`You can add up to ${maxArtworks} artworks at a time.`, 'info');
         return prev;
       }
       return [

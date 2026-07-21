@@ -21,11 +21,21 @@ import {
 
 export type ActionBarMode = 'session';
 
+type StagedItem = {
+  id: string;
+  previewUrl: string;
+  label: string;
+};
+
 interface Props {
   mode: ActionBarMode;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   onOpenSessionCapture: () => void;
   onOpenLibraryPicker: () => void;
+  stagedItems?: StagedItem[];
+  onRemoveStagedItem?: (entryId: string) => void;
+  onSubmitStagedBatch?: (message: string) => Promise<boolean>;
+  isSubmittingStagedBatch?: boolean;
   onInquiry?: (text: string) => Promise<boolean>;
   onLike?: () => void;
   onCollect?: () => void;
@@ -43,6 +53,10 @@ const ContextualActionBar: React.FC<Props> = ({
   onUpload,
   onOpenSessionCapture,
   onOpenLibraryPicker,
+  stagedItems = [],
+  onRemoveStagedItem,
+  onSubmitStagedBatch,
+  isSubmittingStagedBatch,
   onInquiry,
   onLike,
   onCollect,
@@ -75,8 +89,18 @@ const ContextualActionBar: React.FC<Props> = ({
     },
   ];
 
+  const hasStagedItems = stagedItems.length > 0;
+
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (hasStagedItems) {
+      if (isSubmittingStagedBatch) return;
+      const didSubmit = await onSubmitStagedBatch?.(text.trim());
+      if (didSubmit) {
+        setText('');
+      }
+      return;
+    }
     const value = text.trim();
     if (!value || isInquiryDisabled) return;
     const didSubmit = await onInquiry?.(value);
@@ -157,6 +181,30 @@ const ContextualActionBar: React.FC<Props> = ({
             onSubmit={submit}
             className="relative rounded-[34px] border border-neutral-200 bg-white px-4 sm:px-6 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)]"
           >
+            {hasStagedItems && (
+              <div className="mb-3 flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                {stagedItems.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-[16px] border border-neutral-200 bg-neutral-50"
+                  >
+                    <img src={entry.previewUrl} alt={entry.label} className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => onRemoveStagedItem?.(entry.id)}
+                      className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/80 text-white shadow-sm transition-colors hover:bg-black"
+                      aria-label={`Remove ${entry.label}`}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -207,13 +255,15 @@ const ContextualActionBar: React.FC<Props> = ({
               <input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder={placeholder || 'Add a reflection, memory, or association...'}
+                placeholder={hasStagedItems
+                  ? 'Add a note about these artworks (optional)...'
+                  : (placeholder || 'Add a reflection, memory, or association...')}
                 className="flex-1 min-w-0 h-14 rounded-full border border-neutral-200 bg-white px-6 text-[16px] text-neutral-700 outline-none placeholder-neutral-400"
               />
               <button
                 type="submit"
                 className="w-10 h-10 shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-30"
-                disabled={!text.trim() || isInquiryDisabled}
+                disabled={hasStagedItems ? Boolean(isSubmittingStagedBatch) : (!text.trim() || isInquiryDisabled)}
                 title={isInquiryDisabled ? 'Waiting for response' : 'Send'}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

@@ -115,6 +115,8 @@ type ViewportMutationProps = {
   openSessionLibraryPicker: () => void;
   removePendingSessionArtwork: (entryId: string) => void;
   submitPreparedSession: () => Promise<void>;
+  submitStagedBatch: (sessionId: string, message: string) => Promise<boolean>;
+  isSubmittingStagedBatch: boolean;
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   createBoard: (name: string, itemIds?: string[]) => Promise<Board>;
   renameBoard: (boardId: string, name: string) => Promise<Board>;
@@ -219,6 +221,8 @@ export default function AppViewport({
     openSessionLibraryPicker,
     removePendingSessionArtwork,
     submitPreparedSession,
+    submitStagedBatch,
+    isSubmittingStagedBatch,
     handleFileUpload,
     createBoard,
     renameBoard,
@@ -536,6 +540,14 @@ export default function AppViewport({
           isAnalyzing={isAnalyzing}
           isInquiryDisabled={isSessionReplyPending}
           onInquiry={handleSessionInquiry}
+          stagedItems={activeSessionSummary ? pendingSessionArtworks : []}
+          onRemoveStagedItem={removePendingSessionArtwork}
+          onSubmitStagedBatch={(message) => (
+            activeSessionSummary
+              ? submitStagedBatch(activeSessionSummary.id, message)
+              : Promise.resolve(false)
+          )}
+          isSubmittingStagedBatch={isSubmittingStagedBatch}
           onLike={() => artworkDetailItem && handleToggleLike(artworkDetailItem.id)}
           isLiked={Boolean(artworkDetailItem && likedIds.has(artworkDetailItem.id))}
           onDelete={() => artworkDetailItem && setDeleteConfirmation({ type: 'item', id: artworkDetailItem.id })}

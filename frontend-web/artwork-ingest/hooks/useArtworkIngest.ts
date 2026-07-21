@@ -50,7 +50,9 @@ type UseArtworkIngestOptions = {
   userId: string;
   defaultSessionTitle: string;
   activeTab: 'newSession' | 'collect' | 'profile' | 'learn';
-  isComposingNewSession: boolean;
+  // True when picked images should stage into the pending-batch tray instead
+  // of ingesting immediately (new-session composer OR an open ongoing session).
+  canStageSessionArtworks: boolean;
   pendingSessionArtworks: PendingSessionArtwork[];
   items: GalleryItem[];
   sessionStreams: Record<string, SessionStreamMessage[]>;
@@ -145,7 +147,7 @@ export function useArtworkIngest({
   userId,
   defaultSessionTitle,
   activeTab,
-  isComposingNewSession,
+  canStageSessionArtworks,
   pendingSessionArtworks,
   items,
   sessionStreams,
@@ -805,20 +807,20 @@ export function useArtworkIngest({
     const shouldStageUpload =
       !options?.bypassStaging &&
       activeTab === 'newSession' &&
-      isComposingNewSession &&
+      canStageSessionArtworks &&
       (mode === 'gallery' || pendingSessionArtworks.length > 0);
 
     if (shouldStageUpload) {
       const remainingSlots = Math.max(0, 5 - pendingSessionArtworks.length);
       if (remainingSlots === 0) {
-        showToast('You can add up to 5 artworks to start a session.', 'info');
+        showToast('You can add up to 5 artworks at a time.', 'info');
         resetInput?.();
         return;
       }
 
       const filesToStage = files.slice(0, remainingSlots);
       if (filesToStage.length < files.length) {
-        showToast('Only the first 5 artworks can be added to a new session.', 'info');
+        showToast('Only the first 5 artworks were added to the batch.', 'info');
       }
 
       const stagedEntries = buildStagedPendingUploads(await prepareUploadCandidates(filesToStage, mode, {
@@ -878,7 +880,7 @@ export function useArtworkIngest({
     }
   }, [
     activeTab,
-    isComposingNewSession,
+    canStageSessionArtworks,
     pendingSessionArtworks,
     setPendingSessionArtworks,
     showToast,

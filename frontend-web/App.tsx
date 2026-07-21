@@ -30,7 +30,7 @@ import { useArtworkLibrary } from './artwork/hooks/useArtworkLibrary';
 import { useArtworkAnalysis } from './artwork/hooks/useArtworkAnalysis';
 import { useBoards } from './boards/hooks/useBoards';
 import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
-import { useAttachLibraryArtworks } from './session/hooks/useAttachLibraryArtworks';
+import { useSessionStagedBatch } from './session/hooks/useSessionStagedBatch';
 import { useArtworkIngest } from './artwork-ingest/hooks/useArtworkIngest';
 import type { PreparedSessionUploadEntry, PreparedUploadIngestResult, PreparedUploadSessionContext } from './artwork-ingest/types';
 import {
@@ -396,6 +396,7 @@ const App: React.FC = () => {
       availableLibraryArtworks,
       stageLibraryArtworkForSession,
       removePendingSessionArtwork,
+      resetPreparedSessionState,
     },
     messaging: {
       createSessionDraft,
@@ -421,33 +422,27 @@ const App: React.FC = () => {
     openSessionSummary,
   } = sessionWorkspace;
 
-  // When set, the library picker adds to this ongoing session instead of
-  // staging artworks for a new one.
+  // When set, the library picker filters out artworks already in this ongoing
+  // session; picks stage into the shared tray either way.
   const [libraryPickerSessionId, setLibraryPickerSessionId] = React.useState<string | null>(null);
 
-  const {
-    selectedIds: sessionLibrarySelectedIds,
-    isAttaching: isAttachingLibraryArtworks,
-    toggleSelect: toggleSessionLibrarySelect,
-    resetSelection: resetSessionLibrarySelection,
-    attachSelectionToSession,
-  } = useAttachLibraryArtworks({
-    userId: sessionUserId,
-    items,
-    sessionStreams,
-    updateArtworkSessionLinks,
-    appendSessionEvents,
-    persistSessionArtworkInput,
-    setVisit: setArtworkWorkspace,
-    refreshPersistedSessions,
-    showToast,
-  });
+  // Staged artworks go to the tray in the composer (new session) and the action
+  // bar (ongoing session), so both surfaces can add a message before sending.
+  const canStageSessionArtworks = isComposingNewSession || Boolean(activeSessionSummary);
 
   const openSessionLibraryPicker = React.useCallback(() => {
     if (!activeSessionSummary) return;
     setLibraryPickerSessionId(activeSessionSummary.id);
     setIsLibraryPickerOpen(true);
   }, [activeSessionSummary, setIsLibraryPickerOpen]);
+
+  // A staged batch belongs to the surface it was composed on; switching
+  // sessions (or entering/leaving the composer) discards it.
+  const activeSessionIdForStaging = activeSessionSummary?.id ?? null;
+  React.useEffect(() => {
+    resetPreparedSessionState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionIdForStaging]);
 
   const removeArtworkLocally = React.useCallback((itemId: string) => {
     removeArtwork(itemId);
@@ -469,7 +464,7 @@ const App: React.FC = () => {
     userId: sessionUserId,
     defaultSessionTitle: DEFAULT_VISIT_TITLE,
     activeTab,
-    isComposingNewSession,
+    canStageSessionArtworks,
     pendingSessionArtworks,
     items,
     sessionStreams,
@@ -494,6 +489,25 @@ const App: React.FC = () => {
     onExitSessionCapture: exitCaptureAfterSubmit,
   });
   ingestPreparedUploadsRef.current = ingestPreparedUploads;
+
+  const {
+    isSubmittingStagedBatch,
+    submitStagedBatch,
+  } = useSessionStagedBatch({
+    userId: sessionUserId,
+    items,
+    sessionStreams,
+    pendingSessionArtworks,
+    resetPreparedSessionState,
+    updateArtworkSessionLinks,
+    appendSessionEvents,
+    persistSessionArtworkInput,
+    sendSessionInquiryToSession,
+    ingestPreparedUploads,
+    setVisit: setArtworkWorkspace,
+    refreshPersistedSessions,
+    showToast,
+  });
 
   const {
     showHeaderIdentifyAgainModal,
@@ -760,6 +774,8 @@ const App: React.FC = () => {
     openSessionLibraryPicker,
     removePendingSessionArtwork,
     submitPreparedSession,
+    submitStagedBatch,
+    isSubmittingStagedBatch,
     handleFileUpload,
     createBoard,
     renameBoard,
@@ -794,23 +810,19 @@ const App: React.FC = () => {
             ? availableLibraryArtworks.filter((item) =>
                 !item.sessionLinks?.some((link) => link.sessionId === libraryPickerSessionId))
             : availableLibraryArtworks}
-          selectedIds={libraryPickerSessionId ? sessionLibrarySelectedIds : pendingLibraryArtworkIds}
+          selectedIds={pendingLibraryArtworkIds}
           searchValue={libraryPickerSearch}
           onClose={() => {
             setIsLibraryPickerOpen(false);
             setLibraryPickerSearch('');
             setLibraryPickerSessionId(null);
-            resetSessionLibrarySelection();
           }}
           onSearchChange={setLibraryPickerSearch}
-          onToggleSelect={libraryPickerSessionId ? toggleSessionLibrarySelect : stageLibraryArtworkForSession}
+          onToggleSelect={stageLibraryArtworkForSession}
           onConfirm={() => {
-            if (libraryPickerSessionId && !isAttachingLibraryArtworks) {
-              void attachSelectionToSession(libraryPickerSessionId);
-              setLibraryPickerSessionId(null);
-            }
             setIsLibraryPickerOpen(false);
             setLibraryPickerSearch('');
+            setLibraryPickerSessionId(null);
           }}
         />
 
