@@ -8,6 +8,7 @@ import type {
 } from '../../artwork-ingest/types';
 import type { ArtworkWorkspace, GalleryItem, SessionLink } from '../../types';
 import { attachArtworksToSession } from '../api/sessions';
+import { buildArtworkInputEntries, buildArtworkRowEvents } from '../lib/batchEvents';
 import { buildStagedSessionAdditionPrompt } from '../lib/preparedSession';
 import { itemBelongsToSession, newSessionEventId, updateSessionLinkForItem } from '../lib/sessionLinks';
 import { nextLocalOrder } from '../lib/sessionOrdering';
@@ -125,15 +126,12 @@ export function useSessionStagedBatch({
           })),
         ));
 
-        let createdAtCursor = getNextLocalSessionEventCreatedAt(historySnapshot);
-        const libraryStreamMessages: SessionStreamMessage[] = [];
-        libraryEntries.forEach((entry) => {
-          const artworkId = entry.artwork.artworkId || entry.artwork.id;
-          libraryStreamMessages.push(
-            { id: `capture-${sessionId}-${artworkId}`, role: 'user', text: '', type: 'artwork_capture', artworkId, triggerEventId: batchUserInputEventId, createdAt: createdAtCursor++, localOrder: nextLocalOrder() },
-            { id: `card-${sessionId}-${artworkId}`, role: 'model', text: '', type: 'artwork_card', artworkId, triggerEventId: batchUserInputEventId, createdAt: createdAtCursor++, localOrder: nextLocalOrder() },
-          );
-        });
+        const libraryStreamMessages = buildArtworkRowEvents(
+          sessionId,
+          libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id),
+          batchUserInputEventId,
+          getNextLocalSessionEventCreatedAt(historySnapshot),
+        );
         appendSessionEvents(sessionId, libraryStreamMessages, { persist: false });
 
         const attachedClientIds = libraryEntries.map((entry) => entry.artwork.id);
@@ -162,17 +160,7 @@ export function useSessionStagedBatch({
         return false;
       }
 
-      const inputEntries = resolvedNewItems
-        .map((item) => {
-          const link = item.sessionLinks?.find((sessionLink) => sessionLink.sessionId === sessionId);
-          const source: 'upload' | 'capture' | 'library' = link?.source === 'library'
-            ? 'library'
-            : link?.source === 'camera'
-              ? 'capture'
-              : 'upload';
-          return { artworkId: item.artworkId || item.id, source };
-        })
-        .filter((entry) => entry.artworkId);
+      const inputEntries = buildArtworkInputEntries(resolvedNewItems, sessionId);
 
       void persistSessionArtworkInput(sessionId, inputEntries, batchUserInputEventId, message || undefined);
 
