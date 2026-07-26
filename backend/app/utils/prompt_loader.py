@@ -244,6 +244,15 @@ def get_session_chat_prompt(collection_summary: str) -> str:
     return template.replace("{collection_summary}", collection_summary)
 
 
+@lru_cache(maxsize=1)
+def load_journal_generation_prompt() -> str:
+    return _load_prompt_file(INSTRUCTIONS_DIR / "journal_generation.txt")
+
+
+def get_journal_generation_prompt(evidence_package: str) -> str:
+    return load_journal_generation_prompt().replace("{evidence_package}", evidence_package)
+
+
 # Backward-compat aliases
 load_visit_chat_prompt = load_session_chat_prompt
 get_visit_chat_prompt = get_session_chat_prompt

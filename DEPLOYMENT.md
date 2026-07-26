@@ -72,6 +72,40 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30    # JWT expiry
 AI_TIMEOUT=115                    # Seconds before AI call timeout
 ```
 
+### Journal Cron Service
+
+Create a separate Railway service from the same repository with:
+
+```
+Root directory: backend/
+Start command: python -m app.jobs.generate_daily_journals --execute --lookback-days 7 --max-journals 50
+Cron schedule: 15 10 * * *
+```
+
+Railway evaluates this schedule in UTC. `15 10 * * *` runs after the
+two-hour finalization grace in both Pacific standard and daylight time.
+
+The runner defaults to read-only audit mode unless `--execute` is present. It
+processes only finalized local days (two-hour grace by default), skips existing
+journals, limits each batch, isolates failures, and exits when finished. Set
+these variables on the cron service, preferably by referencing the backend
+service values:
+
+```
+ENV=prod
+NEON_DATABASE_URL_PROD=<shared production database URL>
+AI_PROVIDER=gemini
+GEMINI_API_KEY=<shared AI key>
+JOURNAL_TIMEZONE=America/Los_Angeles
+JOURNAL_LOOKBACK_DAYS=7
+JOURNAL_GRACE_HOURS=2
+JOURNAL_MAX_PER_RUN=50
+```
+
+Before enabling the schedule, deploy with the audit start command
+`python -m app.jobs.generate_daily_journals --dry-run`, then pilot execution
+with an approved `--user-id`.
+
 ## Database — Neon PostgreSQL
 
 **Project**: `holy-shape-61879548` (https://console.neon.tech/app/projects/holy-shape-61879548)

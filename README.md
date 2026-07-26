@@ -21,6 +21,15 @@ cp .env.example .env.local  # Add your AI API keys and Neon DB URL
 uvicorn app.main:app --reload
 ```
 
+Audit finalized local days for missing journals without calling AI or writing data:
+
+```bash
+python -m app.jobs.generate_daily_journals --dry-run
+```
+
+Journal execution is opt-in via `--execute`; use `--user-id` and
+`--max-journals` for controlled production pilots.
+
 ### 2. Web Client Setup
 ```bash
 cd frontend-web

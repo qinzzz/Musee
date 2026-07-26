@@ -1,6 +1,8 @@
 import React from 'react';
 import { generateTasteProfile, getTasteProfile } from '../api/artworks';
+import { fetchUserJournals, type JournalListItem } from '../api/journals';
 import { TasteProfileSnapshot } from '../types';
+import JournalList from '../profile/components/JournalList';
 import { Button } from './ui/button';
 
 const DIMENSIONS = [
@@ -97,6 +99,9 @@ const TasteProfileView: React.FC<Props> = ({
   const [submitting, setSubmitting] = React.useState(false);
   const [expandedDim, setExpandedDim] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [journals, setJournals] = React.useState<JournalListItem[]>([]);
+  const [journalsLoading, setJournalsLoading] = React.useState(true);
+  const [journalsError, setJournalsError] = React.useState<string | null>(null);
 
   const loadProfile = React.useCallback(async () => {
     setLoading(true);
@@ -116,6 +121,27 @@ const TasteProfileView: React.FC<Props> = ({
     void loadProfile();
   }, [loadProfile, refreshKey]);
 
+  React.useEffect(() => {
+    let active = true;
+    setJournalsLoading(true);
+    setJournalsError(null);
+    fetchUserJournals(userId)
+      .then((items) => {
+        if (active) setJournals(items);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setJournals([]);
+        setJournalsError(err instanceof Error ? err.message : 'Failed to load journals');
+      })
+      .finally(() => {
+        if (active) setJournalsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId, refreshKey]);
+
   const handleGenerate = async () => {
     setSubmitting(true);
     setError(null);
@@ -131,16 +157,25 @@ const TasteProfileView: React.FC<Props> = ({
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-[13px] text-neutral-400">
-        Loading taste profile…
+      <div className="h-full overflow-y-auto bg-[var(--color-bg-primary)] px-7 py-10">
+        <div className="mx-auto max-w-[620px]">
+          <JournalList journals={journals} loading={journalsLoading} error={journalsError} />
+          <div className="border-t border-neutral-200 pt-10">
+            <p className="text-[11px] font-medium text-neutral-400">Art personality</p>
+            <p className="mt-5 text-[13px] text-neutral-400">Loading taste profile…</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="mx-auto max-w-[620px] px-8 py-12">
-        <p className="text-[13px] text-neutral-500">{error || 'Taste profile unavailable.'}</p>
+      <div className="h-full overflow-y-auto bg-[var(--color-bg-primary)] px-7 py-10">
+        <div className="mx-auto max-w-[620px]">
+          <JournalList journals={journals} loading={journalsLoading} error={journalsError} />
+          <p className="text-[13px] text-neutral-500">{error || 'Taste profile unavailable.'}</p>
+        </div>
       </div>
     );
   }
@@ -164,6 +199,8 @@ const TasteProfileView: React.FC<Props> = ({
   return (
     <div className="h-full overflow-y-auto bg-[var(--color-bg-primary)] px-7 py-10">
       <div className="mx-auto max-w-[620px]">
+        <JournalList journals={journals} loading={journalsLoading} error={journalsError} />
+
         {!canRenderProfile ? (
           <div className="rounded-[32px] border border-neutral-200 bg-white px-8 py-9 shadow-[0_12px_30px_rgba(0,0,0,0.04)]">
             <p className="text-[11px] font-medium text-neutral-400">Art personality</p>

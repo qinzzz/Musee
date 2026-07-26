@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database.models import SavedArtwork, TasteProfile
 from app.services.ai_client_interface import AITextResult
@@ -281,11 +281,15 @@ def match_archetype(scores: dict) -> dict | None:
 
 def get_taste_profile_view(user_id: str, db: Session) -> Dict[str, Any]:
     response = build_taste_profile_response(user_id, db)
-    response["total_artworks"] = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).count()
+    response["total_artworks"] = sum(
+        response.get(key, 0)
+        for key in ("love_count", "reject_count", "respect_count", "unsorted_count")
+    )
 
     if response.get("is_generated"):
         classified_rows = (
             db.query(SavedArtwork)
+            .options(joinedload(SavedArtwork.artwork_entity))
             .filter(
                 SavedArtwork.user_id == user_id,
                 SavedArtwork.classification.in_(["love", "not_for_me", "respect"]),

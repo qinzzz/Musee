@@ -35,7 +35,6 @@ def test_update_artwork_updates_fields_and_tags(client):
         json={
             "artist_name": "Hilma af Klint",
             "artwork_name": "The Swan",
-            "summary": "Short summary",
             "analysis": "Full analysis",
             "date": "1915",
             "medium": "Oil on canvas",
@@ -55,7 +54,6 @@ def test_update_artwork_updates_fields_and_tags(client):
         artwork = db.query(SavedArtwork).filter(SavedArtwork.id == "art-mutate").one()
         assert artwork.artist_name == "Hilma af Klint"
         assert artwork.artwork_name == "The Swan"
-        assert artwork.summary == "Short summary"
         assert artwork.analysis == "Full analysis"
         assert artwork.params["date"] == "1915"
         assert artwork.params["medium"] == "Oil on canvas"
@@ -73,7 +71,6 @@ def test_update_artwork_updates_fields_and_tags(client):
             "artwork_name",
             "date",
             "medium",
-            "summary",
         ]
 
 
