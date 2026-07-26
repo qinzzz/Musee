@@ -36,6 +36,7 @@ class User(Base):
     artworks = relationship("SavedArtwork", back_populates="user", cascade="all, delete-orphan")
     collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+    journals = relationship("Journal", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self):
         """Convert model to dictionary"""
@@ -67,7 +68,6 @@ class SavedArtwork(Base):
     location = Column(JSON, nullable=True)  # Geographic location where photo was taken (JSON struct)
     photo_time = Column(String, nullable=True)  # Original capture time of the photo
     museum_name = Column(String, nullable=True)  # Museum or gallery name
-    summary = Column(String, nullable=True)  # One-sentence fun summary of the artwork
     analysis = Column(Text, nullable=True)  # Detailed artwork analysis from AI (markdown formatted)
     params = Column(JSON, nullable=True)  # Additional parameters (colors, metadata, etc.)
     is_recognized = Column(Integer, default=1)  # 1 for recognized, 0 for unknown
@@ -125,7 +125,6 @@ class SavedArtwork(Base):
             "location": self.location,
             "photo_time": self.photo_time,
             "museum_name": self.museum_name,
-            "summary": self.summary,
             "analysis": self.analysis,
             "params": self.params,
             "is_recognized": self.is_recognized,
@@ -369,6 +368,68 @@ class SessionEvent(Base):
             "sequence_number": self.sequence_number,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class Journal(Base):
+    """Persistent daily snapshot generated from user-authored session events."""
+
+    __tablename__ = "journals"
+    __table_args__ = (
+        UniqueConstraint("user_id", "local_date", name="uq_journals_user_local_date"),
+        Index("idx_journals_user_local_date", "user_id", "local_date"),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    local_date = Column(Date, nullable=False)
+    timezone = Column(String(100), nullable=False)
+    period_start_utc = Column(DateTime, nullable=False)
+    period_end_utc = Column(DateTime, nullable=False)
+
+    title = Column(String(160), nullable=True)
+    reflection = Column(Text, nullable=False)
+    focuses = Column(JSON, nullable=False, default=list)
+    narrative_arc = Column(Text, nullable=True)
+    representative_artwork_ids = Column(JSON, nullable=False, default=list)
+
+    evidence_snapshot = Column(JSON, nullable=False)
+    evidence_schema_version = Column(String(50), nullable=False)
+    source_event_count = Column(Integer, nullable=False)
+    input_hash = Column(String(64), nullable=False)
+
+    prompt_version = Column(String(50), nullable=False)
+    model_version = Column(String(100), nullable=False)
+    generated_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="journals")
+
+    def to_dict(self, *, include_evidence: bool = False):
+        result = {
+            "id": self.id,
+            "user_id": self.user_id,
+            "local_date": self.local_date.isoformat() if self.local_date else None,
+            "timezone": self.timezone,
+            "period_start_utc": self.period_start_utc.isoformat() if self.period_start_utc else None,
+            "period_end_utc": self.period_end_utc.isoformat() if self.period_end_utc else None,
+            "title": self.title,
+            "reflection": self.reflection,
+            "focuses": self.focuses or [],
+            "narrative_arc": self.narrative_arc,
+            "representative_artwork_ids": self.representative_artwork_ids or [],
+            "source_event_count": self.source_event_count,
+            "evidence_schema_version": self.evidence_schema_version,
+            "input_hash": self.input_hash,
+            "prompt_version": self.prompt_version,
+            "model_version": self.model_version,
+            "generated_at": self.generated_at.isoformat() if self.generated_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+        if include_evidence:
+            result["evidence_snapshot"] = self.evidence_snapshot
+        return result
 
 
 class ArtworkEvent(Base):

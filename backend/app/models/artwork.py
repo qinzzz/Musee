@@ -13,7 +13,6 @@ class UpdateArtworkRequest(BaseModel):
     """Request model for updating saved artwork details"""
     artist_name: Optional[str] = None
     artwork_name: Optional[str] = None
-    summary: Optional[str] = None
     tags: Optional[str] = None
     analysis: Optional[str] = None
     params: Optional[Dict[str, Any]] = None

@@ -37,7 +37,6 @@ def update_artwork_record(
     before_payload = {
         "artist_name": artwork.artist_name,
         "artwork_name": artwork.artwork_name,
-        "summary": artwork.summary,
         "analysis": artwork.analysis,
         "date": (artwork.params or {}).get("date") if isinstance(artwork.params, dict) else None,
         "medium": (artwork.params or {}).get("medium") if isinstance(artwork.params, dict) else None,
@@ -47,8 +46,6 @@ def update_artwork_record(
         artwork.artist_name = request.artist_name.strip()
     if request.artwork_name is not None:
         artwork.artwork_name = request.artwork_name.strip()
-    if request.summary is not None:
-        artwork.summary = request.summary
     if request.analysis is not None:
         artwork.analysis = request.analysis
     if request.params is not None:
@@ -73,7 +70,6 @@ def update_artwork_record(
     after_payload = {
         "artist_name": artwork.artist_name,
         "artwork_name": artwork.artwork_name,
-        "summary": artwork.summary,
         "analysis": artwork.analysis,
         "date": (artwork.params or {}).get("date") if isinstance(artwork.params, dict) else None,
         "medium": (artwork.params or {}).get("medium") if isinstance(artwork.params, dict) else None,

@@ -15,6 +15,7 @@ from app.database.models import (
     AIUsage,
     Collection,
     DailyUsage,
+    Journal,
     PublicComment,
     SavedArtwork,
     Session as UserSession,
@@ -47,7 +48,7 @@ def adopt_anonymous_account(db: Session, anonymous_user_id: str, target_user: Us
 
     logger.info("Adopting anonymous account %s into %s", anonymous_user_id, target_user.user_id)
 
-    for model in (SavedArtwork, Collection, UserSession, SkillEvent, PublicComment, AIUsage):
+    for model in (SavedArtwork, Collection, UserSession, Journal, SkillEvent, PublicComment, AIUsage):
         db.query(model).filter(model.user_id == anonymous_user_id).update(
             {model.user_id: target_user.user_id}
         )
