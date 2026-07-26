@@ -4,10 +4,9 @@ This is the single place where offerings are configured. Endpoints never
 encode policy: they ask quota_service for a decision and act on it, so
 changing a limit, a period, or what happens at the limit is an edit here.
 
-Tiers are entitlement levels, not roles ("unlimited" is for internal/team
-accounts; an admin *role* is a separate concern). users.tier selects the
-plan; when real subscriptions arrive, billing becomes the writer of
-users.tier and nothing else changes.
+Tiers are entitlement levels, not roles. users.tier selects the plan; when
+real subscriptions arrive, billing becomes the writer of users.tier and
+nothing else changes.
 """
 from dataclasses import dataclass
 from enum import Enum
@@ -54,6 +53,7 @@ PLANS: dict[str, dict[str, QuotaRule]] = {
 }
 
 DEFAULT_TIER = "free"
+NEW_REGISTRATION_TIER = "unlimited"
 
 
 def get_plan(tier: Optional[str]) -> dict[str, QuotaRule]:

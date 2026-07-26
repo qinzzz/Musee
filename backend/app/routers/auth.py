@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 
+from app.config.plans import NEW_REGISTRATION_TIER
 from app.database.connection import get_db
 from app.database.models import User, UserCredential
 from app.services.account_service import adopt_anonymous_account
@@ -62,7 +63,8 @@ async def google_login(
             email_verified=True,  # Google verified it
             full_name=full_name,
             profile_picture_url=picture,
-            username=email.split('@')[0] if email else None
+            username=email.split('@')[0] if email else None,
+            tier=NEW_REGISTRATION_TIER,
         )
         db.add(user)
         db.flush() # Get user_id before commit

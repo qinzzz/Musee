@@ -67,6 +67,7 @@ class TestSignupVerifyLogin:
         assert body["access_token"]
         assert body["user"]["email"] == "ada@example.com"
         assert body["user"]["email_verified"] is True
+        assert body["user"]["tier"] == "unlimited"
 
         # Password login now works; email is case/whitespace-insensitive.
         r = client.post("/api/auth/login", json={"email": "  ADA@Example.com ", "password": "correct-horse"})
@@ -143,7 +144,8 @@ class TestAccountUnification:
         assert r.json()["detail"]["error_code"] == "password_not_set"
 
     def test_google_first_user_adds_password_via_reset_flow(self, client, sent_emails, db):
-        _google_login(client, "ada@example.com")
+        google_signup = _google_login(client, "ada@example.com")
+        assert google_signup.json()["user"]["tier"] == "unlimited"
 
         r = client.post("/api/auth/request-password-reset", json={"email": "ada@example.com"})
         assert r.status_code == 200
