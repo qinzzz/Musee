@@ -46,8 +46,15 @@ describe('JournalList', () => {
     expect(screen.getByText('Asian Art Museum')).toBeTruthy();
     expect(screen.queryByText('Location not recorded')).toBeNull();
     expect(screen.getAllByRole('img')).toHaveLength(2);
+    expect(screen.getByText('Your journal appears here overnight.')).toBeTruthy();
 
     fireEvent.error(screen.getAllByRole('img')[0]);
     expect(screen.getAllByRole('img')).toHaveLength(1);
+  });
+
+  it('shows the journal timing when the list is empty', () => {
+    render(<JournalList journals={[]} />);
+
+    expect(screen.getByText('Your journal appears here overnight.')).toBeTruthy();
   });
 });

@@ -9,6 +9,8 @@ interface Props {
   error?: string | null;
 }
 
+const JOURNAL_TIMING_MESSAGE = 'Your journal appears here overnight.';
+
 const formatJournalDate = (value: string): string => {
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -67,15 +69,14 @@ const JournalList: React.FC<Props> = ({
     <h1 id="journal-heading" className="mt-3 text-[34px] font-semibold leading-tight text-neutral-900">
       Journal
     </h1>
+    <p className="mt-2 text-[13px] text-neutral-400">{JOURNAL_TIMING_MESSAGE}</p>
 
     {loading ? (
       <p className="mt-5 text-[13px] text-neutral-400">Loading journals…</p>
     ) : error ? (
       <p className="mt-5 text-[13px] text-neutral-500">{error}</p>
     ) : journals.length === 0 ? (
-      <p className="mt-5 text-[14px] leading-7 text-neutral-500">
-        Your daily reflections will appear here.
-      </p>
+      null
     ) : (
       <div className="mt-7 border-t border-neutral-200">
         {journals.map((journal) => (
