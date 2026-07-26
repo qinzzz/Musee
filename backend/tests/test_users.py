@@ -2,19 +2,31 @@
 
 import pytest
 
+from app.database.models import User
+
 
 def test_create_user(client):
     r = client.post("/api/users", json={"device_id": "dev-001"})
     assert r.status_code == 200
     data = r.json()
     assert data["device_id"] == "dev-001"
-    assert data["tier"] == "free"
+    assert data["tier"] == "unlimited"
 
 
 def test_create_user_idempotent(client):
     client.post("/api/users", json={"device_id": "dev-002"})
     r = client.post("/api/users", json={"device_id": "dev-002"})
     assert r.status_code == 200  # returns existing, no error
+
+
+def test_registration_does_not_upgrade_existing_user(client, db):
+    db.add(User(user_id="existing-free", device_id="existing-device", tier="free"))
+    db.commit()
+
+    r = client.post("/api/users", json={"device_id": "existing-device"})
+
+    assert r.status_code == 200
+    assert r.json()["tier"] == "free"
 
 
 def test_get_user(client):
@@ -29,13 +41,13 @@ def test_get_user_not_found(client):
     assert r.status_code == 404
 
 
-def test_quota_free_tier(client):
+def test_new_registration_has_unlimited_quota(client):
     user = client.post("/api/users", json={"device_id": "dev-quota"}).json()
     r = client.get(f"/api/users/{user['user_id']}/quota")
     assert r.status_code == 200
     data = r.json()
-    assert data["tier"] == "free"
-    assert data["limit"] == 20
+    assert data["tier"] == "unlimited"
+    assert data["limit"] is None
     assert data["used"] == 0
 
 

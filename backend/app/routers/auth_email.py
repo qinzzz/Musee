@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.config.plans import NEW_REGISTRATION_TIER
 from app.config.settings import settings
 from app.database.connection import get_db
 from app.database.models import User, UserCredential
@@ -129,7 +130,11 @@ async def signup(request: SignupRequest, db: Session = Depends(get_db)):
         # the latest password + a fresh link simply replace the previous try.
         _set_credential(db, user.user_id, request.password)
     else:
-        user = User(email=email, email_verified=False)
+        user = User(
+            email=email,
+            email_verified=False,
+            tier=NEW_REGISTRATION_TIER,
+        )
         db.add(user)
         db.flush()
         _set_credential(db, user.user_id, request.password)

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
 
-from app.config.plans import PLANS
+from app.config.plans import NEW_REGISTRATION_TIER, PLANS
 from app.services.quota_service import get_account_usage
 
 from app.database.connection import get_db
@@ -59,7 +59,8 @@ async def create_or_get_user(
             device_id=request.device_id,
             username=request.username,
             email=request.email,
-            settings=request.settings
+            settings=request.settings,
+            tier=NEW_REGISTRATION_TIER,
         )
 
         db.add(new_user)
