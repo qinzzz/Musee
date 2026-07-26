@@ -63,6 +63,7 @@ class RunnerConfig:
     grace_hours: int = DEFAULT_GRACE_HOURS
     max_journals: int = DEFAULT_MAX_JOURNALS
     language: str = DEFAULT_LANGUAGE
+    earliest_date: date = settings.journal_earliest_date
     execute: bool = False
     user_allowlist: frozenset[str] = frozenset()
 
@@ -115,6 +116,7 @@ def finalized_local_dates(
     timezone_name: str,
     lookback_days: int,
     grace_hours: int,
+    earliest_date: Optional[date] = None,
 ) -> tuple[date, ...]:
     timezone = ZoneInfo(timezone_name)
     normalized_now = _aware_utc(now_utc)
@@ -122,6 +124,8 @@ def finalized_local_dates(
     dates: list[date] = []
     for days_ago in range(lookback_days, 0, -1):
         candidate_date = local_today - timedelta(days=days_ago)
+        if earliest_date and candidate_date < earliest_date:
+            continue
         finalized_at = datetime.combine(
             candidate_date + timedelta(days=1),
             time.min,
@@ -152,6 +156,7 @@ def discover_candidates(
         timezone_name=config.timezone_name,
         lookback_days=config.lookback_days,
         grace_hours=config.grace_hours,
+        earliest_date=config.earliest_date,
     )
     if not dates:
         return CandidateDiscovery((), (), 0, 0)
@@ -288,6 +293,7 @@ async def run_journal_batch(
                 timezone_name=config.timezone_name,
                 configured_language=config.language,
                 force_regenerate=False,
+                earliest_date=config.earliest_date,
             )
             generated += 1
         except Exception as exc:
@@ -387,6 +393,7 @@ def config_from_arguments(arguments: argparse.Namespace) -> RunnerConfig:
         grace_hours=arguments.grace_hours,
         max_journals=arguments.max_journals,
         language=arguments.language,
+        earliest_date=settings.journal_earliest_date,
         execute=bool(arguments.execute),
         user_allowlist=frozenset(
             user_id.strip()
@@ -417,6 +424,7 @@ def print_result(result: RunnerResult, *, config: RunnerConfig) -> None:
         f" timezone={config.timezone_name}"
         f" lookback_days={config.lookback_days}"
         f" grace_hours={config.grace_hours}"
+        f" earliest_date={config.earliest_date.isoformat()}"
     )
     if not result.lock_acquired:
         print("status=skipped reason=another_runner_holds_lock")

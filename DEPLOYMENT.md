@@ -97,10 +97,14 @@ NEON_DATABASE_URL_PROD=<shared production database URL>
 AI_PROVIDER=gemini
 GEMINI_API_KEY=<shared AI key>
 JOURNAL_TIMEZONE=America/Los_Angeles
+JOURNAL_EARLIEST_DATE=2026-03-01
 JOURNAL_LOOKBACK_DAYS=7
 JOURNAL_GRACE_HOURS=2
 JOURNAL_MAX_PER_RUN=50
 ```
+
+Share `JOURNAL_EARLIEST_DATE` with both the backend and cron services so
+scheduled and manual generation enforce the same cutoff.
 
 Before enabling the schedule, deploy with the audit start command
 `python -m app.jobs.generate_daily_journals --dry-run`, then pilot execution
