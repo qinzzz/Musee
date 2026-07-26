@@ -403,6 +403,23 @@ def test_generate_journal_rejects_day_without_eligible_events(db):
     assert exc_info.value.status_code == 422
 
 
+def test_generate_journal_rejects_date_before_cutoff(db):
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            journal_service.generate_daily_journal(
+                db,
+                user_id="journal-user",
+                local_date=date(2026, 2, 28),
+                timezone_name="UTC",
+            )
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == (
+        "Journal generation is not available before 2026-03-01"
+    )
+
+
 def test_manual_journal_route_requires_admin_secret(client):
     response = client.post(
         "/api/admin/journals/generate",

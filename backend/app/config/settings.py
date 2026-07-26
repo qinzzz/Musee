@@ -1,8 +1,10 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from datetime import date
 from typing import Optional
 import os
 import logging
 from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,7 @@ class Settings(BaseSettings):
     neon_database_url: Optional[str] = None      # Default (used if env-specific not set)
     neon_database_url_dev: Optional[str] = None  # Dev database
     neon_database_url_prod: Optional[str] = None # Prod database
+    journal_earliest_date: date = date(2026, 3, 1)
 
     @property
     def effective_database_url(self) -> str:

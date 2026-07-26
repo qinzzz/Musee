@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.config.settings import settings
 from app.database.models import ArtworkAnalysis, Journal, SavedArtwork, Session as SessionModel, SessionEvent, User
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
@@ -526,7 +527,18 @@ async def generate_daily_journal(
     timezone_name: str,
     configured_language: Optional[str] = None,
     force_regenerate: bool = False,
+    earliest_date: Optional[date] = None,
 ) -> tuple[Journal, bool]:
+    generation_cutoff = earliest_date or settings.journal_earliest_date
+    if local_date < generation_cutoff:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Journal generation is not available before "
+                f"{generation_cutoff.isoformat()}"
+            ),
+        )
+
     evidence = build_daily_evidence(
         db,
         user_id=user_id,

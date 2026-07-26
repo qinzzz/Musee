@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime
 
 import pytest
 
+from app.config.settings import Settings
 from app.database.models import Journal, Session as SessionModel, SessionEvent, User
 from app.jobs.generate_daily_journals import (
     RunnerConfig,
@@ -84,6 +85,7 @@ def _config(**overrides) -> RunnerConfig:
         "grace_hours": 2,
         "max_journals": 50,
         "language": "en",
+        "earliest_date": date(2026, 3, 1),
         "execute": False,
         "user_allowlist": frozenset(),
     }
@@ -125,6 +127,52 @@ def test_finalized_dates_respect_fall_dst_and_grace_period():
 
     assert before_grace == ()
     assert at_grace == (date(2026, 10, 31),)
+
+
+def test_finalized_dates_never_include_dates_before_cutoff():
+    dates = finalized_local_dates(
+        now_utc=datetime(2026, 3, 3, 10, 0, tzinfo=UTC),
+        timezone_name="America/Los_Angeles",
+        lookback_days=7,
+        grace_hours=2,
+        earliest_date=date(2026, 3, 1),
+    )
+
+    assert dates == (date(2026, 3, 1), date(2026, 3, 2))
+
+
+def test_settings_parse_journal_earliest_date_from_environment(monkeypatch):
+    monkeypatch.setenv("JOURNAL_EARLIEST_DATE", "2026-04-15")
+
+    configured_settings = Settings(_env_file=None)
+
+    assert configured_settings.journal_earliest_date == date(2026, 4, 15)
+
+
+def test_discovery_ignores_events_before_cutoff(db):
+    _add_user_event(
+        db,
+        user_id="cutoff-user",
+        event_id="before-cutoff",
+        created_at=datetime(2026, 2, 28, 12),
+    )
+    _add_user_event(
+        db,
+        user_id="cutoff-user",
+        event_id="at-cutoff",
+        created_at=datetime(2026, 3, 1, 12),
+    )
+
+    discovery = discover_candidates(
+        db,
+        config=_config(timezone_name="UTC", lookback_days=7),
+        now_utc=datetime(2026, 3, 3, 10, tzinfo=UTC),
+    )
+
+    assert discovery.eligible_user_dates == 1
+    assert [(item.user_id, item.local_date) for item in discovery.candidates] == [
+        ("cutoff-user", date(2026, 3, 1))
+    ]
 
 
 def test_discovery_matches_evidence_eligibility_and_skips_existing(db):
