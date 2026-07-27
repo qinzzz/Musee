@@ -661,7 +661,7 @@ const SessionCapturePage: React.FC<Props> = ({
   };
 
   const handlePrimaryAction = async () => {
-    if (!artworkSlot) {
+    if (!activeSlot) {
       await captureActiveTargetFromViewport();
       return;
     }
@@ -669,8 +669,11 @@ const SessionCapturePage: React.FC<Props> = ({
     await handleSubmit();
   };
 
-  const primaryCtaLabel = artworkSlot ? 'Analyze' : 'Capture';
-  const primaryCtaDisabled = artworkSlot ? isSubmitting : cameraState !== 'ready' || isCapturing || isSubmitting;
+  const isPrimaryCaptureAction = !activeSlot;
+  const primaryCtaLabel = isPrimaryCaptureAction ? 'Capture' : 'Analyze';
+  const primaryCtaDisabled = isPrimaryCaptureAction
+    ? cameraState !== 'ready' || isCapturing || isSubmitting
+    : !artworkSlot || isSubmitting;
 
   const renderMobileTargetChip = (
     kind: CaptureTarget,
@@ -897,7 +900,7 @@ const SessionCapturePage: React.FC<Props> = ({
               >
                 {isSubmitting ? 'Preparing capture…' : (
                   <>
-                    {!artworkSlot ? <span className="mr-2">{CAMERA_ICON}</span> : null}
+                    {isPrimaryCaptureAction ? <span className="mr-2">{CAMERA_ICON}</span> : null}
                     {primaryCtaLabel}
                   </>
                 )}
@@ -923,7 +926,7 @@ const SessionCapturePage: React.FC<Props> = ({
             >
               {isSubmitting ? 'Preparing capture…' : (
                 <>
-                  {!artworkSlot ? <span className="mr-2">{CAMERA_ICON}</span> : null}
+                  {isPrimaryCaptureAction ? <span className="mr-2">{CAMERA_ICON}</span> : null}
                   {primaryCtaLabel}
                 </>
               )}

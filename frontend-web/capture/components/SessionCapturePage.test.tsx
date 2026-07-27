@@ -138,7 +138,7 @@ describe('SessionCapturePage', () => {
     expect(screen.getByText('Drag or tap Capture for label')).toBeTruthy();
   });
 
-  it('uses the capture CTA before switching to analyze after artwork capture', async () => {
+  it('keeps the capture CTA for an empty label after artwork capture', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
 
     render(
@@ -152,6 +152,17 @@ describe('SessionCapturePage', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('button', { name: 'Capture' }).length).toBeGreaterThan(0);
     });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Capture' })[0]);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Analyze' }).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Label - Optional' }));
+
+    expect(screen.getAllByRole('button', { name: 'Capture' }).length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole('button', { name: 'Analyze' })).toHaveLength(0);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Capture' })[0]);
 
