@@ -59,12 +59,15 @@ function createSessionSummary(overrides: Partial<SessionSummary> = {}): SessionS
 
 function renderAppViewport(options: {
   isPersistedSessionId?: (sessionId: string) => boolean;
+  handleSessionInquiry?: (text: string) => Promise<boolean>;
 }) {
   const setSessionGoal = vi.fn();
-  const setSessionGoalDismissed = vi.fn();
   const setSessionGoalInput = vi.fn();
   const onSaveSessionGoal = vi.fn().mockResolvedValue(undefined);
   const refreshPersistedSessions = vi.fn();
+  const handleSessionInquiry = vi.fn(
+    options.handleSessionInquiry ?? (async () => true),
+  );
 
   render(
     <AppViewport
@@ -139,10 +142,8 @@ function renderAppViewport(options: {
         refreshPersistedSessions,
         saveSessionTitle: vi.fn(),
         showToast: vi.fn(),
-        createSessionDraft: vi.fn(() => 'visit-1'),
         setSessionGoalInput,
         onSaveSessionGoal,
-        setSessionGoalDismissed,
         setNewSessionDraftMessage: vi.fn(),
         setIsLibraryPickerOpen: vi.fn(),
         openSessionLibraryPicker: vi.fn(),
@@ -158,46 +159,58 @@ function renderAppViewport(options: {
         handleDeleteItem: vi.fn(),
         setIsUnsortedFlowOpen: vi.fn(),
         handleToggleLike: vi.fn(),
-        handleSessionInquiry: vi.fn().mockResolvedValue(true),
+        handleSessionInquiry,
       }}
     />,
   );
 
   return {
     setSessionGoal,
-    setSessionGoalDismissed,
     setSessionGoalInput,
     onSaveSessionGoal,
     refreshPersistedSessions,
+    handleSessionInquiry,
   };
 }
 
-describe('AppViewport goal persistence', () => {
-  it('keeps draft goals local when the session is not yet persisted', async () => {
+describe('AppViewport session composer', () => {
+  it('sends the opening question through session messaging', async () => {
     const spies = renderAppViewport({
       isPersistedSessionId: () => false,
     });
 
     fireEvent.click(screen.getByText('submit-goal'));
-    fireEvent.click(screen.getByText('save-goal'));
 
-    expect(spies.setSessionGoalInput).toHaveBeenCalledWith('');
-    expect(spies.setSessionGoal).toHaveBeenCalled();
-    expect(spies.setSessionGoalDismissed).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(spies.handleSessionInquiry).toHaveBeenCalledWith('Draft goal');
+      expect(spies.setSessionGoalInput).toHaveBeenCalledWith('');
+    });
+    expect(spies.setSessionGoal).not.toHaveBeenCalled();
     expect(spies.onSaveSessionGoal).not.toHaveBeenCalled();
     expect(spies.refreshPersistedSessions).not.toHaveBeenCalled();
   });
 
-  it('persists goals when the session already exists server-side', async () => {
+  it('keeps the opening question when sending fails', async () => {
+    const spies = renderAppViewport({
+      handleSessionInquiry: async () => false,
+    });
+
+    fireEvent.click(screen.getByText('submit-goal'));
+
+    await waitFor(() => {
+      expect(spies.handleSessionInquiry).toHaveBeenCalledWith('Draft goal');
+    });
+    expect(spies.setSessionGoalInput).not.toHaveBeenCalled();
+  });
+
+  it('still persists goals edited from session details', async () => {
     const spies = renderAppViewport({
       isPersistedSessionId: () => true,
     });
 
-    fireEvent.click(screen.getByText('submit-goal'));
     fireEvent.click(screen.getByText('save-goal'));
 
     await waitFor(() => {
-      expect(spies.onSaveSessionGoal).toHaveBeenCalledWith('visit-1', 'Draft goal');
       expect(spies.onSaveSessionGoal).toHaveBeenCalledWith('visit-1', 'Updated goal');
     });
     await waitFor(() => {
