@@ -106,10 +106,8 @@ type ViewportMutationProps = {
   refreshPersistedSessions: () => void;
   saveSessionTitle: (sessionId: string, nextTitle: string) => Promise<void>;
   showToast: (message: string, type?: 'info' | 'success', action?: { label: string; onClick: () => void }) => void;
-  createSessionDraft: () => string;
   setSessionGoalInput: React.Dispatch<React.SetStateAction<string>>;
   onSaveSessionGoal: (sessionId: string, goal: string) => Promise<void>;
-  setSessionGoalDismissed: React.Dispatch<React.SetStateAction<Set<string>>>;
   setNewSessionDraftMessage: React.Dispatch<React.SetStateAction<string>>;
   setIsLibraryPickerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   openSessionLibraryPicker: () => void;
@@ -212,10 +210,8 @@ export default function AppViewport({
     refreshPersistedSessions,
     saveSessionTitle,
     showToast,
-    createSessionDraft,
     setSessionGoalInput,
     onSaveSessionGoal,
-    setSessionGoalDismissed,
     setNewSessionDraftMessage,
     setIsLibraryPickerOpen,
     openSessionLibraryPicker,
@@ -359,19 +355,12 @@ export default function AppViewport({
                 }
               }}
               onSessionGoalInputChange={setSessionGoalInput}
-              onSubmitGoal={(goal) => {
-                const sid = activeSessionSummary.id || createSessionDraft();
-                setSessionGoalInput('');
-                setSessionGoal(sid, goal);
-                setSessionGoalDismissed(prev => new Set([...prev, sid]));
-                if (!isPersistedSessionId(sid)) {
-                  return;
-                }
-                onSaveSessionGoal(sid, goal)
-                  .then(() => {
-                    refreshPersistedSessions();
-                  })
-                  .catch(() => {});
+              onSubmitGoal={(question) => {
+                void handleSessionInquiry(question).then((didSend) => {
+                  if (didSend) {
+                    setSessionGoalInput('');
+                  }
+                });
               }}
               onOpenSessionCapture={openSessionCapturePage}
               onPreparedSessionMessageChange={setNewSessionDraftMessage}
