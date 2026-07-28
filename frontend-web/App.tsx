@@ -151,6 +151,7 @@ const App: React.FC = () => {
     removeArtwork,
     updateArtworkSessionLinks,
     refreshArtworks,
+    refreshArtworksIfStale,
     artworksLoaded,
     profileRefreshKey,
     artworkDetailItem,
@@ -802,13 +803,12 @@ const App: React.FC = () => {
 
         <AddFromLibraryModal
           open={isLibraryPickerOpen}
-          items={libraryPickerSessionId
-            ? availableLibraryArtworks.filter((item) =>
-                !item.sessionLinks?.some((link) => link.sessionId === libraryPickerSessionId))
-            : availableLibraryArtworks}
+          items={availableLibraryArtworks}
           initialSelectedIds={pendingLibraryArtworkIds}
           maxSelection={Math.max(1, 5 - pendingSessionArtworks.filter((entry) => entry.kind !== 'library').length)}
+          currentSessionId={libraryPickerSessionId}
           searchValue={libraryPickerSearch}
+          onRefresh={refreshArtworksIfStale}
           onClose={() => {
             setIsLibraryPickerOpen(false);
             setLibraryPickerSearch('');

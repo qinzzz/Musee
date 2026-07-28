@@ -13,15 +13,33 @@ type AddFromLibraryModalProps = {
   initialSelectedIds: string[];
   searchValue: string;
   maxSelection?: number;
+  currentSessionId?: string | null;
+  onRefresh?: () => void;
   onClose: () => void;
   onSearchChange: (value: string) => void;
   onConfirm: (selectedItems: GalleryItem[]) => void;
 };
 
+type ArtworkAvailability = 'available' | 'already-added' | 'analyzing';
+
 function formatSecondaryMeta(item: GalleryItem): string {
   if (item.artistName) return item.artistName;
   if (item.photoTime) return item.photoTime;
   return 'Saved artwork';
+}
+
+function getArtworkAvailability(
+  item: GalleryItem,
+  currentSessionId?: string | null,
+): ArtworkAvailability {
+  if (
+    currentSessionId
+    && item.sessionLinks?.some((link) => link.sessionId === currentSessionId)
+  ) {
+    return 'already-added';
+  }
+  if (item.isAnalyzing) return 'analyzing';
+  return 'available';
 }
 
 export default function AddFromLibraryModal({
@@ -30,28 +48,38 @@ export default function AddFromLibraryModal({
   initialSelectedIds,
   searchValue,
   maxSelection = 5,
+  currentSessionId,
+  onRefresh,
   onClose,
   onSearchChange,
   onConfirm,
 }: AddFromLibraryModalProps) {
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
-  const [selectedItems, setSelectedItems] = React.useState<GalleryItem[]>([]);
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
   const [view, setView] = React.useState<CollectionView>('grid');
 
   // Seed the internal selection each time the modal opens.
   React.useEffect(() => {
     if (!open) return;
-    setSelectedItems(items.filter((item) => initialSelectedIds.includes(item.id)));
+    onRefresh?.();
+    setSelectedIds(
+      items
+        .filter((item) => (
+          initialSelectedIds.includes(item.id)
+          && getArtworkAvailability(item, currentSessionId) === 'available'
+        ))
+        .map((item) => item.id),
+    );
     // Only re-seed on open; live `items`/`initialSelectedIds` churn shouldn't
     // reset an in-progress selection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const toggleSelect = (item: GalleryItem) => {
-    setSelectedItems((prev) => (
-      prev.some((entry) => entry.id === item.id)
-        ? prev.filter((entry) => entry.id !== item.id)
-        : [...prev, item]
+    setSelectedIds((prev) => (
+      prev.includes(item.id)
+        ? prev.filter((id) => id !== item.id)
+        : [...prev, item.id]
     ));
   };
 
@@ -89,8 +117,15 @@ export default function AddFromLibraryModal({
 
   if (!open) return null;
 
-  const selectedIds = selectedItems.map((item) => item.id);
-  const selectedCount = selectedIds.length;
+  const currentItemsById = new Map(items.map((item) => [item.id, item] as const));
+  const currentSelectedItems = selectedIds
+    .map((id) => currentItemsById.get(id))
+    .filter((item): item is GalleryItem => (
+      Boolean(item)
+      && getArtworkAvailability(item!, currentSessionId) === 'available'
+    ));
+  const currentSelectedIds = new Set(currentSelectedItems.map((item) => item.id));
+  const selectedCount = currentSelectedItems.length;
 
   return createPortal(
     <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/20 p-4 backdrop-blur-[2px] sm:p-6">
@@ -168,11 +203,18 @@ export default function AddFromLibraryModal({
               </div>
             ) : (
               filteredItems.map((item) => {
-                const isSelected = selectedIds.includes(item.id);
+                const availability = getArtworkAvailability(item, currentSessionId);
+                const isUnavailable = availability !== 'available';
+                const availabilityLabel = availability === 'already-added'
+                  ? 'Already added'
+                  : availability === 'analyzing'
+                    ? 'Analyzing…'
+                    : null;
+                const isSelected = currentSelectedIds.has(item.id);
                 const limitReached = !isSelected && selectedCount >= maxSelection;
 
                 const handleClick = () => {
-                  if (!limitReached) toggleSelect(item);
+                  if (!isUnavailable && !limitReached) toggleSelect(item);
                 };
 
                 if (view === 'grid') {
@@ -182,11 +224,12 @@ export default function AddFromLibraryModal({
                       type="button"
                       aria-pressed={isSelected}
                       onClick={handleClick}
+                      disabled={isUnavailable || limitReached}
                       className={`group relative overflow-hidden rounded-[18px] border text-left transition-all ${
                         isSelected
                           ? 'border-neutral-950 bg-neutral-950 shadow-[0_8px_20px_rgba(0,0,0,0.12)]'
                           : 'border-neutral-200 bg-white hover:-translate-y-0.5 hover:border-neutral-400 hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)]'
-                      } ${limitReached ? 'cursor-not-allowed opacity-45' : ''}`}
+                      } ${isUnavailable || limitReached ? 'cursor-not-allowed opacity-55' : ''}`}
                     >
                       <div className="relative flex h-32 items-center justify-center overflow-hidden bg-neutral-100 p-2">
                         <img src={item.url} alt={item.artworkName || 'Artwork'} className="h-full w-full object-contain" />
@@ -196,6 +239,11 @@ export default function AddFromLibraryModal({
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
                           </div>
+                        )}
+                        {availabilityLabel && (
+                          <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-neutral-700 shadow-sm backdrop-blur">
+                            {availabilityLabel}
+                          </span>
                         )}
                       </div>
                       <div className={`px-3 pb-3 pt-2.5 ${isSelected ? 'bg-neutral-950' : ''}`}>
@@ -216,9 +264,10 @@ export default function AddFromLibraryModal({
                     type="button"
                     aria-pressed={isSelected}
                     onClick={handleClick}
+                    disabled={isUnavailable || limitReached}
                     className={`flex w-full items-center gap-3 rounded-[20px] px-3.5 py-3 text-left transition-colors ${
                       isSelected ? 'bg-neutral-50' : 'hover:bg-neutral-50'
-                    } ${limitReached ? 'opacity-50' : ''}`}
+                    } ${isUnavailable || limitReached ? 'cursor-not-allowed opacity-55' : ''}`}
                   >
                     <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
                       <img src={item.url} alt={item.artworkName || 'Artwork'} className="h-full w-full object-contain" />
@@ -227,6 +276,11 @@ export default function AddFromLibraryModal({
                       <p className="truncate text-[16px] font-medium text-neutral-900">{item.artworkName || 'Untitled'}</p>
                       <p className="mt-0.5 truncate text-[13px] text-neutral-500">{formatSecondaryMeta(item)}</p>
                     </div>
+                    {availabilityLabel && (
+                      <span className="shrink-0 rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-600">
+                        {availabilityLabel}
+                      </span>
+                    )}
                     {isSelected && (
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-950 text-white">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -253,7 +307,7 @@ export default function AddFromLibraryModal({
               Cancel
             </button>
             <button
-              onClick={() => onConfirm(selectedItems)}
+              onClick={() => onConfirm(currentSelectedItems)}
               disabled={selectedCount === 0}
               className="rounded-full bg-neutral-950 px-5 py-2.5 text-[15px] font-medium text-white transition-opacity disabled:opacity-35"
             >

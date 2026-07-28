@@ -34,7 +34,6 @@ export function usePreparedSessionStaging({
     () =>
       items.filter((item) =>
         !item.isDeletedPlaceholder
-        && !item.isAnalyzing
         && Boolean(item.url)
       ),
     [items],
