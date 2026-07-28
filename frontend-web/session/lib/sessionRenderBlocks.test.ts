@@ -64,7 +64,7 @@ describe('buildSessionRenderBlocks', () => {
     const reply = createMessage({
       id: 'evt-reply',
       role: 'model',
-      type: 'artwork_commentary',
+      type: 'model_response',
       text: 'nice',
       triggerEventId: 'evt-input',
       localOrder: 2,

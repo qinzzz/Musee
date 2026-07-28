@@ -17,8 +17,8 @@ export interface SessionRecord {
 export interface SessionEventPayload {
   id?: string;
   role: 'user' | 'model' | 'system';
-  type?: 'text' | 'artwork_capture' | 'artwork_card' | 'artwork_commentary';
-  event_type?: 'user_input' | 'artwork_result' | 'artwork_commentary' | 'message';
+  type?: 'text' | 'artwork_capture' | 'artwork_card' | 'artwork_commentary' | 'model_response';
+  event_type?: 'user_input' | 'artwork_result' | 'artwork_commentary' | 'model_response' | 'message';
   content?: string;
   artwork_id?: string;
   artwork_ids?: string[];

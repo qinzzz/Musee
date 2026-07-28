@@ -145,14 +145,26 @@ describe('useSessionMessaging', () => {
     const persistedEvents = mockAppendSessionMessages.mock.calls.flatMap((call) => call[1] ?? []);
     expect(persistedEvents).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        event_type: 'artwork_commentary',
+        event_type: 'model_response',
         trigger_event_id: expect.stringMatching(/^evt-/),
+        artwork_ids: [],
+        payload: { status: 'pending', response_kind: 'general' },
       }),
     ]));
+    expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
+      expect.stringMatching(/^session_/),
+      expect.stringMatching(/^response-/),
+      expect.objectContaining({
+        event_type: 'model_response',
+        content: 'assistant reply',
+        artwork_ids: [],
+        payload: { status: 'completed', response_kind: 'general' },
+      }),
+    );
     expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
   });
 
-  it('persists commentary lifecycle as pending then completed artwork_commentary', async () => {
+  it('persists artwork-linked replies as model_response events', async () => {
     const summary = createSessionSummary({
       id: 'visit-1',
       items: [
@@ -206,20 +218,20 @@ describe('useSessionMessaging', () => {
       expect.arrayContaining([
         expect.objectContaining({
           role: 'model',
-          event_type: 'artwork_commentary',
+          event_type: 'model_response',
           artwork_ids: ['art-1', 'art-2'],
-          payload: { status: 'pending' },
+          payload: { status: 'pending', response_kind: 'artwork_commentary' },
         }),
       ]),
     );
     expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
       'visit-1',
-      expect.stringMatching(/^commentary-/),
+      expect.stringMatching(/^response-/),
       expect.objectContaining({
         role: 'model',
-        event_type: 'artwork_commentary',
+        event_type: 'model_response',
         artwork_ids: ['art-1', 'art-2'],
-        payload: { status: 'completed' },
+        payload: { status: 'completed', response_kind: 'artwork_commentary' },
         content: 'assistant reply',
       }),
     );
@@ -275,21 +287,22 @@ describe('useSessionMessaging', () => {
       expect.arrayContaining([
         expect.objectContaining({
           role: 'model',
-          event_type: 'artwork_commentary',
+          event_type: 'model_response',
           artwork_ids: ['art-1'],
-          payload: { status: 'pending' },
+          payload: { status: 'pending', response_kind: 'artwork_commentary' },
         }),
       ]),
     );
     expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
       'visit-1',
-      expect.stringMatching(/^commentary-/),
+      expect.stringMatching(/^response-/),
       expect.objectContaining({
         role: 'model',
-        event_type: 'artwork_commentary',
+        event_type: 'model_response',
         artwork_ids: ['art-1'],
         payload: {
           status: 'failed',
+          response_kind: 'artwork_commentary',
           error_message: 'Something interrupted the reflection stream. Please try again.',
         },
       }),

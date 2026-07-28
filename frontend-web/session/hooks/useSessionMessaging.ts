@@ -164,15 +164,18 @@ export function useSessionMessaging({
             id: event.id,
             role: event.role as 'user' | 'model',
             type: event.type || 'text',
-            event_type: event.type === 'artwork_commentary'
-              ? 'artwork_commentary'
+            event_type: event.type === 'model_response' || event.type === 'artwork_commentary'
+              ? 'model_response'
               : undefined,
             content: isPlaceholder ? undefined : event.text,
             artwork_id: event.artworkId,
             artwork_ids: event.artworkIds,
             trigger_event_id: event.role === 'user' ? undefined : event.triggerEventId,
-            payload: event.type === 'artwork_commentary'
-              ? { status: 'completed' }
+            payload: event.type === 'model_response' || event.type === 'artwork_commentary'
+              ? event.payload || {
+                  status: 'completed',
+                  response_kind: event.artworkIds?.length ? 'artwork_commentary' : 'general',
+                }
               : undefined,
             created_at: event.createdAt,
           };
@@ -284,21 +287,24 @@ export function useSessionMessaging({
     ));
   }, [enqueueSessionEventWrite, refreshPersistedSessions]);
 
-  const persistPendingCommentary = useCallback((
+  const persistPendingModelResponse = useCallback((
     sessionId: string,
-    commentaryId: string,
+    responseId: string,
     artworkIds: string[],
     createdAt: number,
     parentEventId?: string,
   ) => (
     enqueueSessionEventWrite(sessionId, () => (
       appendSessionEventsApi(sessionId, [{
-        id: commentaryId,
+        id: responseId,
         role: 'model',
-        event_type: 'artwork_commentary',
+        event_type: 'model_response',
         artwork_ids: artworkIds,
         trigger_event_id: parentEventId,
-        payload: { status: 'pending' },
+        payload: {
+          status: 'pending',
+          response_kind: artworkIds.length ? 'artwork_commentary' : 'general',
+        },
         created_at: createdAt,
       }]).finally(() => {
         refreshPersistedSessions();
@@ -306,9 +312,9 @@ export function useSessionMessaging({
     ))
   ), [enqueueSessionEventWrite, refreshPersistedSessions]);
 
-  const finalizeCommentary = useCallback(async (
+  const finalizeModelResponse = useCallback(async (
     sessionId: string,
-    commentaryId: string,
+    responseId: string,
     artworkIds: string[],
     status: 'completed' | 'failed',
     parentEventId?: string,
@@ -316,22 +322,23 @@ export function useSessionMessaging({
   ) => {
     const messagePayload = {
       role: 'model' as const,
-      event_type: 'artwork_commentary' as const,
+      event_type: 'model_response' as const,
       content: options?.content,
       artwork_ids: artworkIds,
       trigger_event_id: parentEventId,
       payload: {
         status,
+        response_kind: artworkIds.length ? 'artwork_commentary' : 'general',
         ...(options?.errorMessage ? { error_message: options.errorMessage } : {}),
       },
     };
 
     await enqueueSessionEventWrite(sessionId, async () => {
       try {
-        await updateSessionEvent(sessionId, commentaryId, messagePayload);
+        await updateSessionEvent(sessionId, responseId, messagePayload);
       } catch (_error) {
         await appendSessionEventsApi(sessionId, [{
-          id: commentaryId,
+          id: responseId,
           ...messagePayload,
         }]);
       } finally {
@@ -355,27 +362,30 @@ export function useSessionMessaging({
       || (activeSessionSummary?.id === targetSessionId
         ? activeSessionSummary.items
         : items.filter((item) => itemBelongsToSession(item, targetSessionId)));
-    const commentaryId = `commentary-${Date.now()}`;
+    const responseId = `response-${Date.now()}`;
     const commentaryCreatedAt = getNextLocalEventCreatedAt(existingMessages);
     const commentaryArtworkIds = getSessionArtworkIds(sessionItems);
     const parentEventId = parentEventIdOverride;
     const pendingCommentaryMessage: SessionStreamMessage = {
-      id: commentaryId,
+      id: responseId,
       role: 'model',
       text: '',
-      type: 'artwork_commentary',
+      type: 'model_response',
       artworkIds: commentaryArtworkIds,
       triggerEventId: parentEventId,
       createdAt: commentaryCreatedAt,
       localOrder: nextLocalOrder(),
-      payload: { status: 'pending' },
+      payload: {
+        status: 'pending',
+        response_kind: commentaryArtworkIds.length ? 'artwork_commentary' : 'general',
+      },
     };
 
     appendSessionEvents(targetSessionId, [pendingCommentaryMessage], { persist: false });
 
-    void persistPendingCommentary(
+    void persistPendingModelResponse(
       targetSessionId,
-      commentaryId,
+      responseId,
       commentaryArtworkIds,
       commentaryCreatedAt,
       parentEventId,
@@ -386,7 +396,7 @@ export function useSessionMessaging({
       serializeSessionHistory(historyForPrompt, sessionItems),
       text,
       (chunk) => {
-        updateLocalSessionEvent(targetSessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
           ...event,
           text: `${event.text || ''}${chunk}`,
           payload: {
@@ -400,7 +410,7 @@ export function useSessionMessaging({
         }));
       },
       (fullResponse) => {
-        updateLocalSessionEvent(targetSessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
           ...event,
           text: fullResponse,
           payload: {
@@ -408,9 +418,9 @@ export function useSessionMessaging({
             status: 'completed',
           },
         }));
-        void finalizeCommentary(
+        void finalizeModelResponse(
           targetSessionId,
-          commentaryId,
+          responseId,
           commentaryArtworkIds,
           'completed',
           parentEventId,
@@ -423,7 +433,7 @@ export function useSessionMessaging({
         });
       },
       () => {
-        updateLocalSessionEvent(targetSessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
           ...event,
           payload: {
             ...(event.payload || {}),
@@ -431,9 +441,9 @@ export function useSessionMessaging({
             error_message: 'Something interrupted the reflection stream. Please try again.',
           },
         }));
-        void finalizeCommentary(
+        void finalizeModelResponse(
           targetSessionId,
-          commentaryId,
+          responseId,
           commentaryArtworkIds,
           'failed',
           parentEventId,
@@ -454,7 +464,9 @@ export function useSessionMessaging({
   }, [
     activeSessionSummary,
     appendSessionEvents,
+    finalizeModelResponse,
     items,
+    persistPendingModelResponse,
     sessionUserId,
     setStreamingSessionResponses,
     sessionStreams,
@@ -518,26 +530,29 @@ export function useSessionMessaging({
 
     setStreamingSessionResponses((prev) => ({ ...prev, [sessionId]: '' }));
     const historyForPrompt = getSessionHistoryBeforeTrigger(conversationHistory, parentEventId);
-    const commentaryId = `commentary-${Date.now()}`;
+    const responseId = `response-${Date.now()}`;
     const commentaryCreatedAt = getNextLocalEventCreatedAt(conversationHistory);
     const commentaryArtworkIds = getSessionArtworkIds(sessionItems);
     const pendingCommentaryMessage: SessionStreamMessage = {
-      id: commentaryId,
+      id: responseId,
       role: 'model',
       text: '',
-      type: 'artwork_commentary',
+      type: 'model_response',
       artworkIds: commentaryArtworkIds,
       triggerEventId: parentEventId,
       createdAt: commentaryCreatedAt,
       localOrder: nextLocalOrder(),
-      payload: { status: 'pending' },
+      payload: {
+        status: 'pending',
+        response_kind: commentaryArtworkIds.length ? 'artwork_commentary' : 'general',
+      },
     };
 
     appendSessionEvents(sessionId, [pendingCommentaryMessage], { persist: false });
 
-    void persistPendingCommentary(
+    void persistPendingModelResponse(
       sessionId,
-      commentaryId,
+      responseId,
       commentaryArtworkIds,
       commentaryCreatedAt,
       parentEventId,
@@ -548,7 +563,7 @@ export function useSessionMessaging({
       serializeSessionHistory(historyForPrompt, sessionItems),
       trigger,
       (chunk) => {
-        updateLocalSessionEvent(sessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(sessionId, responseId, (event) => ({
           ...event,
           text: `${event.text || ''}${chunk}`,
           payload: {
@@ -559,7 +574,7 @@ export function useSessionMessaging({
         setStreamingSessionResponses((prev) => ({ ...prev, [sessionId]: (prev[sessionId] || '') + chunk }));
       },
       (fullResponse) => {
-        updateLocalSessionEvent(sessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(sessionId, responseId, (event) => ({
           ...event,
           text: fullResponse,
           payload: {
@@ -567,9 +582,9 @@ export function useSessionMessaging({
             status: 'completed',
           },
         }));
-        void finalizeCommentary(
+        void finalizeModelResponse(
           sessionId,
-          commentaryId,
+          responseId,
           commentaryArtworkIds,
           'completed',
           parentEventId,
@@ -582,7 +597,7 @@ export function useSessionMessaging({
         });
       },
       () => {
-        updateLocalSessionEvent(sessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(sessionId, responseId, (event) => ({
           ...event,
           payload: {
             ...(event.payload || {}),
@@ -590,9 +605,9 @@ export function useSessionMessaging({
             error_message: 'Something interrupted the reflection stream. Please try again.',
           },
         }));
-        void finalizeCommentary(
+        void finalizeModelResponse(
           sessionId,
-          commentaryId,
+          responseId,
           commentaryArtworkIds,
           'failed',
           parentEventId,
@@ -612,6 +627,8 @@ export function useSessionMessaging({
     );
   }, [
     appendSessionEvents,
+    finalizeModelResponse,
+    persistPendingModelResponse,
     sessionUserId,
     sessionGoals,
     setStreamingSessionResponses,
