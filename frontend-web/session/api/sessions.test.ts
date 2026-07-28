@@ -51,7 +51,7 @@ describe('sessions api', () => {
       role: 'model',
       event_type: 'model_response',
       content: 'Response',
-      payload: { status: 'completed', response_kind: 'general' },
+      payload: { status: 'completed' },
     }])).rejects.toThrow('API error (500): not saved');
   });
 });

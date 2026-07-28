@@ -177,10 +177,7 @@ export function useSessionMessaging({
             artwork_ids: event.artworkIds,
             trigger_event_id: event.role === 'user' ? undefined : event.triggerEventId,
             payload: event.type === 'model_response' || event.type === 'artwork_commentary'
-              ? event.payload || {
-                  status: 'completed',
-                  response_kind: event.artworkIds?.length ? 'artwork_commentary' : 'general',
-                }
+              ? event.payload || { status: 'completed' }
               : undefined,
             created_at: event.createdAt,
           };
@@ -310,10 +307,7 @@ export function useSessionMessaging({
         event_type: 'model_response',
         artwork_ids: artworkIds,
         trigger_event_id: parentEventId,
-        payload: {
-          status: 'pending',
-          response_kind: artworkIds.length ? 'artwork_commentary' : 'general',
-        },
+        payload: { status: 'pending' },
         created_at: createdAt,
       }]).finally(() => {
         refreshPersistedSessions();
@@ -337,7 +331,6 @@ export function useSessionMessaging({
       trigger_event_id: parentEventId,
       payload: {
         status,
-        response_kind: artworkIds.length ? 'artwork_commentary' : 'general',
         ...(options?.errorMessage ? { error_message: options.errorMessage } : {}),
       },
     };
@@ -384,10 +377,7 @@ export function useSessionMessaging({
       triggerEventId: parentEventId,
       createdAt: commentaryCreatedAt,
       localOrder: nextLocalOrder(),
-      payload: {
-        status: 'pending',
-        response_kind: commentaryArtworkIds.length ? 'artwork_commentary' : 'general',
-      },
+      payload: { status: 'pending' },
     };
 
     appendSessionEvents(targetSessionId, [pendingCommentaryMessage], { persist: false });
@@ -562,10 +552,7 @@ export function useSessionMessaging({
       triggerEventId: parentEventId,
       createdAt: commentaryCreatedAt,
       localOrder: nextLocalOrder(),
-      payload: {
-        status: 'pending',
-        response_kind: commentaryArtworkIds.length ? 'artwork_commentary' : 'general',
-      },
+      payload: { status: 'pending' },
     };
 
     appendSessionEvents(sessionId, [pendingCommentaryMessage], { persist: false });

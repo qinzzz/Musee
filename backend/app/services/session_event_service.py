@@ -27,7 +27,6 @@ CANONICAL_TO_LEGACY_EVENT_TYPE = {
 VALID_ARTWORK_INPUT_SOURCES = {"upload", "capture", "library"}
 VALID_ARTWORK_RESULT_OUTCOMES = {"succeeded", "failed"}
 VALID_MODEL_RESPONSE_STATUSES = {"pending", "completed", "failed"}
-VALID_MODEL_RESPONSE_KINDS = {"general", "artwork_commentary"}
 VALID_SESSION_EVENT_ROLES = {"user", "model", "system"}
 VALID_SESSION_EVENT_TYPES = {"user_input", "message", "artwork_result", "model_response"}
 
@@ -195,13 +194,7 @@ def normalize_session_event_payload(
         status = normalized.get("status")
         if status not in VALID_MODEL_RESPONSE_STATUSES:
             normalized.pop("status", None)
-        response_kind = normalized.get("response_kind")
-        if response_kind is None:
-            normalized["response_kind"] = (
-                "artwork_commentary" if normalized_artwork_ids else "general"
-            )
-        elif response_kind not in VALID_MODEL_RESPONSE_KINDS:
-            normalized.pop("response_kind", None)
+        normalized.pop("response_kind", None)
         source_event_id = normalized.get("source_event_id")
         if source_event_id is not None and (not isinstance(source_event_id, str) or not source_event_id.strip()):
             normalized.pop("source_event_id", None)
@@ -278,8 +271,6 @@ def validate_and_normalize_session_event(
             raise HTTPException(status_code=400, detail="model_response events must use role='model' or role='system'")
         if not normalized_payload or normalized_payload.get("status") not in VALID_MODEL_RESPONSE_STATUSES:
             raise HTTPException(status_code=400, detail="model_response event requires payload.status")
-        if normalized_payload.get("response_kind") not in VALID_MODEL_RESPONSE_KINDS:
-            raise HTTPException(status_code=400, detail="model_response event requires payload.response_kind")
         if normalized_payload["status"] == "completed" and not normalized_content:
             raise HTTPException(status_code=400, detail="completed model_response event requires content")
 

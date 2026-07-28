@@ -332,7 +332,7 @@ describe('useSessionWorkspace', () => {
     });
     const pendingCommentary = createSessionMessage({
       id: 'local-commentary', role: 'model', text: '', type: 'model_response',
-      payload: { status: 'pending', response_kind: 'general' }, createdAt: 301, localOrder: 6,
+      payload: { status: 'pending' }, createdAt: 301, localOrder: 6,
     });
     // Confirmed on a previous fetch, but no longer returned by the backend →
     // backend wins for confirmed history; it must be dropped.

@@ -148,7 +148,7 @@ describe('useSessionMessaging', () => {
         event_type: 'model_response',
         trigger_event_id: expect.stringMatching(/^evt-/),
         artwork_ids: [],
-        payload: { status: 'pending', response_kind: 'general' },
+        payload: { status: 'pending' },
       }),
     ]));
     expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
@@ -158,7 +158,7 @@ describe('useSessionMessaging', () => {
         event_type: 'model_response',
         content: 'assistant reply',
         artwork_ids: [],
-        payload: { status: 'completed', response_kind: 'general' },
+        payload: { status: 'completed' },
       }),
     );
     expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
@@ -220,7 +220,7 @@ describe('useSessionMessaging', () => {
           role: 'model',
           event_type: 'model_response',
           artwork_ids: ['art-1', 'art-2'],
-          payload: { status: 'pending', response_kind: 'artwork_commentary' },
+          payload: { status: 'pending' },
         }),
       ]),
     );
@@ -231,7 +231,7 @@ describe('useSessionMessaging', () => {
         role: 'model',
         event_type: 'model_response',
         artwork_ids: ['art-1', 'art-2'],
-        payload: { status: 'completed', response_kind: 'artwork_commentary' },
+        payload: { status: 'completed' },
         content: 'assistant reply',
       }),
     );
@@ -289,7 +289,7 @@ describe('useSessionMessaging', () => {
           role: 'model',
           event_type: 'model_response',
           artwork_ids: ['art-1'],
-          payload: { status: 'pending', response_kind: 'artwork_commentary' },
+          payload: { status: 'pending' },
         }),
       ]),
     );
@@ -302,7 +302,6 @@ describe('useSessionMessaging', () => {
         artwork_ids: ['art-1'],
         payload: {
           status: 'failed',
-          response_kind: 'artwork_commentary',
           error_message: 'Something interrupted the reflection stream. Please try again.',
         },
       }),

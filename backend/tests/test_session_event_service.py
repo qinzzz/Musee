@@ -136,10 +136,7 @@ def test_validate_and_normalize_general_model_response_without_artworks():
 
     assert event["event_type"] == "model_response"
     assert event["artwork_ids"] == []
-    assert event["payload"] == {
-        "status": "completed",
-        "response_kind": "general",
-    }
+    assert event["payload"] == {"status": "completed"}
 
 
 def test_legacy_artwork_commentary_normalizes_to_model_response():
@@ -154,6 +151,5 @@ def test_legacy_artwork_commentary_normalizes_to_model_response():
     assert event["event_type"] == "model_response"
     assert event["payload"] == {
         "status": "completed",
-        "response_kind": "artwork_commentary",
         "artwork_ids": ["art-1"],
     }

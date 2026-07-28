@@ -370,7 +370,6 @@ def test_patch_session_message_updates_legacy_commentary_to_model_response(clien
     assert payload["content"] == "Here is the finished commentary."
     assert payload["payload"] == {
         "status": "completed",
-        "response_kind": "artwork_commentary",
         "artwork_ids": ["artwork-commentary"],
     }
     assert payload["artwork_ids"] == ["artwork-commentary"]
@@ -381,7 +380,6 @@ def test_patch_session_message_updates_legacy_commentary_to_model_response(clien
     assert stored.content == "Here is the finished commentary."
     assert stored.payload == {
         "status": "completed",
-        "response_kind": "artwork_commentary",
         "artwork_ids": ["artwork-commentary"],
     }
 
@@ -420,7 +418,6 @@ def test_patch_session_message_updates_commentary_to_failed(client, db):
     assert payload["content"] is None
     assert payload["payload"] == {
         "status": "failed",
-        "response_kind": "artwork_commentary",
         "error_message": "stream interrupted",
         "artwork_ids": ["artwork-failed-a", "artwork-failed-b"],
     }
@@ -430,7 +427,6 @@ def test_patch_session_message_updates_commentary_to_failed(client, db):
     stored = db.query(SessionEvent).filter(SessionEvent.id == "msg-commentary-failed").one()
     assert stored.payload == {
         "status": "failed",
-        "response_kind": "artwork_commentary",
         "error_message": "stream interrupted",
         "artwork_ids": ["artwork-failed-a", "artwork-failed-b"],
     }
@@ -448,7 +444,7 @@ def test_model_response_lifecycle_supports_text_only_sessions(client, db):
             "role": "model",
             "event_type": "model_response",
             "trigger_event_id": "user-question",
-            "payload": {"status": "pending", "response_kind": "general"},
+            "payload": {"status": "pending"},
         }],
     )
     assert created.status_code == 200
@@ -460,7 +456,7 @@ def test_model_response_lifecycle_supports_text_only_sessions(client, db):
             "event_type": "model_response",
             "content": "A complete text-only answer.",
             "trigger_event_id": "user-question",
-            "payload": {"status": "completed", "response_kind": "general"},
+            "payload": {"status": "completed"},
         },
     )
 
@@ -469,7 +465,7 @@ def test_model_response_lifecycle_supports_text_only_sessions(client, db):
     assert payload["event_type"] == "model_response"
     assert payload["artwork_ids"] == []
     assert payload["content"] == "A complete text-only answer."
-    assert payload["payload"] == {"status": "completed", "response_kind": "general"}
+    assert payload["payload"] == {"status": "completed"}
 
 
 def test_canonical_artwork_input_batch_persists_payload_links_and_legacy_shape(client, db):
