@@ -146,7 +146,13 @@ export function useArtworkLibrary({
   const [artworkDetailSelection, setArtworkDetailSelection] = useState<ArtworkDetailSelection | null>(null);
   const tagPositionsLoadedRef = useRef(onTagPositionsLoaded);
 
-  const { serverItems, artworksLoaded, artworksError, refreshArtworks } = useArtworksQuery(userId);
+  const {
+    serverItems,
+    artworksLoaded,
+    artworksError,
+    refreshArtworks,
+    refreshArtworksIfStale,
+  } = useArtworksQuery(userId);
 
   // The narrow write API for artwork state. Everything outside this hook goes
   // through these intent mutators (or the handlers below) instead of a raw
@@ -287,6 +293,7 @@ export function useArtworkLibrary({
     removeArtwork,
     updateArtworkSessionLinks,
     refreshArtworks,
+    refreshArtworksIfStale,
     artworksLoaded,
     profileRefreshKey,
     artworkDetailItem,
