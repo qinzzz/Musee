@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionMessaging } from './useSessionMessaging';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
@@ -153,7 +153,7 @@ describe('useSessionMessaging', () => {
     ]));
     expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
       expect.stringMatching(/^session_/),
-      expect.stringMatching(/^response-/),
+      expect.stringMatching(/^evt-/),
       expect.objectContaining({
         event_type: 'model_response',
         content: 'assistant reply',
@@ -226,7 +226,7 @@ describe('useSessionMessaging', () => {
     );
     expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
       'visit-1',
-      expect.stringMatching(/^response-/),
+      expect.stringMatching(/^evt-/),
       expect.objectContaining({
         role: 'model',
         event_type: 'model_response',
@@ -295,7 +295,7 @@ describe('useSessionMessaging', () => {
     );
     expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
       'visit-1',
-      expect.stringMatching(/^response-/),
+      expect.stringMatching(/^evt-/),
       expect.objectContaining({
         role: 'model',
         event_type: 'model_response',
@@ -306,6 +306,38 @@ describe('useSessionMessaging', () => {
           error_message: 'Something interrupted the reflection stream. Please try again.',
         },
       }),
+    );
+  });
+
+  it('warns when a completed model response cannot be saved after fallback', async () => {
+    mockAppendSessionMessages
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('fallback failed'));
+    mockUpdateSessionEvent.mockRejectedValueOnce(new Error('response not found'));
+
+    const summary = createSessionSummary({ id: 'visit-1' });
+    const { result, spies } = renderUseSessionMessaging({
+      activeSessionSummary: summary,
+      sessionSummaries: [summary],
+      filteredSessionId: 'visit-1',
+      isComposingNewSession: false,
+      sessionStreams: { 'visit-1': [] },
+    });
+
+    await act(async () => {
+      result.current.sendSessionInquiryToSession('visit-1', 'Tell me more');
+    });
+
+    await waitFor(() => {
+      expect(spies.showToast).toHaveBeenCalledWith(
+        'This response couldn’t be saved. Try again.',
+        'info',
+      );
+    });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to persist completed model response:',
+      expect.any(Error),
     );
   });
 

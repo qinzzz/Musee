@@ -75,12 +75,16 @@ export async function fetchSessions(userId: string): Promise<SessionRecord[]> {
 
 export async function appendSessionEvents(sessionId: string, events: SessionEventPayload[]): Promise<void> {
   if (!events.length) return;
-  await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/events`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/events`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(events),
     timeout: 10000,
-  }).catch(() => {});
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
 }
 
 export async function updateSessionEvent(
