@@ -40,4 +40,18 @@ describe('sessions api', () => {
 
     await expect(fetchSessionEvents('session-1')).rejects.toThrow('API error (502)');
   });
+
+  it('appendSessionEvents throws on a non-OK response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not saved', { status: 500 })));
+
+    const { appendSessionEvents } = await import('./sessions');
+
+    await expect(appendSessionEvents('session-1', [{
+      id: 'evt-1',
+      role: 'model',
+      event_type: 'model_response',
+      content: 'Response',
+      payload: { status: 'completed' },
+    }])).rejects.toThrow('API error (500): not saved');
+  });
 });

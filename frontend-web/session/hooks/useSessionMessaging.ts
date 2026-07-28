@@ -17,6 +17,9 @@ import type { SessionDraft, SessionStreamMessage, SessionSummary } from '../type
 type ToastType = 'info' | 'success';
 type ShowToast = (message: string, type?: ToastType) => void;
 
+const SESSION_EVENT_SAVE_ERROR = 'Couldn’t save this session update. Try again.';
+const MODEL_RESPONSE_SAVE_ERROR = 'This response couldn’t be saved. Try again.';
+
 type UseSessionMessagingOptions = {
   defaultSessionTitle: string;
   sessionUserId: string;
@@ -100,11 +103,13 @@ export function useSessionMessaging({
     const next = previous
       .catch(() => undefined)
       .then(task);
-    sessionEventWriteQueuesRef.current[sessionId] = next.finally(() => {
-      if (sessionEventWriteQueuesRef.current[sessionId] === next) {
+    const tracked = next.finally(() => {
+      if (sessionEventWriteQueuesRef.current[sessionId] === tracked) {
         delete sessionEventWriteQueuesRef.current[sessionId];
       }
     });
+    sessionEventWriteQueuesRef.current[sessionId] = tracked;
+    void tracked.catch(() => undefined);
     return next;
   }, []);
 
@@ -164,15 +169,15 @@ export function useSessionMessaging({
             id: event.id,
             role: event.role as 'user' | 'model',
             type: event.type || 'text',
-            event_type: event.type === 'artwork_commentary'
-              ? 'artwork_commentary'
+            event_type: event.type === 'model_response' || event.type === 'artwork_commentary'
+              ? 'model_response'
               : undefined,
             content: isPlaceholder ? undefined : event.text,
             artwork_id: event.artworkId,
             artwork_ids: event.artworkIds,
             trigger_event_id: event.role === 'user' ? undefined : event.triggerEventId,
-            payload: event.type === 'artwork_commentary'
-              ? { status: 'completed' }
+            payload: event.type === 'model_response' || event.type === 'artwork_commentary'
+              ? event.payload || { status: 'completed' }
               : undefined,
             created_at: event.createdAt,
           };
@@ -249,10 +254,14 @@ export function useSessionMessaging({
     if (options?.persist === false) {
       return;
     }
-    void persistSessionEvents(sessionId, newEvents);
+    void persistSessionEvents(sessionId, newEvents).catch((error) => {
+      console.error('Failed to persist session events:', error);
+      showToast(SESSION_EVENT_SAVE_ERROR, 'info');
+    });
   }, [
     appendLocalSessionEvents,
     persistSessionEvents,
+    showToast,
   ]);
 
   // Persist a batch of added artworks as ONE canonical user_input event
@@ -284,18 +293,18 @@ export function useSessionMessaging({
     ));
   }, [enqueueSessionEventWrite, refreshPersistedSessions]);
 
-  const persistPendingCommentary = useCallback((
+  const persistPendingModelResponse = useCallback((
     sessionId: string,
-    commentaryId: string,
+    responseId: string,
     artworkIds: string[],
     createdAt: number,
     parentEventId?: string,
   ) => (
     enqueueSessionEventWrite(sessionId, () => (
       appendSessionEventsApi(sessionId, [{
-        id: commentaryId,
+        id: responseId,
         role: 'model',
-        event_type: 'artwork_commentary',
+        event_type: 'model_response',
         artwork_ids: artworkIds,
         trigger_event_id: parentEventId,
         payload: { status: 'pending' },
@@ -306,9 +315,9 @@ export function useSessionMessaging({
     ))
   ), [enqueueSessionEventWrite, refreshPersistedSessions]);
 
-  const finalizeCommentary = useCallback(async (
+  const finalizeModelResponse = useCallback(async (
     sessionId: string,
-    commentaryId: string,
+    responseId: string,
     artworkIds: string[],
     status: 'completed' | 'failed',
     parentEventId?: string,
@@ -316,7 +325,7 @@ export function useSessionMessaging({
   ) => {
     const messagePayload = {
       role: 'model' as const,
-      event_type: 'artwork_commentary' as const,
+      event_type: 'model_response' as const,
       content: options?.content,
       artwork_ids: artworkIds,
       trigger_event_id: parentEventId,
@@ -328,10 +337,10 @@ export function useSessionMessaging({
 
     await enqueueSessionEventWrite(sessionId, async () => {
       try {
-        await updateSessionEvent(sessionId, commentaryId, messagePayload);
+        await updateSessionEvent(sessionId, responseId, messagePayload);
       } catch (_error) {
         await appendSessionEventsApi(sessionId, [{
-          id: commentaryId,
+          id: responseId,
           ...messagePayload,
         }]);
       } finally {
@@ -355,15 +364,15 @@ export function useSessionMessaging({
       || (activeSessionSummary?.id === targetSessionId
         ? activeSessionSummary.items
         : items.filter((item) => itemBelongsToSession(item, targetSessionId)));
-    const commentaryId = `commentary-${Date.now()}`;
+    const responseId = newSessionEventId();
     const commentaryCreatedAt = getNextLocalEventCreatedAt(existingMessages);
     const commentaryArtworkIds = getSessionArtworkIds(sessionItems);
     const parentEventId = parentEventIdOverride;
     const pendingCommentaryMessage: SessionStreamMessage = {
-      id: commentaryId,
+      id: responseId,
       role: 'model',
       text: '',
-      type: 'artwork_commentary',
+      type: 'model_response',
       artworkIds: commentaryArtworkIds,
       triggerEventId: parentEventId,
       createdAt: commentaryCreatedAt,
@@ -373,20 +382,24 @@ export function useSessionMessaging({
 
     appendSessionEvents(targetSessionId, [pendingCommentaryMessage], { persist: false });
 
-    void persistPendingCommentary(
+    void persistPendingModelResponse(
       targetSessionId,
-      commentaryId,
+      responseId,
       commentaryArtworkIds,
       commentaryCreatedAt,
       parentEventId,
-    );
+    ).catch((error) => {
+      // Completion performs an update-then-create retry, so only log this
+      // preliminary failure and surface an error if the final save also fails.
+      console.error('Failed to persist pending model response:', error);
+    });
 
     streamSessionChat(
       sessionItems.map(toSessionChatArtwork),
       serializeSessionHistory(historyForPrompt, sessionItems),
       text,
       (chunk) => {
-        updateLocalSessionEvent(targetSessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
           ...event,
           text: `${event.text || ''}${chunk}`,
           payload: {
@@ -400,7 +413,7 @@ export function useSessionMessaging({
         }));
       },
       (fullResponse) => {
-        updateLocalSessionEvent(targetSessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
           ...event,
           text: fullResponse,
           payload: {
@@ -408,14 +421,17 @@ export function useSessionMessaging({
             status: 'completed',
           },
         }));
-        void finalizeCommentary(
+        void finalizeModelResponse(
           targetSessionId,
-          commentaryId,
+          responseId,
           commentaryArtworkIds,
           'completed',
           parentEventId,
           { content: fullResponse },
-        );
+        ).catch((error) => {
+          console.error('Failed to persist completed model response:', error);
+          showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
+        });
         setStreamingSessionResponses((prev) => {
           const next = { ...prev };
           delete next[targetSessionId];
@@ -423,7 +439,7 @@ export function useSessionMessaging({
         });
       },
       () => {
-        updateLocalSessionEvent(targetSessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
           ...event,
           payload: {
             ...(event.payload || {}),
@@ -431,14 +447,17 @@ export function useSessionMessaging({
             error_message: 'Something interrupted the reflection stream. Please try again.',
           },
         }));
-        void finalizeCommentary(
+        void finalizeModelResponse(
           targetSessionId,
-          commentaryId,
+          responseId,
           commentaryArtworkIds,
           'failed',
           parentEventId,
           { errorMessage: 'Something interrupted the reflection stream. Please try again.' },
-        );
+        ).catch((error) => {
+          console.error('Failed to persist failed model response:', error);
+          showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
+        });
         setStreamingSessionResponses((prev) => {
           const next = { ...prev };
           delete next[targetSessionId];
@@ -454,10 +473,13 @@ export function useSessionMessaging({
   }, [
     activeSessionSummary,
     appendSessionEvents,
+    finalizeModelResponse,
     items,
+    persistPendingModelResponse,
     sessionUserId,
     setStreamingSessionResponses,
     sessionStreams,
+    showToast,
     updateLocalSessionEvent,
   ]);
 
@@ -518,14 +540,14 @@ export function useSessionMessaging({
 
     setStreamingSessionResponses((prev) => ({ ...prev, [sessionId]: '' }));
     const historyForPrompt = getSessionHistoryBeforeTrigger(conversationHistory, parentEventId);
-    const commentaryId = `commentary-${Date.now()}`;
+    const responseId = newSessionEventId();
     const commentaryCreatedAt = getNextLocalEventCreatedAt(conversationHistory);
     const commentaryArtworkIds = getSessionArtworkIds(sessionItems);
     const pendingCommentaryMessage: SessionStreamMessage = {
-      id: commentaryId,
+      id: responseId,
       role: 'model',
       text: '',
-      type: 'artwork_commentary',
+      type: 'model_response',
       artworkIds: commentaryArtworkIds,
       triggerEventId: parentEventId,
       createdAt: commentaryCreatedAt,
@@ -535,20 +557,22 @@ export function useSessionMessaging({
 
     appendSessionEvents(sessionId, [pendingCommentaryMessage], { persist: false });
 
-    void persistPendingCommentary(
+    void persistPendingModelResponse(
       sessionId,
-      commentaryId,
+      responseId,
       commentaryArtworkIds,
       commentaryCreatedAt,
       parentEventId,
-    );
+    ).catch((error) => {
+      console.error('Failed to persist pending model response:', error);
+    });
 
     streamSessionChat(
       sessionItems.map(toSessionChatArtwork),
       serializeSessionHistory(historyForPrompt, sessionItems),
       trigger,
       (chunk) => {
-        updateLocalSessionEvent(sessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(sessionId, responseId, (event) => ({
           ...event,
           text: `${event.text || ''}${chunk}`,
           payload: {
@@ -559,7 +583,7 @@ export function useSessionMessaging({
         setStreamingSessionResponses((prev) => ({ ...prev, [sessionId]: (prev[sessionId] || '') + chunk }));
       },
       (fullResponse) => {
-        updateLocalSessionEvent(sessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(sessionId, responseId, (event) => ({
           ...event,
           text: fullResponse,
           payload: {
@@ -567,14 +591,17 @@ export function useSessionMessaging({
             status: 'completed',
           },
         }));
-        void finalizeCommentary(
+        void finalizeModelResponse(
           sessionId,
-          commentaryId,
+          responseId,
           commentaryArtworkIds,
           'completed',
           parentEventId,
           { content: fullResponse },
-        );
+        ).catch((error) => {
+          console.error('Failed to persist completed model response:', error);
+          showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
+        });
         setStreamingSessionResponses((prev) => {
           const next = { ...prev };
           delete next[sessionId];
@@ -582,7 +609,7 @@ export function useSessionMessaging({
         });
       },
       () => {
-        updateLocalSessionEvent(sessionId, commentaryId, (event) => ({
+        updateLocalSessionEvent(sessionId, responseId, (event) => ({
           ...event,
           payload: {
             ...(event.payload || {}),
@@ -590,14 +617,17 @@ export function useSessionMessaging({
             error_message: 'Something interrupted the reflection stream. Please try again.',
           },
         }));
-        void finalizeCommentary(
+        void finalizeModelResponse(
           sessionId,
-          commentaryId,
+          responseId,
           commentaryArtworkIds,
           'failed',
           parentEventId,
           { errorMessage: 'Something interrupted the reflection stream. Please try again.' },
-        );
+        ).catch((error) => {
+          console.error('Failed to persist failed model response:', error);
+          showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
+        });
         setStreamingSessionResponses((prev) => {
           const next = { ...prev };
           delete next[sessionId];
@@ -612,9 +642,12 @@ export function useSessionMessaging({
     );
   }, [
     appendSessionEvents,
+    finalizeModelResponse,
+    persistPendingModelResponse,
     sessionUserId,
     sessionGoals,
     setStreamingSessionResponses,
+    showToast,
     updateLocalSessionEvent,
   ]);
 

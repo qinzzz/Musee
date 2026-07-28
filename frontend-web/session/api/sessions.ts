@@ -17,8 +17,8 @@ export interface SessionRecord {
 export interface SessionEventPayload {
   id?: string;
   role: 'user' | 'model' | 'system';
-  type?: 'text' | 'artwork_capture' | 'artwork_card' | 'artwork_commentary';
-  event_type?: 'user_input' | 'artwork_result' | 'artwork_commentary' | 'message';
+  type?: 'text' | 'artwork_capture' | 'artwork_card' | 'artwork_commentary' | 'model_response';
+  event_type?: 'user_input' | 'artwork_result' | 'artwork_commentary' | 'model_response' | 'message';
   content?: string;
   artwork_id?: string;
   artwork_ids?: string[];
@@ -75,12 +75,16 @@ export async function fetchSessions(userId: string): Promise<SessionRecord[]> {
 
 export async function appendSessionEvents(sessionId: string, events: SessionEventPayload[]): Promise<void> {
   if (!events.length) return;
-  await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/events`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/events`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(events),
     timeout: 10000,
-  }).catch(() => {});
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
+  }
 }
 
 export async function updateSessionEvent(

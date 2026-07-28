@@ -172,7 +172,7 @@ export function buildSessionRenderBlocks(
       }
     }
 
-    if (message.type === 'artwork_commentary') {
+    if (message.type === 'model_response' || message.type === 'artwork_commentary') {
       blocks.push({
         type: 'commentary',
         id: message.id,

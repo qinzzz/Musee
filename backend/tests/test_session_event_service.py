@@ -13,12 +13,15 @@ def test_normalize_session_event_type_maps_legacy_values():
     assert normalize_session_event_type("text", role="model") == "message"
     assert normalize_session_event_type("artwork_capture", role="user") == "user_input"
     assert normalize_session_event_type("artwork_card") == "artwork_result"
+    assert normalize_session_event_type("artwork_commentary", role="model") == "model_response"
+    assert normalize_session_event_type("model_response", role="model") == "model_response"
 
 
 def test_legacy_session_transport_type_maps_canonical_values():
     assert legacy_session_transport_type("user_input", role="user", artwork_ids=[]) == "text"
     assert legacy_session_transport_type("user_input", role="user", artwork_ids=["art-1"]) == "artwork_capture"
     assert legacy_session_transport_type("artwork_result") == "artwork_card"
+    assert legacy_session_transport_type("model_response", role="model") == "text"
 
 
 def test_normalize_session_trigger_event_id_strips_empty_values():
@@ -107,11 +110,11 @@ def test_validate_and_normalize_session_event_rejects_trigger_on_user_input():
         raise AssertionError("Expected validation failure")
 
 
-def test_validate_and_normalize_session_event_requires_commentary_status():
+def test_validate_and_normalize_session_event_requires_model_response_status():
     try:
         validate_and_normalize_session_event({
             "role": "model",
-            "event_type": "artwork_commentary",
+            "event_type": "model_response",
             "content": "Hello",
             "artwork_ids": ["art-1"],
             "payload": {},
@@ -121,3 +124,32 @@ def test_validate_and_normalize_session_event_requires_commentary_status():
         assert "payload.status" in str(exc.detail)
     else:
         raise AssertionError("Expected validation failure")
+
+
+def test_validate_and_normalize_general_model_response_without_artworks():
+    event = validate_and_normalize_session_event({
+        "role": "model",
+        "event_type": "model_response",
+        "content": "Here is the answer.",
+        "payload": {"status": "completed"},
+    })
+
+    assert event["event_type"] == "model_response"
+    assert event["artwork_ids"] == []
+    assert event["payload"] == {"status": "completed"}
+
+
+def test_legacy_artwork_commentary_normalizes_to_model_response():
+    event = validate_and_normalize_session_event({
+        "role": "model",
+        "event_type": "artwork_commentary",
+        "content": "Notice the contrast.",
+        "artwork_ids": ["art-1"],
+        "payload": {"status": "completed"},
+    })
+
+    assert event["event_type"] == "model_response"
+    assert event["payload"] == {
+        "status": "completed",
+        "artwork_ids": ["art-1"],
+    }

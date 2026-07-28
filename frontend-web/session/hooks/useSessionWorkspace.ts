@@ -176,7 +176,12 @@ export function useSessionWorkspace({
     const dbMessages = canonicalSessionEvents;
     if (!dbMessages?.length) return;
     if (dbMessages.some((message) => (
-      (message.event_type === 'artwork_commentary' || message.type === 'artwork_commentary')
+      (
+        message.event_type === 'model_response'
+        || message.event_type === 'artwork_commentary'
+        || message.type === 'model_response'
+        || message.type === 'artwork_commentary'
+      )
       && (message.payload as Record<string, unknown> | undefined)?.status !== 'pending'
     ))) {
       sessionState.setStreamingSessionResponses((prev) => {
@@ -194,8 +199,8 @@ export function useSessionWorkspace({
         const artworkIds = getSessionEventArtworkIds(m);
         const canonicalEventType = m.event_type || m.type;
         const frontendMessageType: SessionStreamMessage['type'] =
-          canonicalEventType === 'artwork_commentary'
-            ? 'artwork_commentary'
+          canonicalEventType === 'model_response' || canonicalEventType === 'artwork_commentary'
+            ? 'model_response'
             : canonicalEventType === 'user_input'
               ? 'text'
               : (m.type || 'text') as SessionStreamMessage['type'];

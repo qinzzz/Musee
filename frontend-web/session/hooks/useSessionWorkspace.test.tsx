@@ -331,7 +331,7 @@ describe('useSessionWorkspace', () => {
       id: 'local-user', role: 'user', text: 'just sent', createdAt: 300, localOrder: 5,
     });
     const pendingCommentary = createSessionMessage({
-      id: 'local-commentary', role: 'model', text: '', type: 'artwork_commentary',
+      id: 'local-commentary', role: 'model', text: '', type: 'model_response',
       payload: { status: 'pending' }, createdAt: 301, localOrder: 6,
     });
     // Confirmed on a previous fetch, but no longer returned by the backend →

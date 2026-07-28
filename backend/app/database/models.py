@@ -5,6 +5,7 @@ from app.database.connection import Base
 from app.services.session_event_service import (
     derive_session_event_artwork_ids,
     legacy_session_transport_type,
+    normalize_session_event_payload,
     normalize_session_event_type,
 )
 import uuid
@@ -332,7 +333,7 @@ class SessionEvent(Base):
     session_id      = Column(String, ForeignKey('sessions.id', ondelete='CASCADE'), nullable=False, index=True)
     role            = Column(String(10), nullable=False)   # 'user' | 'model' | 'system'
     type            = Column(String(20), nullable=False, default='message')  # canonical event type
-    content         = Column(Text, nullable=True)          # primarily used for event_type='message'
+    content         = Column(Text, nullable=True)          # text for message/model_response events
     trigger_event_id = Column(String, nullable=True)
     payload         = Column(JSON, nullable=True)
     sequence_number = Column(Integer, nullable=False)
@@ -353,6 +354,12 @@ class SessionEvent(Base):
             canonical_type,
             self.payload,
         )
+        normalized_payload = normalize_session_event_payload(
+            canonical_type,
+            self.payload,
+            artwork_ids=payload_artwork_ids,
+            content=self.content,
+        )
         primary_artwork_id = payload_artwork_ids[0] if payload_artwork_ids else None
         return {
             "id": self.id,
@@ -364,7 +371,7 @@ class SessionEvent(Base):
             "artwork_id": primary_artwork_id,
             "artwork_ids": payload_artwork_ids,
             "trigger_event_id": self.trigger_event_id,
-            "payload": self.payload,
+            "payload": normalized_payload,
             "sequence_number": self.sequence_number,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

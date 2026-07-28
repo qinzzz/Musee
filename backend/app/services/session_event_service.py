@@ -13,21 +13,22 @@ LEGACY_TO_CANONICAL_EVENT_TYPE = {
     "artwork_input": "user_input",
     "artwork_card": "artwork_result",
     "artwork_result": "artwork_result",
-    "artwork_commentary": "artwork_commentary",
+    "artwork_commentary": "model_response",
+    "model_response": "model_response",
 }
 
 CANONICAL_TO_LEGACY_EVENT_TYPE = {
     "user_input": "text",
     "message": "text",
     "artwork_result": "artwork_card",
-    "artwork_commentary": "text",
+    "model_response": "text",
 }
 
 VALID_ARTWORK_INPUT_SOURCES = {"upload", "capture", "library"}
 VALID_ARTWORK_RESULT_OUTCOMES = {"succeeded", "failed"}
-VALID_COMMENTARY_STATUSES = {"pending", "completed", "failed"}
+VALID_MODEL_RESPONSE_STATUSES = {"pending", "completed", "failed"}
 VALID_SESSION_EVENT_ROLES = {"user", "model", "system"}
-VALID_SESSION_EVENT_TYPES = {"user_input", "message", "artwork_result", "artwork_commentary"}
+VALID_SESSION_EVENT_TYPES = {"user_input", "message", "artwork_result", "model_response"}
 
 
 def normalize_session_event_type(raw_type: Optional[str], *, role: Optional[str] = None) -> str:
@@ -185,14 +186,15 @@ def normalize_session_event_payload(
         error_message = normalized.get("error_message")
         if error_message is not None and not isinstance(error_message, str):
             normalized.pop("error_message", None)
-    elif canonical_type == "artwork_commentary":
+    elif canonical_type == "model_response":
         if normalized_artwork_ids:
             normalized["artwork_ids"] = normalized_artwork_ids
         else:
             normalized.pop("artwork_ids", None)
         status = normalized.get("status")
-        if status not in VALID_COMMENTARY_STATUSES:
+        if status not in VALID_MODEL_RESPONSE_STATUSES:
             normalized.pop("status", None)
+        normalized.pop("response_kind", None)
         source_event_id = normalized.get("source_event_id")
         if source_event_id is not None and (not isinstance(source_event_id, str) or not source_event_id.strip()):
             normalized.pop("source_event_id", None)
@@ -264,15 +266,13 @@ def validate_and_normalize_session_event(
             raise HTTPException(status_code=400, detail="artwork_result event requires artworks")
         if not normalized_payload or not normalized_payload.get("result_kind"):
             raise HTTPException(status_code=400, detail="artwork_result event requires payload.result_kind")
-    elif canonical_type == "artwork_commentary":
+    elif canonical_type == "model_response":
         if role not in {"model", "system"}:
-            raise HTTPException(status_code=400, detail="artwork_commentary events must use role='model' or role='system'")
-        if not normalized_artwork_ids:
-            raise HTTPException(status_code=400, detail="artwork_commentary event requires artworks")
-        if not normalized_payload or normalized_payload.get("status") not in VALID_COMMENTARY_STATUSES:
-            raise HTTPException(status_code=400, detail="artwork_commentary event requires payload.status")
+            raise HTTPException(status_code=400, detail="model_response events must use role='model' or role='system'")
+        if not normalized_payload or normalized_payload.get("status") not in VALID_MODEL_RESPONSE_STATUSES:
+            raise HTTPException(status_code=400, detail="model_response event requires payload.status")
         if normalized_payload["status"] == "completed" and not normalized_content:
-            raise HTTPException(status_code=400, detail="completed artwork_commentary event requires content")
+            raise HTTPException(status_code=400, detail="completed model_response event requires content")
 
     return {
         **event,

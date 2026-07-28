@@ -338,7 +338,7 @@ def test_start_session_with_artworks_does_not_leave_shell_session_on_failure(mon
         assert db.query(SessionModel).filter(SessionModel.id == "visit-art-failed").first() is None
 
 
-def test_patch_session_message_updates_commentary_to_completed(client, db):
+def test_patch_session_message_updates_legacy_commentary_to_model_response(client, db):
     db.add(User(user_id="commentary-user", device_id="commentary-user"))
     db.add(SessionModel(id="visit-commentary", user_id="commentary-user", title="Commentary session"))
     db.add(SavedArtwork(id="artwork-commentary", user_id="commentary-user", photo_uri="https://example.com/c.jpg", artist_name="Unknown Artist", artwork_name="Untitled"))
@@ -357,7 +357,7 @@ def test_patch_session_message_updates_commentary_to_completed(client, db):
         "/api/sessions/visit-commentary/messages/msg-commentary",
         json={
             "role": "model",
-            "event_type": "artwork_commentary",
+            "event_type": "model_response",
             "content": "Here is the finished commentary.",
             "artwork_ids": ["artwork-commentary"],
             "payload": {"status": "completed"},
@@ -366,15 +366,22 @@ def test_patch_session_message_updates_commentary_to_completed(client, db):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["event_type"] == "artwork_commentary"
+    assert payload["event_type"] == "model_response"
     assert payload["content"] == "Here is the finished commentary."
-    assert payload["payload"] == {"status": "completed", "artwork_ids": ["artwork-commentary"]}
+    assert payload["payload"] == {
+        "status": "completed",
+        "artwork_ids": ["artwork-commentary"],
+    }
     assert payload["artwork_ids"] == ["artwork-commentary"]
 
     db.expire_all()
     stored = db.query(SessionEvent).filter(SessionEvent.id == "msg-commentary").one()
+    assert stored.type == "model_response"
     assert stored.content == "Here is the finished commentary."
-    assert stored.payload == {"status": "completed", "artwork_ids": ["artwork-commentary"]}
+    assert stored.payload == {
+        "status": "completed",
+        "artwork_ids": ["artwork-commentary"],
+    }
 
 
 def test_patch_session_message_updates_commentary_to_failed(client, db):
@@ -397,7 +404,7 @@ def test_patch_session_message_updates_commentary_to_failed(client, db):
         "/api/sessions/visit-commentary-failed/messages/msg-commentary-failed",
         json={
             "role": "model",
-            "event_type": "artwork_commentary",
+            "event_type": "model_response",
             "artwork_ids": ["artwork-failed-a", "artwork-failed-b"],
             "payload": {
                 "status": "failed",
@@ -423,6 +430,42 @@ def test_patch_session_message_updates_commentary_to_failed(client, db):
         "error_message": "stream interrupted",
         "artwork_ids": ["artwork-failed-a", "artwork-failed-b"],
     }
+
+
+def test_model_response_lifecycle_supports_text_only_sessions(client, db):
+    db.add(User(user_id="text-response-user", device_id="text-response-user"))
+    db.add(SessionModel(id="visit-text-response", user_id="text-response-user", title="Text session"))
+    db.commit()
+
+    created = client.post(
+        "/api/sessions/visit-text-response/events",
+        json=[{
+            "id": "response-text-only",
+            "role": "model",
+            "event_type": "model_response",
+            "trigger_event_id": "user-question",
+            "payload": {"status": "pending"},
+        }],
+    )
+    assert created.status_code == 200
+
+    completed = client.patch(
+        "/api/sessions/visit-text-response/events/response-text-only",
+        json={
+            "role": "model",
+            "event_type": "model_response",
+            "content": "A complete text-only answer.",
+            "trigger_event_id": "user-question",
+            "payload": {"status": "completed"},
+        },
+    )
+
+    assert completed.status_code == 200
+    payload = completed.json()
+    assert payload["event_type"] == "model_response"
+    assert payload["artwork_ids"] == []
+    assert payload["content"] == "A complete text-only answer."
+    assert payload["payload"] == {"status": "completed"}
 
 
 def test_canonical_artwork_input_batch_persists_payload_links_and_legacy_shape(client, db):

@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionMessaging } from './useSessionMessaging';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
@@ -145,14 +145,26 @@ describe('useSessionMessaging', () => {
     const persistedEvents = mockAppendSessionMessages.mock.calls.flatMap((call) => call[1] ?? []);
     expect(persistedEvents).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        event_type: 'artwork_commentary',
+        event_type: 'model_response',
         trigger_event_id: expect.stringMatching(/^evt-/),
+        artwork_ids: [],
+        payload: { status: 'pending' },
       }),
     ]));
+    expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
+      expect.stringMatching(/^session_/),
+      expect.stringMatching(/^evt-/),
+      expect.objectContaining({
+        event_type: 'model_response',
+        content: 'assistant reply',
+        artwork_ids: [],
+        payload: { status: 'completed' },
+      }),
+    );
     expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
   });
 
-  it('persists commentary lifecycle as pending then completed artwork_commentary', async () => {
+  it('persists artwork-linked replies as model_response events', async () => {
     const summary = createSessionSummary({
       id: 'visit-1',
       items: [
@@ -206,7 +218,7 @@ describe('useSessionMessaging', () => {
       expect.arrayContaining([
         expect.objectContaining({
           role: 'model',
-          event_type: 'artwork_commentary',
+          event_type: 'model_response',
           artwork_ids: ['art-1', 'art-2'],
           payload: { status: 'pending' },
         }),
@@ -214,10 +226,10 @@ describe('useSessionMessaging', () => {
     );
     expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
       'visit-1',
-      expect.stringMatching(/^commentary-/),
+      expect.stringMatching(/^evt-/),
       expect.objectContaining({
         role: 'model',
-        event_type: 'artwork_commentary',
+        event_type: 'model_response',
         artwork_ids: ['art-1', 'art-2'],
         payload: { status: 'completed' },
         content: 'assistant reply',
@@ -275,7 +287,7 @@ describe('useSessionMessaging', () => {
       expect.arrayContaining([
         expect.objectContaining({
           role: 'model',
-          event_type: 'artwork_commentary',
+          event_type: 'model_response',
           artwork_ids: ['art-1'],
           payload: { status: 'pending' },
         }),
@@ -283,16 +295,48 @@ describe('useSessionMessaging', () => {
     );
     expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
       'visit-1',
-      expect.stringMatching(/^commentary-/),
+      expect.stringMatching(/^evt-/),
       expect.objectContaining({
         role: 'model',
-        event_type: 'artwork_commentary',
+        event_type: 'model_response',
         artwork_ids: ['art-1'],
         payload: {
           status: 'failed',
           error_message: 'Something interrupted the reflection stream. Please try again.',
         },
       }),
+    );
+  });
+
+  it('warns when a completed model response cannot be saved after fallback', async () => {
+    mockAppendSessionMessages
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('fallback failed'));
+    mockUpdateSessionEvent.mockRejectedValueOnce(new Error('response not found'));
+
+    const summary = createSessionSummary({ id: 'visit-1' });
+    const { result, spies } = renderUseSessionMessaging({
+      activeSessionSummary: summary,
+      sessionSummaries: [summary],
+      filteredSessionId: 'visit-1',
+      isComposingNewSession: false,
+      sessionStreams: { 'visit-1': [] },
+    });
+
+    await act(async () => {
+      result.current.sendSessionInquiryToSession('visit-1', 'Tell me more');
+    });
+
+    await waitFor(() => {
+      expect(spies.showToast).toHaveBeenCalledWith(
+        'This response couldn’t be saved. Try again.',
+        'info',
+      );
+    });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to persist completed model response:',
+      expect.any(Error),
     );
   });
 
