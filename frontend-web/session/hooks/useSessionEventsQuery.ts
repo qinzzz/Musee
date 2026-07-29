@@ -28,6 +28,9 @@ export function useSessionEventsQuery({ sessionId, enabled = true }: UseSessionE
 
   return {
     events: query.data,
+    eventsError: query.error,
+    eventsFetching: query.isFetching,
+    retrySessionEvents: query.refetch,
     refreshSessionEvents,
   };
 }

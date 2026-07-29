@@ -256,6 +256,28 @@ describe('useSessionWorkspace', () => {
     expect(sessionStateMock.setIsComposingNewSession).toHaveBeenLastCalledWith(false);
   });
 
+  it('keeps a first-opened session loading until its canonical event query settles', async () => {
+    let resolveEvents: (events: []) => void = () => {};
+    mockFetchSessionMessages.mockReturnValue(new Promise<[]>((resolve) => {
+      resolveEvents = resolve;
+    }));
+
+    const { result } = renderUseSessionWorkspace({
+      activeTab: 'newSession',
+      sessionStateOverrides: {
+        sessionStreams: { 'session-1': [] },
+      },
+    });
+
+    expect(result.current.sessionHistoryStatus).toBe('loading');
+
+    act(() => resolveEvents([]));
+
+    await waitFor(() => {
+      expect(result.current.sessionHistoryStatus).toBe('ready');
+    });
+  });
+
   it('hydrates missing DB messages into the active visit stream without duplicating existing ones', async () => {
     const existingMessage = createSessionMessage({ id: 'existing', createdAt: 200, text: 'existing' });
     const sessionStateMock = createSessionStateMock({

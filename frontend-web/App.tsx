@@ -419,6 +419,8 @@ const App: React.FC = () => {
     pendingDeletedSessionIds,
     recentSessionSummaries,
     sessionsLoading,
+    sessionHistoryStatus,
+    retrySessionHistory,
     enterBlankSession,
     openSessionSummary,
   } = sessionWorkspace;
@@ -725,6 +727,8 @@ const App: React.FC = () => {
     })),
     newSessionDraftMessage,
     isSubmittingPreparedSession,
+    sessionHistoryStatus,
+    retrySessionHistory,
     sessionStreamScrollRef,
     sessionStreamEndRef,
     items,

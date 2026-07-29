@@ -46,6 +46,7 @@ type ExploreSessionViewProps = {
   preparedSessionMessage: string;
   isSubmittingPreparedSession: boolean;
   isSessionBusy: boolean;
+  sessionHistoryStatus: 'loading' | 'ready' | 'error';
   sessionStreamScrollRef: React.RefObject<HTMLDivElement | null>;
   sessionStreamEndRef: React.RefObject<HTMLDivElement | null>;
   onCloseArtworkDetail: () => void;
@@ -71,6 +72,7 @@ type ExploreSessionViewProps = {
   onOpenLibraryPicker: () => void;
   onRemovePreparedSessionItem: (entryId: string) => void;
   onSubmitPreparedSession: () => void;
+  onRetrySessionHistory: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   onOpenSessionArtwork: (item: GalleryItem) => void;
 };
@@ -270,6 +272,7 @@ export default function ExploreSessionView({
   preparedSessionMessage,
   isSubmittingPreparedSession,
   isSessionBusy,
+  sessionHistoryStatus,
   sessionStreamScrollRef,
   sessionStreamEndRef,
   onCloseArtworkDetail,
@@ -291,10 +294,12 @@ export default function ExploreSessionView({
   onOpenLibraryPicker,
   onRemovePreparedSessionItem,
   onSubmitPreparedSession,
+  onRetrySessionHistory,
   onFileUpload,
   onOpenSessionArtwork,
 }: ExploreSessionViewProps) {
   const [sessionDetailsOpen, setSessionDetailsOpen] = React.useState(false);
+  const [showSessionHistoryLoader, setShowSessionHistoryLoader] = React.useState(false);
   const composerTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const composerValue = preparedSessionItems.length > 0 ? preparedSessionMessage : sessionGoalInput;
   const resizeComposerTextarea = React.useCallback(() => {
@@ -317,6 +322,16 @@ export default function ExploreSessionView({
   React.useEffect(() => {
     setSessionDetailsOpen(false);
   }, [activeSessionSummary.id]);
+
+  React.useEffect(() => {
+    if (sessionHistoryStatus !== 'loading') {
+      setShowSessionHistoryLoader(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setShowSessionHistoryLoader(true), 150);
+    return () => window.clearTimeout(timeout);
+  }, [sessionHistoryStatus]);
 
   React.useLayoutEffect(() => {
     resizeComposerTextarea();
@@ -410,7 +425,41 @@ export default function ExploreSessionView({
 
       <div className="relative isolate flex-1 min-h-0 flex flex-col bg-[var(--color-bg-primary)]" style={{ overflow: 'clip' }}>
 
-        {sessionRenderBlocks.length === 0 ? (
+        {sessionHistoryStatus === 'loading' ? (
+          <div
+            className="relative z-10 flex flex-1 items-center justify-center px-6 pb-20"
+            aria-busy="true"
+            aria-label="Loading session history"
+          >
+            <div className={`flex flex-col items-center gap-3 transition-opacity duration-150 ${
+              showSessionHistoryLoader ? 'opacity-100' : 'opacity-0'
+            }`}>
+              <div className="flex items-center gap-1.5" aria-hidden="true">
+                {[0, 1, 2].map((index) => (
+                  <span
+                    key={index}
+                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-300"
+                    style={{ animationDelay: `${index * 160}ms` }}
+                  />
+                ))}
+              </div>
+              <p className="text-[12px] font-medium text-neutral-400">Loading session…</p>
+            </div>
+          </div>
+        ) : sessionHistoryStatus === 'error' ? (
+          <div className="relative z-10 flex flex-1 items-center justify-center px-6 pb-20">
+            <div className="text-center">
+              <p className="text-[13px] font-medium text-neutral-500">Couldn’t load this session.</p>
+              <button
+                type="button"
+                onClick={onRetrySessionHistory}
+                className="mt-3 rounded-full border border-neutral-200 bg-white px-4 py-2 text-[12px] font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        ) : sessionRenderBlocks.length === 0 ? (
           sessionGoalDismissed.has(activeSessionSummary.id) ? (
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center pb-20 px-6">
               <div className="text-center">
@@ -555,7 +604,7 @@ export default function ExploreSessionView({
           <>
             <div
               ref={sessionStreamScrollRef}
-              className="flex-1 overflow-y-auto px-4 sm:px-10 pb-56 pt-3 sm:pt-4"
+              className="flex-1 animate-in fade-in duration-200 overflow-y-auto px-4 sm:px-10 pb-56 pt-3 sm:pt-4"
               onScroll={() => {}}
               style={{ overscrollBehaviorY: 'contain', touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
