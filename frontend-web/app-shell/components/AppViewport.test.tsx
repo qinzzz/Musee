@@ -37,8 +37,10 @@ vi.mock('../../session/components/ExploreSessionView', () => ({
     onSubmitGoal: (goal: string) => void;
     onSaveExistingGoal: (goal: string) => void;
     isSessionBusy: boolean;
+    sessionHistoryStatus: 'loading' | 'ready' | 'error';
   }) => (
     <div>
+      <span data-testid="session-history-status">{props.sessionHistoryStatus}</span>
       <button disabled={props.isSessionBusy} onClick={() => props.onSubmitGoal('Draft goal')}>submit-goal</button>
       <button onClick={() => props.onSaveExistingGoal('Updated goal')}>save-goal</button>
     </div>
@@ -63,6 +65,7 @@ function renderAppViewport(options: {
   handleSessionInquiry?: (text: string) => Promise<boolean>;
   isAnalyzing?: boolean;
   streamingSessionResponses?: Record<string, string>;
+  sessionHistoryStatus?: 'loading' | 'ready' | 'error';
 }) {
   const setSessionGoal = vi.fn();
   const setSessionGoalInput = vi.fn();
@@ -106,6 +109,8 @@ function renderAppViewport(options: {
         pendingSessionArtworks: [],
         newSessionDraftMessage: '',
         isSubmittingPreparedSession: false,
+        sessionHistoryStatus: options.sessionHistoryStatus ?? 'ready',
+        retrySessionHistory: vi.fn().mockResolvedValue(undefined),
         sessionStreamScrollRef: { current: null },
         sessionStreamEndRef: { current: null },
         items: [],
@@ -209,6 +214,16 @@ describe('AppViewport session composer', () => {
   it('blocks the initial composer while the session is busy', () => {
     const spies = renderAppViewport({ isAnalyzing: true });
 
+    const submitButton = screen.getByText('submit-goal');
+    expect((submitButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(submitButton);
+    expect(spies.handleSessionInquiry).not.toHaveBeenCalled();
+  });
+
+  it('blocks the composer while session history is loading', () => {
+    const spies = renderAppViewport({ sessionHistoryStatus: 'loading' });
+
+    expect(screen.getByTestId('session-history-status').textContent).toBe('loading');
     const submitButton = screen.getByText('submit-goal');
     expect((submitButton as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(submitButton);

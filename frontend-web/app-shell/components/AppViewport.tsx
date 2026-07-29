@@ -65,6 +65,8 @@ type ViewportStateProps = {
   pendingSessionArtworks: PreparedSessionEntry[];
   newSessionDraftMessage: string;
   isSubmittingPreparedSession: boolean;
+  sessionHistoryStatus: 'loading' | 'ready' | 'error';
+  retrySessionHistory: () => Promise<unknown>;
   sessionStreamScrollRef: React.RefObject<HTMLDivElement | null>;
   sessionStreamEndRef: React.RefObject<HTMLDivElement | null>;
   items: GalleryItem[];
@@ -171,6 +173,8 @@ export default function AppViewport({
     pendingSessionArtworks,
     newSessionDraftMessage,
     isSubmittingPreparedSession,
+    sessionHistoryStatus,
+    retrySessionHistory,
     sessionStreamScrollRef,
     sessionStreamEndRef,
     items,
@@ -239,6 +243,7 @@ export default function AppViewport({
     || isAnalyzing
     || isSubmittingPreparedSession
     || isSubmittingStagedBatch
+    || sessionHistoryStatus !== 'ready'
   );
 
   return (
@@ -316,6 +321,8 @@ export default function AppViewport({
               preparedSessionMessage={newSessionDraftMessage}
               isSubmittingPreparedSession={isSubmittingPreparedSession}
               isSessionBusy={isSessionBusy}
+              sessionHistoryStatus={sessionHistoryStatus}
+              onRetrySessionHistory={() => void retrySessionHistory()}
               sessionStreamScrollRef={sessionStreamScrollRef}
               sessionStreamEndRef={sessionStreamEndRef}
               onCloseArtworkDetail={closeArtworkDetail}

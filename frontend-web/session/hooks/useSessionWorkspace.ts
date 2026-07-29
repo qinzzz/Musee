@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from '../lib/sessionEventArtworks';
 import { parseServerTimestamp } from '../../lib/time';
@@ -163,17 +163,37 @@ export function useSessionWorkspace({
 
   // Canonical events come from the shared query layer; cached data repaints a
   // re-opened session immediately while the refetch confirms it.
-  const { events: canonicalSessionEvents } = useSessionEventsQuery({
+  const {
+    events: canonicalSessionEvents,
+    eventsError: canonicalSessionEventsError,
+    eventsFetching: canonicalSessionEventsFetching,
+    retrySessionEvents,
+  } = useSessionEventsQuery({
     sessionId: activeSessionId,
     enabled: activeTab === 'newSession',
   });
+  const hasLocalSessionHistory = Boolean(
+    activeSessionId && sessionState.sessionStreams[activeSessionId]?.length,
+  );
+  const sessionHistoryStatus: 'loading' | 'ready' | 'error' = (
+    activeTab !== 'newSession'
+    || !activeSessionId
+    || hasLocalSessionHistory
+    || canonicalSessionEvents !== undefined
+  )
+    ? 'ready'
+    : canonicalSessionEventsFetching
+      ? 'loading'
+      : canonicalSessionEventsError
+        ? 'error'
+        : 'loading';
 
   useEffect(() => {
     if (activeTab !== 'newSession') return;
     if (sessionStreamScrollRef.current) sessionStreamScrollRef.current.scrollTop = 0;
   }, [activeTab, activeSessionId, sessionStreamScrollRef]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!activeSessionId) return;
     const sessionId = activeSessionId;
     const dbMessages = canonicalSessionEvents;
@@ -328,6 +348,8 @@ export function useSessionWorkspace({
     pendingDeletedSessionIds,
     recentSessionSummaries,
     sessionsLoading,
+    sessionHistoryStatus,
+    retrySessionHistory: retrySessionEvents,
     enterBlankSession,
     openSessionSummary,
   };
