@@ -36,9 +36,10 @@ vi.mock('../../session/components/ExploreSessionView', () => ({
   default: (props: {
     onSubmitGoal: (goal: string) => void;
     onSaveExistingGoal: (goal: string) => void;
+    isSessionBusy: boolean;
   }) => (
     <div>
-      <button onClick={() => props.onSubmitGoal('Draft goal')}>submit-goal</button>
+      <button disabled={props.isSessionBusy} onClick={() => props.onSubmitGoal('Draft goal')}>submit-goal</button>
       <button onClick={() => props.onSaveExistingGoal('Updated goal')}>save-goal</button>
     </div>
   ),
@@ -60,6 +61,8 @@ function createSessionSummary(overrides: Partial<SessionSummary> = {}): SessionS
 function renderAppViewport(options: {
   isPersistedSessionId?: (sessionId: string) => boolean;
   handleSessionInquiry?: (text: string) => Promise<boolean>;
+  isAnalyzing?: boolean;
+  streamingSessionResponses?: Record<string, string>;
 }) {
   const setSessionGoal = vi.fn();
   const setSessionGoalInput = vi.fn();
@@ -98,7 +101,7 @@ function renderAppViewport(options: {
         sessionGoalInput: 'Draft goal',
         sessionGoals: {},
         sessionGoalDismissed: new Set<string>(),
-        streamingSessionResponses: {},
+        streamingSessionResponses: options.streamingSessionResponses ?? {},
         goalGalleryInputRef: { current: null },
         pendingSessionArtworks: [],
         newSessionDraftMessage: '',
@@ -108,7 +111,7 @@ function renderAppViewport(options: {
         items: [],
         artworkWorkspace: { id: '', itemIds: [], globalConversation: [] },
         filteredSessionId: 'visit-1',
-        isAnalyzing: false,
+        isAnalyzing: options.isAnalyzing ?? false,
         likedIds: new Set<string>(),
         boards: [],
         boardsLoading: false,
@@ -201,6 +204,15 @@ describe('AppViewport session composer', () => {
       expect(spies.handleSessionInquiry).toHaveBeenCalledWith('Draft goal');
     });
     expect(spies.setSessionGoalInput).not.toHaveBeenCalled();
+  });
+
+  it('blocks the initial composer while the session is busy', () => {
+    const spies = renderAppViewport({ isAnalyzing: true });
+
+    const submitButton = screen.getByText('submit-goal');
+    expect((submitButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(submitButton);
+    expect(spies.handleSessionInquiry).not.toHaveBeenCalled();
   });
 
   it('still persists goals edited from session details', async () => {

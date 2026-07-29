@@ -234,6 +234,12 @@ export default function AppViewport({
     activeSessionSummary
     && Object.prototype.hasOwnProperty.call(streamingSessionResponses, activeSessionSummary.id),
   );
+  const isSessionBusy = Boolean(
+    isSessionReplyPending
+    || isAnalyzing
+    || isSubmittingPreparedSession
+    || isSubmittingStagedBatch
+  );
 
   return (
     <>
@@ -309,6 +315,7 @@ export default function AppViewport({
               preparedSessionItems={pendingSessionArtworks}
               preparedSessionMessage={newSessionDraftMessage}
               isSubmittingPreparedSession={isSubmittingPreparedSession}
+              isSessionBusy={isSessionBusy}
               sessionStreamScrollRef={sessionStreamScrollRef}
               sessionStreamEndRef={sessionStreamEndRef}
               onCloseArtworkDetail={closeArtworkDetail}
@@ -356,18 +363,27 @@ export default function AppViewport({
               }}
               onSessionGoalInputChange={setSessionGoalInput}
               onSubmitGoal={(question) => {
+                if (isSessionBusy) return;
                 void handleSessionInquiry(question).then((didSend) => {
                   if (didSend) {
                     setSessionGoalInput('');
                   }
                 });
               }}
-              onOpenSessionCapture={openSessionCapturePage}
+              onOpenSessionCapture={() => {
+                if (!isSessionBusy) openSessionCapturePage();
+              }}
               onPreparedSessionMessageChange={setNewSessionDraftMessage}
-              onOpenLibraryPicker={() => setIsLibraryPickerOpen(true)}
+              onOpenLibraryPicker={() => {
+                if (!isSessionBusy) setIsLibraryPickerOpen(true);
+              }}
               onRemovePreparedSessionItem={removePendingSessionArtwork}
-              onSubmitPreparedSession={() => void submitPreparedSession()}
-              onFileUpload={handleFileUpload}
+              onSubmitPreparedSession={() => {
+                if (!isSessionBusy) void submitPreparedSession();
+              }}
+              onFileUpload={(event, mode) => {
+                if (!isSessionBusy) handleFileUpload(event, mode);
+              }}
               onOpenSessionArtwork={(item) =>
                 openArtworkDetail(
                   item,
@@ -523,16 +539,25 @@ export default function AppViewport({
       ) && (
         <ContextualActionBar
           mode="session"
-          onUpload={handleFileUpload}
-          onOpenSessionCapture={openSessionCapturePage}
-          onOpenLibraryPicker={openSessionLibraryPicker}
+          onUpload={(event, mode) => {
+            if (!isSessionBusy) handleFileUpload(event, mode);
+          }}
+          onOpenSessionCapture={() => {
+            if (!isSessionBusy) openSessionCapturePage();
+          }}
+          onOpenLibraryPicker={() => {
+            if (!isSessionBusy) openSessionLibraryPicker();
+          }}
           isAnalyzing={isAnalyzing}
           isInquiryDisabled={isSessionReplyPending}
-          onInquiry={handleSessionInquiry}
+          isBusy={isSessionBusy}
+          onInquiry={(text) => (
+            isSessionBusy ? Promise.resolve(false) : handleSessionInquiry(text)
+          )}
           stagedItems={activeSessionSummary ? pendingSessionArtworks : []}
           onRemoveStagedItem={removePendingSessionArtwork}
           onSubmitStagedBatch={(message) => (
-            activeSessionSummary
+            activeSessionSummary && !isSessionBusy
               ? submitStagedBatch(activeSessionSummary.id, message)
               : Promise.resolve(false)
           )}
