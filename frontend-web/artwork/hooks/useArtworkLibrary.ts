@@ -149,6 +149,7 @@ export function useArtworkLibrary({
   const {
     serverItems,
     artworksLoaded,
+    artworksAuthoritative,
     artworksError,
     refreshArtworks,
     refreshArtworksIfStale,
@@ -295,6 +296,7 @@ export function useArtworkLibrary({
     refreshArtworks,
     refreshArtworksIfStale,
     artworksLoaded,
+    artworksAuthoritative,
     profileRefreshKey,
     artworkDetailItem,
     artworkDetailSelection,

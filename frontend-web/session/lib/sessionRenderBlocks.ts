@@ -15,10 +15,10 @@ function normalizeEventSource(source: unknown): 'library' | 'upload' | 'camera' 
   return 'camera';
 }
 
-function getArtworkEventSourceFromPayload(
+function readArtworkEventSourceFromPayload(
   message: SessionStreamMessage,
   artworkId: string,
-): 'library' | 'upload' | 'camera' {
+): 'library' | 'upload' | 'camera' | undefined {
   const artworks = Array.isArray(message.payload?.artworks) ? message.payload.artworks : [];
   const match = artworks.find((entry) => (
     entry
@@ -28,10 +28,17 @@ function getArtworkEventSourceFromPayload(
   ));
 
   if (match && typeof match === 'object' && 'source' in match) {
-    return normalizeEventSource(match.source);
+    if (match.source === 'library' || match.source === 'upload' || match.source === 'camera' || match.source === 'capture') {
+      return normalizeEventSource(match.source);
+    }
   }
 
-  return normalizeEventSource(message.payload?.source);
+  const source = message.payload?.source;
+  if (source === 'library' || source === 'upload' || source === 'camera' || source === 'capture') {
+    return normalizeEventSource(source);
+  }
+
+  return undefined;
 }
 
 function buildDeletedArtworkPlaceholder(
@@ -56,7 +63,7 @@ function buildDeletedArtworkPlaceholder(
     sessionLinks: [{
       sessionId,
       sequenceNumber: message.sequenceNumber,
-      source: getArtworkEventSourceFromPayload(message, artworkId),
+      source: readArtworkEventSourceFromPayload(message, artworkId) ?? 'camera',
     }],
     conversation: [],
     artworkName: 'Deleted artwork',
@@ -76,9 +83,19 @@ function getArtworkEventSourceForSession(
   return 'camera';
 }
 
-function getArtworkGroupLabel(items: GalleryItem[], sessionId: string): string {
+function getArtworkGroupLabel(
+  items: GalleryItem[],
+  sessionId: string,
+  message?: SessionStreamMessage,
+): string {
   const count = items.length;
-  const sources = Array.from(new Set(items.map((item) => getArtworkEventSourceForSession(item, sessionId))));
+  const sources = Array.from(new Set(items.map((item) => (
+    (message && readArtworkEventSourceFromPayload(
+      message,
+      item.artworkId || getArtworkClientId(item),
+    ))
+    ?? getArtworkEventSourceForSession(item, sessionId)
+  ))));
 
   if (sources.length === 1) {
     switch (sources[0]) {
@@ -106,7 +123,7 @@ function getCommentaryStatus(message: SessionStreamMessage): 'pending' | 'comple
 export function buildSessionRenderBlocks(
   activeSessionSummary: SessionSummary | null,
   sessionStreams: Record<string, SessionStreamMessage[]>,
-  options: { artworksLoaded?: boolean } = {},
+  options: { artworksLoaded?: boolean; allItems?: GalleryItem[] } = {},
 ): SessionRenderBlock[] {
   if (!activeSessionSummary) {
     return [];
@@ -120,7 +137,8 @@ export function buildSessionRenderBlocks(
 
   const itemsByArtworkId = new Map<string, GalleryItem>();
   const itemsById = new Map<string, GalleryItem>();
-  activeSessionSummary.items.forEach((item) => {
+  const resolutionItems = options.allItems ?? activeSessionSummary.items;
+  resolutionItems.forEach((item) => {
     itemsById.set(getArtworkClientId(item), item);
     itemsById.set(item.id, item);
     if (item.artworkId) {
@@ -165,7 +183,7 @@ export function buildSessionRenderBlocks(
           sequenceNumber: message.sequenceNumber,
           localOrder: message.localOrder,
           items,
-          sourceLabel: getArtworkGroupLabel(items, sessionId),
+          sourceLabel: getArtworkGroupLabel(items, sessionId, message),
           userMessage: message.text ? message : undefined,
         });
         continue;

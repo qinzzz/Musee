@@ -45,9 +45,11 @@ export function useArtworksQuery(userId: string) {
     serverItems: query.data,
     refreshArtworks,
     refreshArtworksIfStale,
-    // True once the first fetch settles (success or error); mirrors the old
-    // artworksLoaded flag that gated session summaries and loading states.
+    // Preserve the existing UI-loading contract: cached artwork remains usable
+    // after a failed refresh instead of leaving the app in a permanent spinner.
     artworksLoaded: query.isFetched,
+    // A failed request cannot prove that a missing artwork was deleted.
+    artworksAuthoritative: query.isSuccess,
     artworksError: query.error,
   };
 }

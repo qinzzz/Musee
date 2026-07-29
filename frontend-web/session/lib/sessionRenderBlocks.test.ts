@@ -195,6 +195,58 @@ describe('buildSessionRenderBlocks', () => {
     expect(blocks.map((block) => block.id)).toEqual(['evt-upload-reply']);
   });
 
+  it('resolves event artwork ids from the complete library when the session link is stale', () => {
+    const item = {
+      ...createItem('artwork-with-stale-link'),
+      sessionLinks: undefined,
+    };
+    const libraryInput = createMessage({
+      id: 'evt-library',
+      role: 'user',
+      artworkIds: ['artwork-with-stale-link'],
+      sequenceNumber: 1,
+      createdAt: 100,
+      payload: {
+        artworks: [{ artwork_id: 'artwork-with-stale-link', source: 'library' }],
+      },
+    });
+
+    const blocks = buildSessionRenderBlocks(
+      createSummary(),
+      { 'session-1': [libraryInput] },
+      { artworksLoaded: true, allItems: [item] },
+    );
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({
+      type: 'input',
+      id: 'evt-library',
+      sourceLabel: 'Added from collection',
+    });
+    if (blocks[0].type !== 'input') {
+      throw new Error('expected input block');
+    }
+    expect(blocks[0].items).toEqual([item]);
+    expect(blocks[0].items[0].isDeletedPlaceholder).not.toBe(true);
+  });
+
+  it('retains session-link-only artworks as the legacy artwork group', () => {
+    const legacyItem = createItem('legacy-artwork');
+
+    const blocks = buildSessionRenderBlocks(
+      createSummary([legacyItem]),
+      { 'session-1': [] },
+      { artworksLoaded: true, allItems: [legacyItem] },
+    );
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({
+      type: 'artwork_group',
+      sourceLabel: 'Added from collection',
+      items: [legacyItem],
+    });
+  });
+
   it('keeps artwork user input, its text, and triggered commentary together', () => {
     const itemA = createItem('artwork-a');
     const itemB = {

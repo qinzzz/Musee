@@ -23,6 +23,7 @@ type UseSessionStateOptions = {
   userId: string;
   items: GalleryItem[];
   artworksLoaded: boolean;
+  artworksAuthoritative?: boolean;
   deleteConfirmation: DeleteConfirmation;
   defaultSessionTitle: string;
   initialIsComposingNewSession?: boolean;
@@ -56,6 +57,7 @@ export function useSessionState({
   userId,
   items,
   artworksLoaded,
+  artworksAuthoritative = artworksLoaded,
   deleteConfirmation,
   defaultSessionTitle,
   initialIsComposingNewSession = false,
@@ -163,8 +165,11 @@ export function useSessionState({
   }, [activeSessionSummary, artworksLoaded, sessionStreams]);
 
   const activeSessionRenderBlocks = useMemo<SessionRenderBlock[]>(() => {
-    return buildSessionRenderBlocks(activeSessionSummary, sessionStreams, { artworksLoaded });
-  }, [activeSessionSummary, artworksLoaded, sessionStreams]);
+    return buildSessionRenderBlocks(activeSessionSummary, sessionStreams, {
+      artworksLoaded: artworksAuthoritative,
+      allItems: items,
+    });
+  }, [activeSessionSummary, artworksAuthoritative, items, sessionStreams]);
 
   useEffect(() => {
     if (isComposingNewSession) return;
