@@ -32,6 +32,7 @@ type UseSessionWorkspaceOptions = {
   userId: string;
   items: GalleryItem[];
   artworksLoaded: boolean;
+  artworksAuthoritative?: boolean;
   deleteConfirmation: DeleteConfirmation;
   defaultSessionTitle: string;
   initialIsComposingNewSession: boolean;
@@ -56,6 +57,7 @@ export function useSessionWorkspace({
   userId,
   items,
   artworksLoaded,
+  artworksAuthoritative = artworksLoaded,
   deleteConfirmation,
   defaultSessionTitle,
   initialIsComposingNewSession,
@@ -79,6 +81,7 @@ export function useSessionWorkspace({
     userId,
     items,
     artworksLoaded,
+    artworksAuthoritative,
     deleteConfirmation,
     defaultSessionTitle,
     initialIsComposingNewSession,

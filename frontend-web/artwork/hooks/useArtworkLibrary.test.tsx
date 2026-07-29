@@ -169,6 +169,7 @@ describe('useArtworkLibrary', () => {
 
     await waitFor(() => {
       expect(result.current.artworksLoaded).toBe(true);
+      expect(result.current.artworksAuthoritative).toBe(true);
       expect(result.current.items.some((item) => item.id === 'pending-1')).toBe(true);
       expect(result.current.items.some((item) => item.id === 'server-1')).toBe(true);
     });
@@ -343,6 +344,7 @@ describe('useArtworkLibrary', () => {
       expect(result.current.artworksLoaded).toBe(true);
     });
 
+    expect(result.current.artworksAuthoritative).toBe(false);
     expect(result.current.items.map((item) => item.id)).toEqual(['cached-1']);
     expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to load previous artworks:', expect.any(Error));
   });
