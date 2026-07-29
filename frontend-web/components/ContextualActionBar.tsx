@@ -44,6 +44,7 @@ interface Props {
   isCommunityActive?: boolean;
   isAnalyzing?: boolean;
   isInquiryDisabled?: boolean;
+  isBusy?: boolean;
   isLiked?: boolean;
   activeItem?: GalleryItem;
   placeholder?: string;
@@ -65,12 +66,21 @@ const ContextualActionBar: React.FC<Props> = ({
   isCommunityActive,
   isAnalyzing,
   isInquiryDisabled,
+  isBusy,
   isLiked,
   activeItem,
   placeholder,
 }) => {
   const [text, setText] = useState('');
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const sessionBusy = Boolean(isBusy || isAnalyzing || isInquiryDisabled || isSubmittingStagedBatch);
+
+  React.useEffect(() => {
+    if (sessionBusy) {
+      setIsAddMenuOpen(false);
+    }
+  }, [sessionBusy]);
 
   // Scan artwork is the most frequent mid-session action, so it gets its own
   // button next to "+"; the menu holds the bring-in-existing-images actions.
@@ -79,13 +89,13 @@ const ContextualActionBar: React.FC<Props> = ({
       label: ARTWORK_CTA_ADD_FROM_COLLECTION,
       icon: <AddFromCollectionIcon size={18} />,
       onSelect: onOpenLibraryPicker,
-      disabled: false,
+      disabled: sessionBusy,
     },
     {
       label: ARTWORK_CTA_UPLOAD_PHOTOS,
       icon: <UploadPhotosIcon size={18} />,
       onSelect: () => galleryInputRef.current?.click(),
-      disabled: Boolean(isAnalyzing),
+      disabled: sessionBusy,
     },
   ];
 
@@ -93,8 +103,8 @@ const ContextualActionBar: React.FC<Props> = ({
 
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (sessionBusy) return;
     if (hasStagedItems) {
-      if (isSubmittingStagedBatch) return;
       const didSubmit = await onSubmitStagedBatch?.(text.trim());
       if (didSubmit) {
         setText('');
@@ -118,7 +128,7 @@ const ContextualActionBar: React.FC<Props> = ({
         multiple
         className="hidden"
         onChange={(e) => onUpload(e, 'gallery')}
-        disabled={isAnalyzing}
+        disabled={sessionBusy}
       />
 
       <div className="absolute bottom-0 left-0 right-0 z-[20] px-3 sm:px-6 pb-3 sm:pb-5 bg-gradient-to-t from-[var(--color-bg-primary)] via-[color:rgba(255,255,255,0.95)] to-transparent pt-8" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}>
@@ -192,6 +202,7 @@ const ContextualActionBar: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => onRemoveStagedItem?.(entry.id)}
+                      disabled={sessionBusy}
                       className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/80 text-white shadow-sm transition-colors hover:bg-black"
                       aria-label={`Remove ${entry.label}`}
                     >
@@ -209,19 +220,23 @@ const ContextualActionBar: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={onOpenSessionCapture}
-                disabled={isAnalyzing}
+                disabled={sessionBusy}
                 aria-label={ARTWORK_CTA_SCAN_ARTWORK}
                 title={ARTWORK_CTA_SCAN_ARTWORK}
                 className="w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100 disabled:opacity-40"
               >
                 <ScanArtworkIcon size={20} />
               </button>
-              <DropdownMenu>
+              <DropdownMenu
+                open={isAddMenuOpen}
+                onOpenChange={(open) => setIsAddMenuOpen(open && !sessionBusy)}
+              >
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
+                    disabled={sessionBusy}
                     aria-label={ARTWORK_CTA_ADD_MENU}
-                    className="w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100 data-[state=open]:bg-neutral-100 [&[data-state=open]>svg]:rotate-45"
+                    className="w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100 disabled:opacity-40 data-[state=open]:bg-neutral-100 [&[data-state=open]>svg]:rotate-45"
                   >
                     <svg
                       width="20"
@@ -243,8 +258,12 @@ const ContextualActionBar: React.FC<Props> = ({
                     <DropdownMenuItem
                       key={action.label}
                       disabled={action.disabled}
-                      onSelect={() => action.onSelect()}
-                      className="gap-3 rounded-[14px] px-3.5 py-3 text-[14px] font-medium text-neutral-800"
+                      onSelect={() => {
+                        if (!sessionBusy && !action.disabled) {
+                          action.onSelect();
+                        }
+                      }}
+                      className="gap-3 rounded-[14px] px-3.5 py-3 text-[14px] font-medium text-neutral-800 data-[disabled]:cursor-not-allowed data-[disabled]:text-neutral-400 data-[disabled]:opacity-45"
                     >
                       {action.icon}
                       <span>{action.label}</span>
@@ -263,13 +282,20 @@ const ContextualActionBar: React.FC<Props> = ({
               <button
                 type="submit"
                 className="w-10 h-10 shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-30"
-                disabled={hasStagedItems ? Boolean(isSubmittingStagedBatch) : (!text.trim() || isInquiryDisabled)}
-                title={isInquiryDisabled ? 'Waiting for response' : 'Send'}
+                disabled={sessionBusy || (!hasStagedItems && !text.trim())}
+                title={sessionBusy ? 'Session busy' : 'Send'}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="22" y1="2" x2="11" y2="13"/>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                </svg>
+                {sessionBusy ? (
+                  <span
+                    aria-label="Session busy"
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
+                  />
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"/>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  </svg>
+                )}
               </button>
             </div>
           </form>

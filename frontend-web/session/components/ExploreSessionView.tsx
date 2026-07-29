@@ -45,6 +45,7 @@ type ExploreSessionViewProps = {
   }>;
   preparedSessionMessage: string;
   isSubmittingPreparedSession: boolean;
+  isSessionBusy: boolean;
   sessionStreamScrollRef: React.RefObject<HTMLDivElement | null>;
   sessionStreamEndRef: React.RefObject<HTMLDivElement | null>;
   onCloseArtworkDetail: () => void;
@@ -268,6 +269,7 @@ export default function ExploreSessionView({
   preparedSessionItems,
   preparedSessionMessage,
   isSubmittingPreparedSession,
+  isSessionBusy,
   sessionStreamScrollRef,
   sessionStreamEndRef,
   onCloseArtworkDetail,
@@ -328,6 +330,9 @@ export default function ExploreSessionView({
   }, [resizeComposerTextarea]);
 
   const handleSubmitGoal = () => {
+    if (isSessionBusy) {
+      return;
+    }
     const goal = sessionGoalInput.trim();
     if (!goal) {
       return;
@@ -475,6 +480,7 @@ export default function ExploreSessionView({
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' && !event.shiftKey) {
                           event.preventDefault();
+                          if (isSessionBusy) return;
                           if (preparedSessionItems.length > 0) {
                             onSubmitPreparedSession();
                           } else {
@@ -486,16 +492,24 @@ export default function ExploreSessionView({
                     <button
                       onClick={preparedSessionItems.length > 0 ? onSubmitPreparedSession : handleSubmitGoal}
                       disabled={
-                        preparedSessionItems.length > 0
+                        isSessionBusy
+                        || (preparedSessionItems.length > 0
                           ? isSubmittingPreparedSession
-                          : !sessionGoalInput.trim()
+                          : !sessionGoalInput.trim())
                       }
                       className="absolute bottom-4 right-3 w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-20 transition-opacity"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="22" y1="2" x2="11" y2="13" />
-                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                      </svg>
+                      {isSessionBusy ? (
+                        <span
+                          aria-label="Session busy"
+                          className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
+                        />
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="22" y1="2" x2="11" y2="13" />
+                          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                        </svg>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -505,26 +519,30 @@ export default function ExploreSessionView({
                   accept={SUPPORTED_UPLOAD_ACCEPT}
                   multiple
                   className="hidden"
+                  disabled={isSessionBusy}
                   onChange={(event) => onFileUpload(event, 'gallery')}
                 />
                 <div className="mt-5 flex flex-wrap justify-center gap-3">
                   <button
                     onClick={onOpenLibraryPicker}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
+                    disabled={isSessionBusy}
+                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40"
                   >
                     <AddFromCollectionIcon />
                     {ARTWORK_CTA_ADD_FROM_COLLECTION}
                   </button>
                   <button
                     onClick={() => goalGalleryInputRef.current?.click()}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100"
+                    disabled={isSessionBusy}
+                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100 disabled:opacity-40"
                   >
                     <UploadPhotosIcon />
                     {ARTWORK_CTA_UPLOAD_PHOTOS}
                   </button>
                   <button
                     onClick={onOpenSessionCapture}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[13px] font-medium"
+                    disabled={isSessionBusy}
+                    className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[13px] font-medium disabled:opacity-40"
                   >
                     <ScanArtworkIcon />
                     {ARTWORK_CTA_SCAN_ARTWORK}
