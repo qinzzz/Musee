@@ -61,3 +61,56 @@ describe('ContextualActionBar session busy state', () => {
     expect((screen.getByLabelText(ARTWORK_CTA_ADD_MENU) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('ContextualActionBar mobile composer', () => {
+  it('expands on focus and keeps Enter available for multiline input', () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    const onInquiry = vi.fn(async () => true);
+
+    render(
+      <ContextualActionBar
+        mode="session"
+        onUpload={vi.fn()}
+        onOpenSessionCapture={vi.fn()}
+        onOpenLibraryPicker={vi.fn()}
+        onInquiry={onInquiry}
+      />,
+    );
+
+    const composer = screen.getByRole('textbox');
+    expect(composer.tagName).toBe('TEXTAREA');
+    expect(composer.parentElement?.className).toContain('items-center');
+    fireEvent.focus(composer);
+    expect(composer.getAttribute('aria-expanded')).toBe('true');
+    expect(composer.parentElement?.className).toContain('items-end');
+
+    fireEvent.change(composer, { target: { value: 'First line' } });
+    fireEvent.keyDown(composer, { key: 'Enter', code: 'Enter' });
+    expect(onInquiry).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it('retains Enter-to-submit on desktop', async () => {
+    const onInquiry = vi.fn(async () => true);
+    render(
+      <ContextualActionBar
+        mode="session"
+        onUpload={vi.fn()}
+        onOpenSessionCapture={vi.fn()}
+        onOpenLibraryPicker={vi.fn()}
+        onInquiry={onInquiry}
+      />,
+    );
+
+    const composer = screen.getByRole('textbox');
+    fireEvent.change(composer, { target: { value: 'A desktop reflection' } });
+    fireEvent.keyDown(composer, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => expect(onInquiry).toHaveBeenCalledWith('A desktop reflection'));
+  });
+});

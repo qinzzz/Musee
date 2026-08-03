@@ -18,6 +18,18 @@ import {
 import type { ArtworkDetailItem, IdentifyAgainHints } from '../../artwork/types';
 import type { ActiveSessionStreamEntry, SessionRenderBlock, SessionSummary } from '../types';
 import SessionMessageMarkdown from './SessionMessageMarkdown';
+import {
+  getSessionComposerHeight,
+  shouldSubmitSessionComposerOnEnter,
+} from '../lib/sessionComposerBehavior';
+
+const MOBILE_COMPOSER_QUERY = '(max-width: 639px)';
+
+const matchesMobileComposer = () => (
+  typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia(MOBILE_COMPOSER_QUERY).matches
+);
 
 type SessionViewProps = {
   activeSessionSummary: SessionSummary;
@@ -301,6 +313,8 @@ export default function SessionView({
 }: SessionViewProps) {
   const [sessionDetailsOpen, setSessionDetailsOpen] = React.useState(false);
   const [showSessionHistoryLoader, setShowSessionHistoryLoader] = React.useState(false);
+  const [isComposerFocused, setIsComposerFocused] = React.useState(false);
+  const [isMobileComposer, setIsMobileComposer] = React.useState(matchesMobileComposer);
   const composerTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const composerValue = preparedSessionItems.length > 0 ? preparedSessionMessage : sessionGoalInput;
   const resizeComposerTextarea = React.useCallback(() => {
@@ -314,10 +328,28 @@ export default function SessionView({
     const paddingBottom = parseFloat(styles.paddingBottom) || 0;
     const borderTop = parseFloat(styles.borderTopWidth) || 0;
     const borderBottom = parseFloat(styles.borderBottomWidth) || 0;
-    const oneLineHeight = Math.ceil(lineHeight + paddingTop + paddingBottom + borderTop + borderBottom);
+    const chromeHeight = paddingTop + paddingBottom + borderTop + borderBottom;
+    const contentHeight = textarea.scrollHeight + borderTop + borderBottom;
+    const { height, isScrollable } = getSessionComposerHeight({
+      contentHeight,
+      lineHeight,
+      chromeHeight,
+      isFocused: isComposerFocused,
+      isMobile: isMobileComposer,
+    });
 
     textarea.style.height = 'auto';
-    textarea.style.height = `${Math.max(textarea.scrollHeight + borderTop + borderBottom, oneLineHeight)}px`;
+    textarea.style.height = `${height}px`;
+    textarea.style.overflowY = isScrollable ? 'auto' : 'hidden';
+  }, [isComposerFocused, isMobileComposer]);
+
+  React.useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const mediaQuery = window.matchMedia(MOBILE_COMPOSER_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => setIsMobileComposer(event.matches);
+    setIsMobileComposer(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
   React.useEffect(() => {
@@ -481,86 +513,99 @@ export default function SessionView({
           ) : (
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6">
               <div className="w-full max-w-[640px]">
-                {preparedSessionItems.length > 0 && (
-                  <div className="mb-4 rounded-[24px] border border-neutral-200 bg-white p-4 shadow-sm">
-                    <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                      {preparedSessionItems.map((entry) => (
-                        <div
-                          key={entry.id}
-                          className="group relative h-[92px] w-[92px] shrink-0 overflow-hidden rounded-[18px] border border-neutral-200 bg-neutral-50"
-                        >
-                          <img src={entry.previewUrl} alt={entry.label} className="h-full w-full object-cover" />
-                          <button
-                            onClick={() => onRemovePreparedSessionItem(entry.id)}
-                            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/80 text-white shadow-sm transition-colors hover:bg-black"
-                            aria-label={`Remove ${entry.label}`}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                              <line x1="18" y1="6" x2="6" y2="18" />
-                              <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 <div className="space-y-4">
                   <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-neutral-800 font-sans text-center">
                     What are you drawn to today?
                   </h2>
-                  <div className="relative">
-                    <textarea
-                      ref={composerTextareaRef}
-                      placeholder={
-                        preparedSessionItems.length > 0
-                          ? 'Add an opening question or note before you start chatting…'
-                          : 'Ask anything about art'
-                      }
-                      className="w-full overflow-hidden bg-white rounded-[20px] px-5 py-4 pr-14 text-[16px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none shadow-sm border border-neutral-100 focus:border-neutral-300 transition-colors leading-relaxed"
-                      rows={1}
-                      value={composerValue}
-                      onChange={(event) => {
-                        if (preparedSessionItems.length > 0) {
-                          onPreparedSessionMessageChange(event.target.value);
-                        } else {
-                          onSessionGoalInputChange(event.target.value);
+                  <div className={preparedSessionItems.length > 0 ? 'overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-sm' : ''}>
+                    {preparedSessionItems.length > 0 && (
+                      <div className="border-b border-neutral-100 px-4 pb-3 pt-4">
+                        <div className="flex gap-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                          {preparedSessionItems.map((entry) => (
+                            <div
+                              key={entry.id}
+                              className="group relative h-[92px] w-[92px] shrink-0 overflow-hidden rounded-[18px] border border-neutral-200 bg-neutral-50"
+                            >
+                              <img src={entry.previewUrl} alt={entry.label} className="h-full w-full object-cover" />
+                              <button
+                                onClick={() => onRemovePreparedSessionItem(entry.id)}
+                                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/80 text-white shadow-sm transition-colors hover:bg-black"
+                                aria-label={`Remove ${entry.label}`}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                                  <line x1="18" y1="6" x2="6" y2="18" />
+                                  <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="relative">
+                      <textarea
+                        ref={composerTextareaRef}
+                        placeholder={
+                          preparedSessionItems.length > 0
+                            ? 'Add an opening question or note before you start chatting…'
+                            : 'Ask anything about art'
                         }
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' && !event.shiftKey) {
-                          event.preventDefault();
-                          if (isSessionBusy) return;
+                        aria-expanded={isMobileComposer ? isComposerFocused : undefined}
+                        className={`w-full overflow-hidden bg-white px-5 py-4 pr-14 text-[16px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none leading-relaxed transition-[height,border-color] duration-200 ease-out ${
+                          preparedSessionItems.length > 0
+                            ? ''
+                            : 'rounded-[20px] border border-neutral-100 shadow-sm focus:border-neutral-300 transition-colors'
+                        }`}
+                        rows={1}
+                        value={composerValue}
+                        onChange={(event) => {
                           if (preparedSessionItems.length > 0) {
-                            onSubmitPreparedSession();
+                            onPreparedSessionMessageChange(event.target.value);
                           } else {
-                            handleSubmitGoal();
+                            onSessionGoalInputChange(event.target.value);
                           }
+                        }}
+                        onFocus={() => setIsComposerFocused(true)}
+                        onBlur={() => setIsComposerFocused(false)}
+                        onKeyDown={(event) => {
+                          if (shouldSubmitSessionComposerOnEnter({
+                            key: event.key,
+                            shiftKey: event.shiftKey,
+                            isMobile: isMobileComposer,
+                          })) {
+                            event.preventDefault();
+                            if (isSessionBusy) return;
+                            if (preparedSessionItems.length > 0) {
+                              onSubmitPreparedSession();
+                            } else {
+                              handleSubmitGoal();
+                            }
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={preparedSessionItems.length > 0 ? onSubmitPreparedSession : handleSubmitGoal}
+                        disabled={
+                          isSessionBusy
+                          || (preparedSessionItems.length > 0
+                            ? isSubmittingPreparedSession
+                            : !sessionGoalInput.trim())
                         }
-                      }}
-                    />
-                    <button
-                      onClick={preparedSessionItems.length > 0 ? onSubmitPreparedSession : handleSubmitGoal}
-                      disabled={
-                        isSessionBusy
-                        || (preparedSessionItems.length > 0
-                          ? isSubmittingPreparedSession
-                          : !sessionGoalInput.trim())
-                      }
-                      className="absolute bottom-4 right-3 w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-20 transition-opacity"
-                    >
-                      {isSessionBusy ? (
-                        <span
-                          aria-label="Session busy"
-                          className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
-                        />
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="22" y1="2" x2="11" y2="13" />
-                          <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                        </svg>
-                      )}
-                    </button>
+                        className="absolute bottom-4 right-3 w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-20 transition-opacity"
+                      >
+                        {isSessionBusy ? (
+                          <span
+                            aria-label="Session busy"
+                            className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
+                          />
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13" />
+                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <input
