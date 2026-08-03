@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import EmptyWall from '../../components/EmptyWall';
-import ContextualActionBar from '../../components/ContextualActionBar';
+import ContextualActionBar, { SESSION_QUESTION_PLACEHOLDER } from '../../components/ContextualActionBar';
 import ArtworkDetailModal from '../../artwork/components/ArtworkDetailModal';
 import SessionCapturePage from '../../capture/components/SessionCapturePage';
 import SessionView from '../../session/components/SessionView';
@@ -576,7 +576,7 @@ export default function AppViewport({
           onCommunity={() => setArtworkDetailRightMode((mode) => (mode === 'community' ? 'metadata' : 'community'))}
           isCommunityActive={artworkDetailRightMode === 'community'}
           activeItem={artworkDetailItem as unknown as GalleryItem || undefined}
-          placeholder={activeSessionSummary ? 'Add a reflection, memory, or association...' : 'Start a session or capture an artwork...'}
+          placeholder={activeSessionSummary ? SESSION_QUESTION_PLACEHOLDER : 'Start a session or capture an artwork...'}
         />
       )}
     </>

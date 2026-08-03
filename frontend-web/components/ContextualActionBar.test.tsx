@@ -5,7 +5,7 @@ import {
   ARTWORK_CTA_ADD_MENU,
   ARTWORK_CTA_SCAN_ARTWORK,
 } from '../lib/artworkSourceCtas';
-import ContextualActionBar from './ContextualActionBar';
+import ContextualActionBar, { SESSION_QUESTION_PLACEHOLDER } from './ContextualActionBar';
 
 describe('ContextualActionBar session busy state', () => {
   it('keeps the draft editable while disabling every session input action', () => {
@@ -83,6 +83,7 @@ describe('ContextualActionBar mobile composer', () => {
 
     const composer = screen.getByRole('textbox');
     expect(composer.tagName).toBe('TEXTAREA');
+    expect(composer.getAttribute('placeholder')).toBe(SESSION_QUESTION_PLACEHOLDER);
     expect(composer.parentElement?.className).toContain('items-center');
     fireEvent.focus(composer);
     expect(composer.getAttribute('aria-expanded')).toBe('true');
