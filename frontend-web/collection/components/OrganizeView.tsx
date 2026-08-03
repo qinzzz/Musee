@@ -132,9 +132,11 @@ export default function OrganizeView({
 
   const {
     selectedArtworkIds,
+    isArtworkSelectionMode,
     isApplyingBoard,
     isDeletingSelection,
     toggleArtworkSelection,
+    enterArtworkSelectionMode,
     clearArtworkSelection,
     handleAddSelectionToBoard,
     handleDeleteSelection,
@@ -165,12 +167,16 @@ export default function OrganizeView({
           collectionSearch={collectionSearch}
           collectionSearchPlaceholder={collectionSearchPlaceholder}
           showCollectionUpload={showCollectionUpload}
+          showArtworkSelection={collectTab === 'saved' && savedLayout === 'grid'}
+          isArtworkSelectionMode={isArtworkSelectionMode}
           onCollectTabChange={(tab) => {
             onCollectTabChange(tab);
             setSelectedBoard(null);
           }}
           onCollectionSearchChange={setCollectionSearch}
           onOpenUpload={() => collectionUploadInputRef.current?.click()}
+          onEnterArtworkSelectionMode={enterArtworkSelectionMode}
+          onExitArtworkSelectionMode={clearArtworkSelection}
         />
 
         <div className="relative">
@@ -191,6 +197,7 @@ export default function OrganizeView({
               isAnalyzing={isAnalyzing}
               boards={resolvedBoards}
               selectedArtworkIds={selectedArtworkIds}
+              isArtworkSelectionMode={isArtworkSelectionMode}
               onToggleSelection={toggleArtworkSelection}
               onInterpret={onInterpret}
               onDelete={onDelete}

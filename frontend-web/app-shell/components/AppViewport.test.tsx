@@ -32,7 +32,7 @@ vi.mock('../../components/LearningHubPage', () => ({
   default: () => <div>learn</div>,
 }));
 
-vi.mock('../../session/components/ExploreSessionView', () => ({
+vi.mock('../../session/components/SessionView', () => ({
   default: (props: {
     onSubmitGoal: (goal: string) => void;
     onSaveExistingGoal: (goal: string) => void;

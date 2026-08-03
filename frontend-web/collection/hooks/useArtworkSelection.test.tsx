@@ -28,6 +28,27 @@ function createItem(id: string, overrides: Partial<GalleryItem> = {}): GalleryIt
 }
 
 describe('useArtworkSelection', () => {
+  it('supports an explicit empty selection mode for touch layouts', () => {
+    const items = [createItem('a1')];
+    const { result } = renderHook(() =>
+      useArtworkSelection({
+        collectTab: 'saved',
+        savedLayout: 'grid',
+        searchedSavedItems: items,
+        items,
+        onAddItemsToBoard: vi.fn().mockResolvedValue(undefined),
+        onDeleteArtworks: vi.fn().mockResolvedValue(undefined),
+      }),
+    );
+
+    act(() => result.current.enterArtworkSelectionMode());
+    expect(result.current.isArtworkSelectionMode).toBe(true);
+    expect(result.current.selectedArtworkIds).toEqual([]);
+
+    act(() => result.current.clearArtworkSelection());
+    expect(result.current.isArtworkSelectionMode).toBe(false);
+  });
+
   it('clears selection after adding selected artworks to a board', async () => {
     const onAddItemsToBoard = vi.fn().mockResolvedValue(undefined);
     const onDeleteArtworks = vi.fn().mockResolvedValue(undefined);

@@ -19,6 +19,7 @@ interface Props {
   isAnalyzing: boolean;
   boards?: Album[];
   selectedIds: string[];
+  isSelectionMode: boolean;
   hasSelectionOverlay?: boolean;
   onToggleSelection: (itemId: string) => void;
   onInterpret: (item: GalleryItem, contextItems?: GalleryItem[]) => void;
@@ -32,6 +33,7 @@ const GridView: React.FC<Props> = ({
   isAnalyzing,
   boards = [],
   selectedIds,
+  isSelectionMode,
   hasSelectionOverlay = false,
   onToggleSelection,
   onInterpret,
@@ -39,8 +41,6 @@ const GridView: React.FC<Props> = ({
 }) => {
   const suppressInterpretUntilRef = React.useRef(0);
   const displayItems = items;
-  const isSelectionMode = selectedIds.length > 0;
-
   const suppressInterpret = React.useCallback((durationMs = 250) => {
     suppressInterpretUntilRef.current = Date.now() + durationMs;
   }, []);
@@ -57,6 +57,7 @@ const GridView: React.FC<Props> = ({
               return (
             <div
               key={item.id}
+              data-testid={`artwork-card-${item.id}`}
               className={`group relative aspect-square rounded bg-neutral-100 transition-opacity ${isPendingDelete ? 'cursor-default opacity-45' : 'cursor-pointer'}`}
               onClick={() => {
                 if (isPendingDelete) return;
@@ -99,7 +100,13 @@ const GridView: React.FC<Props> = ({
                   e.stopPropagation();
                   onToggleSelection(item.id);
                 }}
-                className={`absolute top-2 left-2 z-20 ${isPendingDelete ? 'pointer-events-none opacity-0' : (!isSelected && !isSelectionMode ? 'opacity-0 group-hover:opacity-100' : 'opacity-100')}`}
+                className={`absolute top-2 left-2 z-20 h-11 w-11 [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:h-7 [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:w-7 ${
+                  isPendingDelete
+                    ? 'pointer-events-none opacity-0'
+                    : (!isSelected && !isSelectionMode
+                      ? 'hidden opacity-0 [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:flex [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:pointer-events-none [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:group-hover:pointer-events-auto [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:focus-visible:pointer-events-auto [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:focus-visible:opacity-100'
+                      : 'opacity-100')
+                }`}
                 aria-label={selectedIds.includes(item.id) ? 'Deselect artwork' : 'Select artwork'}
               />
               {!isSelectionMode && !isPendingDelete && (
@@ -114,7 +121,7 @@ const GridView: React.FC<Props> = ({
                         e.stopPropagation();
                         suppressInterpret();
                       }}
-                      className="absolute top-2 right-2 z-30 flex h-7 w-7 items-center justify-center rounded-md border border-white/80 bg-black/35 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                      className="absolute top-2 right-2 z-30 flex h-11 w-11 items-center justify-center rounded-xl border border-white/80 bg-black/35 text-white opacity-100 transition-opacity [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:pointer-events-none [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:h-7 [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:w-7 [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:rounded-md [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:group-hover:pointer-events-auto [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:focus-visible:pointer-events-auto [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:focus-visible:opacity-100"
                       aria-label="Artwork actions"
                     >
                       <OverflowDotsIcon />

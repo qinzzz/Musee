@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import CanvasHeader from '../../components/CanvasHeader';
 import ArtworkDetailModal from '../../artwork/components/ArtworkDetailModal';
-import { GalleryItem, ArtworkClassification } from '../../types';
+import type { ArtworkClassification, GalleryItem } from '../../types';
 import type { ArtistPageContext, ArtworkDetailContext } from '../../lib/appNavigation';
 import { SUPPORTED_UPLOAD_ACCEPT } from '../../lib/uploadValidation';
 import {
@@ -17,8 +17,9 @@ import {
 } from '../../components/ArtworkSourceIcons';
 import type { ArtworkDetailItem, IdentifyAgainHints } from '../../artwork/types';
 import type { ActiveSessionStreamEntry, SessionRenderBlock, SessionSummary } from '../types';
+import SessionMessageMarkdown from './SessionMessageMarkdown';
 
-type ExploreSessionViewProps = {
+type SessionViewProps = {
   activeSessionSummary: SessionSummary;
   activeSessionStream: ActiveSessionStreamEntry[];
   sessionRenderBlocks: SessionRenderBlock[];
@@ -161,7 +162,7 @@ const SessionDetailsModal: React.FC<{
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-6">
           <div>
-            <p className="mb-2 text-[11px] font-medium text-neutral-400">Session name</p>
+            <p className="mb-2 text-[12px] font-medium text-neutral-500">Session name</p>
             <input
               value={titleDraft}
               onChange={(event) => setTitleDraft(event.target.value)}
@@ -177,23 +178,23 @@ const SessionDetailsModal: React.FC<{
                 }
               }}
               disabled={isSavingTitle}
-              className="w-full rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] sm:text-[14px] text-neutral-800 outline-none transition-colors focus:border-neutral-300"
+              className="w-full rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] text-neutral-800 outline-none transition-colors focus:border-neutral-300"
             />
           </div>
           <div>
-            <p className="mb-2 text-[11px] font-medium text-neutral-400">Session goal</p>
+            <p className="mb-2 text-[12px] font-medium text-neutral-500">Session goal</p>
             <textarea
               value={goalDraft}
               onChange={(event) => setGoalDraft(event.target.value)}
               onBlur={commitGoal}
               rows={3}
               placeholder="Add a focus for this session…"
-              className="w-full resize-none rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] sm:text-[14px] leading-relaxed text-neutral-800 outline-none transition-colors focus:border-neutral-300"
+              className="w-full resize-none rounded-[16px] border border-neutral-200 bg-white px-4 py-3 text-[16px] leading-relaxed text-neutral-800 outline-none transition-colors focus:border-neutral-300"
             />
           </div>
           {items.length > 0 ? (
             <div>
-              <p className="mb-2 text-[11px] font-medium text-neutral-400">
+              <p className="mb-2 text-[12px] font-medium text-neutral-500">
                 {items.length === 1 ? '1 artwork in this session' : `${items.length} artworks in this session`}
               </p>
               <div className="flex flex-wrap gap-2.5">
@@ -214,7 +215,7 @@ const SessionDetailsModal: React.FC<{
                     aria-label={item.artworkName || 'Artwork'}
                   >
                     {item.isDeletedPlaceholder ? (
-                      <div className="flex h-full w-full items-center justify-center bg-neutral-100 px-2 text-center text-[11px] font-medium text-neutral-400">
+                      <div className="flex h-full w-full items-center justify-center bg-neutral-100 px-2 text-center text-[12px] font-medium text-neutral-500">
                         Deleted artwork
                       </div>
                     ) : (
@@ -244,13 +245,13 @@ const InsightPill: React.FC<{ title: string; text: string }> = ({ title, text })
       onClick={() => setExpanded((value) => !value)}
       className="w-full text-left rounded-[14px] bg-white px-3 py-2.5 shadow-sm hover:shadow-md transition-shadow"
     >
-      <p className="text-[11px] font-semibold text-neutral-800 leading-snug">{title}</p>
-      {expanded && <p className="text-[11px] text-neutral-600 leading-relaxed mt-1.5">{text}</p>}
+      <p className="text-[12px] font-semibold text-neutral-800 leading-snug">{title}</p>
+      {expanded && <p className="text-[12px] text-neutral-600 leading-relaxed mt-1.5">{text}</p>}
     </button>
   );
 };
 
-export default function ExploreSessionView({
+export default function SessionView({
   activeSessionSummary,
   activeSessionStream,
   sessionRenderBlocks,
@@ -297,7 +298,7 @@ export default function ExploreSessionView({
   onRetrySessionHistory,
   onFileUpload,
   onOpenSessionArtwork,
-}: ExploreSessionViewProps) {
+}: SessionViewProps) {
   const [sessionDetailsOpen, setSessionDetailsOpen] = React.useState(false);
   const [showSessionHistoryLoader, setShowSessionHistoryLoader] = React.useState(false);
   const composerTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -443,7 +444,7 @@ export default function ExploreSessionView({
                   />
                 ))}
               </div>
-              <p className="text-[12px] font-medium text-neutral-400">Loading session…</p>
+              <p className="text-[12px] font-medium text-neutral-500">Loading session…</p>
             </div>
           </div>
         ) : sessionHistoryStatus === 'error' ? (
@@ -516,7 +517,7 @@ export default function ExploreSessionView({
                           ? 'Add an opening question or note before you start chatting…'
                           : 'Ask anything about art'
                       }
-                      className="w-full overflow-hidden bg-white rounded-[20px] px-5 py-4 pr-14 text-[16px] sm:text-[14px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none shadow-sm border border-neutral-100 focus:border-neutral-300 transition-colors leading-relaxed"
+                      className="w-full overflow-hidden bg-white rounded-[20px] px-5 py-4 pr-14 text-[16px] text-neutral-800 placeholder:text-neutral-400 resize-none outline-none shadow-sm border border-neutral-100 focus:border-neutral-300 transition-colors leading-relaxed"
                       rows={1}
                       value={composerValue}
                       onChange={(event) => {
@@ -575,7 +576,7 @@ export default function ExploreSessionView({
                   <button
                     onClick={onOpenLibraryPicker}
                     disabled={isSessionBusy}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-5 py-3 text-[14px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40"
                   >
                     <AddFromCollectionIcon />
                     {ARTWORK_CTA_ADD_FROM_COLLECTION}
@@ -583,7 +584,7 @@ export default function ExploreSessionView({
                   <button
                     onClick={() => goalGalleryInputRef.current?.click()}
                     disabled={isSessionBusy}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100 disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[14px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100 disabled:opacity-40"
                   >
                     <UploadPhotosIcon />
                     {ARTWORK_CTA_UPLOAD_PHOTOS}
@@ -591,7 +592,7 @@ export default function ExploreSessionView({
                   <button
                     onClick={onOpenSessionCapture}
                     disabled={isSessionBusy}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[13px] font-medium disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[14px] font-medium disabled:opacity-40"
                   >
                     <ScanArtworkIcon />
                     {ARTWORK_CTA_SCAN_ARTWORK}
@@ -619,7 +620,7 @@ export default function ExploreSessionView({
                             <circle cx="8.5" cy="8.5" r="1.5" />
                             <polyline points="21 15 16 10 5 21" />
                           </svg>
-                          <span className="text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
+                          <span className="text-[16px] leading-[1.7]">
                             {entry.sourceLabel}
                           </span>
                         </div>
@@ -660,7 +661,7 @@ export default function ExploreSessionView({
                                         <div className="h-6 w-6 rounded-full border-2 border-neutral-100" />
                                         <div className="absolute inset-0 h-6 w-6 animate-spin rounded-full border-t-2 border-neutral-600" />
                                       </div>
-                                      <p className="text-[10px] font-medium text-neutral-400">Analyzing</p>
+                                      <p className="text-[12px] font-medium text-neutral-500">Analyzing</p>
                                     </div>
                                   )}
                                 </div>
@@ -670,7 +671,7 @@ export default function ExploreSessionView({
                                       {item.isAnalyzing ? 'Analyzing…' : (item.artworkName || 'Untitled')}
                                     </p>
                                     {item.artistName && (
-                                      <p className="mt-0.5 truncate text-[10px] text-white/75">{item.artistName}</p>
+                                      <p className="mt-0.5 truncate text-[12px] text-white/90">{item.artistName}</p>
                                     )}
                                   </div>
                                 )}
@@ -682,7 +683,7 @@ export default function ExploreSessionView({
                       {entry.type === 'input' && entry.userMessage?.text ? (
                         <div className="flex justify-end">
                           <div className="max-w-[85%] rounded-[20px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-neutral-800 shadow-sm sm:rounded-[28px] sm:px-6 sm:py-3">
-                            <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
+                            <p className="whitespace-pre-wrap text-[16px] leading-[1.7]">
                               {entry.userMessage.text}
                             </p>
                           </div>
@@ -699,9 +700,9 @@ export default function ExploreSessionView({
                             <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '320ms' }} />
                           </div>
                         ) : (
-                          <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">
-                            {entry.message.text}
-                          </p>
+                          <div className="text-[16px] leading-[1.7]">
+                            <SessionMessageMarkdown>{entry.message.text}</SessionMessageMarkdown>
+                          </div>
                         )}
                       </div>
                     </React.Fragment>
@@ -710,12 +711,12 @@ export default function ExploreSessionView({
                       {entry.message.role === 'user' ? (
                         <div className="flex justify-end">
                           <div className="max-w-[85%] rounded-[20px] border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-neutral-800 shadow-sm sm:rounded-[28px] sm:px-6 sm:py-3">
-                            <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">{entry.message.text}</p>
+                            <p className="whitespace-pre-wrap text-[16px] leading-[1.7]">{entry.message.text}</p>
                           </div>
                         </div>
                       ) : (
-                        <div className="text-neutral-700">
-                          <p className="whitespace-pre-wrap text-[14px] leading-[1.7] sm:text-[16px] sm:leading-[1.8]">{entry.message.text}</p>
+                        <div className="text-[16px] leading-[1.7] text-neutral-700">
+                          <SessionMessageMarkdown>{entry.message.text}</SessionMessageMarkdown>
                         </div>
                       )}
                     </React.Fragment>
