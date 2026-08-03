@@ -24,6 +24,7 @@ type Props = {
   isAnalyzing: boolean;
   boards: Board[];
   selectedArtworkIds: string[];
+  isArtworkSelectionMode: boolean;
   onToggleSelection: (itemId: string) => void;
   onInterpret: (item: GalleryItem, context: { items: GalleryItem[]; label: string }) => void;
   onDelete: (id: string) => void;
@@ -56,6 +57,7 @@ export default function SavedArtworksSection({
   isAnalyzing,
   boards,
   selectedArtworkIds,
+  isArtworkSelectionMode,
   onToggleSelection,
   onInterpret,
   onDelete,
@@ -157,6 +159,7 @@ export default function SavedArtworksSection({
             isAnalyzing={isAnalyzing}
             boards={boards}
             selectedIds={selectedArtworkIds}
+            isSelectionMode={isArtworkSelectionMode}
             hasSelectionOverlay={selectedArtworkIds.length > 0}
             onToggleSelection={onToggleSelection}
             onInterpret={(item, contextItems) => onInterpret(item, { items: contextItems || searchedSavedItems, label: savedContextLabel })}

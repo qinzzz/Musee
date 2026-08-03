@@ -3,7 +3,7 @@ import EmptyWall from '../../components/EmptyWall';
 import ContextualActionBar from '../../components/ContextualActionBar';
 import ArtworkDetailModal from '../../artwork/components/ArtworkDetailModal';
 import SessionCapturePage from '../../capture/components/SessionCapturePage';
-import ExploreSessionView from '../../session/components/ExploreSessionView';
+import SessionView from '../../session/components/SessionView';
 import type { AppTab, ArtistPageContext, ArtworkDetailContext, CollectTab } from '../../lib/appNavigation';
 import { stateToPath } from '../../lib/appNavigation';
 import type { ArtworkClassification, ArtworkWorkspace, GalleryItem } from '../../types';
@@ -299,7 +299,7 @@ export default function AppViewport({
           </div>
         ) : activeTab === 'newSession' ? (
           activeSessionSummary ? (
-            <ExploreSessionView
+            <SessionView
               activeSessionSummary={activeSessionSummary}
               activeSessionStream={activeSessionStream}
               sessionRenderBlocks={activeSessionRenderBlocks}

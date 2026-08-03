@@ -22,12 +22,14 @@ export function useArtworkSelection({
   onDeleteArtworks,
 }: Params) {
   const [selectedArtworkIds, setSelectedArtworkIds] = useState<string[]>([]);
+  const [isExplicitSelectionMode, setIsExplicitSelectionMode] = useState(false);
   const [isApplyingBoard, setIsApplyingBoard] = useState(false);
   const [isDeletingSelection, setIsDeletingSelection] = useState(false);
 
   useEffect(() => {
     if (collectTab !== 'saved' || savedLayout !== 'grid') {
       setSelectedArtworkIds([]);
+      setIsExplicitSelectionMode(false);
     }
   }, [collectTab, savedLayout]);
 
@@ -51,6 +53,11 @@ export function useArtworkSelection({
 
   const clearArtworkSelection = () => {
     setSelectedArtworkIds([]);
+    setIsExplicitSelectionMode(false);
+  };
+
+  const enterArtworkSelectionMode = () => {
+    setIsExplicitSelectionMode(true);
   };
 
   const handleAddSelectionToBoard = async (boardId: string) => {
@@ -78,9 +85,11 @@ export function useArtworkSelection({
 
   return {
     selectedArtworkIds,
+    isArtworkSelectionMode: isExplicitSelectionMode || selectedArtworkIds.length > 0,
     isApplyingBoard,
     isDeletingSelection,
     toggleArtworkSelection,
+    enterArtworkSelectionMode,
     clearArtworkSelection,
     handleAddSelectionToBoard,
     handleDeleteSelection,

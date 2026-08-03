@@ -137,7 +137,7 @@ const ContextualActionBar: React.FC<Props> = ({
             <div className="rounded-[28px] border border-neutral-200 bg-white px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.08)]">
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-[11px] tracking-[0.18em] uppercase text-neutral-400">Artwork actions</p>
+                  <p className="text-[12px] tracking-[0.18em] uppercase text-neutral-500">Artwork actions</p>
                   <p className="mt-1 truncate text-[15px] font-medium text-neutral-900">
                     {activeItem.artworkName || activeItem.artistName || 'Selected artwork'}
                   </p>

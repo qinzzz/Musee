@@ -88,7 +88,7 @@ const sidebarNavItemInactiveClassName =
   'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900';
 
 const getExpandedNavItemClassName = (isActive: boolean) =>
-  `w-full flex items-center gap-3.5 px-3 text-[13px] font-medium text-left ${sidebarNavItemSharedClassName} ${
+  `w-full flex items-center gap-3.5 px-3 text-[14px] font-medium text-left ${sidebarNavItemSharedClassName} ${
     isActive ? sidebarNavItemActiveClassName : sidebarNavItemInactiveClassName
   }`;
 
@@ -175,19 +175,17 @@ const AppSidebar: React.FC<Props> = ({
                   }
                 }}
                 onClick={(event) => event.stopPropagation()}
-                className="w-full rounded-md bg-white/90 px-2 py-1 text-[13px] leading-tight text-neutral-900 outline-none ring-1 ring-neutral-200 focus:ring-2 focus:ring-neutral-400"
+                className="w-full rounded-md bg-white/90 px-2 py-1 text-[16px] leading-tight text-neutral-900 outline-none ring-1 ring-neutral-200 focus:ring-2 focus:ring-neutral-400"
               />
             ) : (
               summary.titlePending ? (
                 <SessionTitleSkeleton summaryId={summary.id} />
               ) : (
-                <p className="truncate text-[13px] leading-tight">{summary.title}</p>
+                <p className="truncate text-[14px] leading-tight">{summary.title}</p>
               )
             )}
             <p
-              className={`mt-1 truncate font-mono text-[10px] font-semibold leading-none tracking-wide ${
-                isActive ? 'text-neutral-500' : 'text-neutral-400/90'
-              }`}
+              className="mt-1 truncate font-mono text-[12px] font-semibold leading-4 tracking-wide text-neutral-500"
             >
               {summary.artworkCount} {summary.artworkCount === 1 ? 'artwork' : 'artworks'}
             </p>
@@ -315,7 +313,7 @@ const AppSidebar: React.FC<Props> = ({
                   ) : recentSessionSummaries.length > 0 ? (
                     recentSessionSummaries.map((summary) => renderSessionSummaryCard(summary))
                   ) : (
-                    <div className="px-3 py-4 text-[12px] text-neutral-400">No recent sessions yet.</div>
+                    <div className="px-3 py-4 text-[12px] text-neutral-500">No recent sessions yet.</div>
                   )}
                 </div>
               </DropdownMenuContent>
@@ -337,10 +335,10 @@ const AppSidebar: React.FC<Props> = ({
                   {accountUsageSlot}
                   {devProfileSwitcherSlot}
                   <div>
-                    <label className="text-[10px] font-medium text-neutral-400">Language</label>
+                    <label className="text-[12px] font-medium text-neutral-500">Language</label>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-xs text-neutral-700 transition-colors hover:border-neutral-300">
+                        <button className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-[14px] text-neutral-700 transition-colors hover:border-neutral-300">
                           <span>{language === 'zh' ? '中文' : 'English'}</span>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mr-0.5 text-neutral-400">
                             <polyline points="6 9 12 15 18 9" />
@@ -368,7 +366,7 @@ const AppSidebar: React.FC<Props> = ({
                           onUserMenuOpenChange(false);
                           onOpenSettings();
                         }}
-                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-neutral-700 transition-all hover:bg-neutral-50"
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[14px] font-semibold text-neutral-700 transition-all hover:bg-neutral-50"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -382,7 +380,7 @@ const AppSidebar: React.FC<Props> = ({
                           onUserMenuOpenChange(false);
                           onSignOut();
                         }}
-                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-red-500 transition-all hover:bg-red-50"
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[14px] font-semibold text-red-500 transition-all hover:bg-red-50"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
@@ -395,7 +393,7 @@ const AppSidebar: React.FC<Props> = ({
                           onUserMenuOpenChange(false);
                           onSignIn();
                         }}
-                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-neutral-700 transition-all hover:bg-neutral-50"
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[14px] font-semibold text-neutral-700 transition-all hover:bg-neutral-50"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
@@ -458,7 +456,7 @@ const AppSidebar: React.FC<Props> = ({
               value={sessionSearch}
               onChange={(event) => onSessionSearchChange(event.target.value)}
               placeholder="Search sessions"
-              className="w-full bg-transparent text-[12px] placeholder-neutral-400 outline-none font-medium"
+              className="w-full bg-transparent text-[16px] placeholder-neutral-400 outline-none font-medium"
             />
           </div>
         </div>
@@ -482,7 +480,7 @@ const AppSidebar: React.FC<Props> = ({
               <div className="h-6 w-6 shrink-0 overflow-hidden rounded-full border border-neutral-200 shadow-sm">
                 {userAvatar}
               </div>
-              <span className="text-[13px] font-semibold text-neutral-800 truncate">
+              <span className="text-[14px] font-semibold text-neutral-800 truncate">
                 {userLabel}
               </span>
             </div>
@@ -498,10 +496,10 @@ const AppSidebar: React.FC<Props> = ({
                 {accountUsageSlot}
                 {devProfileSwitcherSlot}
                 <div>
-                  <label className="text-[10px] font-medium text-neutral-400">Language</label>
+                  <label className="text-[12px] font-medium text-neutral-500">Language</label>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-xs text-neutral-700 transition-colors hover:border-neutral-300">
+                      <button className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-[14px] text-neutral-700 transition-colors hover:border-neutral-300">
                         <span>{language === 'zh' ? '中文' : 'English'}</span>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mr-0.5 text-neutral-400">
                           <polyline points="6 9 12 15 18 9" />
@@ -529,7 +527,7 @@ const AppSidebar: React.FC<Props> = ({
                       onUserMenuOpenChange(false);
                       onOpenSettings();
                     }}
-                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 rounded-xl transition-all"
+                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-[14px] font-semibold text-neutral-700 hover:bg-neutral-50 rounded-xl transition-all"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -544,7 +542,7 @@ const AppSidebar: React.FC<Props> = ({
                       onUserMenuOpenChange(false);
                       onSignOut();
                     }}
-                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-[14px] font-semibold text-red-500 hover:bg-red-50 rounded-xl transition-all"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
@@ -557,7 +555,7 @@ const AppSidebar: React.FC<Props> = ({
                       onUserMenuOpenChange(false);
                       onSignIn();
                     }}
-                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 rounded-xl transition-all"
+                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-[14px] font-semibold text-neutral-700 hover:bg-neutral-50 rounded-xl transition-all"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>

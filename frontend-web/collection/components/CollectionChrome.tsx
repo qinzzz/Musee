@@ -14,9 +14,13 @@ type Props = {
   collectionSearch: string;
   collectionSearchPlaceholder: string;
   showCollectionUpload?: boolean;
+  showArtworkSelection: boolean;
+  isArtworkSelectionMode: boolean;
   onCollectTabChange: (tab: CollectTab) => void;
   onCollectionSearchChange: (value: string) => void;
   onOpenUpload: () => void;
+  onEnterArtworkSelectionMode: () => void;
+  onExitArtworkSelectionMode: () => void;
 };
 
 export default function CollectionChrome({
@@ -25,9 +29,13 @@ export default function CollectionChrome({
   collectionSearch,
   collectionSearchPlaceholder,
   showCollectionUpload = true,
+  showArtworkSelection,
+  isArtworkSelectionMode,
   onCollectTabChange,
   onCollectionSearchChange,
   onOpenUpload,
+  onEnterArtworkSelectionMode,
+  onExitArtworkSelectionMode,
 }: Props) {
   return (
     <>
@@ -62,6 +70,16 @@ export default function CollectionChrome({
             </button>
           ))}
         </div>
+        {showArtworkSelection && (
+          <button
+            type="button"
+            onClick={isArtworkSelectionMode ? onExitArtworkSelectionMode : onEnterArtworkSelectionMode}
+            className="ml-auto flex h-11 shrink-0 items-center justify-center px-1 text-[14px] font-medium text-neutral-700 [@media(min-width:768px)_and_(hover:hover)_and_(pointer:fine)]:hidden"
+            aria-pressed={isArtworkSelectionMode}
+          >
+            {isArtworkSelectionMode ? 'Done' : 'Select'}
+          </button>
+        )}
         <div className="ml-auto hidden min-w-0 items-center gap-3 md:flex">
           <div className="flex w-[240px] items-center gap-2.5 rounded-full border border-neutral-200 bg-white px-3.5 py-2 text-neutral-700">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0 text-neutral-400">
