@@ -18,6 +18,18 @@ import {
   ScanArtworkIcon,
   UploadPhotosIcon,
 } from './ArtworkSourceIcons';
+import {
+  getSessionComposerHeight,
+  shouldSubmitSessionComposerOnEnter,
+} from '../session/lib/sessionComposerBehavior';
+
+const MOBILE_COMPOSER_QUERY = '(max-width: 639px)';
+
+const matchesMobileComposer = () => (
+  typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia(MOBILE_COMPOSER_QUERY).matches
+);
 
 export type ActionBarMode = 'session';
 
@@ -73,8 +85,51 @@ const ContextualActionBar: React.FC<Props> = ({
 }) => {
   const [text, setText] = useState('');
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const [isMobileComposer, setIsMobileComposer] = useState(matchesMobileComposer);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const sessionBusy = Boolean(isBusy || isAnalyzing || isInquiryDisabled || isSubmittingStagedBatch);
+  const isComposerExpanded = isComposerFocused;
+
+  const resizeComposerTextarea = React.useCallback(() => {
+    const textarea = composerTextareaRef.current;
+    if (!textarea) return;
+
+    const styles = window.getComputedStyle(textarea);
+    const fontSize = parseFloat(styles.fontSize) || 16;
+    const lineHeight = parseFloat(styles.lineHeight) || fontSize * 1.5;
+    const paddingTop = parseFloat(styles.paddingTop) || 0;
+    const paddingBottom = parseFloat(styles.paddingBottom) || 0;
+    const borderTop = parseFloat(styles.borderTopWidth) || 0;
+    const borderBottom = parseFloat(styles.borderBottomWidth) || 0;
+    const chromeHeight = paddingTop + paddingBottom + borderTop + borderBottom;
+    const contentHeight = textarea.scrollHeight + borderTop + borderBottom;
+    const { height, isScrollable } = getSessionComposerHeight({
+      contentHeight,
+      lineHeight,
+      chromeHeight,
+      isFocused: isComposerFocused,
+      isMobile: isMobileComposer,
+    });
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${height}px`;
+    textarea.style.overflowY = isScrollable ? 'auto' : 'hidden';
+  }, [isComposerFocused, isMobileComposer]);
+
+  React.useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const mediaQuery = window.matchMedia(MOBILE_COMPOSER_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => setIsMobileComposer(event.matches);
+    setIsMobileComposer(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    resizeComposerTextarea();
+  }, [resizeComposerTextarea, text]);
 
   React.useEffect(() => {
     if (sessionBusy) {
@@ -216,17 +271,18 @@ const ContextualActionBar: React.FC<Props> = ({
               </div>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className={`flex gap-2 ${isComposerExpanded ? 'flex-wrap items-end' : 'items-center'}`}>
               <button
                 type="button"
                 onClick={onOpenSessionCapture}
                 disabled={sessionBusy}
                 aria-label={ARTWORK_CTA_SCAN_ARTWORK}
                 title={ARTWORK_CTA_SCAN_ARTWORK}
-                className="w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100 disabled:opacity-40"
+                className={`w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100 disabled:opacity-40 ${isComposerExpanded ? 'order-2' : ''}`}
               >
                 <ScanArtworkIcon size={20} />
               </button>
+              <div className={isComposerExpanded ? 'order-2' : ''}>
               <DropdownMenu
                 open={isAddMenuOpen}
                 onOpenChange={(open) => setIsAddMenuOpen(open && !sessionBusy)}
@@ -271,17 +327,33 @@ const ContextualActionBar: React.FC<Props> = ({
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <input
+              </div>
+              <textarea
+                ref={composerTextareaRef}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onFocus={() => setIsComposerFocused(true)}
+                onBlur={() => setIsComposerFocused(false)}
+                onKeyDown={(event) => {
+                  if (shouldSubmitSessionComposerOnEnter({
+                    key: event.key,
+                    shiftKey: event.shiftKey,
+                    isMobile: isMobileComposer,
+                  })) {
+                    event.preventDefault();
+                    void submit();
+                  }
+                }}
+                rows={1}
+                aria-expanded={isMobileComposer ? isComposerFocused : undefined}
                 placeholder={hasStagedItems
                   ? 'Add a note about these artworks (optional)...'
                   : (placeholder || 'Add a reflection, memory, or association...')}
-                className="flex-1 min-w-0 h-14 rounded-full border border-neutral-200 bg-white px-6 text-[16px] text-neutral-700 outline-none placeholder-neutral-400"
+                className={`min-w-0 resize-none rounded-[28px] border border-neutral-200 bg-white px-6 py-4 text-[16px] leading-6 text-neutral-700 outline-none placeholder-neutral-400 transition-[height,border-color] duration-200 ease-out focus:border-neutral-300 ${isComposerExpanded ? 'order-1 basis-full' : 'flex-1'}`}
               />
               <button
                 type="submit"
-                className="w-10 h-10 shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-30"
+                className={`w-10 h-10 shrink-0 rounded-full bg-neutral-900 text-white flex items-center justify-center disabled:opacity-30 ${isComposerExpanded ? 'order-2 ml-auto' : ''}`}
                 disabled={sessionBusy || (!hasStagedItems && !text.trim())}
                 title={sessionBusy ? 'Session busy' : 'Send'}
               >
