@@ -8,6 +8,7 @@ import {
 import { getArtworkFunFacts } from '../../api/artworks';
 import { hasUsableCommentaryContext } from '../../session/lib/commentary';
 import { buildSessionLink, itemBelongsToSession } from '../../session/lib/sessionLinks';
+import { MAX_SESSION_ARTWORK_BATCH_SIZE } from '../../session/constants';
 import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../../session/types';
 import type { ArtworkWorkspace, GalleryItem, TagCoordinate } from '../../types';
 import type { ArtworkStatePatch } from '../../artwork/lib/artworkState';
@@ -811,16 +812,16 @@ export function useArtworkIngest({
       (mode === 'gallery' || pendingSessionArtworks.length > 0);
 
     if (shouldStageUpload) {
-      const remainingSlots = Math.max(0, 5 - pendingSessionArtworks.length);
+      const remainingSlots = Math.max(0, MAX_SESSION_ARTWORK_BATCH_SIZE - pendingSessionArtworks.length);
       if (remainingSlots === 0) {
-        showToast('You can add up to 5 artworks at a time.', 'info');
+        showToast(`You can add up to ${MAX_SESSION_ARTWORK_BATCH_SIZE} artworks at a time.`, 'info');
         resetInput?.();
         return;
       }
 
       const filesToStage = files.slice(0, remainingSlots);
       if (filesToStage.length < files.length) {
-        showToast('Only the first 5 artworks were added to the batch.', 'info');
+        showToast(`Only the first ${MAX_SESSION_ARTWORK_BATCH_SIZE} artworks were added to the batch.`, 'info');
       }
 
       const stagedEntries = buildStagedPendingUploads(await prepareUploadCandidates(filesToStage, mode, {

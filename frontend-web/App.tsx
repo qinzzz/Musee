@@ -31,6 +31,7 @@ import { useArtworkAnalysis } from './artwork/hooks/useArtworkAnalysis';
 import { useBoards } from './boards/hooks/useBoards';
 import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
 import { useSessionStagedBatch } from './session/hooks/useSessionStagedBatch';
+import { MAX_SESSION_ARTWORK_BATCH_SIZE } from './session/constants';
 import { useArtworkIngest } from './artwork-ingest/hooks/useArtworkIngest';
 import type { PreparedSessionUploadEntry, PreparedUploadIngestResult, PreparedUploadSessionContext } from './artwork-ingest/types';
 import {
@@ -811,7 +812,10 @@ const App: React.FC = () => {
           open={isLibraryPickerOpen}
           items={availableLibraryArtworks}
           initialSelectedIds={pendingLibraryArtworkIds}
-          maxSelection={Math.max(1, 5 - pendingSessionArtworks.filter((entry) => entry.kind !== 'library').length)}
+          maxSelection={Math.max(
+            1,
+            MAX_SESSION_ARTWORK_BATCH_SIZE - pendingSessionArtworks.filter((entry) => entry.kind !== 'library').length,
+          )}
           currentSessionId={libraryPickerSessionId}
           searchValue={libraryPickerSearch}
           onRefresh={refreshArtworksIfStale}

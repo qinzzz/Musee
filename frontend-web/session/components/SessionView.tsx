@@ -18,6 +18,7 @@ import {
 import type { ArtworkDetailItem, IdentifyAgainHints } from '../../artwork/types';
 import type { ActiveSessionStreamEntry, SessionRenderBlock, SessionSummary } from '../types';
 import SessionMessageMarkdown from './SessionMessageMarkdown';
+import SessionArtworkCards from './SessionArtworkCards';
 import {
   getSessionComposerHeight,
   shouldSubmitSessionComposerOnEnter,
@@ -672,57 +673,10 @@ export default function SessionView({
                       </div>
                       <div className="flex justify-start">
                         <div className="w-full max-w-[640px]">
-                          <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                            {entry.items.map((item) => (
-                              <button
-                                key={item.id}
-                                onClick={() => {
-                                  if (item.isDeletedPlaceholder || item.deleteStatus === 'pending') return;
-                                  onOpenSessionArtwork(item);
-                                }}
-                                className={`group relative shrink-0 overflow-hidden rounded-[24px] bg-white text-left shadow-sm transition-shadow ${
-                                  item.isDeletedPlaceholder || item.deleteStatus === 'pending' ? 'cursor-default' : 'hover:shadow-md'
-                                }`}
-                                style={{
-                                  width: entry.items.length === 1 ? '200px' : '160px',
-                                  opacity: item.deleteStatus === 'pending' ? 0.45 : 1,
-                                }}
-                              >
-                                <div className="relative aspect-square">
-                                  {item.isDeletedPlaceholder ? (
-                                    <div className="flex h-full items-center justify-center bg-neutral-100 text-neutral-400">
-                                      <p className="text-[12px] font-medium">Deleted artwork</p>
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={item.url}
-                                      alt={item.artworkName || 'Artwork'}
-                                      className={`h-full w-full object-cover ${item.deleteStatus === 'pending' ? 'saturate-[0.7]' : ''}`}
-                                    />
-                                  )}
-                                  {item.isAnalyzing && (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/70">
-                                      <div className="relative">
-                                        <div className="h-6 w-6 rounded-full border-2 border-neutral-100" />
-                                        <div className="absolute inset-0 h-6 w-6 animate-spin rounded-full border-t-2 border-neutral-600" />
-                                      </div>
-                                      <p className="text-[12px] font-medium text-neutral-500">Analyzing</p>
-                                    </div>
-                                  )}
-                                </div>
-                                {!item.isDeletedPlaceholder && (
-                                  <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent px-3 py-3 transition-opacity duration-200 ${item.deleteStatus === 'pending' ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
-                                    <p className="truncate text-[12px] font-medium text-white">
-                                      {item.isAnalyzing ? 'Analyzing…' : (item.artworkName || 'Untitled')}
-                                    </p>
-                                    {item.artistName && (
-                                      <p className="mt-0.5 truncate text-[12px] text-white/90">{item.artistName}</p>
-                                    )}
-                                  </div>
-                                )}
-                              </button>
-                            ))}
-                          </div>
+                          <SessionArtworkCards
+                            items={entry.items}
+                            onOpenArtwork={onOpenSessionArtwork}
+                          />
                         </div>
                       </div>
                       {entry.type === 'input' && entry.userMessage?.text ? (

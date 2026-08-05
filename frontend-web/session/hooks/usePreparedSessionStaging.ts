@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { GalleryItem } from '../../types';
 import type { PendingSessionArtwork } from '../types';
+import { MAX_SESSION_ARTWORK_BATCH_SIZE } from '../constants';
 
 type ToastType = 'info' | 'success';
 type ShowToast = (message: string, type?: ToastType) => void;
@@ -14,7 +15,7 @@ type UsePreparedSessionStagingOptions = {
 export function usePreparedSessionStaging({
   items,
   showToast,
-  maxArtworks = 5,
+  maxArtworks = MAX_SESSION_ARTWORK_BATCH_SIZE,
 }: UsePreparedSessionStagingOptions) {
   const [pendingSessionArtworks, setPendingSessionArtworks] = useState<PendingSessionArtwork[]>([]);
   const [newSessionDraftMessage, setNewSessionDraftMessage] = useState('');

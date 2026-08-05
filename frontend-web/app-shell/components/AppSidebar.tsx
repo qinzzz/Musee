@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import type { SessionSummary } from '../../session/types';
+import { formatSessionSummaryMeta } from '../../session/lib/sessionSummaryPresentation';
 
 export type AppSidebarNavItem = {
   id: string;
@@ -185,9 +186,9 @@ const AppSidebar: React.FC<Props> = ({
               )
             )}
             <p
-              className="mt-1 truncate font-mono text-[12px] font-semibold leading-4 tracking-wide text-neutral-500"
+              className="mt-1 truncate text-[12px] font-medium leading-4 text-[var(--color-text-secondary)]"
             >
-              {summary.artworkCount} {summary.artworkCount === 1 ? 'artwork' : 'artworks'}
+              {formatSessionSummaryMeta(summary)}
             </p>
           </div>
         </button>
