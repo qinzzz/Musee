@@ -1,0 +1,1 @@
+export const MAX_SESSION_ARTWORK_BATCH_SIZE = 5;

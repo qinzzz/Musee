@@ -76,4 +76,21 @@ describe('AppSidebar session title loading', () => {
     expect(screen.queryByTestId('session-title-skeleton-visit-1')).toBeNull();
     expect(screen.getByText('New York')).toBeTruthy();
   });
+
+  it('renders lightweight session context instead of an artwork count', () => {
+    renderSidebar(createSessionSummary({
+      artworkCount: 2,
+      updatedAt: Date.now(),
+      items: [
+        { artistName: 'Anish Kapoor' },
+        { artistName: 'Henri Matisse' },
+      ] as SessionSummary['items'],
+    }));
+
+    const metadata = screen.getByText('Today · Anish Kapoor, Henri Matisse');
+    expect(metadata.className).toContain('font-medium');
+    expect(metadata.className).toContain('text-[var(--color-text-secondary)]');
+    expect(metadata.className).not.toContain('font-mono');
+    expect(screen.queryByText('2 artworks')).toBeNull();
+  });
 });

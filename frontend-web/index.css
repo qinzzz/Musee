@@ -98,6 +98,219 @@ select {
   -webkit-mask-image: linear-gradient(to right, black 70%, transparent 100%);
 }
 
+/* Session artwork batches use one stable composition for each item count. */
+.session-artwork-composition {
+  display: grid;
+  width: 100%;
+  margin-right: auto;
+  padding: 10px 6px 32px;
+  gap: 18px 10px;
+  align-items: start;
+  isolation: isolate;
+}
+
+.session-artwork-composition--1 {
+  max-width: 290px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.session-artwork-composition--2 {
+  max-width: 490px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.session-artwork-composition--3 {
+  max-width: 590px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.session-artwork-composition--4 {
+  max-width: 510px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.session-artwork-composition--5 {
+  max-width: 640px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.session-artwork-composition--5 .session-artwork-card {
+  grid-column: span 2;
+}
+
+.session-artwork-composition--5 .session-artwork-card:nth-child(4) {
+  grid-column: 2 / span 2;
+}
+
+.session-artwork-composition--5 .session-artwork-card:nth-child(5) {
+  grid-column: 4 / span 2;
+}
+
+.session-artwork-composition--many {
+  max-width: 640px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.session-artwork-composition--many .session-artwork-card {
+  grid-column: auto;
+}
+
+.session-artwork-card {
+  --card-offset-y: 0px;
+  --card-rotation: 0deg;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 5px 18px rgba(17, 17, 17, 0.08);
+  transform: translateY(var(--card-offset-y)) rotate(var(--card-rotation));
+  transform-origin: center;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.session-artwork-card:not(:disabled):focus-visible {
+  z-index: 20 !important;
+  outline: none;
+  transform: translateY(var(--card-offset-y)) rotate(var(--card-rotation));
+}
+
+.session-artwork-card:not(:disabled):focus-visible {
+  box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.18), 0 7px 20px rgba(17, 17, 17, 0.1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .session-artwork-card:not(:disabled):hover {
+    z-index: 20 !important;
+    box-shadow: 0 7px 20px rgba(17, 17, 17, 0.1);
+    transform: translateY(calc(var(--card-offset-y) - 2px)) rotate(var(--card-rotation));
+  }
+}
+
+.session-artwork-card__image {
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+.session-artwork-composition--2 .session-artwork-card:nth-child(1) {
+  --card-offset-y: 10px;
+  --card-rotation: -1.2deg;
+}
+
+.session-artwork-composition--2 .session-artwork-card:nth-child(2) {
+  --card-rotation: 0.8deg;
+}
+
+.session-artwork-composition--3 .session-artwork-card:nth-child(1) {
+  --card-offset-y: 18px;
+  --card-rotation: -1.4deg;
+}
+
+.session-artwork-composition--3 .session-artwork-card:nth-child(2) {
+  --card-rotation: 0.4deg;
+}
+
+.session-artwork-composition--3 .session-artwork-card:nth-child(3) {
+  --card-offset-y: 14px;
+  --card-rotation: 1.3deg;
+}
+
+.session-artwork-composition--4 .session-artwork-card:nth-child(1) {
+  --card-rotation: -1deg;
+}
+
+.session-artwork-composition--4 .session-artwork-card:nth-child(2) {
+  --card-offset-y: 12px;
+  --card-rotation: 0.9deg;
+}
+
+.session-artwork-composition--4 .session-artwork-card:nth-child(3) {
+  --card-offset-y: 8px;
+  --card-rotation: 0.7deg;
+}
+
+.session-artwork-composition--4 .session-artwork-card:nth-child(4) {
+  --card-offset-y: -3px;
+  --card-rotation: -0.8deg;
+}
+
+.session-artwork-composition--5 .session-artwork-card:nth-child(1) {
+  --card-offset-y: 16px;
+  --card-rotation: -1.4deg;
+}
+
+.session-artwork-composition--5 .session-artwork-card:nth-child(2) {
+  --card-rotation: 0.4deg;
+}
+
+.session-artwork-composition--5 .session-artwork-card:nth-child(3) {
+  --card-offset-y: 13px;
+  --card-rotation: 1.3deg;
+}
+
+.session-artwork-composition--5 .session-artwork-card:nth-child(4) {
+  --card-offset-y: 5px;
+  --card-rotation: 0.8deg;
+}
+
+.session-artwork-composition--5 .session-artwork-card:nth-child(5) {
+  --card-offset-y: 18px;
+  --card-rotation: -0.9deg;
+}
+
+@media (max-width: 639px) {
+  .session-artwork-composition {
+    max-width: 100%;
+    padding: 6px 0 24px;
+    gap: 10px;
+  }
+
+  .session-artwork-composition--1 {
+    max-width: 270px;
+  }
+
+  .session-artwork-composition--2,
+  .session-artwork-composition--3,
+  .session-artwork-composition--4,
+  .session-artwork-composition--5,
+  .session-artwork-composition--many {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .session-artwork-composition--3 .session-artwork-card:nth-child(3),
+  .session-artwork-composition--5 .session-artwork-card:nth-child(5) {
+    width: calc(50% - 5px);
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+
+  .session-artwork-composition--5 .session-artwork-card,
+  .session-artwork-composition--5 .session-artwork-card:nth-child(4),
+  .session-artwork-composition--many .session-artwork-card {
+    grid-column: auto;
+  }
+
+  .session-artwork-composition.session-artwork-composition .session-artwork-card {
+    --card-offset-y: 0px;
+    --card-rotation: 0deg;
+  }
+
+  .session-artwork-card {
+    border-radius: 16px;
+  }
+
+  .session-artwork-card__caption {
+    min-height: 61px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-artwork-card {
+    transition: none;
+  }
+}
+
 /* ── 4. Premium Animations & Motion ──────────────────────────────────────── */
 
 /* Neighbor glow effect (used in corridor visual connections) */
