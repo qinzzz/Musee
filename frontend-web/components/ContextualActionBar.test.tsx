@@ -5,7 +5,10 @@ import {
   ARTWORK_CTA_ADD_MENU,
   ARTWORK_CTA_SCAN_ARTWORK,
 } from '../lib/artworkSourceCtas';
-import ContextualActionBar, { SESSION_QUESTION_PLACEHOLDER } from './ContextualActionBar';
+import ContextualActionBar, {
+  SESSION_QUESTION_PLACEHOLDER,
+} from './ContextualActionBar';
+import { SESSION_ARTWORK_QUESTION_PLACEHOLDER } from '../session/constants';
 
 describe('ContextualActionBar session busy state', () => {
   it('keeps the draft editable while disabling every session input action', () => {
@@ -63,6 +66,20 @@ describe('ContextualActionBar session busy state', () => {
 });
 
 describe('ContextualActionBar mobile composer', () => {
+  it('uses a compact prompt when artworks are staged', () => {
+    render(
+      <ContextualActionBar
+        mode="session"
+        onUpload={vi.fn()}
+        onOpenSessionCapture={vi.fn()}
+        onOpenLibraryPicker={vi.fn()}
+        stagedItems={[{ id: 'art-1', previewUrl: 'blob://art-1', label: 'Artwork' }]}
+      />,
+    );
+
+    expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe(SESSION_ARTWORK_QUESTION_PLACEHOLDER);
+  });
+
   it('expands on focus and keeps Enter available for multiline input', () => {
     vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
       matches: true,

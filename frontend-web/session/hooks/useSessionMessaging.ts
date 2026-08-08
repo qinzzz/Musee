@@ -91,9 +91,40 @@ export function useSessionMessaging({
   showToast,
 }: UseSessionMessagingOptions) {
   const sessionEventWriteQueuesRef = useRef<Record<string, Promise<unknown>>>({});
+  const sessionRepliesInFlightRef = useRef<Set<string>>(new Set());
+  const userSubmissionSessionIdRef = useRef<string | null>(null);
+
   const hasPendingSessionReply = useCallback((sessionId: string | null | undefined) => (
-    Boolean(sessionId && Object.prototype.hasOwnProperty.call(streamingSessionResponses, sessionId))
+    Boolean(
+      sessionId
+      && (
+        sessionRepliesInFlightRef.current.has(sessionId)
+        || Object.prototype.hasOwnProperty.call(streamingSessionResponses, sessionId)
+      )
+    )
   ), [streamingSessionResponses]);
+
+  const markSessionReplyPending = useCallback((sessionId: string) => {
+    sessionRepliesInFlightRef.current.add(sessionId);
+    setStreamingSessionResponses((prev) => (
+      Object.prototype.hasOwnProperty.call(prev, sessionId)
+        ? prev
+        : { ...prev, [sessionId]: '' }
+    ));
+  }, [setStreamingSessionResponses]);
+
+  const clearSessionReplyPending = useCallback((sessionId: string) => {
+    sessionRepliesInFlightRef.current.delete(sessionId);
+    if (userSubmissionSessionIdRef.current === sessionId) {
+      userSubmissionSessionIdRef.current = null;
+    }
+    setStreamingSessionResponses((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, sessionId)) return prev;
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
+  }, [setStreamingSessionResponses]);
 
   const enqueueSessionEventWrite = useCallback(<T,>(
     sessionId: string,
@@ -356,7 +387,7 @@ export function useSessionMessaging({
     historyOverride?: SessionStreamMessage[],
     parentEventIdOverride?: string,
   ) => {
-    setStreamingSessionResponses((prev) => ({ ...prev, [targetSessionId]: '' }));
+    markSessionReplyPending(targetSessionId);
 
     const existingMessages = historyOverride || sessionStreams[targetSessionId] || [];
     const historyForPrompt = getSessionHistoryBeforeTrigger(existingMessages, parentEventIdOverride);
@@ -432,11 +463,7 @@ export function useSessionMessaging({
           console.error('Failed to persist completed model response:', error);
           showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
         });
-        setStreamingSessionResponses((prev) => {
-          const next = { ...prev };
-          delete next[targetSessionId];
-          return next;
-        });
+        clearSessionReplyPending(targetSessionId);
       },
       () => {
         updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
@@ -458,11 +485,7 @@ export function useSessionMessaging({
           console.error('Failed to persist failed model response:', error);
           showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
         });
-        setStreamingSessionResponses((prev) => {
-          const next = { ...prev };
-          delete next[targetSessionId];
-          return next;
-        });
+        clearSessionReplyPending(targetSessionId);
       },
       {
         userId: sessionUserId,
@@ -473,8 +496,10 @@ export function useSessionMessaging({
   }, [
     activeSessionSummary,
     appendSessionEvents,
+    clearSessionReplyPending,
     finalizeModelResponse,
     items,
+    markSessionReplyPending,
     persistPendingModelResponse,
     sessionUserId,
     setStreamingSessionResponses,
@@ -538,7 +563,7 @@ export function useSessionMessaging({
     const trigger = buildUploadCommentaryPrompt(newArtworks, sessionGoals[sessionId]);
     if (!trigger) return;
 
-    setStreamingSessionResponses((prev) => ({ ...prev, [sessionId]: '' }));
+    markSessionReplyPending(sessionId);
     const historyForPrompt = getSessionHistoryBeforeTrigger(conversationHistory, parentEventId);
     const responseId = newSessionEventId();
     const commentaryCreatedAt = getNextLocalEventCreatedAt(conversationHistory);
@@ -602,11 +627,7 @@ export function useSessionMessaging({
           console.error('Failed to persist completed model response:', error);
           showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
         });
-        setStreamingSessionResponses((prev) => {
-          const next = { ...prev };
-          delete next[sessionId];
-          return next;
-        });
+        clearSessionReplyPending(sessionId);
       },
       () => {
         updateLocalSessionEvent(sessionId, responseId, (event) => ({
@@ -628,11 +649,7 @@ export function useSessionMessaging({
           console.error('Failed to persist failed model response:', error);
           showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
         });
-        setStreamingSessionResponses((prev) => {
-          const next = { ...prev };
-          delete next[sessionId];
-          return next;
-        });
+        clearSessionReplyPending(sessionId);
       },
       {
         userId: sessionUserId,
@@ -642,7 +659,9 @@ export function useSessionMessaging({
     );
   }, [
     appendSessionEvents,
+    clearSessionReplyPending,
     finalizeModelResponse,
+    markSessionReplyPending,
     persistPendingModelResponse,
     sessionUserId,
     sessionGoals,
@@ -652,6 +671,13 @@ export function useSessionMessaging({
   ]);
 
   const handleSessionInquiry = useCallback(async (text: string) => {
+    // This ref closes the gap before React can repaint the busy state. It also
+    // protects the blank-session path, where repeated submits would otherwise
+    // create a fresh draft id for every click while the first POST is pending.
+    if (userSubmissionSessionIdRef.current) {
+      return false;
+    }
+
     let targetSessionId = activeSessionSummary?.id;
     if (!targetSessionId || isComposingNewSession) {
       targetSessionId = createSessionDraft();
@@ -660,6 +686,9 @@ export function useSessionMessaging({
     if (hasPendingSessionReply(targetSessionId)) {
       return false;
     }
+
+    userSubmissionSessionIdRef.current = targetSessionId;
+    markSessionReplyPending(targetSessionId);
 
     const targetSummary = sessionSummaries.find((summary) => summary.id === targetSessionId);
     const shouldPersistSession = !targetSummary || targetSummary.items.length === 0;
@@ -698,6 +727,7 @@ export function useSessionMessaging({
           userEventId,
         );
       } catch (error) {
+        clearSessionReplyPending(targetSessionId);
         console.error('Failed to commit first session event:', error);
         showToast('Couldn’t send your first message. Try again.', 'info');
         return false;
@@ -705,15 +735,24 @@ export function useSessionMessaging({
       return true;
     }
 
-    sendSessionInquiryToSession(targetSessionId, text);
-    return true;
+    try {
+      sendSessionInquiryToSession(targetSessionId, text);
+      return true;
+    } catch (error) {
+      clearSessionReplyPending(targetSessionId);
+      console.error('Failed to start session response:', error);
+      showToast('Couldn’t send this message. Try again.', 'info');
+      return false;
+    }
   }, [
     activeSessionSummary?.id,
     appendSessionEvents,
     createSessionDraft,
+    clearSessionReplyPending,
     defaultSessionTitle,
     hasPendingSessionReply,
     isComposingNewSession,
+    markSessionReplyPending,
     refreshPersistedSessions,
     sessionUserId,
     sendSessionInquiryToSession,

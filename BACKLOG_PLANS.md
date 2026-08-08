@@ -39,107 +39,34 @@ This is now a structural readability and correctness issue, not just naming poli
 
 ## 0.1 Session Event Layer
 
-Status: deferred
+Status: foundational implementation completed; hardening deferred
 
-### Problem
+### Implementation outcome
 
-The current session model mixes three different concerns:
+The core separation is now in place:
 
-- session membership (`session_artworks`)
-- session chronology (`session_messages`)
-- frontend stream reconstruction heuristics
+- `sessions` remain the session container
+- `session_artworks` remain canonical artwork membership
+- `session_events` provide ordered chronology through `sequence_number`
+- user input, artwork results, and model responses are represented as explicit events
+- model responses persist a pending, completed, or failed lifecycle
+- the frontend renders an event-first timeline and reconciles optimistic entries with persisted events
 
-This is good enough for the current MVP, but it is not a clean long-term model for repeated artwork appearances, multi-artwork actions, or event-first session playback.
+Session turn coordination was also hardened:
 
-### Current limitation
+- one lightweight indicator reports adding artworks, analyzing artworks, writing a response, or an interrupted response
+- mutation actions stay locked for the full active turn
+- a synchronous submission guard prevents rapid duplicate sends before React state updates
+- stream timeout, premature end-of-stream, and stale pending responses resolve to a visible failure state
 
-Right now:
+The previously listed mixed optimistic/persisted ordering bug is no longer an open product bug because a second mutation cannot be submitted while the first turn is active.
 
-- `session_artworks` correctly answers which artworks belong to a session
-- `session_messages` partially acts like an event log
-- the frontend still reconstructs the stream partly from unique session artworks instead of from explicit events
+### Remaining work
 
-Because of that, the same artwork appearing multiple times in one session is not modeled cleanly in the rendered stream.
-
-### Design goal
-
-Introduce a proper session event layer so the product can chronologically reconstruct what happened in a session without overloading artwork membership or frontend heuristics.
-
-### Recommended model
-
-Keep:
-
-- `sessions` as the session container
-- `session_artworks` as canonical unique membership
-
-Add later:
-
-- `session_events`
-  - event-level chronology
-  - event type
-  - role
-  - optional text payload
-  - metadata payload
-  - created / ordered position
-
-- `session_event_artworks`
-  - join table between events and artworks
-  - supports one event referencing multiple artworks
-  - supports one artwork appearing in multiple events
-
-### Important design principle
-
-Events should not be anchored to the `session_artworks` row itself.
-
-Instead:
-
-- `session_artworks` answers “is this artwork part of the session?”
-- `session_events` answers “what happened in the session, and when?”
-
-That separation is necessary if:
-
-- the same artwork appears multiple times in one session
-- one action references multiple artworks
-- the session stream needs to be replayed faithfully
-
-### Suggested event types for the first pass
-
-Start small:
-
-- `message`
-- `artwork_input`
-- `artwork_result`
-
-Exact source such as `library`, `upload`, or `camera` can stay in event metadata rather than exploding the event type list too early.
-
-### Example target behavior
-
-If a user:
-
-1. uploads artwork A
-2. later uploads artwork A again
-
-Then:
-
-- `session_artworks` still contains one unique membership row for A
-- `session_events` contains two distinct chronology events
-- the session stream can render both appearances in order
-
-### Migration shape
-
-1. introduce backend event tables
-2. write new session actions to the event layer
-3. migrate frontend session stream to be event-first
-4. keep `session_artworks` as membership truth
-5. gradually retire the current mixed message / artwork reconstruction path
-
-### Why this matters
-
-This is not only a product feature enabler. It is also a structural cleanup that reduces ambiguity between:
-
-- membership
-- chronology
-- rendered session UI
+- reduce remaining frontend fallback heuristics as event coverage becomes complete
+- define idempotency and recovery behavior for interrupted backend work
+- decide how repeated appearances of the same artwork should be presented
+- add immutable artwork display snapshots if session history must survive artwork edits or deletion
 
 ### Future: immutable artwork display snapshots
 
@@ -170,7 +97,7 @@ Before implementing this, decide the deletion policy:
 
 ## 0.15 AI Job Layer
 
-Status: deferred until the session event model exists
+Status: deferred; session-event prerequisite completed
 
 ### Problem
 
@@ -222,9 +149,9 @@ Suggested first responsibilities:
 
 ### Important sequencing
 
-Do not implement this before the session event layer.
+The event-layer prerequisite is now in place. Before implementing jobs, decide the product behavior for retries, recovery, and operational visibility.
 
-The cleaner model is:
+The intended separation remains:
 
 - `session_events` answer what happened in the session
 - `ai_jobs` answer what AI work was launched because of those events
@@ -339,6 +266,9 @@ The current automated suite now protects several high-risk flows, including:
 
 - session start orchestration
 - session messaging / commentary flow
+- session processing-state derivation and action gating
+- stream completion, failure, timeout, and premature end-of-stream handling
+- rapid duplicate-submit prevention and cleanup after failure
 - session delete behavior
 - app-shell navigation behavior
 - artwork ingest orchestration
@@ -368,13 +298,12 @@ The intended ownership model is:
 
 The goal is to make new features, bug fixes, and tests attach to smaller units instead of the root component.
 
-### Candidate first tests
+### Candidate next tests
 
-1. Upload placeholder persists during analysis and server refresh.
-2. Session ordering uses capture time, not photo/EXIF time.
-3. Switching from one artwork to another resets edit mode.
-4. Deleted artwork behavior in session history is correct.
-5. Quota exceeded blocks upload cleanly.
+1. Exercise a multi-artwork upload through the rendered UI and verify one ordered turn.
+2. Verify stale pending-response recovery after a full reload.
+3. Verify deleted-artwork behavior in historical session events.
+4. Verify quota-exceeded upload behavior through the rendered UI.
 
 ### What a good test should define
 

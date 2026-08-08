@@ -1,6 +1,26 @@
 import type { Message } from '../types';
 import { API_BASE_URL, API_TIMEOUT, fetchWithTimeout, getLanguage } from './core';
 
+export const SESSION_STREAM_IDLE_TIMEOUT_MS = 60_000;
+
+async function readStreamWithIdleTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      reader.read(),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('Session response stream timed out'));
+        }, SESSION_STREAM_IDLE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
 export interface CommunityData {
   entity: { id: string; display_artist: string; display_title: string; instance_count: number } | null;
   comments: Array<{
@@ -27,6 +47,9 @@ export async function streamSessionChat(
     role: message.role === 'model' ? 'assistant' : message.role,
     content: message.text,
   }));
+
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let terminalEventReceived = false;
 
   try {
     const response = await fetchWithTimeout(`${API_BASE_URL}/visit/chat-stream`, {
@@ -57,16 +80,18 @@ export async function streamSessionChat(
       throw new Error(text || `session chat stream failed: ${response.status}`);
     }
 
-    const reader = response.body?.getReader();
+    reader = response.body?.getReader();
     if (!reader) {
       throw new Error('Response body is not readable');
     }
 
     const decoder = new TextDecoder();
     let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    while (!terminalEventReceived) {
+      const { done, value } = await readStreamWithIdleTimeout(reader);
+      if (done) {
+        throw new Error('Session response stream ended before completion');
+      }
       buffer += decoder.decode(value, { stream: true });
       const events = buffer.split('\n\n');
       buffer = events.pop() || '';
@@ -85,19 +110,31 @@ export async function streamSessionChat(
           if (eventType === 'chunk' && data.type === 'text') {
             onChunk(data.content);
           } else if (eventType === 'complete' && data.type === 'result') {
+            terminalEventReceived = true;
             onComplete(data.response || '');
           } else if (eventType === 'error') {
-            onError(new Error(data.message || 'Stream error'));
+            throw new Error(data.message || 'Stream error');
           }
         } catch {
           if (eventType === 'error') {
-            onError(new Error(eventData));
+            throw new Error(eventData);
           }
         }
       }
     }
   } catch (error) {
-    onError(error instanceof Error ? error : new Error(String(error)));
+    if (!terminalEventReceived) {
+      terminalEventReceived = true;
+      onError(error instanceof Error ? error : new Error(String(error)));
+    }
+  } finally {
+    if (reader) {
+      try {
+        await reader.cancel();
+      } catch {
+        // The stream may already be closed or errored.
+      }
+    }
   }
 }
 
