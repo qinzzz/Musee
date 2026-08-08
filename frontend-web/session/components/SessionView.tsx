@@ -17,8 +17,15 @@ import {
 } from '../../components/ArtworkSourceIcons';
 import type { ArtworkDetailItem, IdentifyAgainHints } from '../../artwork/types';
 import type { ActiveSessionStreamEntry, SessionRenderBlock, SessionSummary } from '../types';
+import { SESSION_ARTWORK_QUESTION_PLACEHOLDER } from '../constants';
 import SessionMessageMarkdown from './SessionMessageMarkdown';
 import SessionArtworkCards from './SessionArtworkCards';
+import SessionProcessingIndicator from './SessionProcessingIndicator';
+import {
+  isPendingCommentaryStale,
+  SESSION_PROCESSING_LABELS,
+  type SessionProcessingState,
+} from '../lib/sessionProcessingState';
 import {
   getSessionComposerHeight,
   shouldSubmitSessionComposerOnEnter,
@@ -60,6 +67,7 @@ type SessionViewProps = {
   preparedSessionMessage: string;
   isSubmittingPreparedSession: boolean;
   isSessionBusy: boolean;
+  sessionProcessingState: SessionProcessingState;
   sessionHistoryStatus: 'loading' | 'ready' | 'error';
   sessionStreamScrollRef: React.RefObject<HTMLDivElement | null>;
   sessionStreamEndRef: React.RefObject<HTMLDivElement | null>;
@@ -89,6 +97,40 @@ type SessionViewProps = {
   onRetrySessionHistory: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   onOpenSessionArtwork: (item: GalleryItem) => void;
+};
+
+const SessionCommentaryBlock: React.FC<{
+  entry: Extract<SessionRenderBlock, { type: 'commentary' }>;
+  sessionProcessingState: SessionProcessingState;
+}> = ({ entry, sessionProcessingState }) => {
+  const matchingState = 'responseId' in sessionProcessingState
+    && sessionProcessingState.responseId === entry.id
+    ? sessionProcessingState
+    : null;
+  const failedState: SessionProcessingState | null = entry.status === 'failed' || isPendingCommentaryStale(entry)
+    ? {
+        kind: 'failed',
+        responseId: entry.id,
+        message: SESSION_PROCESSING_LABELS.responseFailed,
+      }
+    : null;
+  const effectiveState = matchingState || failedState;
+
+  return (
+    <div className="space-y-2 text-neutral-700">
+      {entry.message.text ? (
+        <div className="text-[16px] leading-[1.7]">
+          <SessionMessageMarkdown>{entry.message.text}</SessionMessageMarkdown>
+        </div>
+      ) : null}
+      {!entry.message.text && effectiveState?.kind === 'writing_response' ? (
+        <SessionProcessingIndicator state={effectiveState} />
+      ) : null}
+      {effectiveState?.kind === 'failed' ? (
+        <SessionProcessingIndicator state={effectiveState} />
+      ) : null}
+    </div>
+  );
 };
 
 const SessionDetailsModal: React.FC<{
@@ -286,6 +328,7 @@ export default function SessionView({
   preparedSessionMessage,
   isSubmittingPreparedSession,
   isSessionBusy,
+  sessionProcessingState,
   sessionHistoryStatus,
   sessionStreamScrollRef,
   sessionStreamEndRef,
@@ -505,7 +548,8 @@ export default function SessionView({
                 </p>
                 <button
                   onClick={onOpenLibraryPicker}
-                  className="mt-5 rounded-full border border-neutral-200 bg-white px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
+                  disabled={isSessionBusy}
+                  className="mt-5 rounded-full border border-neutral-200 bg-white px-5 py-3 text-[13px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40"
                 >
                   {ARTWORK_CTA_ADD_FROM_COLLECTION}
                 </button>
@@ -548,7 +592,7 @@ export default function SessionView({
                         ref={composerTextareaRef}
                         placeholder={
                           preparedSessionItems.length > 0
-                            ? 'Add an opening question or note before you start chatting…'
+                            ? SESSION_ARTWORK_QUESTION_PLACEHOLDER
                             : 'Ask anything about art'
                         }
                         aria-expanded={isMobileComposer ? isComposerFocused : undefined}
@@ -608,6 +652,9 @@ export default function SessionView({
                       </button>
                     </div>
                   </div>
+                  {sessionProcessingState.kind !== 'idle' ? (
+                    <SessionProcessingIndicator state={sessionProcessingState} />
+                  ) : null}
                 </div>
                 <input
                   ref={goalGalleryInputRef}
@@ -690,21 +737,11 @@ export default function SessionView({
                       ) : null}
                     </div>
                   ) : entry.type === 'commentary' ? (
-                    <React.Fragment key={entry.id}>
-                      <div className="text-neutral-700">
-                        {entry.status === 'pending' && !entry.message.text ? (
-                          <div className="flex items-center gap-1.5 py-1">
-                            <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '0ms' }} />
-                            <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '160ms' }} />
-                            <div className="w-2 h-2 rounded-full bg-neutral-300 animate-bounce" style={{ animationDelay: '320ms' }} />
-                          </div>
-                        ) : (
-                          <div className="text-[16px] leading-[1.7]">
-                            <SessionMessageMarkdown>{entry.message.text}</SessionMessageMarkdown>
-                          </div>
-                        )}
-                      </div>
-                    </React.Fragment>
+                    <SessionCommentaryBlock
+                      key={entry.id}
+                      entry={entry}
+                      sessionProcessingState={sessionProcessingState}
+                    />
                   ) : (
                     <React.Fragment key={entry.id}>
                       {entry.message.role === 'user' ? (
@@ -721,6 +758,14 @@ export default function SessionView({
                     </React.Fragment>
                   ),
                 )}
+                {sessionProcessingState.kind === 'adding_artworks'
+                || sessionProcessingState.kind === 'analyzing_artworks'
+                || (
+                  sessionProcessingState.kind === 'writing_response'
+                  && !sessionProcessingState.responseId
+                ) ? (
+                  <SessionProcessingIndicator state={sessionProcessingState} />
+                ) : null}
                 <div ref={sessionStreamEndRef} className="h-24 shrink-0" />
               </div>
             </div>

@@ -2,7 +2,8 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import AppViewport from './AppViewport';
-import type { SessionSummary } from '../../session/types';
+import type { SessionRenderBlock, SessionSummary } from '../../session/types';
+import { SESSION_PENDING_RESPONSE_STALE_MS } from '../../session/lib/sessionProcessingState';
 
 vi.mock('../../capture/components/SessionCapturePage', () => ({
   default: () => <div>capture</div>,
@@ -65,6 +66,7 @@ function renderAppViewport(options: {
   handleSessionInquiry?: (text: string) => Promise<boolean>;
   isAnalyzing?: boolean;
   streamingSessionResponses?: Record<string, string>;
+  activeSessionRenderBlocks?: SessionRenderBlock[];
   sessionHistoryStatus?: 'loading' | 'ready' | 'error';
 }) {
   const setSessionGoal = vi.fn();
@@ -94,7 +96,7 @@ function renderAppViewport(options: {
         isComposingNewSession: false,
         activeSessionSummary: createSessionSummary(),
         activeSessionStream: [],
-        activeSessionRenderBlocks: [],
+        activeSessionRenderBlocks: options.activeSessionRenderBlocks ?? [],
         sessionTitleById: {},
         artworkDetailItem: null,
         artworkHeaderActions: null,
@@ -228,6 +230,56 @@ describe('AppViewport session composer', () => {
     expect((submitButton as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(submitButton);
     expect(spies.handleSessionInquiry).not.toHaveBeenCalled();
+  });
+
+  it('blocks from a persisted pending response even without an in-memory stream', () => {
+    const createdAt = Date.now();
+    const spies = renderAppViewport({
+      activeSessionRenderBlocks: [{
+        type: 'commentary',
+        id: 'response-1',
+        createdAt,
+        status: 'pending',
+        message: {
+          id: 'response-1',
+          role: 'model',
+          type: 'model_response',
+          text: '',
+          createdAt,
+          payload: { status: 'pending' },
+        },
+      }],
+    });
+
+    const submitButton = screen.getByText('submit-goal');
+    expect((submitButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(submitButton);
+    expect(spies.handleSessionInquiry).not.toHaveBeenCalled();
+  });
+
+  it('unlocks a persisted pending response after it becomes stale', async () => {
+    const createdAt = Date.now() - SESSION_PENDING_RESPONSE_STALE_MS - 1;
+    const spies = renderAppViewport({
+      activeSessionRenderBlocks: [{
+        type: 'commentary',
+        id: 'response-1',
+        createdAt,
+        status: 'pending',
+        message: {
+          id: 'response-1',
+          role: 'model',
+          type: 'model_response',
+          text: '',
+          createdAt,
+          payload: { status: 'pending' },
+        },
+      }],
+    });
+
+    const submitButton = screen.getByText('submit-goal');
+    expect((submitButton as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(submitButton);
+    await waitFor(() => expect(spies.handleSessionInquiry).toHaveBeenCalledWith('Draft goal'));
   });
 
   it('still persists goals edited from session details', async () => {

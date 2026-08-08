@@ -1,1 +1,2 @@
 export const MAX_SESSION_ARTWORK_BATCH_SIZE = 5;
+export const SESSION_ARTWORK_QUESTION_PLACEHOLDER = 'Ask Musee';

@@ -164,6 +164,35 @@ describe('useSessionMessaging', () => {
     expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects rapid duplicate submits before the first session event finishes saving', async () => {
+    let resolveFirstCommit: ((value: { inserted: number; session: { id: string; title: string } }) => void) | undefined;
+    mockStartSessionWithEvent.mockReturnValueOnce(new Promise((resolve) => {
+      resolveFirstCommit = resolve;
+    }));
+    const { result, spies } = renderUseSessionMessaging();
+    let firstSubmit: Promise<boolean> | undefined;
+    let duplicateResult = true;
+
+    act(() => {
+      firstSubmit = result.current.handleSessionInquiry('Only once');
+    });
+    await act(async () => {
+      duplicateResult = await result.current.handleSessionInquiry('Only once');
+    });
+
+    expect(duplicateResult).toBe(false);
+    expect(mockStartSessionWithEvent).toHaveBeenCalledTimes(1);
+    expect(spies.setSessionDrafts).toHaveBeenCalledTimes(1);
+    expect(mockStreamSessionChat).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveFirstCommit?.({ inserted: 1, session: { id: 'session-1', title: 'Untitled Session' } });
+      await firstSubmit;
+    });
+
+    expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
+  });
+
   it('persists artwork-linked replies as model_response events', async () => {
     const summary = createSessionSummary({
       id: 'visit-1',
@@ -353,6 +382,25 @@ describe('useSessionMessaging', () => {
     expect(spies.showToast).toHaveBeenCalledWith('Couldn’t send your first message. Try again.', 'info');
     expect(mockAppendSessionMessages).not.toHaveBeenCalled();
     expect(mockStreamSessionChat).not.toHaveBeenCalled();
+  });
+
+  it('allows a new submit after the initial event save fails', async () => {
+    mockStartSessionWithEvent
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce({ inserted: 1, session: { id: 'session-1', title: 'Untitled Session' } });
+    const { result } = renderUseSessionMessaging();
+    let firstResult = true;
+    let secondResult = false;
+
+    await act(async () => {
+      firstResult = await result.current.handleSessionInquiry('First attempt');
+      secondResult = await result.current.handleSessionInquiry('Second attempt');
+    });
+
+    expect(firstResult).toBe(false);
+    expect(secondResult).toBe(true);
+    expect(mockStartSessionWithEvent).toHaveBeenCalledTimes(2);
+    expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a new user message while the active session response is still streaming', async () => {

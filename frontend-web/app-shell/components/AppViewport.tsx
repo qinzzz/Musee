@@ -11,6 +11,8 @@ import type { SmartCollection } from '../../api/artworks';
 import type { Board } from '../../boards/types';
 import type { ArtworkDetailItem } from '../../artwork/types';
 import type { ActiveSessionStreamEntry, SessionRenderBlock, SessionSummary } from '../../session/types';
+import { useSessionProcessingState } from '../../session/hooks/useSessionProcessingState';
+import { isSessionProcessing } from '../../session/lib/sessionProcessingState';
 import type { CaptureState } from '../hooks/useCaptureNavigation';
 
 const CollectionView = lazy(() => import('../../collection/components/CollectionView'));
@@ -238,11 +240,15 @@ export default function AppViewport({
     activeSessionSummary
     && Object.prototype.hasOwnProperty.call(streamingSessionResponses, activeSessionSummary.id),
   );
+  const sessionProcessingState = useSessionProcessingState({
+    activeSessionSummary,
+    sessionRenderBlocks: activeSessionRenderBlocks,
+    isAddingArtworks: isSubmittingPreparedSession || isSubmittingStagedBatch,
+    isAnalyzingArtworks: isAnalyzing,
+    hasLiveResponse: isSessionReplyPending,
+  });
   const isSessionBusy = Boolean(
-    isSessionReplyPending
-    || isAnalyzing
-    || isSubmittingPreparedSession
-    || isSubmittingStagedBatch
+    isSessionProcessing(sessionProcessingState)
     || sessionHistoryStatus !== 'ready'
   );
 
@@ -321,6 +327,7 @@ export default function AppViewport({
               preparedSessionMessage={newSessionDraftMessage}
               isSubmittingPreparedSession={isSubmittingPreparedSession}
               isSessionBusy={isSessionBusy}
+              sessionProcessingState={sessionProcessingState}
               sessionHistoryStatus={sessionHistoryStatus}
               onRetrySessionHistory={() => void retrySessionHistory()}
               sessionStreamScrollRef={sessionStreamScrollRef}
@@ -555,8 +562,8 @@ export default function AppViewport({
           onOpenLibraryPicker={() => {
             if (!isSessionBusy) openSessionLibraryPicker();
           }}
-          isAnalyzing={isAnalyzing}
-          isInquiryDisabled={isSessionReplyPending}
+          isAnalyzing={sessionProcessingState.kind === 'analyzing_artworks'}
+          isInquiryDisabled={sessionProcessingState.kind === 'writing_response'}
           isBusy={isSessionBusy}
           onInquiry={(text) => (
             isSessionBusy ? Promise.resolve(false) : handleSessionInquiry(text)

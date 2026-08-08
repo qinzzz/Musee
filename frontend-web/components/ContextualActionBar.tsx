@@ -22,6 +22,7 @@ import {
   getSessionComposerHeight,
   shouldSubmitSessionComposerOnEnter,
 } from '../session/lib/sessionComposerBehavior';
+import { SESSION_ARTWORK_QUESTION_PLACEHOLDER } from '../session/constants';
 
 const MOBILE_COMPOSER_QUERY = '(max-width: 639px)';
 export const SESSION_QUESTION_PLACEHOLDER = 'Ask a question…';
@@ -348,7 +349,7 @@ const ContextualActionBar: React.FC<Props> = ({
                 rows={1}
                 aria-expanded={isMobileComposer ? isComposerFocused : undefined}
                 placeholder={hasStagedItems
-                  ? 'Add a note about these artworks (optional)...'
+                  ? SESSION_ARTWORK_QUESTION_PLACEHOLDER
                   : (placeholder || SESSION_QUESTION_PLACEHOLDER)}
                 className={`min-w-0 resize-none rounded-[28px] border border-neutral-200 bg-white px-6 py-4 text-[16px] leading-6 text-neutral-700 outline-none placeholder-neutral-400 transition-[height,border-color] duration-200 ease-out focus:border-neutral-300 ${isComposerExpanded ? 'order-1 basis-full' : 'flex-1'}`}
               />
