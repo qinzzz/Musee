@@ -11,7 +11,7 @@ import ContextualActionBar, {
 import { SESSION_ARTWORK_QUESTION_PLACEHOLDER } from '../session/constants';
 
 describe('ContextualActionBar session busy state', () => {
-  it('keeps the draft editable while disabling every session input action', () => {
+  it('disables the empty composer and every session input action', () => {
     const onInquiry = vi.fn(async () => true);
     const onOpenSessionCapture = vi.fn();
 
@@ -27,9 +27,8 @@ describe('ContextualActionBar session busy state', () => {
     );
 
     const textbox = screen.getByRole('textbox');
-    fireEvent.change(textbox, { target: { value: 'Keep this draft' } });
-
-    expect((textbox as HTMLInputElement).value).toBe('Keep this draft');
+    expect((textbox as HTMLTextAreaElement).disabled).toBe(true);
+    expect((textbox as HTMLTextAreaElement).value).toBe('');
     expect((screen.getByLabelText(ARTWORK_CTA_SCAN_ARTWORK) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByLabelText(ARTWORK_CTA_ADD_MENU) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTitle('Session busy') as HTMLButtonElement).disabled).toBe(true);
@@ -38,6 +37,60 @@ describe('ContextualActionBar session busy state', () => {
     fireEvent.submit(textbox.closest('form')!);
     expect(onInquiry).not.toHaveBeenCalled();
     expect(onOpenSessionCapture).not.toHaveBeenCalled();
+  });
+
+  it('hands off a staged draft immediately and never restores it on failure', async () => {
+    let finishSubmission!: (value: boolean) => void;
+    const submission = new Promise<boolean>((resolve) => {
+      finishSubmission = resolve;
+    });
+    const onSubmitStagedBatch = vi.fn((_message: string) => submission);
+
+    const Harness = () => {
+      const [isBusy, setIsBusy] = React.useState(false);
+      const [stagedItems, setStagedItems] = React.useState([
+        { id: 'art-1', previewUrl: 'blob://art-1', label: 'Artwork' },
+      ]);
+      return (
+        <ContextualActionBar
+          mode="session"
+          onUpload={vi.fn()}
+          onOpenSessionCapture={vi.fn()}
+          onOpenLibraryPicker={vi.fn()}
+          stagedItems={stagedItems}
+          isSubmittingStagedBatch={isBusy}
+          onSubmitStagedBatch={async (message) => {
+            setStagedItems([]);
+            setIsBusy(true);
+            const succeeded = await onSubmitStagedBatch(message);
+            setIsBusy(false);
+            return succeeded;
+          }}
+        />
+      );
+    };
+
+    render(<Harness />);
+    const composer = screen.getByRole('textbox');
+    fireEvent.focus(composer);
+    fireEvent.change(composer, { target: { value: 'What about this piece?' } });
+    fireEvent.click(screen.getByTitle('Send'));
+
+    await waitFor(() => {
+      expect(onSubmitStagedBatch).toHaveBeenCalledWith('What about this piece?');
+      expect((composer as HTMLTextAreaElement).value).toBe('');
+      expect((composer as HTMLTextAreaElement).disabled).toBe(true);
+      expect(screen.queryByAltText('Artwork')).toBeNull();
+      expect(composer.parentElement?.className).toContain('items-center');
+    });
+    expect(document.activeElement).not.toBe(composer);
+
+    finishSubmission(false);
+    await waitFor(() => {
+      expect((composer as HTMLTextAreaElement).disabled).toBe(false);
+    });
+    expect((composer as HTMLTextAreaElement).value).toBe('');
+    expect(screen.queryByAltText('Artwork')).toBeNull();
   });
 
   it('closes the add menu when the session becomes busy', async () => {

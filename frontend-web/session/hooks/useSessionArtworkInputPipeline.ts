@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useState } from 'react';
+import { startTransition, useCallback, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type {
   PreparedSessionUploadEntry,
@@ -120,13 +120,20 @@ export function useSessionArtworkInputPipeline({
   showToast,
 }: UseSessionArtworkInputPipelineOptions) {
   const [isSubmittingStagedBatch, setIsSubmittingStagedBatch] = useState(false);
+  const submissionInFlightRef = useRef(false);
 
   const runInputPipeline = useCallback(async (
     target: InputTarget,
     inputArtworks: PendingSessionArtwork[] = pendingSessionArtworks,
+    clearPreparedDraftOnStart = false,
   ): Promise<boolean> => {
     if (inputArtworks.length === 0) return false;
+    if (submissionInFlightRef.current) return false;
     if (target.kind === 'new' ? isSubmittingPreparedSession : isSubmittingStagedBatch) return false;
+    submissionInFlightRef.current = true;
+    if (clearPreparedDraftOnStart) {
+      resetPreparedSessionState();
+    }
 
     const setSubmitting = target.kind === 'new'
       ? setIsSubmittingPreparedSession
@@ -356,7 +363,9 @@ export function useSessionArtworkInputPipeline({
         });
       }
 
-      startTransition(() => resetPreparedSessionState());
+      if (!clearPreparedDraftOnStart) {
+        startTransition(() => resetPreparedSessionState());
+      }
       // Raw artwork and canonical input persistence are complete. From here
       // the artwork records themselves expose the analyzing state, so the
       // shared session indicator can advance from "adding" to "analyzing".
@@ -407,7 +416,7 @@ export function useSessionArtworkInputPipeline({
           };
         });
       }
-      if (hasResolvedArtwork) {
+      if (hasResolvedArtwork && !clearPreparedDraftOnStart) {
         startTransition(() => resetPreparedSessionState());
       }
       const failureMessage = failurePhase === 'saving-session-turn' && hasResolvedArtwork
@@ -420,6 +429,7 @@ export function useSessionArtworkInputPipeline({
       showToast(failureMessage, 'info');
       return false;
     } finally {
+      submissionInFlightRef.current = false;
       setSubmitting(false);
     }
   }, [
@@ -449,12 +459,16 @@ export function useSessionArtworkInputPipeline({
   ]);
 
   const submitPreparedSession = useCallback(async () => {
-    await runInputPipeline({ kind: 'new' });
-  }, [runInputPipeline]);
+    const submittedArtworks = pendingSessionArtworks;
+    await runInputPipeline({ kind: 'new' }, submittedArtworks, true);
+  }, [pendingSessionArtworks, runInputPipeline]);
 
   const submitStagedBatch = useCallback(
-    (sessionId: string, message: string) => runInputPipeline({ kind: 'existing', sessionId, message }),
-    [runInputPipeline],
+    (sessionId: string, message: string) => {
+      const submittedArtworks = pendingSessionArtworks;
+      return runInputPipeline({ kind: 'existing', sessionId, message }, submittedArtworks, true);
+    },
+    [pendingSessionArtworks, runInputPipeline],
   );
 
   const submitImmediateArtwork = useCallback((
