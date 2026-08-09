@@ -158,22 +158,25 @@ const ContextualActionBar: React.FC<Props> = ({
 
   const hasStagedItems = stagedItems.length > 0;
 
+  const handOffComposer = () => {
+    setText('');
+    setIsComposerFocused(false);
+    composerTextareaRef.current?.blur();
+  };
+
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (sessionBusy) return;
     if (hasStagedItems) {
-      const didSubmit = await onSubmitStagedBatch?.(text.trim());
-      if (didSubmit) {
-        setText('');
-      }
+      const submittedText = text.trim();
+      handOffComposer();
+      await onSubmitStagedBatch?.(submittedText);
       return;
     }
     const value = text.trim();
     if (!value || isInquiryDisabled) return;
-    const didSubmit = await onInquiry?.(value);
-    if (didSubmit !== false) {
-      setText('');
-    }
+    handOffComposer();
+    await onInquiry?.(value);
   };
 
   return (
@@ -333,6 +336,7 @@ const ContextualActionBar: React.FC<Props> = ({
               <textarea
                 ref={composerTextareaRef}
                 value={text}
+                disabled={sessionBusy}
                 onChange={(e) => setText(e.target.value)}
                 onFocus={() => setIsComposerFocused(true)}
                 onBlur={() => setIsComposerFocused(false)}
@@ -351,7 +355,7 @@ const ContextualActionBar: React.FC<Props> = ({
                 placeholder={hasStagedItems
                   ? SESSION_ARTWORK_QUESTION_PLACEHOLDER
                   : (placeholder || SESSION_QUESTION_PLACEHOLDER)}
-                className={`min-w-0 resize-none rounded-[28px] border border-neutral-200 bg-white px-6 py-4 text-[16px] leading-6 text-neutral-700 outline-none placeholder-neutral-400 transition-[height,border-color] duration-200 ease-out focus:border-neutral-300 ${isComposerExpanded ? 'order-1 basis-full' : 'flex-1'}`}
+                className={`min-w-0 resize-none rounded-[28px] border border-neutral-200 bg-white px-6 py-4 text-[16px] leading-6 text-neutral-700 outline-none placeholder-neutral-400 transition-[height,border-color] duration-200 ease-out focus:border-neutral-300 disabled:cursor-not-allowed disabled:text-neutral-400 ${isComposerExpanded ? 'order-1 basis-full' : 'flex-1'}`}
               />
               <button
                 type="submit"

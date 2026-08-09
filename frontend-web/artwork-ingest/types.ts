@@ -50,5 +50,9 @@ export type PreparedUploadIngestResult = {
     entryId: string;
     item: import('../types').GalleryItem;
   }>;
+  failedEntries: Array<{
+    entryId: string;
+    message: string;
+  }>;
   analysisPromise: Promise<import('../types').GalleryItem[]>;
 };

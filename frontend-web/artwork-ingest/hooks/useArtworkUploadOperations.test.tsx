@@ -67,6 +67,12 @@ function createFile(name = 'artwork.jpg', type = 'image/jpeg') {
   return new File(['file-data'], name, { type, lastModified: 1710000000000 });
 }
 
+function createSizedFile(name: string, size: number, type = 'image/jpeg') {
+  const file = createFile(name, type);
+  Object.defineProperty(file, 'size', { value: size });
+  return file;
+}
+
 function createGalleryItem(overrides: Partial<GalleryItem> = {}): GalleryItem {
   return {
     id: 'existing-1',
@@ -299,10 +305,77 @@ describe('useArtworkUploadOperations', () => {
     expect(result.current.state.items[0].id).toMatch(/^upload-placeholder-/);
     expect(result.current.state.items[0]).toMatchObject({
       analysisStatus: 'failed',
-      analysisError: 'Analysis failed hard',
+      analysisError: 'Artwork saved, but Musee couldn’t analyze it. Try identifying it again.',
       syncStatus: 'synced',
     });
     expect(spies.showToast).toHaveBeenCalledWith('Added an artwork to collection', 'success');
+    expect(spies.showToast).toHaveBeenCalledWith(
+      'Artwork saved, but Musee couldn’t analyze it. Try identifying it again.',
+      'info',
+    );
+  });
+
+  it('rejects oversized images before staging while preserving valid files', async () => {
+    const { result, spies } = renderUseArtworkUploadOperations({
+      activeTab: 'newSession',
+      canStageSessionArtworks: true,
+      pendingSessionArtworks: [],
+    });
+    const oversized = createSizedFile('large.jpg', 17 * 1024 * 1024);
+    const valid = createFile('valid.jpg');
+
+    await act(async () => {
+      await result.current.api.processArtworkFiles([oversized, valid], 'gallery');
+    });
+
+    expect(result.current.state.pendingSessionArtworks).toHaveLength(1);
+    expect(result.current.state.pendingSessionArtworks[0]).toMatchObject({ label: 'valid' });
+    expect(spies.showToast).toHaveBeenCalledWith(
+      '“large.jpg” is 17 MB. Choose an image that is 10 MB or smaller.',
+      'info',
+    );
+    expect(mockSaveArtworkUpload).not.toHaveBeenCalled();
+  });
+
+  it('keeps valid files when another image cannot be prepared', async () => {
+    const broken = createFile('broken.heic', 'image/heic');
+    const valid = createFile('valid.jpg');
+    mockNormalizeUploadFile.mockImplementation(async (file: File) => {
+      if (file === broken) throw new Error('conversion failed');
+      return file;
+    });
+    const { result, spies } = renderUseArtworkUploadOperations({
+      activeTab: 'newSession',
+      canStageSessionArtworks: true,
+    });
+
+    await act(async () => {
+      await result.current.api.processArtworkFiles([broken, valid], 'gallery');
+    });
+
+    expect(result.current.state.pendingSessionArtworks).toHaveLength(1);
+    expect(spies.showToast).toHaveBeenCalledWith(
+      'Musee couldn’t prepare “broken.heic”. Try a JPG or PNG version instead.',
+      'info',
+    );
+  });
+
+  it('removes a failed collection placeholder and explains the upload failure', async () => {
+    mockSaveArtworkUpload.mockRejectedValue(new Error('network disconnected'));
+    const { result, spies } = renderUseArtworkUploadOperations({
+      activeTab: 'collect',
+      items: [],
+    });
+
+    await act(async () => {
+      await result.current.api.processArtworkFiles([createFile('failed.jpg')], 'gallery');
+    });
+
+    expect(result.current.state.items).toHaveLength(0);
+    expect(spies.showToast).toHaveBeenCalledWith(
+      'Musee couldn’t upload this artwork. Check your connection and try again.',
+      'info',
+    );
   });
 
   it('normalizes capture files into a prepared pipeline entry with label and coordinates', async () => {
@@ -330,6 +403,22 @@ describe('useArtworkUploadOperations', () => {
       mode: 'camera',
       coords: { latitude: 40.7, longitude: -74 },
     });
+  });
+
+  it('rejects an oversized capture with a clear size message', async () => {
+    const { result, spies } = renderUseArtworkUploadOperations();
+    const artwork = createSizedFile('capture.jpg', 17 * 1024 * 1024);
+
+    let prepared: PendingSessionArtwork | null = null;
+    await act(async () => {
+      prepared = await result.current.api.prepareCaptureSubmission({ artwork, label: null });
+    });
+
+    expect(prepared).toBeNull();
+    expect(spies.showToast).toHaveBeenCalledWith(
+      '“capture.jpg” is 17 MB. Choose an image that is 10 MB or smaller.',
+      'info',
+    );
   });
 
   it('keeps the open artwork detail selection on the stable client id after persistence', async () => {
@@ -411,5 +500,30 @@ describe('useArtworkUploadOperations', () => {
     expect(ids).toHaveLength(2);
     expect(ids.every((id) => id.startsWith('upload-placeholder-'))).toBe(true);
     expect(result.current.state.items.map((item) => item.artworkId)).toEqual(['saved-1', 'saved-2']);
+  });
+
+  it('preserves successful batch uploads and reports failed files clearly', async () => {
+    mockSaveArtworkUpload
+      .mockResolvedValueOnce(createSavedUpload())
+      .mockRejectedValueOnce(new Error('network disconnected'));
+    mockAnalyzeArtworkFromExisting.mockResolvedValue(createAnalysis());
+    const { result, spies } = renderUseArtworkUploadOperations({
+      activeTab: 'collect',
+      items: [],
+    });
+
+    await act(async () => {
+      await result.current.api.processArtworkFiles([
+        createFile('saved.jpg'),
+        createFile('failed.jpg'),
+      ], 'gallery');
+    });
+
+    expect(result.current.state.items).toHaveLength(1);
+    expect(result.current.state.items[0].analysisStatus).toBe('analyzed');
+    expect(spies.showToast).toHaveBeenCalledWith(
+      'Musee couldn’t upload this artwork. Check your connection and try again. The other selected artworks were added.',
+      'info',
+    );
   });
 });
