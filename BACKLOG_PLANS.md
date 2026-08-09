@@ -956,3 +956,35 @@ Tapping a chip inserts it as the user's message and dispatches through the norma
 ### Success metric
 
 - Chip tap-through rate, available from day one.
+
+## 13. Clear Oversized Image Upload Feedback
+
+Status: open
+
+### Problem
+
+The backend currently rejects image files larger than 10 MB. A 17 MB JPEG or PNG is therefore rejected, because the web frontend sends supported image formats without resizing or compressing them first.
+
+The backend already returns a specific error (`File too large. Maximum size: 10MB`), but the session input pipeline collapses a failed initial save into the generic message:
+
+`Couldn’t add the artworks. Try again.`
+
+That message implies a transient failure and does not tell users that retrying the same file cannot succeed.
+
+### Recommended direction
+
+1. Add a frontend file-size preflight after file normalization and before staging or creating an optimistic placeholder.
+2. Show a specific message that includes the selected file's size and the allowed limit, for example: `This image is 17 MB. Choose an image smaller than 10 MB.`
+3. Keep the backend size validation as the authoritative safety check and map its structured error to the same product message.
+4. For a multi-artwork selection, reject only oversized files and preserve valid files rather than failing the whole batch.
+5. Include the filename when multiple files were selected so users know which image needs attention.
+
+Automatic client-side compression can be considered separately. Clear rejection feedback is the smaller and more predictable first fix.
+
+### Acceptance criteria
+
+- an oversized file is rejected before upload begins
+- no temporary session card or optimistic event is created for the rejected file
+- the message explains the 10 MB limit and does not suggest retrying the unchanged file
+- valid files in the same selection can still be staged and uploaded
+- a backend size rejection produces the same clear message if frontend validation is bypassed
