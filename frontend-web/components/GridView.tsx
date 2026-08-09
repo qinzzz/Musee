@@ -138,7 +138,7 @@ const GridView: React.FC<Props> = ({
                         onDelete(item.id);
                       }}
                     >
-                      Delete artwork
+                      Remove from collection
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

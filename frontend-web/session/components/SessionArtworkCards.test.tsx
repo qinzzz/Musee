@@ -50,4 +50,23 @@ describe('SessionArtworkCards', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Untitled, Artist unknown' }));
     expect(onOpenArtwork).toHaveBeenCalledWith(item);
   });
+
+  it('renders preserved metadata on a disabled deleted card', () => {
+    const onOpenArtwork = vi.fn();
+    const item = makeArtwork(1, {
+      artworkName: 'Remembered Work',
+      artistName: 'Remembered Artist',
+      isDeletedPlaceholder: true,
+      url: '',
+    });
+
+    render(<SessionArtworkCards items={[item]} onOpenArtwork={onOpenArtwork} />);
+
+    expect(screen.getByText('Deleted artwork')).toBeTruthy();
+    expect(screen.getByText('Remembered Work')).toBeTruthy();
+    expect(screen.getByText('Remembered Artist · 2001')).toBeTruthy();
+    expect((screen.getByRole('button') as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button'));
+    expect(onOpenArtwork).not.toHaveBeenCalled();
+  });
 });

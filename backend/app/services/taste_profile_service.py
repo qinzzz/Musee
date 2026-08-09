@@ -106,7 +106,7 @@ def get_profile_counts(user_id: str, db: Session) -> Dict[str, int]:
     counts = {key: 0 for key in CLASSIFICATION_VALUES}
     rows = (
         db.query(SavedArtwork.classification, func.count(SavedArtwork.id))
-        .filter(SavedArtwork.user_id == user_id)
+        .filter(SavedArtwork.user_id == user_id, SavedArtwork.active_filter())
         .group_by(SavedArtwork.classification)
         .all()
     )
@@ -293,6 +293,7 @@ def get_taste_profile_view(user_id: str, db: Session) -> Dict[str, Any]:
             .filter(
                 SavedArtwork.user_id == user_id,
                 SavedArtwork.classification.in_(["love", "not_for_me", "respect"]),
+                SavedArtwork.active_filter(),
             )
             .all()
         )
@@ -305,7 +306,10 @@ def get_taste_profile_view(user_id: str, db: Session) -> Dict[str, Any]:
 
 
 async def generate_taste_profile_snapshot(user_id: str, db: Session) -> Dict[str, Any]:
-    rows = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).all()
+    rows = db.query(SavedArtwork).filter(
+        SavedArtwork.user_id == user_id,
+        SavedArtwork.active_filter(),
+    ).all()
     if not rows:
         raise HTTPException(status_code=404, detail="No artworks found for this user")
 

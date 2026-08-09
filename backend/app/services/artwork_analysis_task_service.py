@@ -10,7 +10,6 @@ entity-level dimension analysis, which it will eventually replace.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 import json
 import logging
@@ -181,7 +180,10 @@ async def run_artwork_analysis(
     db = SessionLocal()
     usage_id: Optional[str] = None
     try:
-        artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+        artwork = db.query(SavedArtwork).filter(
+            SavedArtwork.id == artwork_id,
+            SavedArtwork.active_filter(),
+        ).first()
         if not artwork:
             return
         if not force and not needs_artwork_analysis(db, artwork_id):
@@ -267,12 +269,6 @@ async def run_artwork_analysis(
     finally:
         db.close()
 
-
-def run_artwork_analysis_bg(artwork_id: str, image_bytes: Optional[bytes] = None, force: bool = False) -> None:
-    """Sync wrapper for FastAPI BackgroundTasks."""
-    asyncio.run(run_artwork_analysis(artwork_id, image_bytes=image_bytes, force=force))
-
-
 async def backfill_artwork_analyses(db: Session, limit: Optional[int] = None, force: bool = False) -> Dict[str, int]:
     """Sweep artworks lacking a current-version terminal analysis. Also the
     migration path for the pre-existing library and the retry path for
@@ -286,7 +282,7 @@ async def backfill_artwork_analyses(db: Session, limit: Optional[int] = None, fo
         )
         .subquery()
     )
-    query = db.query(SavedArtwork.id)
+    query = db.query(SavedArtwork.id).filter(SavedArtwork.active_filter())
     if not force:
         query = query.filter(~SavedArtwork.id.in_(current_ids.select()))
     if limit:

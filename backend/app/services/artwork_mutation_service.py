@@ -30,7 +30,10 @@ def update_artwork_record(
     artwork_id: str,
     request: UpdateArtworkRequest,
 ) -> dict:
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
@@ -103,7 +106,10 @@ def update_artwork_classification_record(
     if classification not in CLASSIFICATION_VALUES:
         raise HTTPException(status_code=400, detail="Invalid classification")
 
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
@@ -125,7 +131,10 @@ async def get_or_create_artwork_fun_facts(
     artwork_id: str,
     language: Optional[str],
 ) -> list[dict[str, str]]:
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
 

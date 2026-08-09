@@ -26,7 +26,7 @@ from app.services.artwork_background_service import (
     track_artwork_task,
 )
 from app.services.artwork_enrichment_service import do_artist_bio, run_artist_bio_bg
-from app.services.artwork_analysis_task_service import run_artwork_analysis, run_artwork_analysis_bg
+from app.services.artwork_analysis_task_service import run_artwork_analysis
 from app.services.artwork_ingest_service import parse_location_value, resolve_location_payload, save_analyzed_artwork_record_sync
 from app.services.artwork_utilities_service import initialize_ai_services
 from app.services.session_service import get_session_context, update_session_narrative_task
@@ -194,7 +194,7 @@ async def analyze_artist(
             background_tasks.add_task(run_artist_bio_bg, artist_entity_id_fast)
         if artwork_id:
             if background_tasks:
-                background_tasks.add_task(run_artwork_analysis_bg, artwork_id, image_bytes, False)
+                background_tasks.add_task(run_artwork_analysis, artwork_id, image_bytes, False)
             else:
                 track_artwork_task(
                     asyncio.create_task(run_artwork_analysis(artwork_id, image_bytes=image_bytes))

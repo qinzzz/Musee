@@ -445,6 +445,16 @@ def test_list_journals_returns_recent_first_with_derived_location(client, db):
             artist_name="Available Artist",
         )
     )
+    db.add(
+        SavedArtwork(
+            id="deleted-artwork",
+            user_id="journal-list-user",
+            photo_uri="https://example.com/deleted.jpg",
+            artwork_name="Remembered Work",
+            artist_name="Remembered Artist",
+            deleted_at=datetime(2026, 7, 4),
+        )
+    )
     db.add_all(
         [
             Journal(
@@ -514,6 +524,14 @@ def test_list_journals_returns_recent_first_with_derived_location(client, db):
                     "photo_uri": "https://example.com/available.jpg",
                     "artwork_name": "Available Work",
                     "artist_name": "Available Artist",
+                    "is_deleted": False,
+                },
+                {
+                    "id": "deleted-artwork",
+                    "photo_uri": None,
+                    "artwork_name": "Remembered Work",
+                    "artist_name": "Remembered Artist",
+                    "is_deleted": True,
                 }
             ],
         },

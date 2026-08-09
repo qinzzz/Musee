@@ -6,7 +6,7 @@ import type {
   SessionSummary,
   SessionStreamMessage,
 } from '../types';
-import { getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from './sessionEventArtworks';
+import { getDeletedArtworkReference, getPrimarySessionEventArtworkId, getSessionEventArtworkIds } from './sessionEventArtworks';
 import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 type SessionMembership = {
@@ -261,6 +261,7 @@ export function buildActiveSessionStream({
     })
     .map((message) => {
       const artworkId = getPrimarySessionEventArtworkId(message)!;
+      const deletedReference = getDeletedArtworkReference(message, artworkId);
       return {
         id: `deleted-artwork-${artworkId}`,
         createdAt: captureTimeByArtworkId.get(artworkId) || message.createdAt,
@@ -282,7 +283,9 @@ export function buildActiveSessionStream({
           timestamp: message.createdAt,
           sessionCapturedAt: captureTimeByArtworkId.get(artworkId) || message.createdAt,
           conversation: [],
-          artworkName: 'Deleted artwork',
+          artworkName: deletedReference?.artwork_name?.trim() || 'Deleted artwork',
+          artistName: deletedReference?.artist_name?.trim() || undefined,
+          date: deletedReference?.date?.trim() || undefined,
           syncStatus: 'synced',
           isDeletedPlaceholder: true,
         },

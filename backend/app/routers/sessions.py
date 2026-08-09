@@ -22,7 +22,7 @@ from app.services.session_service import (
     require_session_access,
     update_session_event,
 )
-from app.services.session_event_service import validate_and_normalize_session_event
+from app.services.session_event_service import derive_session_event_artwork_ids, validate_and_normalize_session_event
 from app.utils.auth_utils import get_current_user, require_same_user
 
 router = APIRouter()
@@ -90,7 +90,41 @@ async def get_session_events(
         .order_by(SessionEvent.sequence_number)
         .all()
     )
-    return [m.to_dict() for m in msgs]
+    serialized = [message.to_dict() for message in msgs]
+    referenced_ids = {
+        artwork_id
+        for event in serialized
+        for artwork_id in derive_session_event_artwork_ids(event.get("event_type"), event.get("payload"))
+    }
+    deleted_artworks = {
+        artwork.id: artwork
+        for artwork in db.query(SavedArtwork).filter(
+            SavedArtwork.id.in_(referenced_ids),
+            SavedArtwork.user_id == session_record.user_id,
+            SavedArtwork.deleted_at.is_not(None),
+        ).all()
+    } if referenced_ids else {}
+
+    for event in serialized:
+        deleted_references = []
+        for artwork_id in derive_session_event_artwork_ids(event.get("event_type"), event.get("payload")):
+            artwork = deleted_artworks.get(artwork_id)
+            if not artwork:
+                continue
+            deleted_references.append({
+                "artwork_id": artwork.id,
+                "artwork_name": artwork.artwork_name,
+                "artist_name": artwork.artist_name,
+                "date": (artwork.params or {}).get("date") if isinstance(artwork.params, dict) else None,
+                "deleted_at": artwork.deleted_at.isoformat(),
+            })
+        if deleted_references:
+            event["payload"] = {
+                **(event.get("payload") or {}),
+                "deleted_artworks": deleted_references,
+            }
+
+    return serialized
 
 
 @router.post("/sessions/{session_id}/events")
@@ -248,6 +282,7 @@ async def start_session_with_artworks(
     artworks = db.query(SavedArtwork).filter(
         SavedArtwork.id.in_(artwork_ids),
         SavedArtwork.user_id == user_id,
+        SavedArtwork.active_filter(),
     ).all()
     artwork_by_id = {art.id: art for art in artworks}
     missing_ids = [artwork_id for artwork_id in artwork_ids if artwork_id not in artwork_by_id]
@@ -309,6 +344,7 @@ async def attach_artworks_to_session(
     artworks = db.query(SavedArtwork).filter(
         SavedArtwork.id.in_(artwork_ids),
         SavedArtwork.user_id == user_id,
+        SavedArtwork.active_filter(),
     ).all()
     artwork_by_id = {art.id: art for art in artworks}
     missing_ids = [artwork_id for artwork_id in artwork_ids if artwork_id not in artwork_by_id]

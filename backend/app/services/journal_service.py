@@ -135,9 +135,10 @@ def list_user_journals(db: Session, *, user_id: str) -> List[Dict[str, Any]]:
             "representative_artworks": [
                 {
                     "id": artwork.id,
-                    "photo_uri": artwork.photo_uri,
+                    "photo_uri": None if artwork.deleted_at else artwork.photo_uri,
                     "artwork_name": artwork.artwork_name,
                     "artist_name": artwork.artist_name,
+                    "is_deleted": artwork.deleted_at is not None,
                 }
                 for artwork_id in (journal.representative_artwork_ids or [])[:2]
                 if (artwork := artwork_by_id.get(artwork_id)) is not None

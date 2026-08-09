@@ -1,6 +1,6 @@
 import type { GalleryItem } from '../../types';
 import { getItemSequenceNumberForSession, getSessionItemTimestamp } from './sessionSelectors';
-import { getSessionEventArtworkIds } from './sessionEventArtworks';
+import { getDeletedArtworkReference, getSessionEventArtworkIds } from './sessionEventArtworks';
 import { compareSessionEvents } from './sessionOrdering';
 import type { SessionRenderBlock, SessionStreamMessage, SessionSummary } from '../types';
 import { getArtworkClientId } from '../../lib/artworkIdentity';
@@ -46,6 +46,7 @@ function buildDeletedArtworkPlaceholder(
   sessionId: string,
   message: SessionStreamMessage,
 ): GalleryItem {
+  const deletedReference = getDeletedArtworkReference(message, artworkId);
   return {
     id: `deleted-artwork-${artworkId}`,
     artworkId,
@@ -66,7 +67,9 @@ function buildDeletedArtworkPlaceholder(
       source: readArtworkEventSourceFromPayload(message, artworkId) ?? 'camera',
     }],
     conversation: [],
-    artworkName: 'Deleted artwork',
+    artworkName: deletedReference?.artwork_name?.trim() || 'Deleted artwork',
+    artistName: deletedReference?.artist_name?.trim() || undefined,
+    date: deletedReference?.date?.trim() || undefined,
     syncStatus: 'synced',
     isDeletedPlaceholder: true,
   };

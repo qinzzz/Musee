@@ -24,6 +24,7 @@ async def enrich_artwork_metadata_batch(
         db.query(SavedArtwork)
         .filter(
             SavedArtwork.user_id == user_id,
+            SavedArtwork.active_filter(),
             SavedArtwork.movement == None,
             SavedArtwork.analysis != None,
         )

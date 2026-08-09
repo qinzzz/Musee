@@ -1,5 +1,7 @@
 """Tests for the quota foundation: plans config, decisions, usage recording."""
 
+from datetime import UTC, datetime
+
 import pytest
 from fastapi import HTTPException
 
@@ -82,6 +84,17 @@ class TestQuotaDecisions:
         decision = check_quota(db, "u-stored", STORED_ARTWORKS)
         assert not decision.allowed
         assert decision.status.used == limit
+
+    def test_soft_deleted_artworks_do_not_count_toward_storage_quota(self, db):
+        _make_user(db, uid="u-soft-deleted")
+        _add_artworks(db, "u-soft-deleted", 2)
+        artwork = db.query(SavedArtwork).filter(SavedArtwork.user_id == "u-soft-deleted").first()
+        artwork.deleted_at = datetime.now(UTC)
+        db.commit()
+
+        decision = check_quota(db, "u-soft-deleted", STORED_ARTWORKS)
+
+        assert decision.status.used == 1
 
     def test_unlimited_tier_never_blocks(self, db):
         _make_user(db, tier="unlimited", uid="u-unlim")

@@ -19,6 +19,7 @@ export function createQueryClient(): QueryClient {
 
 export const queryKeys = {
   sessions: (userId: string) => ['sessions', userId] as const,
+  sessionEventsRoot: () => ['session-events'] as const,
   sessionEvents: (sessionId: string) => ['session-events', sessionId] as const,
   artworks: (userId: string) => ['artworks', userId] as const,
   boards: (userId: string) => ['boards', userId] as const,

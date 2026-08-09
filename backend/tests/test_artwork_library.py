@@ -20,7 +20,7 @@ def test_get_artworks_returns_user_items(client, db):
     assert {item["id"] for item in payload["items"]} == {"art-1", "art-2"}
 
 
-def test_delete_artwork_keeps_session_after_last_artwork_is_removed(client, db):
+def test_remove_artwork_soft_deletes_it_and_keeps_session_membership(client, db):
     db.add(User(user_id="delete-user", device_id="delete-user"))
     db.add(SessionModel(id="sess-delete", user_id="delete-user", title="Visit"))
     db.add(SavedArtwork(id="art-delete", user_id="delete-user", photo_uri="r2://delete", artist_name="A", artwork_name="W"))
@@ -31,10 +31,16 @@ def test_delete_artwork_keeps_session_after_last_artwork_is_removed(client, db):
     response = client.delete("/api/artworks/art-delete", params={"user_id": "delete-user"})
 
     assert response.status_code == 200
-    assert db.query(SavedArtwork).filter(SavedArtwork.id == "art-delete").first() is None
+    deleted = db.query(SavedArtwork).filter(SavedArtwork.id == "art-delete").first()
+    assert deleted is not None
+    assert deleted.deleted_at is not None
+    assert db.query(SessionArtwork).filter(SessionArtwork.artwork_id == "art-delete").count() == 1
+    library = client.get("/api/artworks", params={"user_id": "delete-user"}).json()
+    assert library["items"] == []
+    assert library["total"] == 0
     session = db.query(SessionModel).filter(SessionModel.id == "sess-delete").first()
     assert session is not None
-    assert session.title == "Untitled Session"
+    assert session.title == "Visit"
 
 
 def test_delete_artwork_keeps_session_with_text_messages(client, db):
@@ -66,7 +72,9 @@ def test_delete_artwork_keeps_session_with_text_messages(client, db):
     response = client.delete("/api/artworks/art-keep", params={"user_id": "delete-keep-user"})
 
     assert response.status_code == 200
-    assert db.query(SavedArtwork).filter(SavedArtwork.id == "art-keep").first() is None
+    deleted = db.query(SavedArtwork).filter(SavedArtwork.id == "art-keep").first()
+    assert deleted is not None
+    assert deleted.deleted_at is not None
     assert db.query(SessionModel).filter(SessionModel.id == "sess-keep").first() is not None
 
 
@@ -110,7 +118,9 @@ def test_batch_delete_artworks_keeps_session_with_text_messages(client, db):
     )
 
     assert response.status_code == 200
-    assert db.query(SavedArtwork).filter(SavedArtwork.id == "art-batch-keep").first() is None
+    deleted = db.query(SavedArtwork).filter(SavedArtwork.id == "art-batch-keep").first()
+    assert deleted is not None
+    assert deleted.deleted_at is not None
     assert db.query(SessionModel).filter(SessionModel.id == "sess-batch-keep").first() is not None
 
 

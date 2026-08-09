@@ -7,15 +7,9 @@ import { usePreparedSessionStaging } from './usePreparedSessionStaging';
 import { useSessionActions } from './useSessionActions';
 import { useSessionMessaging } from './useSessionMessaging';
 import { useSessionEventsQuery } from './useSessionEventsQuery';
-import { useSessionStartFlow } from './useSessionStartFlow';
 import { useSessionState } from './useSessionState';
 import type { ArtworkWorkspace, GalleryItem, SessionLink } from '../../types';
 import type { ArtworkDetailItem } from '../../artwork/types';
-import type {
-  PreparedSessionUploadEntry,
-  PreparedUploadIngestResult,
-  PreparedUploadSessionContext,
-} from '../../artwork-ingest/types';
 import type {
   PendingSessionArtwork,
   SessionStreamMessage,
@@ -47,10 +41,6 @@ type UseSessionWorkspaceOptions = {
   setActiveTab: Dispatch<SetStateAction<AppTab>>;
   clearShellOverlays: () => void;
   showToast: ShowToast;
-  ingestPreparedUploads: (
-    uploadEntries: PreparedSessionUploadEntry[],
-    context: PreparedUploadSessionContext,
-  ) => Promise<PreparedUploadIngestResult>;
 };
 
 export function useSessionWorkspace({
@@ -72,7 +62,6 @@ export function useSessionWorkspace({
   setActiveTab,
   clearShellOverlays,
   showToast,
-  ingestPreparedUploads,
 }: UseSessionWorkspaceOptions) {
   const [pendingDeletedSessionIds, setPendingDeletedSessionIds] = useState<Set<string>>(new Set());
   const resetPreparedSessionStateRef = useRef<() => void>(() => {});
@@ -98,12 +87,10 @@ export function useSessionWorkspace({
   const messaging = useSessionMessaging({
     defaultSessionTitle,
     sessionUserId: userId,
-    filteredSessionId: sessionState.filteredSessionId,
     isComposingNewSession: sessionState.isComposingNewSession,
     items,
     sessionStreams: sessionState.sessionStreams,
     streamingSessionResponses: sessionState.streamingSessionResponses,
-    sessionGoals: sessionState.sessionGoals,
     sessionSummaries: sessionState.sessionSummaries,
     activeSessionSummary: sessionState.activeSessionSummary,
     refreshPersistedSessions: sessionState.refreshPersistedSessions,
@@ -313,28 +300,6 @@ export function useSessionWorkspace({
     },
   });
 
-  const submitPreparedSessionFlow = useSessionStartFlow({
-    defaultSessionTitle,
-    sessionUserId: userId,
-    pendingSessionArtworks: prepared.pendingSessionArtworks,
-    newSessionDraftMessage: prepared.newSessionDraftMessage,
-    isSubmittingPreparedSession: prepared.isSubmittingPreparedSession,
-    setIsSubmittingPreparedSession: prepared.setIsSubmittingPreparedSession,
-    refreshPersistedSessions: sessionState.refreshPersistedSessions,
-    setSessionDrafts: sessionState.setSessionDrafts,
-    updateArtworkSessionLinks,
-    setActiveTab,
-    setFilteredSessionId: sessionState.setFilteredSessionId,
-    setIsComposingNewSession: sessionState.setIsComposingNewSession,
-    setVisit,
-    resetPreparedSessionState: prepared.resetPreparedSessionState,
-    appendSessionEvents: messaging.appendSessionEvents,
-    persistSessionArtworkInput: messaging.persistSessionArtworkInput,
-    ingestPreparedUploads,
-    sendSessionInquiryToSession: messaging.sendSessionInquiryToSession,
-    showToast,
-  });
-
   const recentSessionSummaries = useMemo(() => sessionState.sessionSummaries.slice(0, 10), [sessionState.sessionSummaries]);
   const sessionsLoading = !artworksLoaded && sessionState.sessionSummaries.length === 0;
 
@@ -344,7 +309,6 @@ export function useSessionWorkspace({
     prepared,
     messaging,
     sessionActions,
-    submitPreparedSession: submitPreparedSessionFlow.submitPreparedSession,
     pendingDeletedSessionIds,
     recentSessionSummaries,
     sessionsLoading,

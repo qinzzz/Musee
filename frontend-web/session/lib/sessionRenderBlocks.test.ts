@@ -120,7 +120,15 @@ describe('buildSessionRenderBlocks', () => {
       artworkIds: ['missing-artwork'],
       sequenceNumber: 1,
       createdAt: 100,
-      payload: { artworks: [{ artwork_id: 'missing-artwork', source: 'upload' }] },
+      payload: {
+        artworks: [{ artwork_id: 'missing-artwork', source: 'upload' }],
+        deleted_artworks: [{
+          artwork_id: 'missing-artwork',
+          artwork_name: 'Remembered Work',
+          artist_name: 'Remembered Artist',
+          date: '1988',
+        }],
+      },
     });
     const uploadReply = createMessage({
       id: 'evt-upload-reply',
@@ -159,7 +167,9 @@ describe('buildSessionRenderBlocks', () => {
     expect(blocks[0].items[0]).toMatchObject({
       id: 'deleted-artwork-missing-artwork',
       artworkId: 'missing-artwork',
-      artworkName: 'Deleted artwork',
+      artworkName: 'Remembered Work',
+      artistName: 'Remembered Artist',
+      date: '1988',
       isDeletedPlaceholder: true,
     });
   });

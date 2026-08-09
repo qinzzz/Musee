@@ -10,7 +10,8 @@ import { buildSessionLink } from '../../session/lib/sessionLinks';
 // bootstrap-cache entries, and in-memory GalleryItems.
 
 export function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
-  const imageUrl = resolveImageUrl(item.photo_uri);
+  const isDeleted = Boolean(item.is_deleted || item.deleted_at);
+  const imageUrl = isDeleted ? '' : resolveImageUrl(item.photo_uri);
   const keywords = (item.artwork_tags || []).map((tag: any) =>
     tag.name.startsWith('#') ? tag.name.toLowerCase() : `#${tag.name.toLowerCase()}`,
   );
@@ -69,6 +70,7 @@ export function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
       syncStatus: 'synced',
       isAnalyzing: analysisStatus === 'pending' || analysisStatus === 'analyzing',
       streamingText: analysisStatus === 'failed' ? (item.analysis_error || 'Analysis failed.') : undefined,
+      isDeletedPlaceholder: isDeleted || undefined,
     },
   );
 }

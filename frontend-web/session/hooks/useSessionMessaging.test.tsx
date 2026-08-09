@@ -63,12 +63,10 @@ function renderUseSessionMessaging(options: {
   const hook = renderHook(() => useSessionMessaging({
     defaultSessionTitle: 'Untitled Session',
     sessionUserId: 'user-1',
-    filteredSessionId: options.filteredSessionId ?? null,
     isComposingNewSession: options.isComposingNewSession ?? true,
     items: options.items ?? [] as GalleryItem[],
     sessionStreams: options.sessionStreams ?? {},
     streamingSessionResponses: options.streamingSessionResponses ?? {},
-    sessionGoals: {},
     sessionSummaries: options.sessionSummaries ?? [],
     activeSessionSummary: options.activeSessionSummary ?? null,
     refreshPersistedSessions,

@@ -35,11 +35,20 @@ export type PreparedUploadCandidate = {
 export type PreparedUploadSessionContext = {
   sessionId: string;
   getSequenceNumber: (entryId: string) => number;
-  // The canonical persisted user_input event id for the batch.
-  userInputEventId: string;
+  // Called synchronously before placeholders enter gallery state. Session
+  // orchestration uses this to bind them to one stable optimistic input block,
+  // so they can never render as legacy/orphan artwork rows.
+  onPlaceholdersReady?: (placeholders: Array<{
+    entryId: string;
+    item: import('../types').GalleryItem;
+  }>) => void;
 };
 
 export type PreparedUploadIngestResult = {
   persistedItems: import('../types').GalleryItem[];
+  persistedEntries: Array<{
+    entryId: string;
+    item: import('../types').GalleryItem;
+  }>;
   analysisPromise: Promise<import('../types').GalleryItem[]>;
 };

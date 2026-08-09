@@ -194,7 +194,10 @@ async def get_artwork_tags(
     db: Session = Depends(get_db)
 ):
     """Get all tags for an artwork"""
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
@@ -208,7 +211,10 @@ async def add_tag_to_artwork(
     db: Session = Depends(get_db)
 ):
     """Associate a tag with an artwork"""
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
 

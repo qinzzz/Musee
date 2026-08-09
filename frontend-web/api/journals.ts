@@ -2,9 +2,10 @@ import { API_BASE_URL, fetchWithTimeout } from './core';
 
 export interface JournalArtworkPreview {
   id: string;
-  photo_uri: string;
+  photo_uri: string | null;
   artwork_name: string;
   artist_name: string;
+  is_deleted?: boolean;
 }
 
 export interface JournalListItem {
