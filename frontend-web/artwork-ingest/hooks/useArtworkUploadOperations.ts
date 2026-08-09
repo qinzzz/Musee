@@ -13,7 +13,16 @@ import type { GalleryItem, TagCoordinate } from '../../types';
 import type { ArtworkStatePatch } from '../../artwork/lib/artworkState';
 import { mergeArtworkState } from '../../artwork/lib/artworkState';
 import { parseQuotaError } from '../../api/account';
-import { buildUnsupportedUploadMessage, isSupportedUploadImage } from '../../lib/uploadValidation';
+import {
+  buildBatchUploadFailureMessage,
+  buildOversizedUploadMessage,
+  buildUnpreparedUploadMessage,
+  buildUnsupportedUploadMessage,
+  getArtworkAnalysisErrorMessage,
+  getArtworkUploadErrorMessage,
+  isOversizedUploadImage,
+  isSupportedUploadImage,
+} from '../../lib/uploadValidation';
 import { createLocationResolver } from '../lib/location';
 import {
   buildUploadRequestKey,
@@ -316,7 +325,9 @@ export function useArtworkUploadOperations({
   ): Promise<PreparedUploadIngestResult> => {
     const persistedSessionItems: GalleryItem[] = [];
     const persistedEntries: Array<{ entryId: string; item: GalleryItem }> = [];
+    const failedEntries: Array<{ entryId: string; message: string }> = [];
     const analysisTasks: Array<Promise<GalleryItem | null>> = [];
+    let showedAnalysisFailure = false;
 
     const preparedEntries = uploadEntries.map((uploadEntry) => ({
       uploadEntry,
@@ -373,12 +384,16 @@ export function useArtworkUploadOperations({
             sequenceNumber,
             mode: uploadEntry.mode,
             labelFile: uploadEntry.labelFile,
-          })
+            })
             .then(({ resolvedItem }) => resolvedItem)
             .catch((error) => {
-              const message = error instanceof Error ? error.message : 'Analysis failed.';
+              const message = getArtworkAnalysisErrorMessage(error);
               console.error('Failed to analyze staged upload:', error);
               markArtworkAnalysisFailed(persistedItem.id, message);
+              if (!showedAnalysisFailure) {
+                showedAnalysisFailure = true;
+                showToast(message, 'info');
+              }
               return null;
             }),
         );
@@ -386,11 +401,9 @@ export function useArtworkUploadOperations({
         const quotaError = parseQuotaError(error);
         const message = quotaError
           ? quotaError.message
-          : (error instanceof Error ? error.message : 'Analysis failed.');
+          : getArtworkUploadErrorMessage(error, uploadEntry.file);
         console.error('Failed to save/analyze staged upload:', error);
-        if (quotaError) {
-          showToast(quotaError.message, 'info');
-        }
+        failedEntries.push({ entryId: uploadEntry.id, message });
         if (placeholderId && persistedItemId) {
           markArtworkAnalysisFailed(persistedItemId, message);
         } else if (placeholderId) {
@@ -406,6 +419,7 @@ export function useArtworkUploadOperations({
     return {
       persistedItems: persistedSessionItems,
       persistedEntries,
+      failedEntries,
       analysisPromise,
     };
   }, [
@@ -416,6 +430,7 @@ export function useArtworkUploadOperations({
     reconcilePlaceholderWithSavedArtwork,
     removeUploadPlaceholder,
     addLocalArtworks,
+    showToast,
   ]);
 
   const processSingleCollectionUpload = useCallback(async (
@@ -460,15 +475,16 @@ export function useArtworkUploadOperations({
     } catch (error) {
       console.error('Upload failed:', error);
       const quotaError = parseQuotaError(error);
-      if (quotaError) {
-        showToast(quotaError.message, 'info');
-      }
       if (placeholder && persistedItemId) {
-        const message = quotaError?.message
-          || (error instanceof Error ? error.message : 'Analysis failed.');
+        const message = getArtworkAnalysisErrorMessage(error);
         markArtworkAnalysisFailed(persistedItemId, message);
+        showToast(message, 'info');
       } else if (placeholder) {
         removeUploadPlaceholder(placeholder.id);
+        showToast(
+          quotaError?.message || getArtworkUploadErrorMessage(error, preparedUpload.file),
+          'info',
+        );
       }
     } finally {
       setIsAnalyzing(false);
@@ -502,6 +518,7 @@ export function useArtworkUploadOperations({
       }
 
       const persistedUploads: BatchPersistedUpload[] = [];
+      const uploadFailureMessages: string[] = [];
 
       for (let index = 0; index < preparedUploads.length; index += 1) {
         const entry = preparedUploads[index];
@@ -525,9 +542,9 @@ export function useArtworkUploadOperations({
         } catch (error) {
           console.error('Failed to save artwork before analysis:', error);
           const quotaError = parseQuotaError(error);
-          if (quotaError) {
-            showToast(quotaError.message, 'info');
-          }
+          uploadFailureMessages.push(
+            quotaError?.message || getArtworkUploadErrorMessage(error, entry.file),
+          );
           removeUploadPlaceholder(placeholder.id);
         }
       }
@@ -535,6 +552,13 @@ export function useArtworkUploadOperations({
       const persistedItems = persistedUploads.map((entry) => entry.item);
       if (persistedItems.length > 0) {
         showToast(collectionUploadSuccessMessage, 'success');
+      }
+      const uploadFailureMessage = buildBatchUploadFailureMessage(
+        uploadFailureMessages,
+        persistedItems.length,
+      );
+      if (uploadFailureMessage) {
+        showToast(uploadFailureMessage, 'info');
       }
 
       if (anchorCandidate?.coords?.latitude !== undefined && anchorCandidate.coords.longitude !== undefined) {
@@ -551,6 +575,7 @@ export function useArtworkUploadOperations({
           .catch(() => {});
       }
 
+      let showedAnalysisFailure = false;
       for (const entry of persistedUploads) {
         try {
           await analyzePersistedUpload({
@@ -560,8 +585,12 @@ export function useArtworkUploadOperations({
             previewUrl: entry.candidate.previewUrl,
           });
         } catch (error) {
-          const errMsg = error instanceof Error ? error.message : 'Analysis failed.';
-          markArtworkAnalysisFailed(entry.item.id, errMsg || 'Analysis failed.');
+          const message = getArtworkAnalysisErrorMessage(error);
+          markArtworkAnalysisFailed(entry.item.id, message);
+          if (!showedAnalysisFailure) {
+            showedAnalysisFailure = true;
+            showToast(message, 'info');
+          }
         }
       }
 
@@ -598,7 +627,29 @@ export function useArtworkUploadOperations({
       return;
     }
 
-    const files = await Promise.all(acceptedFiles.map((file) => normalizeUploadFile(file)));
+    const normalizationResults = await Promise.all(acceptedFiles.map(async (file) => {
+      try {
+        return { originalFile: file, normalizedFile: await normalizeUploadFile(file) };
+      } catch (error) {
+        console.error('Failed to prepare image for upload:', error);
+        return { originalFile: file, normalizedFile: null };
+      }
+    }));
+    const unpreparedFiles = normalizationResults
+      .filter((entry) => !entry.normalizedFile)
+      .map((entry) => entry.originalFile);
+    if (unpreparedFiles.length > 0) {
+      showToast(buildUnpreparedUploadMessage(unpreparedFiles), 'info');
+    }
+
+    const normalizedFiles = normalizationResults
+      .map((entry) => entry.normalizedFile)
+      .filter((file): file is File => Boolean(file));
+    const oversizedFiles = normalizedFiles.filter(isOversizedUploadImage);
+    if (oversizedFiles.length > 0) {
+      showToast(buildOversizedUploadMessage(oversizedFiles), 'info');
+    }
+    const files = normalizedFiles.filter((file) => !isOversizedUploadImage(file));
     if (files.length === 0) {
       resetInput?.();
       return;
@@ -700,11 +751,32 @@ export function useArtworkUploadOperations({
     });
   }, [processArtworkFiles]);
 
-  const prepareCaptureSubmission = useCallback(async (payload: CaptureSubmission): Promise<PreparedSessionUploadEntry> => {
-    const [normalizedArtwork, normalizedLabel] = await Promise.all([
+  const prepareCaptureSubmission = useCallback(async (payload: CaptureSubmission): Promise<PreparedSessionUploadEntry | null> => {
+    const [artworkResult, labelResult] = await Promise.allSettled([
       normalizeUploadFile(payload.artwork),
       payload.label ? normalizeUploadFile(payload.label) : Promise.resolve(null),
     ]);
+    if (artworkResult.status === 'rejected' || labelResult.status === 'rejected') {
+      const failedFiles = [
+        artworkResult.status === 'rejected' ? payload.artwork : null,
+        labelResult.status === 'rejected' ? payload.label : null,
+      ].filter((file): file is File => Boolean(file));
+      console.error('Failed to prepare captured image:', {
+        artworkError: artworkResult.status === 'rejected' ? artworkResult.reason : null,
+        labelError: labelResult.status === 'rejected' ? labelResult.reason : null,
+      });
+      showToast(buildUnpreparedUploadMessage(failedFiles), 'info');
+      return null;
+    }
+    const normalizedArtwork = artworkResult.value;
+    const normalizedLabel = labelResult.value;
+    const oversizedFiles = [normalizedArtwork, normalizedLabel]
+      .filter((file): file is File => Boolean(file))
+      .filter(isOversizedUploadImage);
+    if (oversizedFiles.length > 0) {
+      showToast(buildOversizedUploadMessage(oversizedFiles), 'info');
+      return null;
+    }
     const [candidate] = await prepareUploadCandidates([normalizedArtwork], 'camera', {
       captureCoords: payload.coords || null,
       readExifMetadata,
@@ -713,7 +785,7 @@ export function useArtworkUploadOperations({
     });
     const [entry] = buildStagedPendingUploads([candidate]);
     return { ...entry, labelFile: normalizedLabel };
-  }, []);
+  }, [showToast]);
 
   return {
     updateSavedArtworkInState,

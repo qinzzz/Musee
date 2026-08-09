@@ -82,6 +82,7 @@ function renderPipeline(options: {
   const sendSessionInquiryToSession = vi.fn();
   const refreshPersistedSessions = vi.fn();
   const resetPreparedSessionState = vi.fn();
+  const showToast = vi.fn();
 
   const hook = renderHook(() => {
     const [sessionStreams, setSessionStreams] = React.useState<Record<string, SessionStreamMessage[]>>({
@@ -129,7 +130,7 @@ function renderPipeline(options: {
       persistSessionArtworkInput,
       ingestPreparedUploads: options.ingestPreparedUploads,
       sendSessionInquiryToSession,
-      showToast: vi.fn(),
+      showToast,
     });
 
     return { api, sessionStreams };
@@ -142,6 +143,7 @@ function renderPipeline(options: {
       sendSessionInquiryToSession,
       refreshPersistedSessions,
       resetPreparedSessionState,
+      showToast,
     },
   };
 }
@@ -179,6 +181,7 @@ describe('useSessionArtworkInputPipeline', () => {
       return {
         persistedItems: [persisted],
         persistedEntries: [{ entryId: entries[0].id, item: persisted }],
+        failedEntries: [],
         analysisPromise: analysisFinished.promise,
       };
     });
@@ -252,6 +255,7 @@ describe('useSessionArtworkInputPipeline', () => {
       return {
         persistedItems: [persisted],
         persistedEntries: [{ entryId: 'upload-2', item: persisted }],
+        failedEntries: [{ entryId: 'upload-1', message: 'Musee couldn’t upload this artwork. Check your connection and try again.' }],
         analysisPromise: Promise.resolve([persisted]),
       };
     });
@@ -268,6 +272,10 @@ describe('useSessionArtworkInputPipeline', () => {
       'Compare them',
     );
     expect(result.current.sessionStreams['session-1'][1].artworkIds).toEqual(['saved-artwork-2']);
+    expect(spies.showToast).toHaveBeenCalledWith(
+      'Musee couldn’t upload this artwork. Check your connection and try again. The other selected artworks were added.',
+      'info',
+    );
   });
 
   it('uses the same canonical event for a new session with library and uploaded artwork', async () => {
@@ -291,6 +299,7 @@ describe('useSessionArtworkInputPipeline', () => {
       return {
         persistedItems: [persisted],
         persistedEntries: [{ entryId: entries[0].id, item: persisted }],
+        failedEntries: [],
         analysisPromise: Promise.resolve([persisted]),
       };
     });
@@ -350,6 +359,7 @@ describe('useSessionArtworkInputPipeline', () => {
       return {
         persistedItems: [],
         persistedEntries: [],
+        failedEntries: [{ entryId: entries[0].id, message: 'Musee couldn’t upload this artwork. Check your connection and try again.' }],
         analysisPromise: Promise.resolve([]),
       };
     });
@@ -364,6 +374,10 @@ describe('useSessionArtworkInputPipeline', () => {
     expect(spies.persistSessionArtworkInput).not.toHaveBeenCalled();
     expect(result.current.sessionStreams['session-1']).toHaveLength(1);
     expect(result.current.sessionStreams['session-1'][0].id).toBe('existing-message');
+    expect(spies.showToast).toHaveBeenCalledWith(
+      'Musee couldn’t upload this artwork. Check your connection and try again.',
+      'info',
+    );
   });
 
   it('retries canonical event persistence once with the same id', async () => {
@@ -378,6 +392,7 @@ describe('useSessionArtworkInputPipeline', () => {
       return {
         persistedItems: [persisted],
         persistedEntries: [{ entryId: entries[0].id, item: persisted }],
+        failedEntries: [],
         analysisPromise: Promise.resolve([persisted]),
       };
     });

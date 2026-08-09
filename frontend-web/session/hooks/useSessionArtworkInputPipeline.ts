@@ -6,6 +6,7 @@ import type {
   PreparedUploadSessionContext,
 } from '../../artwork-ingest/types';
 import type { ArtworkWorkspace, GalleryItem, SessionLink } from '../../types';
+import { buildBatchUploadFailureMessage } from '../../lib/uploadValidation';
 import {
   attachArtworksToSession,
   startSessionWithArtworks,
@@ -34,6 +35,7 @@ import type {
 type AppTab = 'newSession' | 'collect' | 'profile' | 'learn';
 type ToastType = 'info' | 'success';
 type ArtworkInputSource = 'upload' | 'capture' | 'library';
+type PipelineFailurePhase = 'starting-session' | 'linking-artworks' | 'uploading-artworks' | 'saving-session-turn';
 
 type InputTarget =
   | { kind: 'new' }
@@ -134,6 +136,9 @@ export function useSessionArtworkInputPipeline({
     let optimisticSessionId: string | null = null;
     let optimisticEventId: string | null = null;
     let hasResolvedArtwork = false;
+    let failurePhase: PipelineFailurePhase = target.kind === 'new'
+      ? 'starting-session'
+      : 'linking-artworks';
 
     try {
       const libraryEntries = inputArtworks.filter(
@@ -251,6 +256,7 @@ export function useSessionArtworkInputPipeline({
 
       let uploadResult: PreparedUploadIngestResult | null = null;
       if (uploadEntries.length > 0) {
+        failurePhase = 'uploading-artworks';
         uploadResult = await ingestPreparedUploads(uploadEntries, {
           sessionId,
           getSequenceNumber,
@@ -302,16 +308,30 @@ export function useSessionArtworkInputPipeline({
           ...prev,
           [sessionId]: (prev[sessionId] || []).filter((event) => event.id !== eventId),
         }));
-        showToast(
-          isNewSession ? 'Couldn’t save the first artwork. Try again.' : 'Couldn’t add the artworks. Try again.',
-          'info',
+        const uploadFailureMessage = buildBatchUploadFailureMessage(
+          uploadResult?.failedEntries.map((entry) => entry.message) || [],
+          0,
         );
+        showToast(uploadFailureMessage || (
+          isNewSession
+            ? 'Musee couldn’t save the first artwork. Check your connection and try again.'
+            : 'None of the selected artworks could be added. Check your connection and try again.'
+        ), 'info');
         return false;
       }
       hasResolvedArtwork = true;
 
+      const partialUploadFailureMessage = buildBatchUploadFailureMessage(
+        uploadResult?.failedEntries.map((entry) => entry.message) || [],
+        resolvedItems.length,
+      );
+      if (partialUploadFailureMessage) {
+        showToast(partialUploadFailureMessage, 'info');
+      }
+
       publishOptimisticEvent();
       const inputEntries = buildArtworkInputEntries(resolvedItems, sessionId);
+      failurePhase = 'saving-session-turn';
       try {
         await persistSessionArtworkInput(sessionId, inputEntries, eventId, message || undefined);
       } catch (_firstError) {
@@ -390,12 +410,14 @@ export function useSessionArtworkInputPipeline({
       if (hasResolvedArtwork) {
         startTransition(() => resetPreparedSessionState());
       }
-      showToast(
-        target.kind === 'new'
-          ? 'Could not start session from selected artworks.'
-          : 'Couldn’t add artworks to this session. Try again.',
-        'info',
-      );
+      const failureMessage = failurePhase === 'saving-session-turn' && hasResolvedArtwork
+        ? 'The artworks were saved, but Musee couldn’t finish updating the session. Refresh to check the session.'
+        : failurePhase === 'linking-artworks'
+          ? 'Musee couldn’t link these artworks to the session. They’re still in your collection.'
+          : target.kind === 'new'
+            ? 'Musee couldn’t start the session. Check your connection and try again.'
+            : 'Musee couldn’t add these artworks. Check your connection and try again.';
+      showToast(failureMessage, 'info');
       return false;
     } finally {
       setSubmitting(false);

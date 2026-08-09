@@ -511,6 +511,7 @@ const App: React.FC = () => {
     coords?: { latitude: number; longitude: number };
   }) => {
     const preparedCapture = await prepareCaptureSubmission(payload);
+    if (!preparedCapture) return;
     exitCaptureAfterSubmit();
     await submitImmediateArtwork(preparedCapture, activeSessionSummary?.id);
   }, [
