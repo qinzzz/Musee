@@ -959,7 +959,7 @@ Tapping a chip inserts it as the user's message and dispatches through the norma
 
 ## 13. Clear Oversized Image Upload Feedback
 
-Status: open
+Status: implemented
 
 ### Problem
 
@@ -988,3 +988,12 @@ Automatic client-side compression can be considered separately. Clear rejection 
 - the message explains the 10 MB limit and does not suggest retrying the unchanged file
 - valid files in the same selection can still be staged and uploaded
 - a backend size rejection produces the same clear message if frontend validation is bypassed
+
+### Implementation outcome
+
+- files larger than 10 MB are rejected after normalization and before staging or placeholder creation
+- the message includes the filename, selected size, and 10 MB limit
+- valid files in a mixed selection continue through upload
+- backend size, unsupported-format, empty-file, unreadable-image, timeout, quota, and generic network failures are translated into user-facing messages
+- collection and session batches distinguish complete failure from partial success
+- artwork analysis failures now explain that the artwork was saved even though analysis did not complete
