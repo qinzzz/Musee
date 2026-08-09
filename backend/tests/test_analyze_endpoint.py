@@ -1,5 +1,6 @@
 """Tests for analyze endpoint validation (no AI calls needed)."""
 
+import asyncio
 import io
 
 from app.database.models import SavedArtwork
@@ -51,15 +52,28 @@ def test_analyze_stream_no_user_id(client):
 
 
 def test_analyze_persists_identified_artwork(client, monkeypatch):
+    request_loop_ids = []
+    analysis_calls = []
+
     async def fake_process_image(_image):
+        request_loop_ids.append(id(asyncio.get_running_loop()))
         return b"image-bytes", {}
 
     async def fake_vision_hint(_image_bytes):
         return None, ["https://example.com/ref"]
 
+    async def fake_run_artwork_analysis(artwork_id, image_bytes=None, force=False):
+        analysis_calls.append({
+            "artwork_id": artwork_id,
+            "image_bytes": image_bytes,
+            "force": force,
+            "loop_id": id(asyncio.get_running_loop()),
+        })
+
     monkeypatch.setattr("app.routers.artwork_identify.process_image", fake_process_image)
     monkeypatch.setattr("app.routers.artwork_identify.get_vision_hint", fake_vision_hint)
     monkeypatch.setattr("app.routers.artwork_identify.get_storage_service", lambda: _FakeStorage())
+    monkeypatch.setattr("app.routers.artwork_identify.run_artwork_analysis", fake_run_artwork_analysis)
     monkeypatch.setattr(
         "app.routers.artwork_identify.AIServiceFactory.get_service",
         lambda _provider: _SuccessfulIdentifyService(),
@@ -77,6 +91,13 @@ def test_analyze_persists_identified_artwork(client, monkeypatch):
     assert body["artwork_name"] == "The Swan"
     assert body["photo_uri"] == "r2://identified-art.jpg"
     assert body["tags"] == ["symbolism", "abstract"]
+    assert len(analysis_calls) == 1
+    assert analysis_calls[0]["image_bytes"] == b"image-bytes"
+    assert analysis_calls[0]["force"] is False
+    # FastAPI must execute the async analysis on the request application's
+    # event loop. A sync wrapper using asyncio.run() would create a new loop
+    # here and recreate the production Gemini client failure.
+    assert analysis_calls[0]["loop_id"] == request_loop_ids[0]
 
     with TestingSessionLocal() as db:
         artwork = db.query(SavedArtwork).filter(SavedArtwork.user_id == "identify-user").one()

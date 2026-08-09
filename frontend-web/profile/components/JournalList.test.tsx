@@ -57,4 +57,29 @@ describe('JournalList', () => {
 
     expect(screen.getByText('Your journal appears here overnight.')).toBeTruthy();
   });
+
+  it('renders deleted representative artwork metadata without an image', () => {
+    render(
+      <JournalList
+        journals={[{
+          id: 'deleted-journal',
+          local_date: '2026-08-08',
+          location: null,
+          reflection: 'A remembered encounter.',
+          representative_artworks: [{
+            id: 'deleted-artwork',
+            photo_uri: null,
+            artwork_name: 'Remembered Work',
+            artist_name: 'Remembered Artist',
+            is_deleted: true,
+          }],
+        }]}
+      />,
+    );
+
+    expect(screen.getByText('Remembered Work (deleted)')).toBeTruthy();
+    expect(screen.getByText('Remembered Artist')).toBeTruthy();
+    expect(screen.queryByText('Deleted')).toBeNull();
+    expect(screen.queryByRole('img')).toBeNull();
+  });
 });

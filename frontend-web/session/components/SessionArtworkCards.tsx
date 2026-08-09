@@ -5,6 +5,7 @@ import { MAX_SESSION_ARTWORK_BATCH_SIZE } from '../constants';
 const UNTITLED_ARTWORK_LABEL = 'Untitled';
 const UNKNOWN_ARTIST_LABEL = 'Artist unknown';
 const ANALYZING_LABEL = 'Analyzing…';
+const DELETED_ARTWORK_LABEL = 'Deleted artwork';
 
 type SessionArtworkCardsProps = {
   items: GalleryItem[];
@@ -33,7 +34,7 @@ export default function SessionArtworkCards({ items, onOpenArtwork }: SessionArt
       aria-label={count === 1 ? 'Artwork' : `${count} artworks`}
     >
       {items.map((item, index) => {
-        const title = item.isDeletedPlaceholder ? 'Deleted artwork' : getArtworkTitle(item);
+        const title = getArtworkTitle(item);
         const attribution = getArtworkAttribution(item);
         const isUnavailable = Boolean(item.isDeletedPlaceholder || item.deleteStatus === 'pending');
 
@@ -51,12 +52,16 @@ export default function SessionArtworkCards({ items, onOpenArtwork }: SessionArt
               zIndex: count - index,
             }}
             disabled={isUnavailable}
-            aria-label={isUnavailable ? title : `Open ${title}, ${attribution}`}
+            aria-label={item.isDeletedPlaceholder
+              ? `Deleted artwork: ${title}, ${attribution}`
+              : item.deleteStatus === 'pending'
+                ? `Removing ${title}`
+                : `Open ${title}, ${attribution}`}
           >
             <div className="session-artwork-card__image relative aspect-square">
               {item.isDeletedPlaceholder ? (
-                <div className="flex h-full items-center justify-center bg-neutral-100 px-4 text-center text-neutral-400">
-                  <p className="text-[12px] font-medium">Deleted artwork</p>
+                <div className="flex h-full items-center justify-center bg-neutral-200 px-4 text-center text-neutral-500 grayscale">
+                  <p className="text-[13px] font-medium leading-snug">{DELETED_ARTWORK_LABEL}</p>
                 </div>
               ) : (
                 <img
@@ -81,11 +86,9 @@ export default function SessionArtworkCards({ items, onOpenArtwork }: SessionArt
               <p className="line-clamp-2 text-[14px] font-semibold leading-[1.25] text-neutral-900">
                 {title}
               </p>
-              {!item.isDeletedPlaceholder ? (
-                <p className="mt-1 truncate text-[12px] leading-[1.35] text-neutral-500">
-                  {attribution}
-                </p>
-              ) : null}
+              <p className="mt-1 truncate text-[12px] leading-[1.35] text-neutral-500">
+                {attribution}
+              </p>
             </div>
           </button>
         );

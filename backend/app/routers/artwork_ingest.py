@@ -30,7 +30,7 @@ from app.services.artwork_background_service import (
     track_artwork_task,
 )
 from app.services.artwork_enrichment_service import run_artist_bio_bg as _run_artist_bio_bg
-from app.services.artwork_analysis_task_service import run_artwork_analysis, run_artwork_analysis_bg
+from app.services.artwork_analysis_task_service import run_artwork_analysis
 from app.services.artwork_event_service import (
     ARTWORK_EVENT_IDENTIFICATION_COMPLETED,
     ARTWORK_EVENT_IDENTIFICATION_FAILED,
@@ -128,7 +128,10 @@ async def analyze_artwork_unified(
     label_image_bytes: Optional[bytes] = None
 
     if artwork_id:
-        existing_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+        existing_artwork = db.query(SavedArtwork).filter(
+            SavedArtwork.id == artwork_id,
+            SavedArtwork.active_filter(),
+        ).first()
         if not existing_artwork:
             raise HTTPException(status_code=404, detail="Artwork not found")
         if not user_id:
@@ -328,7 +331,7 @@ async def analyze_artwork_unified(
         # (Re)identification changes the metadata the taste analysis consumes,
         # so force a fresh analysis row.
         if background_tasks:
-            background_tasks.add_task(run_artwork_analysis_bg, str(existing_artwork.id), image_bytes, True)
+            background_tasks.add_task(run_artwork_analysis, str(existing_artwork.id), image_bytes, True)
         else:
             track_artwork_task(
                 asyncio.create_task(
@@ -403,7 +406,7 @@ async def analyze_artwork_unified(
             background_tasks.add_task(_run_artist_bio_bg, artist_entity_id_fast)
         if artwork_id_result:
             if background_tasks:
-                background_tasks.add_task(run_artwork_analysis_bg, artwork_id_result, image_bytes, False)
+                background_tasks.add_task(run_artwork_analysis, artwork_id_result, image_bytes, False)
             else:
                 track_artwork_task(
                     asyncio.create_task(run_artwork_analysis(artwork_id_result, image_bytes=image_bytes))
@@ -526,7 +529,10 @@ async def save_artwork_upload(
 
 @router.post("/artworks/{artwork_id}/reanalyze")
 async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
 

@@ -174,6 +174,10 @@ export function useArtworkLibrary({
     setItems((prev) => prev.filter((item) => item.id !== targetId));
   }, []);
 
+  const refreshProfileDerivedData = useCallback(() => {
+    setProfileRefreshKey((prev) => prev + 1);
+  }, []);
+
   // resolveLink returns a link to set, null to detach, or undefined to skip.
   const updateArtworkSessionLinks = useCallback((
     sessionId: string,
@@ -295,6 +299,7 @@ export function useArtworkLibrary({
     updateArtworkSessionLinks,
     refreshArtworks,
     refreshArtworksIfStale,
+    refreshProfileDerivedData,
     artworksLoaded,
     artworksAuthoritative,
     profileRefreshKey,

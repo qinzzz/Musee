@@ -270,8 +270,15 @@ const SessionDetailsModal: React.FC<{
                     aria-label={item.artworkName || 'Artwork'}
                   >
                     {item.isDeletedPlaceholder ? (
-                      <div className="flex h-full w-full items-center justify-center bg-neutral-100 px-2 text-center text-[12px] font-medium text-neutral-500">
-                        Deleted artwork
+                      <div className="flex h-full w-full flex-col items-center justify-center bg-neutral-200 px-2 text-center text-neutral-600 grayscale">
+                        <span className="line-clamp-3 text-[11px] font-semibold leading-tight">
+                          {item.artworkName ? `${item.artworkName} (deleted)` : 'Deleted artwork'}
+                        </span>
+                        {item.artistName ? (
+                          <span className="mt-1 line-clamp-2 text-[9px] leading-tight text-neutral-500">
+                            {item.artistName}
+                          </span>
+                        ) : null}
                       </div>
                     ) : (
                       <img

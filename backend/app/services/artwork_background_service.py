@@ -64,7 +64,10 @@ async def generate_fun_facts(
     language: Optional[str],
 ) -> None:
     with SessionLocal() as db:
-        artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+        artwork = db.query(SavedArtwork).filter(
+            SavedArtwork.id == artwork_id,
+            SavedArtwork.active_filter(),
+        ).first()
         if not artwork or artwork.insights:
             return
 
@@ -92,7 +95,10 @@ async def generate_fun_facts(
         )
         succeed_ai_usage(usage_id)
         with SessionLocal() as db:
-            artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+            artwork = db.query(SavedArtwork).filter(
+                SavedArtwork.id == artwork_id,
+                SavedArtwork.active_filter(),
+            ).first()
             if artwork and not artwork.insights:
                 artwork.insights = fun_facts
                 db.commit()

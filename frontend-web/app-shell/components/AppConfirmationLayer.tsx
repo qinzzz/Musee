@@ -47,16 +47,16 @@ export default function AppConfirmationLayer({
             </div>
             <h3 className="mb-3 text-xl font-serif text-neutral-900">
               {deleteConfirmation.type === 'item'
-                ? 'Delete Artwork?'
+                ? 'Remove Artwork?'
                 : deleteConfirmation.type === 'items'
-                  ? 'Delete Artworks?'
+                  ? 'Remove Artworks?'
                   : 'Delete Session?'}
             </h3>
             <p className="mb-8 text-sm leading-relaxed text-neutral-500">
               {deleteConfirmation.type === 'item'
-                ? 'This will permanently delete this artwork and its curated analysis from Musee.'
+                ? 'Remove this artwork from your collection?'
                 : deleteConfirmation.type === 'items'
-                  ? `This will permanently delete ${deleteConfirmation.count || deleteConfirmation.ids?.length || 0} selected ${deleteConfirmation.count === 1 ? 'artwork' : 'artworks'} and their curated analysis from Musee.`
+                  ? `Remove ${deleteConfirmation.count || deleteConfirmation.ids?.length || 0} selected ${deleteConfirmation.count === 1 ? 'artwork' : 'artworks'} from your collection?`
                 : `This will permanently delete ${pendingDeleteSessionSummary?.title || 'this session'} and its reflections from Musee. The ${pendingDeleteSessionSummary?.artworkCount || 0} ${pendingDeleteSessionSummary?.artworkCount === 1 ? 'artwork will stay' : 'artworks will stay'} in your library.`}
             </p>
             <div className="flex space-x-3">
@@ -80,7 +80,7 @@ export default function AppConfirmationLayer({
                 }}
                 className="flex-1 rounded-full bg-neutral-900 px-6 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-black"
               >
-                Delete
+                {deleteConfirmation.type === 'session' ? 'Delete' : 'Remove'}
               </button>
             </div>
           </div>

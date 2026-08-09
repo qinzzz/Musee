@@ -88,6 +88,7 @@ class SavedArtwork(Base):
     analysis_error = Column(Text, nullable=True)
     analysis_attempted_at = Column(DateTime, nullable=True)
     analysis_completed_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="artworks")
@@ -147,9 +148,16 @@ class SavedArtwork(Base):
             "analysis_error": self.analysis_error,
             "analysis_attempted_at": self.analysis_attempted_at.isoformat() if self.analysis_attempted_at else None,
             "analysis_completed_at": self.analysis_completed_at.isoformat() if self.analysis_completed_at else None,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "is_deleted": self.deleted_at is not None,
         }
 
         return result
+
+    @classmethod
+    def active_filter(cls):
+        """Canonical predicate for artwork surfaces that only show collection items."""
+        return cls.deleted_at.is_(None)
 
 
 class CollectionArtwork(Base):

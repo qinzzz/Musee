@@ -104,6 +104,7 @@ export type PendingSessionArtwork =
       file: File;
       previewUrl: string;
       mode: 'gallery' | 'camera';
+      labelFile?: File | null;
       timestamp: number;
       photoTime: string;
       coords?: { latitude?: number; longitude?: number };

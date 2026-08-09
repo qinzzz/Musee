@@ -1,16 +1,15 @@
 import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { useArtworkIngest } from './useArtworkIngest';
+import { useArtworkUploadOperations } from './useArtworkUploadOperations';
 import { updateArtworkInList } from '../../artwork/lib/artworkState';
-import type { ArtworkWorkspace, GalleryItem, TagCoordinate } from '../../types';
-import type { PendingSessionArtwork, SessionDraft, SessionStreamMessage } from '../../session/types';
+import type { GalleryItem, TagCoordinate } from '../../types';
+import type { PendingSessionArtwork } from '../../session/types';
 
 const {
   mockAnalyzeArtworkFromExisting,
   mockSaveArtworkUpload,
   mockGetArtworkFunFacts,
-  mockHasUsableCommentaryContext,
   mockNormalizeUploadFile,
   mockReadExifMetadata,
   mockFormatPhotoTime,
@@ -20,7 +19,6 @@ const {
   mockAnalyzeArtworkFromExisting: vi.fn(),
   mockSaveArtworkUpload: vi.fn(),
   mockGetArtworkFunFacts: vi.fn(),
-  mockHasUsableCommentaryContext: vi.fn(),
   mockNormalizeUploadFile: vi.fn(),
   mockReadExifMetadata: vi.fn(),
   mockFormatPhotoTime: vi.fn(),
@@ -35,10 +33,6 @@ vi.mock('../../api/analysis', () => ({
 
 vi.mock('../../api/artworks', () => ({
   getArtworkFunFacts: mockGetArtworkFunFacts,
-}));
-
-vi.mock('../../session/lib/commentary', () => ({
-  hasUsableCommentaryContext: mockHasUsableCommentaryContext,
 }));
 
 vi.mock('../lib/metadata', () => ({
@@ -57,7 +51,6 @@ type HarnessOptions = {
   canStageSessionArtworks?: boolean;
   pendingSessionArtworks?: PendingSessionArtwork[];
   items?: GalleryItem[];
-  sessionStreams?: Record<string, SessionStreamMessage[]>;
 };
 
 function createDeferred<T>() {
@@ -131,56 +124,37 @@ function createSavedUpload() {
   };
 }
 
-function renderUseArtworkIngest(options: HarnessOptions = {}) {
+function renderUseArtworkUploadOperations(options: HarnessOptions = {}) {
   const showToast = vi.fn();
-  const resolveUploadSession = vi.fn(() => ({ sessionId: 'visit-1', isNew: true }));
-  const appendSessionEvents = vi.fn();
-  const persistSessionArtworkInput = vi.fn();
-  const triggerUploadCommentary = vi.fn();
-  const onExitSessionCapture = vi.fn();
 
   const hook = renderHook(() => {
     const [pendingSessionArtworks, setPendingSessionArtworks] = React.useState<PendingSessionArtwork[]>(
       options.pendingSessionArtworks ?? [],
     );
     const [items, setItems] = React.useState<GalleryItem[]>(options.items ?? []);
-    const [artworkWorkspace, setArtworkWorkspace] = React.useState<ArtworkWorkspace>({ id: 'initial', itemIds: [], globalConversation: [] });
     const [artworkDetailSelection, setArtworkDetailSelection] = React.useState<{
       artworkClientId: string;
       navigationItemClientIds?: string[];
     } | null>(null);
     const [tagPositions, setTagPositions] = React.useState<Record<string, TagCoordinate>>({});
-    const [sessionDrafts, setSessionDrafts] = React.useState<SessionDraft[]>([]);
     const [isAnalyzing, setIsAnalyzing] = React.useState(false);
-    const [filteredSessionId, setFilteredSessionId] = React.useState<string | null>(null);
 
-    const api = useArtworkIngest({
+    const api = useArtworkUploadOperations({
       userId: 'user-1',
-      defaultSessionTitle: 'Untitled Session',
       activeTab: options.activeTab ?? 'collect',
       canStageSessionArtworks: options.canStageSessionArtworks ?? false,
       pendingSessionArtworks,
-      items,
-      sessionStreams: options.sessionStreams ?? {},
       setPendingSessionArtworks,
       patchArtwork: (targetId, patch) => setItems((prev) => updateArtworkInList(prev, targetId, patch)),
       addLocalArtworks: (newItems) => setItems((prev) => [...newItems, ...prev]),
       replaceArtwork: (targetId, next) => setItems((prev) => prev.map((item) => (item.id === targetId ? next : item))),
       removeArtwork: (targetId) => setItems((prev) => prev.filter((item) => item.id !== targetId)),
-        setVisit: setArtworkWorkspace,
       artworkDetailSelection,
       setArtworkDetailSelection,
       setTagPositions,
-      setSessionDrafts,
       setIsAnalyzing,
-      setFilteredSessionId,
       showToast,
       parseAnalysis: (text) => text ?? '',
-      resolveUploadSession,
-      appendSessionEvents,
-      persistSessionArtworkInput,
-      triggerUploadCommentary,
-      onExitSessionCapture,
     });
 
     return {
@@ -188,12 +162,9 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
       state: {
         pendingSessionArtworks,
         items,
-        artworkWorkspace,
         artworkDetailSelection,
         tagPositions,
-        sessionDrafts,
         isAnalyzing,
-        filteredSessionId,
       },
       actions: {
         setArtworkDetailSelection,
@@ -205,16 +176,11 @@ function renderUseArtworkIngest(options: HarnessOptions = {}) {
     ...hook,
     spies: {
       showToast,
-      resolveUploadSession,
-      appendSessionEvents,
-      persistSessionArtworkInput,
-      triggerUploadCommentary,
-      onExitSessionCapture,
     },
   };
 }
 
-describe('useArtworkIngest', () => {
+describe('useArtworkUploadOperations', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -233,7 +199,6 @@ describe('useArtworkIngest', () => {
       museum: 'SFMOMA',
     }));
     mockGetArtworkFunFacts.mockResolvedValue([]);
-    mockHasUsableCommentaryContext.mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -243,7 +208,7 @@ describe('useArtworkIngest', () => {
   });
 
   it('stages uploads for a new composed session instead of persisting immediately', async () => {
-    const { result, spies } = renderUseArtworkIngest({
+    const { result, spies } = renderUseArtworkUploadOperations({
       activeTab: 'newSession',
       canStageSessionArtworks: true,
       pendingSessionArtworks: [],
@@ -269,7 +234,7 @@ describe('useArtworkIngest', () => {
     mockSaveArtworkUpload.mockResolvedValue(createSavedUpload());
     mockAnalyzeArtworkFromExisting.mockResolvedValue(createAnalysis());
 
-    const { result, spies } = renderUseArtworkIngest({
+    const { result, spies } = renderUseArtworkUploadOperations({
       activeTab: 'collect',
       canStageSessionArtworks: false,
       items: [],
@@ -316,7 +281,7 @@ describe('useArtworkIngest', () => {
     mockSaveArtworkUpload.mockResolvedValue(createSavedUpload());
     mockAnalyzeArtworkFromExisting.mockRejectedValue(new Error('Analysis failed hard'));
 
-    const { result, spies } = renderUseArtworkIngest({
+    const { result, spies } = renderUseArtworkUploadOperations({
       activeTab: 'collect',
       canStageSessionArtworks: false,
       items: [],
@@ -340,103 +305,8 @@ describe('useArtworkIngest', () => {
     expect(spies.showToast).toHaveBeenCalledWith('Added an artwork to collection', 'success');
   });
 
-  it('persists the session artwork input immediately after raw upload save, before analysis resolves', async () => {
-    const deferredAnalysis = createDeferred<ReturnType<typeof createAnalysis>>();
-    mockSaveArtworkUpload.mockResolvedValue({
-      ...createSavedUpload(),
-      session_links: [{ session_id: 'visit-1', sequence_number: 0, source: 'upload' }],
-    });
-    mockAnalyzeArtworkFromExisting.mockReturnValue(deferredAnalysis.promise);
-
-    const { result, spies } = renderUseArtworkIngest({
-      activeTab: 'newSession',
-      canStageSessionArtworks: false,
-      items: [],
-    });
-
-    let uploadPromise!: Promise<void>;
-    act(() => {
-      uploadPromise = result.current.api.processArtworkFiles([createFile('session-upload.jpg')], 'gallery');
-    });
-
-    await waitFor(() => {
-      expect(mockSaveArtworkUpload).toHaveBeenCalled();
-      expect(spies.persistSessionArtworkInput).toHaveBeenCalledWith(
-        'visit-1',
-        [{ artworkId: 'saved-1', source: 'upload' }],
-        expect.stringMatching(/^evt-/),
-      );
-    });
-
-    expect(spies.appendSessionEvents).toHaveBeenCalledWith(
-      'visit-1',
-      [
-        expect.objectContaining({
-          role: 'user',
-          type: 'text',
-          localOrder: expect.any(Number),
-        }),
-      ],
-      { persist: false },
-    );
-
-    expect(mockAnalyzeArtworkFromExisting).toHaveBeenCalled();
-    expect(spies.triggerUploadCommentary).not.toHaveBeenCalled();
-
-    deferredAnalysis.resolve(createAnalysis());
-    await act(async () => {
-      await uploadPromise;
-    });
-
-    await waitFor(() => {
-      expect(spies.triggerUploadCommentary).toHaveBeenCalled();
-    });
-  });
-
-  it('attaches a new session upload after existing session artwork sequence numbers', async () => {
-    mockSaveArtworkUpload.mockResolvedValue({
-      ...createSavedUpload(),
-      session_links: [{ session_id: 'visit-1', sequence_number: 4, source: 'upload' }],
-    });
-    mockAnalyzeArtworkFromExisting.mockResolvedValue(createAnalysis());
-
-    const { result } = renderUseArtworkIngest({
-      activeTab: 'newSession',
-      canStageSessionArtworks: false,
-      items: [
-        createGalleryItem({
-          id: 'existing-1',
-          artworkId: 'existing-artwork-1',
-          sessionLinks: [{ sessionId: 'visit-1', sequenceNumber: 3, source: 'library' }],
-        }),
-      ],
-    });
-
-    await act(async () => {
-      await result.current.api.processArtworkFiles([createFile('later-upload.jpg')], 'gallery');
-    });
-
-    expect(mockSaveArtworkUpload).toHaveBeenCalledWith(
-      expect.any(File),
-      'user-1',
-      'visit-1',
-      expect.any(String),
-      'Mar 9, 2024',
-      37.78,
-      -122.4,
-      'upload',
-      4,
-    );
-    expect(result.current.state.items[0].sessionLinks).toEqual([
-      { sessionId: 'visit-1', sequenceNumber: 4, source: 'upload' },
-    ]);
-  });
-
-  it('normalizes capture files, exits capture, and forwards label + coords into analysis', async () => {
-    mockSaveArtworkUpload.mockResolvedValue(createSavedUpload());
-    mockAnalyzeArtworkFromExisting.mockResolvedValue(createAnalysis());
-
-    const { result, spies } = renderUseArtworkIngest({
+  it('normalizes capture files into a prepared pipeline entry with label and coordinates', async () => {
+    const { result } = renderUseArtworkUploadOperations({
       activeTab: 'collect',
       canStageSessionArtworks: false,
     });
@@ -444,33 +314,21 @@ describe('useArtworkIngest', () => {
     const artwork = createFile('artwork.jpg');
     const label = createFile('label.jpg');
 
+    let prepared!: PendingSessionArtwork;
     await act(async () => {
-      await result.current.api.handleSessionCaptureSubmit({
+      prepared = await result.current.api.prepareCaptureSubmission({
         artwork,
         label,
         coords: { latitude: 40.7, longitude: -74.0 },
       });
     });
 
-    expect(spies.onExitSessionCapture).toHaveBeenCalledTimes(1);
-
-    await waitFor(() => {
-      expect(mockAnalyzeArtworkFromExisting).toHaveBeenCalled();
-    });
-
-    expect(mockSaveArtworkUpload).toHaveBeenCalledWith(
-      artwork,
-      'user-1',
-      undefined,
-      expect.any(String),
-      'Mar 9, 2024',
-      40.7,
-      -74,
-      'camera',
-      0,
-    );
-    expect(mockAnalyzeArtworkFromExisting).toHaveBeenCalledWith('saved-1', {
+    expect(prepared).toMatchObject({
+      kind: 'upload',
+      file: artwork,
       labelFile: label,
+      mode: 'camera',
+      coords: { latitude: 40.7, longitude: -74 },
     });
   });
 
@@ -479,7 +337,7 @@ describe('useArtworkIngest', () => {
     mockSaveArtworkUpload.mockResolvedValue(createSavedUpload());
     mockAnalyzeArtworkFromExisting.mockReturnValue(deferredAnalysis.promise);
 
-    const { result } = renderUseArtworkIngest({
+    const { result } = renderUseArtworkUploadOperations({
       activeTab: 'collect',
       canStageSessionArtworks: false,
       items: [],
@@ -536,8 +394,8 @@ describe('useArtworkIngest', () => {
       .mockResolvedValueOnce(createAnalysis({ artwork_id: 'saved-1' }))
       .mockResolvedValueOnce(createAnalysis({ artwork_id: 'saved-2' }));
 
-    const { result, spies } = renderUseArtworkIngest({
-      activeTab: 'newSession',
+    const { result } = renderUseArtworkUploadOperations({
+      activeTab: 'collect',
       canStageSessionArtworks: false,
       items: [],
     });
@@ -553,25 +411,5 @@ describe('useArtworkIngest', () => {
     expect(ids).toHaveLength(2);
     expect(ids.every((id) => id.startsWith('upload-placeholder-'))).toBe(true);
     expect(result.current.state.items.map((item) => item.artworkId)).toEqual(['saved-1', 'saved-2']);
-    expect(spies.appendSessionEvents).toHaveBeenNthCalledWith(
-      1,
-      'visit-1',
-      [
-        expect.objectContaining({
-          artworkIds: expect.arrayContaining(ids),
-        }),
-      ],
-      { persist: false },
-    );
-    expect(spies.appendSessionEvents).toHaveBeenNthCalledWith(
-      2,
-      'visit-1',
-      [
-        expect.objectContaining({
-          artworkIds: ['saved-1', 'saved-2'],
-        }),
-      ],
-      { persist: false },
-    );
   });
 });

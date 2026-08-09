@@ -5,11 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionWorkspace } from './useSessionWorkspace';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import type { ArtworkDetailItem } from '../../artwork/types';
-import type {
-  PreparedSessionUploadEntry,
-  PreparedUploadIngestResult,
-  PreparedUploadSessionContext,
-} from '../../artwork-ingest/types';
 import type { SessionStreamMessage } from '../types';
 
 const {
@@ -17,14 +12,12 @@ const {
   mockUsePreparedSessionStaging,
   mockUseSessionActions,
   mockUseSessionMessaging,
-  mockUseSessionStartFlow,
   mockUseSessionState,
 } = vi.hoisted(() => ({
   mockFetchSessionMessages: vi.fn(),
   mockUsePreparedSessionStaging: vi.fn(),
   mockUseSessionActions: vi.fn(),
   mockUseSessionMessaging: vi.fn(),
-  mockUseSessionStartFlow: vi.fn(),
   mockUseSessionState: vi.fn(),
 }));
 
@@ -42,10 +35,6 @@ vi.mock('./useSessionActions', () => ({
 
 vi.mock('./useSessionMessaging', () => ({
   useSessionMessaging: mockUseSessionMessaging,
-}));
-
-vi.mock('./useSessionStartFlow', () => ({
-  useSessionStartFlow: mockUseSessionStartFlow,
 }));
 
 vi.mock('./useSessionState', () => ({
@@ -127,7 +116,6 @@ function renderUseSessionWorkspace(options?: {
 }) {
   const sessionStateMock = createSessionStateMock(options?.sessionStateOverrides);
   const preparedReset = vi.fn();
-  const submitPreparedSession = vi.fn();
   const sessionActions = { handleDeleteSession: vi.fn() };
   const messaging = {
     appendSessionEvents: vi.fn(),
@@ -144,8 +132,6 @@ function renderUseSessionWorkspace(options?: {
   });
   mockUseSessionMessaging.mockReturnValue(messaging);
   mockUseSessionActions.mockReturnValue(sessionActions);
-  mockUseSessionStartFlow.mockReturnValue({ submitPreparedSession });
-
   const updateArtworkSessionLinks = vi.fn();
   const setVisit = vi.fn();
   const setDeleteConfirmation = vi.fn();
@@ -158,14 +144,6 @@ function renderUseSessionWorkspace(options?: {
   } as unknown as HTMLInputElement;
   const sessionStreamScroll = { scrollTop: 123 } as HTMLDivElement;
   const sessionStreamEnd = { scrollIntoView: vi.fn() } as unknown as HTMLDivElement;
-  const ingestPreparedUploads = vi.fn<(
-    uploadEntries: PreparedSessionUploadEntry[],
-    context: PreparedUploadSessionContext,
-  ) => Promise<PreparedUploadIngestResult>>().mockResolvedValue({
-    persistedItems: [],
-    analysisPromise: Promise.resolve([]),
-  });
-
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
   });
@@ -190,14 +168,12 @@ function renderUseSessionWorkspace(options?: {
     setActiveTab,
     clearShellOverlays,
     showToast,
-    ingestPreparedUploads,
   }), { wrapper });
 
   return {
     ...hook,
     sessionStateMock,
     preparedReset,
-    submitPreparedSession,
     sessionActions,
     messaging,
     spies: {
@@ -207,7 +183,6 @@ function renderUseSessionWorkspace(options?: {
       setActiveTab,
       clearShellOverlays,
       showToast,
-      ingestPreparedUploads,
       renameInput,
       sessionStreamScroll,
       sessionStreamEnd,
@@ -298,8 +273,6 @@ describe('useSessionWorkspace', () => {
       sendSessionInquiryToSession: vi.fn(),
     });
     mockUseSessionActions.mockReturnValue({});
-    mockUseSessionStartFlow.mockReturnValue({ submitPreparedSession: vi.fn() });
-
     mockFetchSessionMessages.mockResolvedValue([
       {
         id: 'from-db',
@@ -379,8 +352,6 @@ describe('useSessionWorkspace', () => {
       sendSessionInquiryToSession: vi.fn(),
     });
     mockUseSessionActions.mockReturnValue({});
-    mockUseSessionStartFlow.mockReturnValue({ submitPreparedSession: vi.fn() });
-
     mockFetchSessionMessages.mockResolvedValue([
       { id: 'db-1', role: 'user', content: 'question', type: 'text', sequence_number: 1, created_at: 150 },
       { id: 'db-2', role: 'model', content: 'answer', sequence_number: 2, created_at: 200 },
@@ -427,8 +398,6 @@ describe('useSessionWorkspace', () => {
       sendSessionInquiryToSession: vi.fn(),
     });
     mockUseSessionActions.mockReturnValue({});
-    mockUseSessionStartFlow.mockReturnValue({ submitPreparedSession: vi.fn() });
-
     mockFetchSessionMessages.mockResolvedValue([
       {
         id: 'evt-1',

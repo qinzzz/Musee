@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
 from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
@@ -35,6 +37,46 @@ def test_get_session_messages_rejects_authenticated_non_owner(client, db):
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Not authorized to access this session"
+
+
+def test_session_events_include_deleted_artwork_display_metadata(client, db):
+    db.add(User(user_id="deleted-history-user", device_id="deleted-history-user"))
+    db.add(SessionModel(id="deleted-history-session", user_id="deleted-history-user", title="History"))
+    db.add(
+        SavedArtwork(
+            id="deleted-history-artwork",
+            user_id="deleted-history-user",
+            photo_uri="r2://deleted-history",
+            artist_name="Georgia O'Keeffe",
+            artwork_name="Blue and Green Music",
+            params={"date": "1919–1921"},
+            deleted_at=datetime.now(UTC),
+        )
+    )
+    db.add(
+        SessionEvent(
+            id="deleted-history-event",
+            session_id="deleted-history-session",
+            role="user",
+            type="user_input",
+            payload={"artworks": [{"artwork_id": "deleted-history-artwork", "source": "upload"}]},
+            sequence_number=1,
+        )
+    )
+    db.commit()
+
+    response = client.get("/api/sessions/deleted-history-session/events")
+
+    assert response.status_code == 200
+    deleted_reference = response.json()[0]["payload"]["deleted_artworks"][0]
+    assert deleted_reference == {
+        "artwork_id": "deleted-history-artwork",
+        "artwork_name": "Blue and Green Music",
+        "artist_name": "Georgia O'Keeffe",
+        "date": "1919–1921",
+        "deleted_at": deleted_reference["deleted_at"],
+    }
+    assert deleted_reference["deleted_at"]
 
 
 def test_append_session_messages_rejects_authenticated_non_owner(client, db):

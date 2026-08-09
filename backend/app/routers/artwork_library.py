@@ -16,10 +16,7 @@ from app.database.models import ArtistEntity, ArtworkEntity, PublicComment, Save
 from app.services.artwork_analysis_task_service import get_current_analysis
 from app.services.artwork_entity_service import normalize_entity_name, upsert_artist_entity, upsert_artwork_entity
 from app.services.artwork_enrichment_service import do_artist_bio
-from app.services.session_service import (
-    get_artwork_session_ids,
-    refresh_session_title,
-)
+from app.services.session_service import refresh_session_title
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -32,7 +29,10 @@ def _update_artwork_analysis_status(
     error: str | None = None,
 ) -> None:
     with SessionLocal() as recovery_db:
-        artwork = recovery_db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+        artwork = recovery_db.query(SavedArtwork).filter(
+            SavedArtwork.id == artwork_id,
+            SavedArtwork.active_filter(),
+        ).first()
         if not artwork:
             return
         artwork.analysis_status = status
@@ -65,7 +65,7 @@ def get_artworks(
                 selectinload(SavedArtwork.session_links),
                 selectinload(SavedArtwork.artwork_tags),
             )
-            .filter(SavedArtwork.user_id == user_id)
+            .filter(SavedArtwork.user_id == user_id, SavedArtwork.active_filter())
         )
         if recognized_only is not None:
             query = query.filter(SavedArtwork.is_recognized == (1 if recognized_only else 0))
@@ -103,6 +103,7 @@ async def get_smart_collections(
     artworks = db.query(SavedArtwork).filter(
         SavedArtwork.user_id == user_id,
         SavedArtwork.is_recognized == 1,
+        SavedArtwork.active_filter(),
     ).all()
 
     artist_movement_counts: dict = {}
@@ -155,7 +156,7 @@ async def list_user_artists(user_id: str = Query(...), db: Session = Depends(get
     rows = (
         db.query(ArtistEntity, func.count(SavedArtwork.id).label("artwork_count"))
         .join(SavedArtwork, SavedArtwork.artist_entity_id == ArtistEntity.id)
-        .filter(SavedArtwork.user_id == user_id)
+        .filter(SavedArtwork.user_id == user_id, SavedArtwork.active_filter())
         .group_by(ArtistEntity.id)
         .order_by(ArtistEntity.display_name)
         .all()
@@ -182,7 +183,11 @@ async def get_artist_artworks(
 ):
     artworks = (
         db.query(SavedArtwork)
-        .filter(SavedArtwork.artist_entity_id == artist_id, SavedArtwork.user_id == user_id)
+        .filter(
+            SavedArtwork.artist_entity_id == artist_id,
+            SavedArtwork.user_id == user_id,
+            SavedArtwork.active_filter(),
+        )
         .order_by(SavedArtwork.created_at.desc())
         .all()
     )
@@ -194,7 +199,10 @@ async def backfill_artwork_artist(
     artwork_id: str,
     db: Session = Depends(get_db),
 ):
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
     artwork.analysis_status = "analyzing"
@@ -244,7 +252,10 @@ async def backfill_artwork_artist(
 
 @router.get("/artworks/{artwork_id}")
 async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
     return artwork.to_dict()
@@ -266,7 +277,10 @@ async def get_artwork_analysis_debug(artwork_id: str, db: Session = Depends(get_
 
 @router.get("/artworks/{artwork_id}/community")
 async def get_community(artwork_id: str, db: Session = Depends(get_db)):
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork or not artwork.artwork_entity_id:
         return {"entity": None, "comments": []}
 
@@ -298,7 +312,10 @@ async def publish_comment(
     body: PublishCommentRequest,
     db: Session = Depends(get_db),
 ):
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
@@ -345,22 +362,19 @@ async def delete_artwork(
     user_id: str = Query(...),
     db: Session = Depends(get_db),
 ):
-    artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
     if artwork.user_id != user_id and artwork.device_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this artwork")
 
-    linked_session_ids = get_artwork_session_ids(db, artwork_id)
-    db.delete(artwork)
+    artwork.deleted_at = datetime.now(UTC)
     db.commit()
 
-    for linked_session_id in linked_session_ids:
-        session_to_refresh = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()
-        refresh_session_title(db, session_to_refresh)
-        db.commit()
-
-    return {"message": "Artwork deleted successfully"}
+    return {"message": "Artwork removed from collection"}
 
 
 @router.post("/artworks/batch-delete")
@@ -370,18 +384,27 @@ async def batch_delete_artworks(
     db: Session = Depends(get_db),
 ):
     try:
+        active_artwork_ids = {
+            artwork_id
+            for (artwork_id,) in db.query(SavedArtwork.id).filter(
+                SavedArtwork.id.in_(artwork_ids),
+                SavedArtwork.user_id == user_id,
+                SavedArtwork.active_filter(),
+            ).all()
+        }
         affected_session_ids = {
             sid
             for (sid,) in db.query(SessionArtwork.session_id)
-            .filter(SessionArtwork.artwork_id.in_(artwork_ids))
+            .filter(SessionArtwork.artwork_id.in_(active_artwork_ids))
             .distinct()
             .all()
         }
 
         deleted_count = db.query(SavedArtwork).filter(
-            SavedArtwork.id.in_(artwork_ids),
+            SavedArtwork.id.in_(active_artwork_ids),
             SavedArtwork.user_id == user_id,
-        ).delete(synchronize_session=False)
+            SavedArtwork.active_filter(),
+        ).update({SavedArtwork.deleted_at: datetime.now(UTC)}, synchronize_session=False)
 
         db.commit()
 
@@ -391,7 +414,7 @@ async def batch_delete_artworks(
 
         db.commit()
         return {
-            "message": f"Deleted {deleted_count} artworks",
+            "message": f"Removed {deleted_count} artworks from collection",
             "deleted_count": deleted_count,
         }
     except Exception as exc:

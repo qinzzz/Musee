@@ -10,6 +10,8 @@ interface Props {
 }
 
 const JOURNAL_TIMING_MESSAGE = 'Your journal appears here overnight.';
+const UNTITLED_ARTWORK_LABEL = 'Untitled artwork';
+const UNKNOWN_ARTIST_LABEL = 'Artist unknown';
 
 const formatJournalDate = (value: string): string => {
   const parsed = new Date(`${value}T00:00:00`);
@@ -36,22 +38,37 @@ const JournalArtworkImages: React.FC<{ artworks: JournalArtworkPreview[] }> = ({
       aria-label="Representative artworks"
     >
       {visibleArtworks.map((artwork, index) => {
+        const artworkName = artwork.artwork_name?.trim() || UNTITLED_ARTWORK_LABEL;
+        const artistName = artwork.artist_name?.trim() || UNKNOWN_ARTIST_LABEL;
         const pairPosition = index === 0
           ? 'left-0 top-0 h-[82%] w-[72%]'
           : 'bottom-0 right-0 h-[82%] w-[72%]';
+        const sharedClassName = `absolute rounded-[12px] border-4 border-white shadow-sm ${
+          isPair ? pairPosition : 'inset-0 h-full w-full'
+        }`;
+        if (artwork.is_deleted || !artwork.photo_uri) {
+          return (
+            <div
+              key={artwork.id}
+              className={`${sharedClassName} flex flex-col items-center justify-center bg-neutral-200 px-4 text-center text-neutral-600 grayscale`}
+              aria-label={`${artworkName} by ${artistName}, deleted`}
+            >
+              <p className="line-clamp-3 text-[14px] font-semibold leading-snug">{artworkName} (deleted)</p>
+              <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-neutral-500">{artistName}</p>
+            </div>
+          );
+        }
         return (
           <img
             key={artwork.id}
             src={resolveImageUrl(artwork.photo_uri)}
-            alt={`${artwork.artwork_name} by ${artwork.artist_name}`}
+            alt={`${artworkName} by ${artistName}`}
             loading="lazy"
             decoding="async"
             onError={() => {
               setFailedIds((current) => new Set(current).add(artwork.id));
             }}
-            className={`absolute rounded-[12px] border-4 border-white object-cover shadow-sm ${
-              isPair ? pairPosition : 'inset-0 h-full w-full'
-            }`}
+            className={`${sharedClassName} object-cover`}
           />
         );
       })}

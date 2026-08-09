@@ -77,7 +77,10 @@ def _resets_at(period: QuotaPeriod, today: date) -> Optional[str]:
 def _usage_for(db: Session, user_id: str, quota: str, rule: QuotaRule, today: date) -> int:
     if quota == STORED_ARTWORKS:
         # Derived, not counted: the artwork table is the truth.
-        return db.query(sa_func.count(SavedArtwork.id)).filter(SavedArtwork.user_id == user_id).scalar() or 0
+        return db.query(sa_func.count(SavedArtwork.id)).filter(
+            SavedArtwork.user_id == user_id,
+            SavedArtwork.active_filter(),
+        ).scalar() or 0
 
     start = _period_start(rule.period, today)
     query = db.query(

@@ -36,6 +36,7 @@ SCHEMA_BOOTSTRAP_STATEMENTS = (
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_error TEXT",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_attempted_at TIMESTAMP",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_completed_at TIMESTAMP",
+    "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP",
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_title VARCHAR",
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS system_title VARCHAR",
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS title_state VARCHAR(20) NOT NULL DEFAULT 'draft'",
@@ -184,6 +185,7 @@ SCHEMA_BOOTSTRAP_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_ai_usage_job_status ON ai_usage(job_type, status)",
     "CREATE INDEX IF NOT EXISTS idx_saved_artworks_user_id ON saved_artworks(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_saved_artworks_device_id ON saved_artworks(device_id)",
+    "CREATE INDEX IF NOT EXISTS idx_saved_artworks_active_user_created ON saved_artworks(user_id, created_at DESC) WHERE deleted_at IS NULL",
     """
     DO $$
     BEGIN

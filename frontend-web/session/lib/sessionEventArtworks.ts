@@ -2,6 +2,14 @@ type ArtworkPayloadEntry = {
   artwork_id?: string | null;
 };
 
+export type DeletedArtworkReference = {
+  artwork_id: string;
+  artwork_name?: string | null;
+  artist_name?: string | null;
+  date?: string | null;
+  deleted_at?: string | null;
+};
+
 type SessionEventLike = {
   artworkId?: string | null;
   artwork_id?: string | null;
@@ -55,4 +63,18 @@ export function getSessionEventArtworkIds(event: SessionEventLike): string[] {
 
 export function getPrimarySessionEventArtworkId(event: SessionEventLike): string | undefined {
   return getSessionEventArtworkIds(event)[0];
+}
+
+export function getDeletedArtworkReference(
+  event: SessionEventLike,
+  artworkId: string,
+): DeletedArtworkReference | undefined {
+  const deletedArtworks = event.payload?.deleted_artworks;
+  if (!Array.isArray(deletedArtworks)) return undefined;
+  return deletedArtworks.find((entry): entry is DeletedArtworkReference => (
+    Boolean(entry)
+    && typeof entry === 'object'
+    && 'artwork_id' in entry
+    && entry.artwork_id === artworkId
+  ));
 }

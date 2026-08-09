@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, selectinload, load_only
+from sqlalchemy.orm import Session, selectinload, load_only, with_loader_criteria
 from typing import List, Optional
 import logging
 
@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 def _collection_with_artwork_ids_query(db: Session):
     return db.query(Collection).options(
-        selectinload(Collection.artworks).load_only(SavedArtwork.id)
+        selectinload(Collection.artworks).load_only(SavedArtwork.id),
+        with_loader_criteria(SavedArtwork, SavedArtwork.active_filter()),
     )
 
 
@@ -50,6 +51,7 @@ def _get_owned_artworks(db: Session, user_id: str, artwork_ids: List[str]) -> Li
         .filter(
             SavedArtwork.id.in_(artwork_ids),
             SavedArtwork.user_id == user_id,
+            SavedArtwork.active_filter(),
         )
         .all()
     )

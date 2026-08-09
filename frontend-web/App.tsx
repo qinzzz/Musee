@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useState, useRef, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
@@ -30,10 +31,9 @@ import { useArtworkLibrary } from './artwork/hooks/useArtworkLibrary';
 import { useArtworkAnalysis } from './artwork/hooks/useArtworkAnalysis';
 import { useBoards } from './boards/hooks/useBoards';
 import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
-import { useSessionStagedBatch } from './session/hooks/useSessionStagedBatch';
+import { useSessionArtworkInputPipeline } from './session/hooks/useSessionArtworkInputPipeline';
 import { MAX_SESSION_ARTWORK_BATCH_SIZE } from './session/constants';
-import { useArtworkIngest } from './artwork-ingest/hooks/useArtworkIngest';
-import type { PreparedSessionUploadEntry, PreparedUploadIngestResult, PreparedUploadSessionContext } from './artwork-ingest/types';
+import { useArtworkUploadOperations } from './artwork-ingest/hooks/useArtworkUploadOperations';
 import {
   getInitialNavigationState,
   type ArtistPageContext,
@@ -41,6 +41,7 @@ import {
   type CollectTab,
 } from './lib/appNavigation';
 import { parseAnalysis } from './artwork/lib/analysisText';
+import { queryKeys } from './lib/queryClient';
 
 const UnsortedClassificationModal = lazy(() => import('./components/UnsortedClassificationModal'));
 
@@ -104,6 +105,7 @@ const USER_ID = getOrCreateUserId();
 const DEFAULT_VISIT_TITLE = 'Untitled Session';
 
 const App: React.FC = () => {
+  const queryClient = useQueryClient();
   const initialNavigationState = getInitialNavigationState(window.location.pathname);
   const goalGalleryInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -153,6 +155,7 @@ const App: React.FC = () => {
     updateArtworkSessionLinks,
     refreshArtworks,
     refreshArtworksIfStale,
+    refreshProfileDerivedData,
     artworksLoaded,
     artworksAuthoritative,
     profileRefreshKey,
@@ -326,14 +329,6 @@ const App: React.FC = () => {
     showToast,
   });
 
-  const ingestPreparedUploadsRef = useRef<(
-    uploadEntries: PreparedSessionUploadEntry[],
-    context: PreparedUploadSessionContext,
-  ) => Promise<PreparedUploadIngestResult>>(async () => ({
-    persistedItems: [],
-    analysisPromise: Promise.resolve([]),
-  }));
-
   const sessionWorkspace = useSessionWorkspace({
     userId: sessionUserId,
     items,
@@ -353,7 +348,6 @@ const App: React.FC = () => {
     setActiveTab,
     clearShellOverlays,
     showToast,
-    ingestPreparedUploads: (uploadEntries, context) => ingestPreparedUploadsRef.current(uploadEntries, context),
   });
 
   const {
@@ -363,6 +357,7 @@ const App: React.FC = () => {
       filteredSessionId,
       setFilteredSessionId,
       isComposingNewSession,
+      setIsComposingNewSession,
       openSessionMenuId,
       setOpenSessionMenuId,
       editingSessionId,
@@ -371,6 +366,7 @@ const App: React.FC = () => {
       setEditingSessionTitle,
       setSessionDrafts,
       sessionStreams,
+      setSessionStreams,
       sessionGoalDismissed,
       sessionGoalInput,
       setSessionGoalInput,
@@ -395,6 +391,7 @@ const App: React.FC = () => {
       libraryPickerSearch,
       setLibraryPickerSearch,
       isSubmittingPreparedSession,
+      setIsSubmittingPreparedSession,
       pendingLibraryArtworkIds,
       availableLibraryArtworks,
       commitLibrarySelection,
@@ -402,11 +399,9 @@ const App: React.FC = () => {
       resetPreparedSessionState,
     },
     messaging: {
-      resolveUploadSession,
       appendSessionEvents,
       persistSessionArtworkInput,
       sendSessionInquiryToSession,
-      triggerUploadCommentary,
       handleSessionInquiry,
     },
     sessionActions: {
@@ -416,7 +411,6 @@ const App: React.FC = () => {
       commitSessionRename,
       confirmDeleteSession,
     },
-    submitPreparedSession,
     pendingDeletedSessionIds,
     recentSessionSummaries,
     sessionsLoading,
@@ -462,56 +456,69 @@ const App: React.FC = () => {
     applyArtworkAnalysisResult,
     markArtworkAnalysisFailed,
     handleFileUpload,
-    handleSessionCaptureSubmit,
+    prepareCaptureSubmission,
     ingestPreparedUploads,
-  } = useArtworkIngest({
+  } = useArtworkUploadOperations({
     userId: sessionUserId,
-    defaultSessionTitle: DEFAULT_VISIT_TITLE,
     activeTab,
     canStageSessionArtworks,
     pendingSessionArtworks,
-    items,
-    sessionStreams,
     setPendingSessionArtworks,
     patchArtwork,
     addLocalArtworks,
     replaceArtwork,
     removeArtwork,
-    setVisit: setArtworkWorkspace,
     artworkDetailSelection,
     setArtworkDetailSelection,
     setTagPositions,
-    setSessionDrafts,
     setIsAnalyzing,
-    setFilteredSessionId,
     showToast,
     parseAnalysis,
-    resolveUploadSession,
-    appendSessionEvents,
-    persistSessionArtworkInput,
-    triggerUploadCommentary,
-    onExitSessionCapture: exitCaptureAfterSubmit,
   });
-  ingestPreparedUploadsRef.current = ingestPreparedUploads;
-
   const {
     isSubmittingStagedBatch,
+    submitPreparedSession,
     submitStagedBatch,
-  } = useSessionStagedBatch({
+    submitImmediateArtwork,
+  } = useSessionArtworkInputPipeline({
     userId: sessionUserId,
+    defaultSessionTitle: DEFAULT_VISIT_TITLE,
     items,
     sessionStreams,
     pendingSessionArtworks,
+    newSessionDraftMessage,
+    isSubmittingPreparedSession,
+    setIsSubmittingPreparedSession,
+    refreshPersistedSessions,
+    setSessionDrafts,
     resetPreparedSessionState,
     updateArtworkSessionLinks,
+    setActiveTab,
+    setFilteredSessionId,
+    setIsComposingNewSession,
+    setSessionStreams,
     appendSessionEvents,
     persistSessionArtworkInput,
     sendSessionInquiryToSession,
     ingestPreparedUploads,
     setVisit: setArtworkWorkspace,
-    refreshPersistedSessions,
     showToast,
   });
+
+  const handleSessionCaptureSubmit = React.useCallback(async (payload: {
+    artwork: File;
+    label: File | null;
+    coords?: { latitude: number; longitude: number };
+  }) => {
+    const preparedCapture = await prepareCaptureSubmission(payload);
+    exitCaptureAfterSubmit();
+    await submitImmediateArtwork(preparedCapture, activeSessionSummary?.id);
+  }, [
+    activeSessionSummary?.id,
+    exitCaptureAfterSubmit,
+    prepareCaptureSubmission,
+    submitImmediateArtwork,
+  ]);
 
   const {
     showHeaderIdentifyAgainModal,
@@ -583,11 +590,15 @@ const App: React.FC = () => {
         removeArtworkLocally(item.id);
       });
       refreshArtworks();
+      refreshProfileDerivedData();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessionEventsRoot() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.artists(sessionUserId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.accountUsage(sessionUserId) });
       showToast(
-        targetItems.length === 1 ? 'Artwork deleted' : `${targetItems.length} artworks deleted`,
+        targetItems.length === 1 ? 'Removed from collection' : `Removed ${targetItems.length} artworks from collection`,
         'success',
       );
-      console.log(`Successfully deleted artworks: ${targetItems.map((item) => item.id).join(', ')}`);
+      console.log(`Successfully removed artworks from collection: ${targetItems.map((item) => item.id).join(', ')}`);
     } catch (error) {
       console.error('Failed to delete artworks:', error);
       targetItems.forEach((item) => {
@@ -597,7 +608,7 @@ const App: React.FC = () => {
           },
         });
       });
-      showToast(targetItems.length === 1 ? 'Could not delete artwork' : 'Could not delete artworks', 'info');
+      showToast(targetItems.length === 1 ? 'Could not remove artwork' : 'Could not remove artworks', 'info');
       throw error;
     }
   };
