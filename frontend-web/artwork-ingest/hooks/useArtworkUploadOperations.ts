@@ -219,6 +219,7 @@ export function useArtworkUploadOperations({
   }, [removeArtwork, setArtworkDetailSelection]);
 
   const persistRawArtwork = useCallback(async (options: {
+    uploadOperationId: string;
     file: File;
     previewUrl: string;
     mode: IngestMode;
@@ -239,6 +240,7 @@ export function useArtworkUploadOperations({
       options.coords?.longitude,
       options.mode === 'camera' ? 'camera' : 'upload',
       options.sequenceNumber,
+      options.uploadOperationId,
     );
 
     return createPersistedUploadItem(saved, options);
@@ -360,6 +362,7 @@ export function useArtworkUploadOperations({
       try {
         const sequenceNumber = context.getSequenceNumber(uploadEntry.id);
         const persistedItem = await persistRawArtwork({
+          uploadOperationId: uploadEntry.uploadOperationId,
           file: uploadEntry.file,
           previewUrl: uploadEntry.previewUrl,
           mode: uploadEntry.mode,
@@ -450,6 +453,7 @@ export function useArtworkUploadOperations({
       addLocalArtworks([placeholder!]);
 
       const persistedItem = await persistRawArtwork({
+        uploadOperationId: preparedUpload.uploadOperationId,
         file: preparedUpload.file,
         previewUrl: preparedUpload.previewUrl,
         mode,
@@ -525,6 +529,7 @@ export function useArtworkUploadOperations({
         const placeholder = placeholders[index];
         try {
           const persistedItem = await persistRawArtwork({
+            uploadOperationId: entry.uploadOperationId,
             file: entry.file,
             previewUrl: entry.previewUrl,
             mode,

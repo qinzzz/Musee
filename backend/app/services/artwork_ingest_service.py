@@ -5,8 +5,11 @@ import json
 import logging
 from typing import Any, Dict, Optional, Union
 
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
 from app.database.connection import SessionLocal
-from app.database.models import SavedArtwork, User
+from app.database.models import SavedArtwork, SessionArtwork, User
 from app.services.artwork_analysis_service import batch_link_tags
 from app.services.artwork_event_service import (
     ARTWORK_EVENT_ADDED_TO_SESSION,
@@ -25,6 +28,45 @@ from app.utils.image_processing import reverse_geocode
 from app.services.quota_service import record_artwork_upload
 
 logger = logging.getLogger(__name__)
+
+
+class UploadOperationConflictError(ValueError):
+    """Raised when an idempotency key is reused for a different upload context."""
+
+
+def find_idempotent_upload(
+    db: Session,
+    *,
+    user_id: Optional[str],
+    session_id: Optional[str],
+    upload_operation_id: Optional[str],
+) -> Optional[SavedArtwork]:
+    if not upload_operation_id:
+        return None
+
+    existing = (
+        db.query(SavedArtwork)
+        .filter(SavedArtwork.upload_operation_id == upload_operation_id)
+        .first()
+    )
+    if not existing:
+        return None
+    if existing.user_id != user_id:
+        raise UploadOperationConflictError("Upload operation belongs to a different user")
+    if existing.deleted_at is not None:
+        raise UploadOperationConflictError("Upload operation belongs to a removed artwork")
+    if session_id:
+        linked = (
+            db.query(SessionArtwork.id)
+            .filter(
+                SessionArtwork.session_id == session_id,
+                SessionArtwork.artwork_id == existing.id,
+            )
+            .first()
+        )
+        if not linked:
+            raise UploadOperationConflictError("Upload operation belongs to a different session")
+    return existing
 
 
 def location_payload_needs_resolution(location: Optional[Union[str, Dict[str, Any]]]) -> bool:
@@ -88,72 +130,98 @@ def create_saved_artwork_record_sync(
     photo_time: Optional[str],
     source: str = "upload",
     sequence_number: Optional[int] = None,
+    upload_operation_id: Optional[str] = None,
 ) -> str:
     with SessionLocal() as local_db:
-        session = _get_or_create_owned_session(
+        existing = find_idempotent_upload(
             local_db,
             user_id=user_id,
             session_id=session_id,
-            create_if_missing_id=False,
+            upload_operation_id=upload_operation_id,
         )
-        artwork = SavedArtwork(
-            photo_uri=photo_uri,
-            artist_name="Unknown Artist",
-            artwork_name="Untitled",
-            user_id=user_id,
-            is_recognized=0,
-            analysis=None,
-            params={},
-            location=location,
-            photo_time=photo_time,
-            analysis_status="pending",
-            analysis_error=None,
-        )
-        local_db.add(artwork)
-        local_db.commit()
-        local_db.refresh(artwork)
-        record_artwork_upload(local_db, user_id)
-        log_artwork_event(
-            local_db,
-            artwork_id=str(artwork.id),
-            event_type=ARTWORK_EVENT_CREATED,
-            actor_role="system",
-            trigger_source=source,
-            trigger_session_id=session_id,
-            payload={
-                "photo_uri": photo_uri,
-                "has_location": bool(location),
-                "photo_time": photo_time,
-            },
-        )
+        if existing:
+            return str(existing.id)
 
-        link = _ensure_session_artwork_link(
-            local_db,
-            session_id=session_id,
-            artwork_id=str(artwork.id),
-            source=source,
-            sequence_number=sequence_number,
-        )
-        if link and session_id:
+        try:
+            session = _get_or_create_owned_session(
+                local_db,
+                user_id=user_id,
+                session_id=session_id,
+                create_if_missing_id=False,
+            )
+            artwork = SavedArtwork(
+                photo_uri=photo_uri,
+                artist_name="Unknown Artist",
+                artwork_name="Untitled",
+                user_id=user_id,
+                is_recognized=0,
+                analysis=None,
+                params={},
+                location=location,
+                photo_time=photo_time,
+                analysis_status="pending",
+                analysis_error=None,
+                upload_operation_id=upload_operation_id,
+            )
+            local_db.add(artwork)
+            local_db.flush()
             log_artwork_event(
                 local_db,
                 artwork_id=str(artwork.id),
-                event_type=ARTWORK_EVENT_ADDED_TO_SESSION,
+                event_type=ARTWORK_EVENT_CREATED,
                 actor_role="system",
                 trigger_source=source,
                 trigger_session_id=session_id,
                 payload={
-                    "session_id": session_id,
-                    "source": source,
-                    "sequence_number": link.sequence_number,
+                    "photo_uri": photo_uri,
+                    "has_location": bool(location),
+                    "photo_time": photo_time,
                 },
             )
-        if session:
-            local_db.flush()
-            _refresh_session_title(local_db, session)
-        local_db.commit()
 
-        return str(artwork.id)
+            link = _ensure_session_artwork_link(
+                local_db,
+                session_id=session_id,
+                artwork_id=str(artwork.id),
+                source=source,
+                sequence_number=sequence_number,
+            )
+            if link and session_id:
+                log_artwork_event(
+                    local_db,
+                    artwork_id=str(artwork.id),
+                    event_type=ARTWORK_EVENT_ADDED_TO_SESSION,
+                    actor_role="system",
+                    trigger_source=source,
+                    trigger_session_id=session_id,
+                    payload={
+                        "session_id": session_id,
+                        "source": source,
+                        "sequence_number": link.sequence_number,
+                    },
+                )
+            if session:
+                local_db.flush()
+                _refresh_session_title(local_db, session)
+            local_db.commit()
+            artwork_id = str(artwork.id)
+        except IntegrityError:
+            local_db.rollback()
+            existing = find_idempotent_upload(
+                local_db,
+                user_id=user_id,
+                session_id=session_id,
+                upload_operation_id=upload_operation_id,
+            )
+            if existing:
+                return str(existing.id)
+            raise
+
+        # Usage telemetry is deliberately outside the primary transaction: it
+        # must neither split artwork/link persistence nor count idempotent retries.
+        if user_id:
+            record_artwork_upload(local_db, user_id)
+        return artwork_id
 
 
 def save_analyzed_artwork_record_sync(

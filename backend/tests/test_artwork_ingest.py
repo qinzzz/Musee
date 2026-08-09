@@ -2,16 +2,31 @@ import io
 
 from fastapi.testclient import TestClient
 
-from app.database.models import ArtworkEvent, SavedArtwork, Session as SessionModel, User
+from app.database.models import ArtworkEvent, DailyUsage, SavedArtwork, Session as SessionModel, SessionArtwork, User
 from app.main import app
 from app.models.artwork import AIProvider
 from app.routers import artwork_ingest
+from app.services import artwork_ingest_service
 from tests.conftest import TestingSessionLocal
 
 
 class _FakeStorage:
     async def save(self, *_args, **_kwargs):
         return "r2://saved-artwork.jpg"
+
+
+class _TrackingStorage:
+    def __init__(self):
+        self.save_calls = 0
+        self.deleted_uris = []
+
+    async def save(self, *_args, **_kwargs):
+        self.save_calls += 1
+        return f"r2://saved-artwork-{self.save_calls}.jpg"
+
+    async def delete(self, uri):
+        self.deleted_uris.append(uri)
+        return True
 
 
 class _FailingAIService:
@@ -69,6 +84,108 @@ def test_artworks_upload_persists_pending_artwork(client, monkeypatch):
             .all()
         )
         assert [event.event_type for event in events] == ["artwork_created"]
+
+
+def test_artworks_upload_reuses_record_for_same_operation_id(client, monkeypatch):
+    async def fake_process_image(_image):
+        return b"image-bytes", {}
+
+    storage = _TrackingStorage()
+    monkeypatch.setattr(artwork_ingest, "process_image", fake_process_image)
+    monkeypatch.setattr(artwork_ingest, "get_storage_service", lambda: storage)
+
+    request = {
+        "files": {"image": ("art.jpg", io.BytesIO(b"stub"), "image/jpeg")},
+        "data": {
+            "user_id": "idempotent-upload-user",
+            "session_id": "idempotent-upload-session",
+            "upload_operation_id": "upload-stable-operation",
+        },
+    }
+    first = client.post("/api/artworks/upload", **request)
+    request["files"] = {"image": ("art.jpg", io.BytesIO(b"stub"), "image/jpeg")}
+    second = client.post("/api/artworks/upload", **request)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["photo_uri"] == first.json()["photo_uri"]
+    assert storage.save_calls == 1
+
+    with TestingSessionLocal() as db:
+        artworks = db.query(SavedArtwork).filter(
+            SavedArtwork.user_id == "idempotent-upload-user"
+        ).all()
+        assert len(artworks) == 1
+        assert artworks[0].upload_operation_id == "upload-stable-operation"
+        assert db.query(SessionArtwork).filter(
+            SessionArtwork.session_id == "idempotent-upload-session"
+        ).count() == 1
+        assert db.query(ArtworkEvent).filter(
+            ArtworkEvent.artwork_id == artworks[0].id
+        ).count() == 2
+        usage = db.query(DailyUsage).filter(DailyUsage.user_id == "idempotent-upload-user").one()
+        assert usage.artworks_uploaded == 1
+
+
+def test_artworks_upload_rejects_operation_id_reuse_by_another_user(client, monkeypatch):
+    async def fake_process_image(_image):
+        return b"image-bytes", {}
+
+    storage = _TrackingStorage()
+    monkeypatch.setattr(artwork_ingest, "process_image", fake_process_image)
+    monkeypatch.setattr(artwork_ingest, "get_storage_service", lambda: storage)
+
+    first = client.post(
+        "/api/artworks/upload",
+        files={"image": ("art.jpg", io.BytesIO(b"stub"), "image/jpeg")},
+        data={"user_id": "operation-owner", "upload_operation_id": "upload-private-operation"},
+    )
+    second = client.post(
+        "/api/artworks/upload",
+        files={"image": ("art.jpg", io.BytesIO(b"stub"), "image/jpeg")},
+        data={"user_id": "operation-other", "upload_operation_id": "upload-private-operation"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert storage.save_calls == 1
+    with TestingSessionLocal() as db:
+        assert db.query(SavedArtwork).count() == 1
+
+
+def test_artworks_upload_rolls_back_artwork_and_session_link_together(monkeypatch):
+    async def fake_process_image(_image):
+        return b"image-bytes", {}
+
+    def failing_session_link(*_args, **_kwargs):
+        raise RuntimeError("link failed")
+
+    storage = _TrackingStorage()
+    monkeypatch.setattr(artwork_ingest, "process_image", fake_process_image)
+    monkeypatch.setattr(artwork_ingest, "get_storage_service", lambda: storage)
+    monkeypatch.setattr(artwork_ingest_service, "_ensure_session_artwork_link", failing_session_link)
+
+    with TestClient(app, raise_server_exceptions=False) as failing_client:
+        response = failing_client.post(
+            "/api/artworks/upload",
+            files={"image": ("art.jpg", io.BytesIO(b"stub"), "image/jpeg")},
+            data={
+                "user_id": "atomic-upload-user",
+                "session_id": "atomic-upload-session",
+                "upload_operation_id": "upload-atomic-operation",
+            },
+        )
+
+    assert response.status_code == 500
+    assert storage.deleted_uris == ["r2://saved-artwork-1.jpg"]
+    with TestingSessionLocal() as db:
+        assert db.query(SessionModel).filter(
+            SessionModel.id == "atomic-upload-session"
+        ).count() == 0
+        assert db.query(SavedArtwork).filter(
+            SavedArtwork.user_id == "atomic-upload-user"
+        ).count() == 0
 
 
 def test_artworks_upload_does_not_leave_shell_session_when_first_save_fails(monkeypatch):

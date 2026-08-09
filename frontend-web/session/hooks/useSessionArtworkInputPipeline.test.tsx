@@ -62,6 +62,7 @@ function createItem(overrides: Partial<GalleryItem> = {}): GalleryItem {
 const createUploadEntry = (id: string): Extract<PendingSessionArtwork, { kind: 'upload' }> => ({
   id,
   kind: 'upload',
+  uploadOperationId: id,
   file: new File(['image'], `${id}.jpg`, { type: 'image/jpeg' }),
   previewUrl: `blob://${id}`,
   mode: 'gallery',

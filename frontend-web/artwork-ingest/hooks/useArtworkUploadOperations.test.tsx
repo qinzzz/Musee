@@ -225,12 +225,16 @@ describe('useArtworkUploadOperations', () => {
     });
 
     expect(result.current.state.pendingSessionArtworks).toHaveLength(1);
+    const stagedUpload = result.current.state.pendingSessionArtworks[0];
     expect(result.current.state.pendingSessionArtworks[0]).toMatchObject({
       kind: 'upload',
       mode: 'gallery',
       label: 'first',
       sublabel: 'Mar 9, 2024',
     });
+    expect(stagedUpload.id).toBe(
+      stagedUpload.kind === 'upload' ? stagedUpload.uploadOperationId : undefined,
+    );
     expect(mockSaveArtworkUpload).not.toHaveBeenCalled();
     expect(mockAnalyzeArtworkFromExisting).not.toHaveBeenCalled();
     expect(spies.showToast).not.toHaveBeenCalled();
@@ -268,6 +272,7 @@ describe('useArtworkUploadOperations', () => {
       -122.4,
       'upload',
       0,
+      expect.stringMatching(/^upload-/),
     );
     expect(mockAnalyzeArtworkFromExisting).toHaveBeenCalledWith('saved-1', {
       labelFile: null,

@@ -7,6 +7,13 @@ import type {
 import type { PendingSessionArtwork, SessionStreamMessage } from '../../session/types';
 import type { GalleryItem } from '../../types';
 
+function newUploadOperationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `upload-${crypto.randomUUID()}`;
+  }
+  return `upload-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 export async function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -52,6 +59,7 @@ export async function prepareUploadCandidates(
     const timestamp = metadata.timestamp || Date.now();
 
     return {
+      uploadOperationId: newUploadOperationId(),
       file,
       previewUrl: await readFileAsDataUrl(file),
       mode,
@@ -65,8 +73,9 @@ export async function prepareUploadCandidates(
 
 export function buildStagedPendingUploads(candidates: PreparedUploadCandidate[]): PreparedSessionUploadEntry[] {
   return candidates.map((candidate) => ({
-    id: `upload-${Math.random().toString(36).substring(2, 11)}`,
+    id: candidate.uploadOperationId,
     kind: 'upload',
+    uploadOperationId: candidate.uploadOperationId,
     file: candidate.file,
     previewUrl: candidate.previewUrl,
     mode: candidate.mode,

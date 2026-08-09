@@ -4,6 +4,7 @@ import asyncio
 from datetime import UTC, datetime
 import json
 import logging
+import re
 import uuid
 from typing import Optional
 
@@ -41,7 +42,9 @@ from app.services.artwork_event_service import (
     log_artwork_event,
 )
 from app.services.artwork_ingest_service import (
+    UploadOperationConflictError,
     create_saved_artwork_record_sync,
+    find_idempotent_upload,
     location_payload_needs_resolution,
     parse_location_value,
     resolve_location_payload,
@@ -61,6 +64,31 @@ from app.utils.image_processing import process_image
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+UPLOAD_OPERATION_ID_MAX_LENGTH = 128
+UPLOAD_OPERATION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]+$")
+UPLOAD_OPERATION_CONFLICT_DETAIL = "Upload operation cannot be reused for this request"
+
+
+def _normalize_upload_operation_id(value: Optional[str]) -> Optional[str]:
+    normalized = (value or "").strip()
+    if not normalized:
+        return None
+    if (
+        len(normalized) > UPLOAD_OPERATION_ID_MAX_LENGTH
+        or not UPLOAD_OPERATION_ID_PATTERN.fullmatch(normalized)
+    ):
+        raise HTTPException(status_code=400, detail="Invalid upload operation id")
+    return normalized
+
+
+async def _delete_uploaded_object_best_effort(storage, photo_uri: Optional[str]) -> None:
+    if not photo_uri or not hasattr(storage, "delete"):
+        return
+    try:
+        await storage.delete(photo_uri)
+    except Exception:
+        logger.warning("Could not clean up an uncommitted uploaded object", exc_info=True)
 
 
 def _resolve_artwork_analysis_event_type(
@@ -478,10 +506,24 @@ async def save_artwork_upload(
     longitude: Optional[float] = Form(None),
     source: Optional[str] = Form("upload"),
     sequence_number: Optional[int] = Form(None),
+    upload_operation_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
 ):
     require_same_user(current_user, user_id)
+    upload_operation_id = _normalize_upload_operation_id(upload_operation_id)
+    try:
+        existing_upload = find_idempotent_upload(
+            db,
+            user_id=user_id,
+            session_id=session_id,
+            upload_operation_id=upload_operation_id,
+        )
+    except UploadOperationConflictError as exc:
+        raise HTTPException(status_code=409, detail=UPLOAD_OPERATION_CONFLICT_DETAIL) from exc
+    if existing_upload:
+        return existing_upload.to_dict()
+
     if user_id and settings.use_database:
         check_artwork_quota(user_id, db)
 
@@ -499,6 +541,7 @@ async def save_artwork_upload(
     if image_metadata.get("exif_timestamp"):
         photo_time = image_metadata["exif_timestamp"]
 
+    storage = None
     if client_type == "web" or not client_type:
         storage = get_storage_service()
         generated_photo_uri = await storage.save(image_bytes, image.filename or "artwork.jpg", user_id)
@@ -507,23 +550,37 @@ async def save_artwork_upload(
 
     parsed_location = parse_location_value(location)
 
-    artwork_id = await anyio.to_thread.run_sync(
-        create_saved_artwork_record_sync,
-        user_id,
-        session_id,
-        generated_photo_uri,
-        parsed_location,
-        photo_time,
-        source or "upload",
-        sequence_number,
-    )
+    try:
+        artwork_id = await anyio.to_thread.run_sync(
+            create_saved_artwork_record_sync,
+            user_id,
+            session_id,
+            generated_photo_uri,
+            parsed_location,
+            photo_time,
+            source or "upload",
+            sequence_number,
+            upload_operation_id,
+        )
+    except UploadOperationConflictError as exc:
+        await _delete_uploaded_object_best_effort(storage, generated_photo_uri)
+        raise HTTPException(status_code=409, detail=UPLOAD_OPERATION_CONFLICT_DETAIL) from exc
+    except Exception:
+        await _delete_uploaded_object_best_effort(storage, generated_photo_uri)
+        raise
 
     saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
     if not saved_artwork:
         raise HTTPException(status_code=500, detail="Artwork was saved but could not be reloaded")
 
+    # A concurrent retry may have stored the same bytes twice before the
+    # unique operation id resolved the winning DB record. Remove the losing
+    # object while returning the original artwork.
+    if upload_operation_id and saved_artwork.photo_uri != generated_photo_uri:
+        await _delete_uploaded_object_best_effort(storage, generated_photo_uri)
+
     response = saved_artwork.to_dict()
-    response["photo_uri"] = generated_photo_uri
+    response["photo_uri"] = saved_artwork.photo_uri
     return response
 
 

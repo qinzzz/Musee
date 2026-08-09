@@ -61,6 +61,15 @@ class SavedArtwork(Base):
     """Database model for saved artworks"""
 
     __tablename__ = "saved_artworks"
+    __table_args__ = (
+        Index(
+            "uq_saved_artworks_upload_operation_id",
+            "upload_operation_id",
+            unique=True,
+            postgresql_where=text("upload_operation_id IS NOT NULL"),
+            sqlite_where=text("upload_operation_id IS NOT NULL"),
+        ),
+    )
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     photo_uri = Column(String, nullable=False)  # Local file path or URI
@@ -89,6 +98,9 @@ class SavedArtwork(Base):
     analysis_attempted_at = Column(DateTime, nullable=True)
     analysis_completed_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
+    # Stable client operation id. Nullable for legacy/imported artworks; web
+    # uploads use it to make a repeated POST return the original record.
+    upload_operation_id = Column(String(128), nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="artworks")

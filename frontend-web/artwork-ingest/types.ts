@@ -23,6 +23,7 @@ export type LocationInfo = {
 export type PreparedSessionUploadEntry = Extract<PendingSessionArtwork, { kind: 'upload' }>;
 
 export type PreparedUploadCandidate = {
+  uploadOperationId: string;
   file: File;
   previewUrl: string;
   mode: IngestMode;

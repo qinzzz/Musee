@@ -101,6 +101,7 @@ export type PendingSessionArtwork =
   | {
       id: string;
       kind: 'upload';
+      uploadOperationId: string;
       file: File;
       previewUrl: string;
       mode: 'gallery' | 'camera';
