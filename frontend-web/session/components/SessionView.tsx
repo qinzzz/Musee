@@ -21,6 +21,7 @@ import { SESSION_ARTWORK_QUESTION_PLACEHOLDER } from '../constants';
 import SessionMessageMarkdown from './SessionMessageMarkdown';
 import SessionArtworkCards from './SessionArtworkCards';
 import SessionProcessingIndicator from './SessionProcessingIndicator';
+import SessionThreadStatus from './SessionThreadStatus';
 import {
   isPendingCommentaryStale,
   SESSION_PROCESSING_LABELS,
@@ -367,6 +368,7 @@ export default function SessionView({
   const [isComposerFocused, setIsComposerFocused] = React.useState(false);
   const [isMobileComposer, setIsMobileComposer] = React.useState(matchesMobileComposer);
   const composerTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const preservedSessionScrollTopRef = React.useRef<number | null>(null);
   const composerValue = preparedSessionItems.length > 0 ? preparedSessionMessage : sessionGoalInput;
   const resizeComposerTextarea = React.useCallback(() => {
     const textarea = composerTextareaRef.current;
@@ -421,6 +423,14 @@ export default function SessionView({
     resizeComposerTextarea();
   }, [composerValue, preparedSessionItems.length, resizeComposerTextarea]);
 
+  React.useLayoutEffect(() => {
+    if (artworkDetailItem || preservedSessionScrollTopRef.current === null) return;
+    const scrollContainer = sessionStreamScrollRef.current;
+    if (!scrollContainer) return;
+    scrollContainer.scrollTop = preservedSessionScrollTopRef.current;
+    preservedSessionScrollTopRef.current = null;
+  }, [artworkDetailItem, sessionStreamScrollRef]);
+
   React.useEffect(() => {
     resizeComposerTextarea();
     const animationFrame = window.requestAnimationFrame(resizeComposerTextarea);
@@ -437,6 +447,11 @@ export default function SessionView({
       return;
     }
     onSubmitGoal(goal);
+  };
+
+  const handleOpenSessionArtwork = (item: GalleryItem) => {
+    preservedSessionScrollTopRef.current = sessionStreamScrollRef.current?.scrollTop ?? 0;
+    onOpenSessionArtwork(item);
   };
 
   if (artworkDetailItem) {
@@ -503,7 +518,7 @@ export default function SessionView({
         items={activeSessionSummary.items}
         onSaveTitle={onSaveSessionTitle}
         onSaveGoal={onSaveExistingGoal}
-        onOpenArtwork={onOpenSessionArtwork}
+        onOpenArtwork={handleOpenSessionArtwork}
         onClose={() => setSessionDetailsOpen(false)}
       />
 
@@ -729,7 +744,7 @@ export default function SessionView({
                         <div className="w-full max-w-[640px]">
                           <SessionArtworkCards
                             items={entry.items}
-                            onOpenArtwork={onOpenSessionArtwork}
+                            onOpenArtwork={handleOpenSessionArtwork}
                           />
                         </div>
                       </div>
@@ -748,6 +763,12 @@ export default function SessionView({
                       key={entry.id}
                       entry={entry}
                       sessionProcessingState={sessionProcessingState}
+                    />
+                  ) : entry.type === 'status' ? (
+                    <SessionThreadStatus
+                      key={entry.id}
+                      message={entry.message}
+                      tone={entry.tone}
                     />
                   ) : (
                     <React.Fragment key={entry.id}>

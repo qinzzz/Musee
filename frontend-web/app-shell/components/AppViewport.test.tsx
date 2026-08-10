@@ -39,9 +39,11 @@ vi.mock('../../session/components/SessionView', () => ({
     onSaveExistingGoal: (goal: string) => void;
     isSessionBusy: boolean;
     sessionHistoryStatus: 'loading' | 'ready' | 'error';
+    sessionProcessingState: { kind: string };
   }) => (
     <div>
       <span data-testid="session-history-status">{props.sessionHistoryStatus}</span>
+      <span data-testid="session-processing-kind">{props.sessionProcessingState.kind}</span>
       <button disabled={props.isSessionBusy} onClick={() => props.onSubmitGoal('Draft goal')}>submit-goal</button>
       <button onClick={() => props.onSaveExistingGoal('Updated goal')}>save-goal</button>
     </div>
@@ -68,6 +70,8 @@ function renderAppViewport(options: {
   streamingSessionResponses?: Record<string, string>;
   activeSessionRenderBlocks?: SessionRenderBlock[];
   sessionHistoryStatus?: 'loading' | 'ready' | 'error';
+  isSubmittingPreparedSession?: boolean;
+  activeInputPipelineSessionId?: string | null;
 }) {
   const setSessionGoal = vi.fn();
   const setSessionGoalInput = vi.fn();
@@ -110,7 +114,7 @@ function renderAppViewport(options: {
         goalGalleryInputRef: { current: null },
         pendingSessionArtworks: [],
         newSessionDraftMessage: '',
-        isSubmittingPreparedSession: false,
+        isSubmittingPreparedSession: options.isSubmittingPreparedSession ?? false,
         sessionHistoryStatus: options.sessionHistoryStatus ?? 'ready',
         retrySessionHistory: vi.fn().mockResolvedValue(undefined),
         sessionStreamScrollRef: { current: null },
@@ -122,6 +126,7 @@ function renderAppViewport(options: {
         likedIds: new Set<string>(),
         boards: [],
         boardsLoading: false,
+        activeInputPipelineSessionId: options.activeInputPipelineSessionId ?? null,
       }}
       navigation={{
         closeSessionCapturePage: vi.fn(),
@@ -216,6 +221,19 @@ describe('AppViewport session composer', () => {
   it('blocks the initial composer while the session is busy', () => {
     const spies = renderAppViewport({ isAnalyzing: true });
 
+    const submitButton = screen.getByText('submit-goal');
+    expect((submitButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(submitButton);
+    expect(spies.handleSessionInquiry).not.toHaveBeenCalled();
+  });
+
+  it('keeps a background upload globally blocking without showing its status in another session', () => {
+    const spies = renderAppViewport({
+      isSubmittingPreparedSession: true,
+      activeInputPipelineSessionId: 'another-session',
+    });
+
+    expect(screen.getByTestId('session-processing-kind').textContent).toBe('idle');
     const submitButton = screen.getByText('submit-goal');
     expect((submitButton as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(submitButton);

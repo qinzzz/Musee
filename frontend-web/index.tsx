@@ -12,6 +12,9 @@ import { createQueryClient } from './lib/queryClient';
 import './index.css';
 
 const queryClient = createQueryClient();
+const SessionStatusPreviewPage = import.meta.env.DEV
+  ? React.lazy(() => import('./development/SessionStatusPreviewPage'))
+  : null;
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -22,7 +25,11 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      {window.location.pathname === '/verify-email' ? (
+      {SessionStatusPreviewPage && window.location.pathname === '/__dev/session-status' ? (
+        <React.Suspense fallback={null}>
+          <SessionStatusPreviewPage />
+        </React.Suspense>
+      ) : window.location.pathname === '/verify-email' ? (
         <VerifyEmailPage />
       ) : window.location.pathname === '/reset-password' ? (
         <ResetPasswordPage />

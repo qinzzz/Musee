@@ -139,7 +139,6 @@ export function useSessionWorkspace({
     });
   }, [
     activeTab,
-    artworkDetailItem,
     sessionStreamEndRef,
     sessionState.activeSessionSummary?.id,
     sessionState.activeSessionStream.length,

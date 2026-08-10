@@ -41,6 +41,33 @@ describe('sessions api', () => {
     await expect(fetchSessionEvents('session-1')).rejects.toThrow('API error (502)');
   });
 
+  it('ensureSession persists the caller-provided id before downstream work', async () => {
+    const session = {
+      id: 'client-session-1',
+      user_id: 'user-1',
+      title: 'First question',
+    };
+    const fetchSpy = vi.fn().mockResolvedValue(new Response(JSON.stringify({ session }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { ensureSession } = await import('./sessions');
+
+    await expect(ensureSession('user-1', 'client-session-1', 'First question')).resolves.toEqual(session);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/sessions?user_id=user-1'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          session_id: 'client-session-1',
+          title: 'First question',
+        }),
+      }),
+    );
+  });
+
   it('appendSessionEvents throws on a non-OK response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not saved', { status: 500 })));
 

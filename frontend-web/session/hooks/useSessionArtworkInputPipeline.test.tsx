@@ -8,19 +8,19 @@ import { useSessionArtworkInputPipeline } from './useSessionArtworkInputPipeline
 
 const {
   mockAttachArtworksToSession,
-  mockStartSessionWithArtworks,
+  mockEnsureSession,
   mockBuildPreparedSessionFallbackPrompt,
   mockBuildStagedSessionAdditionPrompt,
 } = vi.hoisted(() => ({
   mockAttachArtworksToSession: vi.fn(),
-  mockStartSessionWithArtworks: vi.fn(),
+  mockEnsureSession: vi.fn(),
   mockBuildPreparedSessionFallbackPrompt: vi.fn(),
   mockBuildStagedSessionAdditionPrompt: vi.fn(),
 }));
 
 vi.mock('../api/sessions', () => ({
   attachArtworksToSession: mockAttachArtworksToSession,
-  startSessionWithArtworks: mockStartSessionWithArtworks,
+  ensureSession: mockEnsureSession,
 }));
 
 vi.mock('../lib/preparedSession', () => ({
@@ -76,6 +76,9 @@ function renderPipeline(options: {
   items?: GalleryItem[];
   ingestPreparedUploads: ReturnType<typeof vi.fn>;
   persistSessionArtworkInput?: ReturnType<typeof vi.fn>;
+  persistedSessionIds?: string[];
+  sessionTitleById?: Record<string, string>;
+  newSessionDraftMessage?: string;
 }) {
   const persistSessionArtworkInput = options.persistSessionArtworkInput
     || vi.fn().mockResolvedValue(undefined);
@@ -95,6 +98,12 @@ function renderPipeline(options: {
       }],
     });
     const [isSubmittingPreparedSession, setIsSubmittingPreparedSession] = React.useState(false);
+    const [sessionDrafts, setSessionDrafts] = React.useState<Array<{
+      id: string;
+      title: string;
+      createdAt: number;
+      updatedAt: number;
+    }>>([]);
     const appendSessionEvents = (
       sessionId: string,
       messages: SessionStreamMessage[],
@@ -112,13 +121,15 @@ function renderPipeline(options: {
       userId: 'user-1',
       defaultSessionTitle: 'Untitled Session',
       items: options.items || [],
+      persistedSessionIds: options.persistedSessionIds ?? ['session-1'],
+      sessionTitleById: options.sessionTitleById ?? { 'session-1': 'Existing session' },
       sessionStreams,
       pendingSessionArtworks: options.pending,
-      newSessionDraftMessage: '',
+      newSessionDraftMessage: options.newSessionDraftMessage ?? '',
       isSubmittingPreparedSession,
       setIsSubmittingPreparedSession,
       refreshPersistedSessions,
-      setSessionDrafts: vi.fn(),
+      setSessionDrafts,
       updateArtworkSessionLinks: vi.fn(),
       setActiveTab: vi.fn(),
       setFilteredSessionId: vi.fn(),
@@ -133,7 +144,7 @@ function renderPipeline(options: {
       showToast,
     });
 
-    return { api, sessionStreams };
+    return { api, sessionStreams, sessionDrafts };
   });
 
   return {
@@ -152,9 +163,15 @@ describe('useSessionArtworkInputPipeline', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAttachArtworksToSession.mockResolvedValue({ inserted: 0, artworks: [] });
-    mockStartSessionWithArtworks.mockResolvedValue({
-      session: { id: 'session-new', title: 'Untitled Session' },
-    });
+    mockEnsureSession.mockImplementation(async (_userId, sessionId, title) => ({
+      id: sessionId,
+      user_id: 'user-1',
+      title,
+      title_source: 'user_locked',
+      status: 'active',
+      created_at: 100,
+      updated_at: 100,
+    }));
     mockBuildPreparedSessionFallbackPrompt.mockReturnValue('Discuss these artworks');
     mockBuildStagedSessionAdditionPrompt.mockReturnValue('Discuss the additions');
   });
@@ -237,7 +254,7 @@ describe('useSessionArtworkInputPipeline', () => {
     expect(spies.sendSessionInquiryToSession).toHaveBeenCalledTimes(1);
   });
 
-  it('removes failed uploads from the canonical event while preserving successful entries', async () => {
+  it('keeps successful entries and adds an inline status for a partial upload failure', async () => {
     const entries = [createUploadEntry('upload-1'), createUploadEntry('upload-2')];
     const placeholders = entries.map((entry, index) => createItem({
       id: `placeholder-${index + 1}`,
@@ -257,7 +274,11 @@ describe('useSessionArtworkInputPipeline', () => {
       return {
         persistedItems: [persisted],
         persistedEntries: [{ entryId: 'upload-2', item: persisted }],
-        failedEntries: [{ entryId: 'upload-1', message: 'Musee couldn’t upload this artwork. Check your connection and try again.' }],
+        failedEntries: [{
+          entryId: 'upload-1',
+          message: 'Musee couldn’t upload this artwork. Check your connection and try again.',
+          errorCode: 'server_error',
+        }],
         analysisPromise: Promise.resolve([persisted]),
       };
     });
@@ -274,10 +295,15 @@ describe('useSessionArtworkInputPipeline', () => {
       'Compare them',
     );
     expect(result.current.sessionStreams['session-1'][1].artworkIds).toEqual(['saved-artwork-2']);
-    expect(spies.showToast).toHaveBeenCalledWith(
-      'Musee couldn’t upload this artwork. Check your connection and try again. The other selected artworks were added.',
-      'info',
-    );
+    expect(result.current.sessionStreams['session-1'][2]).toMatchObject({
+      role: 'model',
+      text: 'Couldn’t upload the artwork. Please try again.',
+      payload: {
+        message_kind: 'upload_failure',
+        error_code: 'server_error',
+      },
+    });
+    expect(spies.showToast).not.toHaveBeenCalled();
   });
 
   it('uses the same canonical event for a new session with library and uploaded artwork', async () => {
@@ -325,13 +351,16 @@ describe('useSessionArtworkInputPipeline', () => {
       await result.current.api.submitPreparedSession();
     });
 
-    expect(mockStartSessionWithArtworks).toHaveBeenCalledWith('user-1', {
-      session_id: expect.stringMatching(/^session_/),
-      title: 'Untitled Session',
-      artwork_ids: ['library-artwork'],
-    });
+    const sessionId = mockEnsureSession.mock.calls[0][1];
+    expect(sessionId).toMatch(/^session_/);
+    expect(mockEnsureSession).toHaveBeenCalledWith('user-1', sessionId, 'Untitled Session');
+    expect(mockAttachArtworksToSession).toHaveBeenCalledWith(
+      sessionId,
+      'user-1',
+      ['library-artwork'],
+    );
     expect(spies.persistSessionArtworkInput).toHaveBeenCalledWith(
-      'session-new',
+      sessionId,
       [
         { artworkId: 'library-artwork', source: 'library' },
         { artworkId: 'uploaded-artwork', source: 'upload' },
@@ -340,7 +369,7 @@ describe('useSessionArtworkInputPipeline', () => {
       undefined,
     );
     expect(spies.sendSessionInquiryToSession).toHaveBeenCalledWith(
-      'session-new',
+      sessionId,
       'Discuss these artworks',
       expect.arrayContaining([
         expect.objectContaining({ artworkId: 'library-artwork' }),
@@ -353,7 +382,131 @@ describe('useSessionArtworkInputPipeline', () => {
     );
   });
 
-  it('removes the optimistic shell when every upload fails', async () => {
+  it('publishes a titled provisional session before persistence and waits to upload', async () => {
+    const sessionSaved = createDeferred<{
+      id: string;
+      user_id: string;
+      title: string;
+      title_source: string;
+      status: string;
+      created_at: number;
+      updated_at: number;
+    }>();
+    mockEnsureSession.mockImplementationOnce(() => sessionSaved.promise);
+    const upload = createUploadEntry('upload-1');
+    const persisted = createItem({ artworkId: 'saved-artwork-1' });
+    const ingestPreparedUploads = vi.fn().mockResolvedValue({
+      persistedItems: [persisted],
+      persistedEntries: [{ entryId: upload.id, item: persisted }],
+      failedEntries: [],
+      analysisPromise: Promise.resolve([persisted]),
+    });
+    const { result } = renderPipeline({
+      pending: [upload],
+      ingestPreparedUploads,
+      newSessionDraftMessage: '  What makes this painting feel quiet?  ',
+    });
+
+    let submission!: Promise<void>;
+    act(() => {
+      submission = result.current.api.submitPreparedSession();
+    });
+
+    await waitFor(() => expect(result.current.sessionDrafts).toHaveLength(1));
+    const provisional = result.current.sessionDrafts[0];
+    expect(provisional).toMatchObject({
+      id: expect.stringMatching(/^session_/),
+      title: 'What makes this painting feel quiet?',
+    });
+    expect(result.current.sessionStreams[provisional.id][0]).toMatchObject({
+      role: 'user',
+      text: 'What makes this painting feel quiet?',
+    });
+    expect(result.current.api.activeInputPipelineSessionId).toBe(provisional.id);
+    expect(mockEnsureSession).toHaveBeenCalledWith(
+      'user-1',
+      provisional.id,
+      'What makes this painting feel quiet?',
+    );
+    expect(ingestPreparedUploads).not.toHaveBeenCalled();
+
+    await act(async () => {
+      sessionSaved.resolve({
+        id: provisional.id,
+        user_id: 'user-1',
+        title: provisional.title,
+        title_source: 'user_locked',
+        status: 'active',
+        created_at: 100,
+        updated_at: 100,
+      });
+      await submission;
+    });
+
+    expect(ingestPreparedUploads).toHaveBeenCalledWith(
+      [upload],
+      expect.objectContaining({ sessionId: provisional.id }),
+    );
+    expect(result.current.api.activeInputPipelineSessionId).toBeNull();
+  });
+
+  it('keeps the local session and shows an inline failure when persistence fails', async () => {
+    mockEnsureSession.mockRejectedValueOnce(new Error('offline'));
+    const upload = createUploadEntry('upload-1');
+    const ingestPreparedUploads = vi.fn();
+    const { result, spies } = renderPipeline({
+      pending: [upload],
+      ingestPreparedUploads,
+      newSessionDraftMessage: 'A question for Musee',
+    });
+
+    await act(async () => {
+      await result.current.api.submitPreparedSession();
+    });
+
+    expect(ingestPreparedUploads).not.toHaveBeenCalled();
+    expect(result.current.sessionDrafts).toHaveLength(1);
+    const sessionId = result.current.sessionDrafts[0].id;
+    expect(result.current.sessionStreams[sessionId].at(-1)).toMatchObject({
+      role: 'model',
+      text: 'Couldn’t save this session',
+      payload: {
+        message_kind: 'session_failure',
+        error_code: 'session_save_failed',
+      },
+    });
+    expect(spies.persistSessionArtworkInput).not.toHaveBeenCalled();
+    expect(spies.showToast).not.toHaveBeenCalled();
+  });
+
+  it('ensures an unpersisted local session before retrying artwork input', async () => {
+    const upload = createUploadEntry('upload-1');
+    const persisted = createItem({ artworkId: 'saved-artwork-1' });
+    const ingestPreparedUploads = vi.fn().mockResolvedValue({
+      persistedItems: [persisted],
+      persistedEntries: [{ entryId: upload.id, item: persisted }],
+      failedEntries: [],
+      analysisPromise: Promise.resolve([persisted]),
+    });
+    const { result } = renderPipeline({
+      pending: [upload],
+      ingestPreparedUploads,
+      persistedSessionIds: [],
+      sessionTitleById: { 'session-1': 'A local session' },
+    });
+
+    await act(async () => {
+      await result.current.api.submitStagedBatch('session-1', 'Try once more');
+    });
+
+    expect(mockEnsureSession).toHaveBeenCalledWith('user-1', 'session-1', 'A local session');
+    expect(ingestPreparedUploads).toHaveBeenCalledWith(
+      [upload],
+      expect.objectContaining({ sessionId: 'session-1' }),
+    );
+  });
+
+  it('replaces the optimistic shell with an inline network failure when every upload fails', async () => {
     const upload = createUploadEntry('upload-1');
     const placeholder = createItem({ id: 'placeholder-1', artworkId: undefined });
     const ingestPreparedUploads = vi.fn(async (entries, context) => {
@@ -361,7 +514,11 @@ describe('useSessionArtworkInputPipeline', () => {
       return {
         persistedItems: [],
         persistedEntries: [],
-        failedEntries: [{ entryId: entries[0].id, message: 'Musee couldn’t upload this artwork. Check your connection and try again.' }],
+        failedEntries: [{
+          entryId: entries[0].id,
+          message: 'Musee couldn’t upload this artwork. Check your connection and try again.',
+          errorCode: 'network_error',
+        }],
         analysisPromise: Promise.resolve([]),
       };
     });
@@ -374,12 +531,64 @@ describe('useSessionArtworkInputPipeline', () => {
 
     expect(succeeded).toBe(false);
     expect(spies.persistSessionArtworkInput).not.toHaveBeenCalled();
-    expect(result.current.sessionStreams['session-1']).toHaveLength(1);
+    expect(result.current.sessionStreams['session-1']).toHaveLength(2);
     expect(result.current.sessionStreams['session-1'][0].id).toBe('existing-message');
-    expect(spies.showToast).toHaveBeenCalledWith(
-      'Musee couldn’t upload this artwork. Check your connection and try again.',
-      'info',
-    );
+    expect(result.current.sessionStreams['session-1'][1]).toMatchObject({
+      role: 'model',
+      text: 'Network error. Check your connection and try again.',
+      payload: {
+        message_kind: 'upload_failure',
+        error_code: 'network_error',
+      },
+    });
+    expect(result.current.api.isSubmittingStagedBatch).toBe(false);
+    expect(spies.showToast).not.toHaveBeenCalled();
+
+    const blocks = buildSessionRenderBlocks({
+      id: 'session-1',
+      title: 'Session',
+      location: null,
+      artworkCount: 0,
+      updatedAt: 200,
+      dateLabel: null,
+      items: [],
+    }, result.current.sessionStreams);
+    expect(blocks.at(-1)).toMatchObject({
+      type: 'status',
+      message: 'Network error. Check your connection and try again.',
+      tone: 'failed',
+    });
+  });
+
+  it('adds a short inline status when analysis fails after upload persistence', async () => {
+    const upload = createUploadEntry('upload-1');
+    const placeholder = createItem({ id: 'placeholder-1', artworkId: undefined });
+    const persisted = createItem({ ...placeholder, artworkId: 'saved-artwork-1' });
+    const ingestPreparedUploads = vi.fn(async (entries, context) => {
+      context.onPlaceholdersReady?.([{ entryId: entries[0].id, item: placeholder }]);
+      return {
+        persistedItems: [persisted],
+        persistedEntries: [{ entryId: entries[0].id, item: persisted }],
+        failedEntries: [],
+        analysisPromise: Promise.resolve([]),
+        analysisFailureCountPromise: Promise.resolve(1),
+      };
+    });
+    const { result, spies } = renderPipeline({ pending: [upload], ingestPreparedUploads });
+
+    await act(async () => {
+      await result.current.api.submitStagedBatch('session-1', 'Question');
+    });
+
+    expect(result.current.sessionStreams['session-1'].at(-1)).toMatchObject({
+      text: 'Analysis failed',
+      payload: {
+        message_kind: 'analysis_failure',
+        error_code: 'analysis_failed',
+      },
+    });
+    expect(spies.sendSessionInquiryToSession).not.toHaveBeenCalled();
+    expect(spies.showToast).not.toHaveBeenCalled();
   });
 
   it('retries canonical event persistence once with the same id', async () => {

@@ -26,6 +26,30 @@ def test_list_sessions_returns_user_sessions(client, db):
     assert {session["id"] for session in response.json()} == {"sess-1", "sess-2"}
 
 
+def test_create_session_is_idempotent_for_a_client_generated_id(client, db):
+    first_response = client.post(
+        "/api/sessions",
+        params={"user_id": "session-first-user"},
+        json={"session_id": "client-session-1", "title": "First question"},
+    )
+    second_response = client.post(
+        "/api/sessions",
+        params={"user_id": "session-first-user"},
+        json={"session_id": "client-session-1", "title": "A later retry"},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert first_response.json()["session"]["id"] == "client-session-1"
+    assert second_response.json()["session"]["id"] == "client-session-1"
+    assert second_response.json()["session"]["title"] == "First question"
+
+    sessions = db.query(SessionModel).filter(SessionModel.id == "client-session-1").all()
+    assert len(sessions) == 1
+    assert sessions[0].user_id == "session-first-user"
+    assert sessions[0].title == "First question"
+
+
 def test_get_session_messages_rejects_authenticated_non_owner(client, db):
     db.add(User(user_id="owner", device_id="owner"))
     db.add(User(user_id="other", device_id="other"))

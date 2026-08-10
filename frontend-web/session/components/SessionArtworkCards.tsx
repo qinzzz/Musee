@@ -5,6 +5,9 @@ import { MAX_SESSION_ARTWORK_BATCH_SIZE } from '../constants';
 const UNTITLED_ARTWORK_LABEL = 'Untitled';
 const UNKNOWN_ARTIST_LABEL = 'Artist unknown';
 const ANALYZING_LABEL = 'Analyzing…';
+const UPLOADING_LABEL = 'Uploading…';
+const ANALYZING_PROGRESS_LABEL = 'Analyzing';
+const UPLOADING_PROGRESS_LABEL = 'Uploading';
 const DELETED_ARTWORK_LABEL = 'Deleted artwork';
 
 type SessionArtworkCardsProps = {
@@ -13,8 +16,15 @@ type SessionArtworkCardsProps = {
 };
 
 function getArtworkTitle(item: GalleryItem): string {
+  if (item.syncStatus === 'pending' && !item.artworkName?.trim()) return UPLOADING_LABEL;
   if (item.isAnalyzing && !item.artworkName?.trim()) return ANALYZING_LABEL;
   return item.artworkName?.trim() || UNTITLED_ARTWORK_LABEL;
+}
+
+function getArtworkProgressLabel(item: GalleryItem): string | null {
+  if (item.syncStatus === 'pending') return UPLOADING_PROGRESS_LABEL;
+  if (item.isAnalyzing) return ANALYZING_PROGRESS_LABEL;
+  return null;
 }
 
 function getArtworkAttribution(item: GalleryItem): string {
@@ -37,6 +47,7 @@ export default function SessionArtworkCards({ items, onOpenArtwork }: SessionArt
         const title = getArtworkTitle(item);
         const attribution = getArtworkAttribution(item);
         const isUnavailable = Boolean(item.isDeletedPlaceholder || item.deleteStatus === 'pending');
+        const progressLabel = getArtworkProgressLabel(item);
 
         return (
           <button
@@ -71,13 +82,13 @@ export default function SessionArtworkCards({ items, onOpenArtwork }: SessionArt
                 />
               )}
 
-              {item.isAnalyzing ? (
+              {progressLabel ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/70">
                   <div className="relative">
                     <div className="h-6 w-6 rounded-full border-2 border-neutral-100" />
                     <div className="absolute inset-0 h-6 w-6 animate-spin rounded-full border-t-2 border-neutral-600" />
                   </div>
-                  <p className="text-[12px] font-medium text-neutral-500">Analyzing</p>
+                  <p className="text-[12px] font-medium text-neutral-500">{progressLabel}</p>
                 </div>
               ) : null}
             </div>

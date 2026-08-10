@@ -4,6 +4,7 @@ import { getDeletedArtworkReference, getSessionEventArtworkIds } from './session
 import { compareSessionEvents } from './sessionOrdering';
 import type { SessionRenderBlock, SessionStreamMessage, SessionSummary } from '../types';
 import { getArtworkClientId } from '../../lib/artworkIdentity';
+import { isSessionFailureMessageKind } from './sessionFailureStatus';
 
 function normalizeEventSource(source: unknown): 'library' | 'upload' | 'camera' {
   if (source === 'library' || source === 'upload' || source === 'camera') {
@@ -202,6 +203,19 @@ export function buildSessionRenderBlocks(
         localOrder: message.localOrder,
         message,
         status: getCommentaryStatus(message),
+      });
+      continue;
+    }
+
+    if (message.text && isSessionFailureMessageKind(message.payload?.message_kind)) {
+      blocks.push({
+        type: 'status',
+        id: message.id,
+        createdAt: message.createdAt,
+        sequenceNumber: message.sequenceNumber,
+        localOrder: message.localOrder,
+        message: message.text,
+        tone: 'failed',
       });
       continue;
     }
