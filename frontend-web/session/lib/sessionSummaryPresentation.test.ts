@@ -25,8 +25,8 @@ describe('session summary presentation', () => {
     expect(formatSessionRecency(new Date(2025, 11, 20, 8).getTime(), NOW)).toBe('Dec 20, 2025');
   });
 
-  it('shows draft state instead of a zero artwork count', () => {
-    expect(formatSessionSummaryMeta(createSummary(), NOW)).toBe('Draft · Today');
+  it('shows recency without a draft label when a session has no artworks yet', () => {
+    expect(formatSessionSummaryMeta(createSummary(), NOW)).toBe('Today');
   });
 
   it('summarizes recognizable artists and remaining unique artists', () => {

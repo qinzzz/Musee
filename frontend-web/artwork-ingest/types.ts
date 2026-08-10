@@ -1,4 +1,5 @@
 import type { PendingSessionArtwork } from '../session/types';
+import type { ArtworkUploadFailureCode } from '../lib/uploadValidation';
 
 export type IngestMode = 'gallery' | 'camera';
 
@@ -53,6 +54,8 @@ export type PreparedUploadIngestResult = {
   failedEntries: Array<{
     entryId: string;
     message: string;
+    errorCode?: ArtworkUploadFailureCode;
   }>;
   analysisPromise: Promise<import('../types').GalleryItem[]>;
+  analysisFailureCountPromise?: Promise<number>;
 };

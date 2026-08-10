@@ -143,7 +143,7 @@ export async function updateSession(sessionId: string, userId: string, title: st
   return response.json();
 }
 
-export async function createSession(userId: string, sessionId?: string, title?: string): Promise<any> {
+export async function ensureSession(userId: string, sessionId: string, title: string): Promise<SessionRecord> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/sessions?user_id=${encodeURIComponent(userId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -156,7 +156,8 @@ export async function createSession(userId: string, sessionId?: string, title?: 
     const errorText = await response.text();
     throw new Error(`API error (${response.status}): ${errorText}`);
   }
-  return response.json();
+  const payload = await response.json();
+  return payload.session as SessionRecord;
 }
 
 export async function startSessionWithArtworks(userId: string, payload: StartSessionWithArtworksPayload): Promise<any> {

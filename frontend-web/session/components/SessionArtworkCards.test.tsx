@@ -69,4 +69,27 @@ describe('SessionArtworkCards', () => {
     fireEvent.click(screen.getByRole('button'));
     expect(onOpenArtwork).not.toHaveBeenCalled();
   });
+
+  it('shows uploading until persistence completes, then analyzing', () => {
+    render(
+      <SessionArtworkCards
+        items={[
+          makeArtwork(1, {
+            syncStatus: 'pending',
+            isAnalyzing: true,
+            analysisStatus: 'pending',
+          }),
+          makeArtwork(2, {
+            syncStatus: 'synced',
+            isAnalyzing: true,
+            analysisStatus: 'pending',
+          }),
+        ]}
+        onOpenArtwork={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Uploading')).toBeTruthy();
+    expect(screen.getByText('Analyzing')).toBeTruthy();
+  });
 });

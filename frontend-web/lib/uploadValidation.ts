@@ -11,6 +11,13 @@ const UPLOAD_TIMEOUT_ERROR = 'The upload took too long. Check your connection an
 const GENERIC_ANALYSIS_ERROR = 'Artwork saved, but Musee couldn’t analyze it. Try identifying it again.';
 const ANALYSIS_TIMEOUT_ERROR = 'Artwork saved, but analysis took too long. Try identifying it again.';
 
+export type ArtworkUploadFailureCode =
+  | 'network_error'
+  | 'request_timeout'
+  | 'server_error'
+  | 'quota_exceeded'
+  | 'validation_error';
+
 const SUPPORTED_IMAGE_EXTENSIONS = new Set([
   'jpg',
   'jpeg',
@@ -100,6 +107,30 @@ function extractBackendDetail(error: unknown): string | null {
 
 function isTimeoutError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+export function getArtworkUploadFailureCode(error: unknown): ArtworkUploadFailureCode {
+  if (isTimeoutError(error)) return 'request_timeout';
+
+  if (
+    error instanceof TypeError
+    || (error instanceof Error && /failed to fetch|network error|networkerror|load failed/i.test(error.message))
+  ) {
+    return 'network_error';
+  }
+
+  const normalizedDetail = extractBackendDetail(error)?.toLowerCase();
+  if (
+    normalizedDetail?.includes('file too large')
+    || normalizedDetail?.includes('invalid file type')
+    || normalizedDetail?.includes('file is empty')
+    || normalizedDetail?.includes('invalid image file')
+    || (error instanceof Error && error.message.includes('API error (413)'))
+  ) {
+    return 'validation_error';
+  }
+
+  return 'server_error';
 }
 
 export function getArtworkUploadErrorMessage(error: unknown, file?: File): string {

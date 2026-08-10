@@ -9,6 +9,8 @@ import {
 } from '../api/sessions';
 import { itemBelongsToSession, newSessionEventId } from '../lib/sessionLinks';
 import { getSessionHistoryBeforeTrigger, serializeSessionHistory } from '../lib/sessionHistory';
+import { buildInitialSessionTitle } from '../lib/sessionCreation';
+import { SESSION_FAILURE_MESSAGES } from '../lib/sessionFailureStatus';
 import { compareSessionEvents, nextLocalOrder } from '../lib/sessionOrdering';
 import type { SessionDraft, SessionStreamMessage, SessionSummary } from '../types';
 
@@ -138,11 +140,11 @@ export function useSessionMessaging({
     return next;
   }, []);
 
-  const createSessionDraft = useCallback(() => {
+  const createSessionDraft = useCallback((initialTitle = defaultSessionTitle) => {
     const now = Date.now();
     const newSession: SessionDraft = {
       id: `session_${Math.random().toString(36).substring(2, 11)}`,
-      title: defaultSessionTitle,
+      title: initialTitle,
       createdAt: now,
       updatedAt: now,
     };
@@ -536,7 +538,7 @@ export function useSessionMessaging({
 
     let targetSessionId = activeSessionSummary?.id;
     if (!targetSessionId || isComposingNewSession) {
-      targetSessionId = createSessionDraft();
+      targetSessionId = createSessionDraft(buildInitialSessionTitle(text, defaultSessionTitle));
     }
 
     if (hasPendingSessionReply(targetSessionId)) {
@@ -560,11 +562,12 @@ export function useSessionMessaging({
         createdAt,
         localOrder: nextLocalOrder(),
       };
+      appendLocalSessionEvents(targetSessionId, [userMsg]);
 
       try {
         await startSessionWithEvent(sessionUserId, {
           session_id: targetSessionId,
-          title: targetSummary?.title || defaultSessionTitle,
+          title: targetSummary?.title || buildInitialSessionTitle(text, defaultSessionTitle),
           event: {
             id: userMsg.id,
             role: 'user',
@@ -574,7 +577,6 @@ export function useSessionMessaging({
           },
         });
         refreshPersistedSessions();
-        appendSessionEvents(targetSessionId, [userMsg]);
         streamSessionInquiryResponse(
           targetSessionId,
           text,
@@ -584,8 +586,20 @@ export function useSessionMessaging({
         );
       } catch (error) {
         clearSessionReplyPending(targetSessionId);
+        appendLocalSessionEvents(targetSessionId, [{
+          id: newSessionEventId(),
+          role: 'model',
+          type: 'text',
+          text: SESSION_FAILURE_MESSAGES.session,
+          payload: {
+            message_kind: 'session_failure',
+            error_code: 'session_save_failed',
+          },
+          triggerEventId: userEventId,
+          createdAt: createdAt + 1,
+          localOrder: nextLocalOrder(),
+        }]);
         console.error('Failed to commit first session event:', error);
-        showToast('Couldn’t send your first message. Try again.', 'info');
         return false;
       }
       return true;
@@ -602,7 +616,7 @@ export function useSessionMessaging({
     }
   }, [
     activeSessionSummary?.id,
-    appendSessionEvents,
+    appendLocalSessionEvents,
     createSessionDraft,
     clearSessionReplyPending,
     defaultSessionTitle,

@@ -79,6 +79,7 @@ type ViewportStateProps = {
   boards: Board[];
   boardsLoading: boolean;
   sessionTitleById: Record<string, string>;
+  activeInputPipelineSessionId: string | null;
 };
 
 type ViewportNavigationProps = {
@@ -187,6 +188,7 @@ export default function AppViewport({
     boards,
     boardsLoading,
     sessionTitleById,
+    activeInputPipelineSessionId,
   } = state;
   const {
     closeSessionCapturePage,
@@ -240,15 +242,29 @@ export default function AppViewport({
     activeSessionSummary
     && Object.prototype.hasOwnProperty.call(streamingSessionResponses, activeSessionSummary.id),
   );
+  const hasAnySessionReplyPending = Object.keys(streamingSessionResponses).length > 0;
+  const isArtworkInputPending = isSubmittingPreparedSession || isSubmittingStagedBatch;
+  const isActiveInputPipelineSession = Boolean(
+    activeSessionSummary?.id
+    && activeSessionSummary.id === activeInputPipelineSessionId
+  );
   const sessionProcessingState = useSessionProcessingState({
     activeSessionSummary,
     sessionRenderBlocks: activeSessionRenderBlocks,
-    isAddingArtworks: isSubmittingPreparedSession || isSubmittingStagedBatch,
-    isAnalyzingArtworks: isAnalyzing,
+    isAddingArtworks: Boolean(
+      isArtworkInputPending
+      && isActiveInputPipelineSession
+    ),
+    isAnalyzingArtworks: isAnalyzing && (
+      activeInputPipelineSessionId === null || isActiveInputPipelineSession
+    ),
     hasLiveResponse: isSessionReplyPending,
   });
   const isSessionBusy = Boolean(
-    isSessionProcessing(sessionProcessingState)
+    isArtworkInputPending
+    || activeInputPipelineSessionId !== null
+    || hasAnySessionReplyPending
+    || isSessionProcessing(sessionProcessingState)
     || sessionHistoryStatus !== 'ready'
   );
 

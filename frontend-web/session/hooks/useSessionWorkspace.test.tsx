@@ -231,6 +231,24 @@ describe('useSessionWorkspace', () => {
     expect(sessionStateMock.setIsComposingNewSession).toHaveBeenLastCalledWith(false);
   });
 
+  it('does not auto-scroll when returning from artwork detail to the same session', () => {
+    const options: {
+      activeTab: 'newSession';
+      artworkDetailItem: ArtworkDetailItem | null;
+    } = {
+      activeTab: 'newSession',
+      artworkDetailItem: { id: 'artwork-1' } as ArtworkDetailItem,
+    };
+    const { rerender, spies } = renderUseSessionWorkspace(options);
+
+    expect(spies.sessionStreamEnd.scrollIntoView).not.toHaveBeenCalled();
+
+    options.artworkDetailItem = null;
+    rerender();
+
+    expect(spies.sessionStreamEnd.scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it('keeps a first-opened session loading until its canonical event query settles', async () => {
     let resolveEvents: (events: []) => void = () => {};
     mockFetchSessionMessages.mockReturnValue(new Promise<[]>((resolve) => {

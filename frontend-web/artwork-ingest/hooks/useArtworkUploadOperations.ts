@@ -19,6 +19,7 @@ import {
   buildUnpreparedUploadMessage,
   buildUnsupportedUploadMessage,
   getArtworkAnalysisErrorMessage,
+  getArtworkUploadFailureCode,
   getArtworkUploadErrorMessage,
   isOversizedUploadImage,
   isSupportedUploadImage,
@@ -325,9 +326,8 @@ export function useArtworkUploadOperations({
   ): Promise<PreparedUploadIngestResult> => {
     const persistedSessionItems: GalleryItem[] = [];
     const persistedEntries: Array<{ entryId: string; item: GalleryItem }> = [];
-    const failedEntries: Array<{ entryId: string; message: string }> = [];
+    const failedEntries: PreparedUploadIngestResult['failedEntries'] = [];
     const analysisTasks: Array<Promise<GalleryItem | null>> = [];
-    let showedAnalysisFailure = false;
 
     const preparedEntries = uploadEntries.map((uploadEntry) => ({
       uploadEntry,
@@ -390,10 +390,6 @@ export function useArtworkUploadOperations({
               const message = getArtworkAnalysisErrorMessage(error);
               console.error('Failed to analyze staged upload:', error);
               markArtworkAnalysisFailed(persistedItem.id, message);
-              if (!showedAnalysisFailure) {
-                showedAnalysisFailure = true;
-                showToast(message, 'info');
-              }
               return null;
             }),
         );
@@ -403,7 +399,11 @@ export function useArtworkUploadOperations({
           ? quotaError.message
           : getArtworkUploadErrorMessage(error, uploadEntry.file);
         console.error('Failed to save/analyze staged upload:', error);
-        failedEntries.push({ entryId: uploadEntry.id, message });
+        failedEntries.push({
+          entryId: uploadEntry.id,
+          message,
+          errorCode: quotaError ? 'quota_exceeded' : getArtworkUploadFailureCode(error),
+        });
         if (placeholderId && persistedItemId) {
           markArtworkAnalysisFailed(persistedItemId, message);
         } else if (placeholderId) {
@@ -412,8 +412,12 @@ export function useArtworkUploadOperations({
       }
     }
 
-    const analysisPromise = Promise.all(analysisTasks).then((results) => (
+    const analysisResultsPromise = Promise.all(analysisTasks);
+    const analysisPromise = analysisResultsPromise.then((results) => (
       results.filter((item): item is GalleryItem => Boolean(item))
+    ));
+    const analysisFailureCountPromise = analysisResultsPromise.then((results) => (
+      results.filter((item) => item === null).length
     ));
 
     return {
@@ -421,6 +425,7 @@ export function useArtworkUploadOperations({
       persistedEntries,
       failedEntries,
       analysisPromise,
+      analysisFailureCountPromise,
     };
   }, [
     analyzePersistedUpload,

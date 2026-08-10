@@ -475,8 +475,17 @@ const App: React.FC = () => {
     showToast,
     parseAnalysis,
   });
+  const persistedSessionIds = React.useMemo(
+    () => persistedSessions.map((session) => session.id),
+    [persistedSessions],
+  );
+  const sessionTitleById = React.useMemo(
+    () => Object.fromEntries(sessionSummaries.map((session) => [session.id, session.title])),
+    [sessionSummaries],
+  );
   const {
     isSubmittingStagedBatch,
+    activeInputPipelineSessionId,
     submitPreparedSession,
     submitStagedBatch,
     submitImmediateArtwork,
@@ -484,6 +493,8 @@ const App: React.FC = () => {
     userId: sessionUserId,
     defaultSessionTitle: DEFAULT_VISIT_TITLE,
     items,
+    persistedSessionIds,
+    sessionTitleById,
     sessionStreams,
     pendingSessionArtworks,
     newSessionDraftMessage,
@@ -751,7 +762,8 @@ const App: React.FC = () => {
     likedIds,
     boards,
     boardsLoading,
-    sessionTitleById: Object.fromEntries(sessionSummaries.map((session) => [session.id, session.title])),
+    sessionTitleById,
+    activeInputPipelineSessionId,
   };
 
   const viewportNavigation = {

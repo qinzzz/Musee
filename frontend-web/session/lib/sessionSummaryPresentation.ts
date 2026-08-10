@@ -3,7 +3,6 @@ import { isKnownArtistName } from './commentary';
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const MAX_VISIBLE_ARTISTS = 2;
-const DRAFT_LABEL = 'Draft';
 const ANALYZING_LABEL = 'Analyzing';
 const DETAILS_PENDING_LABEL = 'Artwork details pending';
 
@@ -38,7 +37,7 @@ export function formatSessionSummaryMeta(summary: SessionSummary, now = Date.now
   }
 
   if (summary.artworkCount === 0) {
-    return `${DRAFT_LABEL} · ${recency}`;
+    return recency;
   }
 
   const artists = Array.from(new Set(

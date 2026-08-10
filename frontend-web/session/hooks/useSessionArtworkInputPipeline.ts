@@ -6,10 +6,13 @@ import type {
   PreparedUploadSessionContext,
 } from '../../artwork-ingest/types';
 import type { ArtworkWorkspace, GalleryItem, SessionLink } from '../../types';
-import { buildBatchUploadFailureMessage } from '../../lib/uploadValidation';
+import {
+  buildBatchUploadFailureMessage,
+  getArtworkUploadFailureCode,
+} from '../../lib/uploadValidation';
 import {
   attachArtworksToSession,
-  startSessionWithArtworks,
+  ensureSession,
 } from '../api/sessions';
 import { buildArtworkInputEntries } from '../lib/batchEvents';
 import {
@@ -22,6 +25,13 @@ import {
   updateSessionLinkForItem,
 } from '../lib/sessionLinks';
 import { nextLocalOrder } from '../lib/sessionOrdering';
+import { buildInitialSessionTitle } from '../lib/sessionCreation';
+import {
+  getSessionUploadFailureStatus,
+  SESSION_FAILURE_MESSAGES,
+  shouldShowInlineSessionUploadFailure,
+  type SessionFailureKind,
+} from '../lib/sessionFailureStatus';
 import {
   getNextLocalSessionEventCreatedAt,
   getNextSessionArtworkSequenceNumber,
@@ -45,6 +55,8 @@ type UseSessionArtworkInputPipelineOptions = {
   userId: string;
   defaultSessionTitle: string;
   items: GalleryItem[];
+  persistedSessionIds: string[];
+  sessionTitleById: Record<string, string>;
   sessionStreams: Record<string, SessionStreamMessage[]>;
   pendingSessionArtworks: PendingSessionArtwork[];
   newSessionDraftMessage: string;
@@ -99,6 +111,8 @@ export function useSessionArtworkInputPipeline({
   userId,
   defaultSessionTitle,
   items,
+  persistedSessionIds,
+  sessionTitleById,
   sessionStreams,
   pendingSessionArtworks,
   newSessionDraftMessage,
@@ -120,6 +134,7 @@ export function useSessionArtworkInputPipeline({
   showToast,
 }: UseSessionArtworkInputPipelineOptions) {
   const [isSubmittingStagedBatch, setIsSubmittingStagedBatch] = useState(false);
+  const [activeInputPipelineSessionId, setActiveInputPipelineSessionId] = useState<string | null>(null);
   const submissionInFlightRef = useRef(false);
 
   const runInputPipeline = useCallback(async (
@@ -143,9 +158,47 @@ export function useSessionArtworkInputPipeline({
     let optimisticSessionId: string | null = null;
     let optimisticEventId: string | null = null;
     let hasResolvedArtwork = false;
+    let hasPersistedSession = target.kind === 'existing'
+      && persistedSessionIds.includes(target.sessionId);
     let failurePhase: PipelineFailurePhase = target.kind === 'new'
       ? 'starting-session'
       : 'linking-artworks';
+
+    const publishLocalFailureStatus = (
+      sessionId: string,
+      message: string,
+      messageKind: SessionFailureKind,
+      errorCode: string,
+      options: { replaceEventId?: string; triggerEventId?: string } = {},
+    ) => {
+      const statusId = newSessionEventId();
+      const statusLocalOrder = nextLocalOrder();
+      setSessionStreams((prev) => {
+        const currentEvents = prev[sessionId] || [];
+        const events = options.replaceEventId
+          ? currentEvents.filter((entry) => entry.id !== options.replaceEventId)
+          : currentEvents;
+        return {
+          ...prev,
+          [sessionId]: [
+            ...events,
+            {
+              id: statusId,
+              role: 'model',
+              type: 'text',
+              text: message,
+              payload: {
+                message_kind: messageKind,
+                error_code: errorCode,
+              },
+              triggerEventId: options.triggerEventId,
+              createdAt: getNextLocalSessionEventCreatedAt(events),
+              localOrder: statusLocalOrder,
+            },
+          ],
+        };
+      });
+    };
 
     try {
       const libraryEntries = inputArtworks.filter(
@@ -163,21 +216,29 @@ export function useSessionArtworkInputPipeline({
       const provisionalSessionId = isNewSession
         ? `session_${Math.random().toString(36).substring(2, 11)}`
         : target.sessionId;
-      let sessionId = provisionalSessionId;
-      let sessionTitle = defaultSessionTitle;
-
-      if (isNewSession && libraryEntries.length > 0) {
-        const started = await startSessionWithArtworks(userId, {
-          session_id: provisionalSessionId,
-          title: defaultSessionTitle,
-          artwork_ids: libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id),
-        });
-        sessionId = started?.session?.id || provisionalSessionId;
-        sessionTitle = started?.session?.title || defaultSessionTitle;
-      }
+      const sessionId = provisionalSessionId;
+      let sessionTitle = isNewSession
+        ? buildInitialSessionTitle(message, defaultSessionTitle)
+        : sessionTitleById[sessionId] || defaultSessionTitle;
 
       optimisticSessionId = sessionId;
       optimisticEventId = eventId;
+      setActiveInputPipelineSessionId(sessionId);
+
+      if (isNewSession) {
+        setSessionDrafts((prev) => [
+          { id: sessionId, title: sessionTitle, createdAt, updatedAt: createdAt },
+          ...prev.filter((draft) => draft.id !== sessionId),
+        ]);
+        setActiveTab('newSession');
+        setFilteredSessionId(sessionId);
+        setIsComposingNewSession(false);
+        setVisit({
+          id: sessionId,
+          itemIds: [],
+          globalConversation: [],
+        });
+      }
 
       const sequenceStart = isNewSession
         ? 0
@@ -223,6 +284,20 @@ export function useSessionArtworkInputPipeline({
       // until onPlaceholdersReady patches this same event with client ids.
       publishOptimisticEvent();
 
+      const shouldEnsureSession = isNewSession || !persistedSessionIds.includes(sessionId);
+      if (shouldEnsureSession) {
+        failurePhase = 'starting-session';
+        const persistedSession = await ensureSession(userId, sessionId, sessionTitle);
+        hasPersistedSession = true;
+        sessionTitle = persistedSession.title || sessionTitle;
+        setSessionDrafts((prev) => prev.map((draft) => (
+          draft.id === sessionId
+            ? { ...draft, title: sessionTitle, updatedAt: Date.now() }
+            : draft
+        )));
+        refreshPersistedSessions();
+      }
+
       const resolvedLibraryItems = libraryEntries.map((entry) => (
         updateSessionLinkForItem(entry.artwork, sessionId, () => ({
           sessionId,
@@ -232,13 +307,12 @@ export function useSessionArtworkInputPipeline({
       ));
 
       if (libraryEntries.length > 0) {
-        if (!isNewSession) {
-          await attachArtworksToSession(
-            sessionId,
-            userId,
-            libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id),
-          );
-        }
+        failurePhase = 'linking-artworks';
+        await attachArtworksToSession(
+          sessionId,
+          userId,
+          libraryEntries.map((entry) => entry.artwork.artworkId || entry.artwork.id),
+        );
         const sequenceByClientId = new Map(
           libraryEntries.map((entry) => [entry.artwork.id, getSequenceNumber(entry.id)]),
         );
@@ -311,19 +385,40 @@ export function useSessionArtworkInputPipeline({
       const persistedUploadItems = persistedEntries.map((entry) => entry.item);
       const resolvedItems = [...resolvedLibraryItems, ...persistedUploadItems];
       if (resolvedItems.length === 0) {
-        setSessionStreams((prev) => ({
-          ...prev,
-          [sessionId]: (prev[sessionId] || []).filter((event) => event.id !== eventId),
-        }));
+        const uploadFailureCodes = uploadResult?.failedEntries.map((entry) => entry.errorCode) || [];
+        const uploadFailureStatus = getSessionUploadFailureStatus(
+          uploadFailureCodes,
+        );
+        const shouldShowInlineFailure = hasPersistedSession
+          && shouldShowInlineSessionUploadFailure(uploadFailureCodes);
+        if (shouldShowInlineFailure) {
+          publishLocalFailureStatus(
+            sessionId,
+            uploadFailureStatus.message,
+            'upload_failure',
+            uploadFailureStatus.errorCode,
+            { replaceEventId: eventId },
+          );
+        } else {
+          setSessionStreams((prev) => ({
+            ...prev,
+            [sessionId]: (prev[sessionId] || []).filter((event) => event.id !== eventId),
+          }));
+        }
         const uploadFailureMessage = buildBatchUploadFailureMessage(
           uploadResult?.failedEntries.map((entry) => entry.message) || [],
           0,
         );
-        showToast(uploadFailureMessage || (
-          isNewSession
-            ? 'Musee couldn’t save the first artwork. Check your connection and try again.'
-            : 'None of the selected artworks could be added. Check your connection and try again.'
-        ), 'info');
+        if (!shouldShowInlineFailure) {
+          showToast(
+            uploadFailureMessage || (
+              isNewSession
+                ? 'Musee couldn’t save the first artwork. Check your connection and try again.'
+                : 'None of the selected artworks could be added. Check your connection and try again.'
+            ),
+            'info',
+          );
+        }
         return false;
       }
       hasResolvedArtwork = true;
@@ -332,11 +427,24 @@ export function useSessionArtworkInputPipeline({
         uploadResult?.failedEntries.map((entry) => entry.message) || [],
         resolvedItems.length,
       );
-      if (partialUploadFailureMessage) {
-        showToast(partialUploadFailureMessage, 'info');
-      }
-
       publishOptimisticEvent();
+      if (partialUploadFailureMessage) {
+        const uploadFailureCodes = uploadResult?.failedEntries.map((entry) => entry.errorCode) || [];
+        const uploadFailureStatus = getSessionUploadFailureStatus(
+          uploadFailureCodes,
+        );
+        if (shouldShowInlineSessionUploadFailure(uploadFailureCodes)) {
+          publishLocalFailureStatus(
+            sessionId,
+            uploadFailureStatus.message,
+            'upload_failure',
+            uploadFailureStatus.errorCode,
+            { triggerEventId: eventId },
+          );
+        } else {
+          showToast(partialUploadFailureMessage, 'info');
+        }
+      }
       const inputEntries = buildArtworkInputEntries(resolvedItems, sessionId);
       failurePhase = 'saving-session-turn';
       try {
@@ -349,13 +457,6 @@ export function useSessionArtworkInputPipeline({
       refreshPersistedSessions();
 
       if (isNewSession) {
-        setSessionDrafts((prev) => [
-          { id: sessionId, title: sessionTitle, createdAt, updatedAt: createdAt },
-          ...prev.filter((draft) => draft.id !== sessionId),
-        ]);
-        setActiveTab('newSession');
-        setFilteredSessionId(sessionId);
-        setIsComposingNewSession(false);
         setVisit({
           id: sessionId,
           itemIds: resolvedItems.map((item) => item.id),
@@ -372,7 +473,20 @@ export function useSessionArtworkInputPipeline({
       setSubmitting(false);
 
       const analysisPromise = uploadResult?.analysisPromise || Promise.resolve([]);
-      const analyzedUploads = await analysisPromise;
+      const analysisFailureCountPromise = uploadResult?.analysisFailureCountPromise || Promise.resolve(0);
+      const [analyzedUploads, analysisFailureCount] = await Promise.all([
+        analysisPromise,
+        analysisFailureCountPromise,
+      ]);
+      if (analysisFailureCount > 0) {
+        publishLocalFailureStatus(
+          sessionId,
+          SESSION_FAILURE_MESSAGES.analysis,
+          'analysis_failure',
+          'analysis_failed',
+          { triggerEventId: eventId },
+        );
+      }
       const libraryItems = resolvedItems.filter((item) => (
         item.sessionLinks?.some((link) => link.sessionId === sessionId && link.source === 'library')
       ));
@@ -404,7 +518,40 @@ export function useSessionArtworkInputPipeline({
       return true;
     } catch (error) {
       console.error('Failed to submit artwork input:', error);
-      if (optimisticSessionId && optimisticEventId) {
+      const shouldShowInlineUploadFailure = Boolean(
+        optimisticSessionId
+        && optimisticEventId
+        && hasPersistedSession
+        && failurePhase === 'uploading-artworks',
+      );
+      const shouldShowInlineSessionFailure = Boolean(
+        optimisticSessionId
+        && optimisticEventId
+        && failurePhase === 'starting-session',
+      );
+      if (shouldShowInlineSessionFailure && optimisticSessionId && optimisticEventId) {
+        publishLocalFailureStatus(
+          optimisticSessionId,
+          SESSION_FAILURE_MESSAGES.session,
+          'session_failure',
+          'session_save_failed',
+          { triggerEventId: optimisticEventId },
+        );
+        refreshPersistedSessions();
+      } else if (shouldShowInlineUploadFailure && optimisticSessionId && optimisticEventId) {
+        const uploadFailureStatus = getSessionUploadFailureStatus([
+          getArtworkUploadFailureCode(error),
+        ]);
+        publishLocalFailureStatus(
+          optimisticSessionId,
+          uploadFailureStatus.message,
+          'upload_failure',
+          uploadFailureStatus.errorCode,
+          hasResolvedArtwork
+            ? { triggerEventId: optimisticEventId }
+            : { replaceEventId: optimisticEventId },
+        );
+      } else if (optimisticSessionId && optimisticEventId) {
         // Keep successfully uploaded artwork visible, but remove the optimistic
         // turn if attachment/upload failed before anything became durable.
         setSessionStreams((prev) => {
@@ -419,18 +566,21 @@ export function useSessionArtworkInputPipeline({
       if (hasResolvedArtwork && !clearPreparedDraftOnStart) {
         startTransition(() => resetPreparedSessionState());
       }
-      const failureMessage = failurePhase === 'saving-session-turn' && hasResolvedArtwork
-        ? 'The artworks were saved, but Musee couldn’t finish updating the session. Refresh to check the session.'
-        : failurePhase === 'linking-artworks'
-          ? 'Musee couldn’t link these artworks to the session. They’re still in your collection.'
-          : target.kind === 'new'
-            ? 'Musee couldn’t start the session. Check your connection and try again.'
-            : 'Musee couldn’t add these artworks. Check your connection and try again.';
-      showToast(failureMessage, 'info');
+      if (!shouldShowInlineUploadFailure && !shouldShowInlineSessionFailure) {
+        const failureMessage = failurePhase === 'saving-session-turn' && hasResolvedArtwork
+          ? 'The artworks were saved, but Musee couldn’t finish updating the session. Refresh to check the session.'
+          : failurePhase === 'linking-artworks'
+            ? 'Musee couldn’t link these artworks to the session. They’re still in your collection.'
+            : target.kind === 'new'
+              ? 'Musee couldn’t start the session. Check your connection and try again.'
+              : 'Musee couldn’t add these artworks. Check your connection and try again.';
+        showToast(failureMessage, 'info');
+      }
       return false;
     } finally {
       submissionInFlightRef.current = false;
       setSubmitting(false);
+      setActiveInputPipelineSessionId(null);
     }
   }, [
     appendSessionEvents,
@@ -441,11 +591,13 @@ export function useSessionArtworkInputPipeline({
     items,
     newSessionDraftMessage,
     pendingSessionArtworks,
+    persistedSessionIds,
     persistSessionArtworkInput,
     refreshPersistedSessions,
     resetPreparedSessionState,
     sendSessionInquiryToSession,
     sessionStreams,
+    sessionTitleById,
     setActiveTab,
     setFilteredSessionId,
     setIsComposingNewSession,
@@ -483,6 +635,7 @@ export function useSessionArtworkInputPipeline({
 
   return {
     isSubmittingStagedBatch,
+    activeInputPipelineSessionId,
     submitPreparedSession,
     submitStagedBatch,
     submitImmediateArtwork,

@@ -130,7 +130,7 @@ describe('useSessionMessaging', () => {
     expect(didSubmit).toBe(true);
     expect(mockStartSessionWithEvent).toHaveBeenCalledWith('user-1', {
       session_id: expect.stringMatching(/^session_/),
-      title: 'Untitled Session',
+      title: 'Hello there',
       event: expect.objectContaining({
         id: expect.stringMatching(/^evt-/),
         role: 'user',
@@ -180,7 +180,7 @@ describe('useSessionMessaging', () => {
 
     expect(duplicateResult).toBe(false);
     expect(mockStartSessionWithEvent).toHaveBeenCalledTimes(1);
-    expect(spies.setSessionDrafts).toHaveBeenCalledTimes(1);
+    expect(spies.setSessionDrafts).toHaveBeenCalledTimes(2);
     expect(mockStreamSessionChat).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -377,7 +377,24 @@ describe('useSessionMessaging', () => {
     });
 
     expect(didSubmit).toBe(false);
-    expect(spies.showToast).toHaveBeenCalledWith('Couldn’t send your first message. Try again.', 'info');
+    expect(spies.showToast).not.toHaveBeenCalled();
+    expect(spies.setSessionStreams).toHaveBeenCalledTimes(2);
+    const localStreams = spies.setSessionStreams.mock.calls.reduce<Record<string, SessionStreamMessage[]>>(
+      (state, [update]) => (typeof update === 'function' ? update(state) : update),
+      {},
+    );
+    const localSession = Object.values(localStreams)[0];
+    expect(localSession).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'user', text: 'Hello there' }),
+      expect.objectContaining({
+        role: 'model',
+        text: 'Couldn’t save this session',
+        payload: {
+          message_kind: 'session_failure',
+          error_code: 'session_save_failed',
+        },
+      }),
+    ]));
     expect(mockAppendSessionMessages).not.toHaveBeenCalled();
     expect(mockStreamSessionChat).not.toHaveBeenCalled();
   });

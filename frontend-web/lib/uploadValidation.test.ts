@@ -3,6 +3,7 @@ import {
   MAX_UPLOAD_FILE_SIZE_BYTES,
   buildBatchUploadFailureMessage,
   buildOversizedUploadMessage,
+  getArtworkUploadFailureCode,
   getArtworkUploadErrorMessage,
   isOversizedUploadImage,
 } from './uploadValidation';
@@ -49,5 +50,14 @@ describe('upload validation', () => {
       .toBe('2 artworks couldn’t be uploaded. The other selected artworks were added.');
     expect(buildBatchUploadFailureMessage(failures, 0))
       .toBe('None of the selected artworks could be uploaded. Check your connection and file sizes, then try again.');
+  });
+
+  it('classifies transport failures for inline session feedback', () => {
+    const timeout = new Error('aborted');
+    timeout.name = 'AbortError';
+
+    expect(getArtworkUploadFailureCode(timeout)).toBe('request_timeout');
+    expect(getArtworkUploadFailureCode(new TypeError('Failed to fetch'))).toBe('network_error');
+    expect(getArtworkUploadFailureCode(new Error('API error (503): unavailable'))).toBe('server_error');
   });
 });

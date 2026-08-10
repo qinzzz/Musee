@@ -87,6 +87,15 @@ export type SessionRenderBlock =
       sequenceNumber?: number;
       localOrder?: number;
       message: SessionStreamMessage;
+    }
+  | {
+      type: 'status';
+      id: string;
+      createdAt: number;
+      sequenceNumber?: number;
+      localOrder?: number;
+      message: string;
+      tone: 'failed';
     };
 
 export type PendingSessionArtwork =
