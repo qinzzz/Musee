@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = True
     ai_timeout: int = 180  # Seconds before timing out AI calls (3 minutes)
+    collection_retrieval_enabled: bool = True
+    collection_retrieval_candidate_limit: int = 30
+    collection_retrieval_result_limit: int = 5
 
     # File Upload & Storage
     max_file_size_mb: int = 10

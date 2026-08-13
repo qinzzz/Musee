@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SESSION_STREAM_IDLE_TIMEOUT_MS, streamSessionChat } from './chat';
+import { SESSION_STREAM_IDLE_TIMEOUT_MS, SessionAuthenticationError, streamSessionChat } from './chat';
 
 const encoder = new TextEncoder();
 
@@ -46,6 +46,62 @@ describe('streamSessionChat', () => {
     expect(stream.onChunk).toHaveBeenCalledWith('Hello');
     expect(stream.onComplete).toHaveBeenCalledOnce();
     expect(stream.onError).not.toHaveBeenCalled();
+  });
+
+  it('forwards retrieval phases and completion provenance', async () => {
+    const onPhase = vi.fn();
+    const retrieval = { status: 'completed', selected_source_ids: ['artwork-1'] };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(createStreamResponse([
+      'event: phase\ndata: {"phase":"retrieving_collection"}\n\n',
+      `event: complete\ndata: ${JSON.stringify({ type: 'result', response: 'Found it', retrieval })}\n\n`,
+    ])));
+    const onComplete = vi.fn();
+
+    await streamSessionChat([], [], 'Search mine', vi.fn(), onComplete, vi.fn(), { onPhase });
+
+    expect(onPhase).toHaveBeenCalledWith('retrieving_collection');
+    expect(onComplete).toHaveBeenCalledWith('Found it', retrieval);
+  });
+
+  it('forwards prior retrieval source IDs for follow-up reference resolution', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(createStreamResponse([
+      'event: complete\ndata: {"type":"result","response":"Done"}\n\n',
+    ]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await streamSessionChat(
+      [],
+      [{ role: 'model', text: 'You saved Woman with a Hat.', retrieval_source_ids: ['saved-art-1'] }],
+      'When and where did I find this?',
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+    );
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(String(request.body));
+    expect(body.conversation_history).toEqual([{
+      role: 'assistant',
+      content: 'You saved Woman with a Hat.',
+      retrieval_source_ids: ['saved-art-1'],
+    }]);
+  });
+
+  it('returns a typed authentication error for an expired token', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: {
+        error_code: 'token_expired',
+        message: 'Your session expired. Please sign in again.',
+      },
+    }), { status: 401 })));
+    const stream = startStream();
+
+    await stream.promise;
+
+    expect(stream.onComplete).not.toHaveBeenCalled();
+    expect(stream.onError).toHaveBeenCalledOnce();
+    expect(stream.onError.mock.calls[0][0]).toBeInstanceOf(SessionAuthenticationError);
+    expect(stream.onError.mock.calls[0][0]).toMatchObject({ code: 'token_expired' });
   });
 
   it('fails when the body ends without a complete or error event', async () => {

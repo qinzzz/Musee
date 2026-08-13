@@ -174,7 +174,8 @@ function renderAppViewport(options: {
         handleDeleteItem: vi.fn(),
         setIsUnsortedFlowOpen: vi.fn(),
         handleToggleLike: vi.fn(),
-        handleSessionInquiry,
+      handleSessionInquiry,
+      onSessionAuthenticationRequired: vi.fn(),
       }}
     />,
   );

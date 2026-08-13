@@ -60,8 +60,21 @@ describe('session processing state', () => {
   it('uses lightweight labels without artwork counts', () => {
     expect(SESSION_PROCESSING_LABELS.addingArtworks).toBe('Adding artworks…');
     expect(SESSION_PROCESSING_LABELS.analyzingArtworks).toBe('Analyzing artworks…');
+    expect(SESSION_PROCESSING_LABELS.preparingResponse).toBe('Preparing response…');
+    expect(SESSION_PROCESSING_LABELS.searchingCollection).toBe('Searching your collection…');
     expect(SESSION_PROCESSING_LABELS.writingResponse).toBe('Writing response…');
     expect(Object.values(SESSION_PROCESSING_LABELS).join(' ')).not.toMatch(/\d/);
+  });
+
+  it('surfaces collection retrieval as an explicit response phase', () => {
+    const pending = createCommentary('pending');
+    pending.message.payload = { status: 'pending', phase: 'retrieving_collection' };
+
+    const state = derive({ hasLiveResponse: true, sessionRenderBlocks: [pending] });
+
+    expect(state).toEqual({ kind: 'searching_collection', responseId: 'response-1' });
+    expect(isSessionProcessing(state)).toBe(true);
+    expect(getSessionProcessingLabel(state)).toBe('Searching your collection…');
   });
 
   it('derives adding, writing, and analyzing in lifecycle priority order', () => {

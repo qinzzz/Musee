@@ -3,6 +3,68 @@ import { API_BASE_URL, API_TIMEOUT, fetchWithTimeout, getLanguage } from './core
 
 export const SESSION_STREAM_IDLE_TIMEOUT_MS = 60_000;
 
+export type SessionChatPhase = 'planning' | 'retrieving_collection' | 'generating_response';
+
+export type SessionRetrievalTrace = {
+  status: 'skipped' | 'completed' | 'empty' | 'failed';
+  strategy?: 'structured' | 'conceptual_rerank' | 'hybrid' | null;
+  eligible_count?: number;
+  candidate_count?: number;
+  selected_count?: number;
+  candidates_truncated?: boolean;
+  completeness?: 'complete' | 'bounded' | 'unknown';
+  total_count?: number | null;
+  skip_reason?: 'planner_not_needed' | 'unauthenticated' | 'feature_disabled' | null;
+  selected_source_ids?: string[];
+  failure_stage?: string | null;
+};
+
+export type SessionChatHistoryMessage = Message & {
+  retrieval_source_ids?: string[];
+};
+
+export class SessionAuthenticationError extends Error {
+  readonly code: 'token_expired' | 'invalid_token' | 'authentication_required';
+
+  constructor(
+    code: 'token_expired' | 'invalid_token' | 'authentication_required',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'SessionAuthenticationError';
+    this.code = code;
+  }
+}
+
+async function buildSessionChatError(response: Response): Promise<Error> {
+  const fallback = `session chat stream failed: ${response.status}`;
+  const text = await response.text();
+  if (response.status !== 401) {
+    return new Error(text || fallback);
+  }
+
+  try {
+    const body = JSON.parse(text) as {
+      detail?: string | { error_code?: string; message?: string };
+    };
+    const detail = body.detail;
+    const code = typeof detail === 'object' && detail?.error_code === 'token_expired'
+      ? 'token_expired'
+      : typeof detail === 'object' && detail?.error_code === 'invalid_token'
+        ? 'invalid_token'
+        : 'authentication_required';
+    const message = typeof detail === 'object' && detail?.message
+      ? detail.message
+      : 'Please sign in again to search your collection.';
+    return new SessionAuthenticationError(code, message);
+  } catch {
+    return new SessionAuthenticationError(
+      'authentication_required',
+      'Please sign in again to search your collection.',
+    );
+  }
+}
+
 async function readStreamWithIdleTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
 ): Promise<ReadableStreamReadResult<Uint8Array>> {
@@ -36,16 +98,24 @@ export interface CommunityData {
 
 export async function streamSessionChat(
   items: { id: string; url: string; keywords: string[]; artistName?: string; artworkName?: string; description?: string; date?: string; medium?: string }[],
-  conversationHistory: Message[],
+  conversationHistory: SessionChatHistoryMessage[],
   newMessage: string,
   onChunk: (text: string) => void,
-  onComplete: (response: string) => void,
+  onComplete: (response: string, retrieval?: SessionRetrievalTrace) => void,
   onError: (error: Error) => void,
-  context?: { userId?: string; sessionId?: string; triggerEventId?: string },
+  context?: {
+    userId?: string;
+    sessionId?: string;
+    triggerEventId?: string;
+    onPhase?: (phase: SessionChatPhase) => void;
+  },
 ): Promise<void> {
   const history = conversationHistory.map((message) => ({
     role: message.role === 'model' ? 'assistant' : message.role,
     content: message.text,
+    ...(message.retrieval_source_ids?.length
+      ? { retrieval_source_ids: message.retrieval_source_ids }
+      : {}),
   }));
 
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -76,8 +146,7 @@ export async function streamSessionChat(
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `session chat stream failed: ${response.status}`);
+      throw await buildSessionChatError(response);
     }
 
     reader = response.body?.getReader();
@@ -107,11 +176,13 @@ export async function streamSessionChat(
         if (!eventData) continue;
         try {
           const data = JSON.parse(eventData);
-          if (eventType === 'chunk' && data.type === 'text') {
+          if (eventType === 'phase' && typeof data.phase === 'string') {
+            context?.onPhase?.(data.phase as SessionChatPhase);
+          } else if (eventType === 'chunk' && data.type === 'text') {
             onChunk(data.content);
           } else if (eventType === 'complete' && data.type === 'result') {
             terminalEventReceived = true;
-            onComplete(data.response || '');
+            onComplete(data.response || '', data.retrieval);
           } else if (eventType === 'error') {
             throw new Error(data.message || 'Stream error');
           }

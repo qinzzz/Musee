@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionMessaging } from './useSessionMessaging';
+import { SessionAuthenticationError } from '../../api/chat';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import type { SessionStreamMessage, SessionSummary } from '../types';
 
@@ -26,6 +27,14 @@ vi.mock('../api/sessions', () => ({
 }));
 
 vi.mock('../../api/chat', () => ({
+  SessionAuthenticationError: class SessionAuthenticationError extends Error {
+    code: string;
+
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+    }
+  },
   streamSessionChat: mockStreamSessionChat,
 }));
 
@@ -115,6 +124,7 @@ describe('useSessionMessaging', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     consoleErrorSpy.mockRestore();
     vi.clearAllMocks();
   });
@@ -160,6 +170,42 @@ describe('useSessionMessaging', () => {
       }),
     );
     expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists an authentication-required response instead of a generic failure', async () => {
+    mockStreamSessionChat.mockImplementation((
+      _items: GalleryItem[],
+      _history: SessionStreamMessage[],
+      _text: string,
+      _onChunk: (chunk: string) => void,
+      _onComplete: (fullResponse: string) => void,
+      onError: (error: Error) => void,
+    ) => {
+      onError(new SessionAuthenticationError('token_expired', 'Expired'));
+    });
+    const summary = createSessionSummary({ id: 'visit-1' });
+    const { result } = renderUseSessionMessaging({
+      activeSessionSummary: summary,
+      sessionSummaries: [summary],
+      isComposingNewSession: false,
+    });
+
+    await act(async () => {
+      await result.current.handleSessionInquiry('What Monet works have I saved?');
+    });
+
+    await waitFor(() => expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
+      'visit-1',
+      expect.any(String),
+      expect.objectContaining({
+        content: 'Your session expired. Sign in again to search your collection.',
+        payload: expect.objectContaining({
+          status: 'auth_required',
+          error_code: 'token_expired',
+          retry_message: 'What Monet works have I saved?',
+        }),
+      }),
+    ));
   });
 
   it('rejects rapid duplicate submits before the first session event finishes saving', async () => {
@@ -262,6 +308,51 @@ describe('useSessionMessaging', () => {
         content: 'assistant reply',
       }),
     );
+  });
+
+  it('keeps the collection-search phase visible before returning to writing', () => {
+    vi.useFakeTimers();
+    mockStreamSessionChat.mockImplementation((
+      _items: GalleryItem[],
+      _history: SessionStreamMessage[],
+      _text: string,
+      _onChunk: (chunk: string) => void,
+      _onComplete: (fullResponse: string) => void,
+      _onError: () => void,
+      context: { onPhase?: (phase: 'planning' | 'retrieving_collection' | 'generating_response') => void },
+    ) => {
+      context.onPhase?.('planning');
+      context.onPhase?.('retrieving_collection');
+      context.onPhase?.('generating_response');
+    });
+
+    const summary = createSessionSummary({ id: 'visit-1' });
+    const { result, spies } = renderUseSessionMessaging({
+      activeSessionSummary: summary,
+      sessionSummaries: [summary],
+      filteredSessionId: 'visit-1',
+      isComposingNewSession: false,
+      sessionStreams: { 'visit-1': [] },
+    });
+
+    act(() => {
+      result.current.sendSessionInquiryToSession('visit-1', 'Search my collection');
+    });
+
+    const readLatestPhase = () => {
+      const streams = spies.setSessionStreams.mock.calls.reduce<Record<string, SessionStreamMessage[]>>(
+        (state, [update]) => (typeof update === 'function' ? update(state) : update),
+        {},
+      );
+      return streams['visit-1']?.find((message) => message.role === 'model')?.payload?.phase;
+    };
+
+    expect(readLatestPhase()).toBe('retrieving_collection');
+
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+    expect(readLatestPhase()).toBe('generating_response');
   });
 
   it('persists failed commentary status when the stream errors', async () => {

@@ -4,9 +4,12 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
+from app.database.connection import get_db
+from app.database.models import User
 from app.models.artwork import AIProvider
 from app.services.ai_client_interface import AIStreamChunk, AITextResult
 from app.services.ai_service import AIServiceFactory
@@ -17,6 +20,11 @@ from app.services.session_chat_service import (
     build_session_chat_items_payload,
     load_bootstrap_image_bytes,
 )
+from app.services.retrieval import execute_collection_retrieval, plan_collection_context, retrieve_collection_context
+from app.services.retrieval.contracts import RetrievalOutcome, RetrievalPlan, RetrievalTrace
+from app.services.retrieval.context_composer import compose_no_collection_claims_context
+from app.services.session_service import get_session_or_404, require_session_access
+from app.utils.auth_utils import get_current_user, require_same_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -27,15 +35,27 @@ logger = logging.getLogger(__name__)
 async def session_chat(
     request: SessionChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
+    require_same_user(current_user, request.user_id)
+    if current_user and request.session_id:
+        require_session_access(current_user, get_session_or_404(db, request.session_id))
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
+    retrieval_ai_service = AIServiceFactory.get_fast_service(ai_provider) if current_user else None
     image_bytes_list = await load_bootstrap_image_bytes(
         request.items,
         request.conversation_history,
     )
 
     try:
+        retrieval_outcome = await _retrieve_for_request(
+            ai_service=retrieval_ai_service,
+            db=db,
+            current_user=current_user,
+            request=request,
+        )
         usage_id = start_ai_usage(
             user_id=request.user_id,
             job_type="session_chat",
@@ -50,6 +70,8 @@ async def session_chat(
             "new_message": request.new_message,
             "image_bytes_list": image_bytes_list,
         }
+        if retrieval_outcome.context:
+            chat_kwargs["retrieval_context"] = retrieval_outcome.context
         if callable(session_chat_result):
             response = await session_chat_result(**chat_kwargs)
         else:
@@ -71,13 +93,15 @@ async def session_chat(
 async def stream_session_chat(
     request: SessionChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
+    require_same_user(current_user, request.user_id)
+    if current_user and request.session_id:
+        require_session_access(current_user, get_session_or_404(db, request.session_id))
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
-    image_bytes_list = await load_bootstrap_image_bytes(
-        request.items,
-        request.conversation_history,
-    )
+    retrieval_ai_service = AIServiceFactory.get_fast_service(ai_provider) if current_user else None
 
     async def event_generator():
         full_text = ""
@@ -91,6 +115,42 @@ async def stream_session_chat(
             subject_id=request.trigger_event_id or request.session_id,
         )
         try:
+            yield _phase_event("planning")
+            if current_user is None:
+                retrieval_outcome = _skipped_retrieval_outcome()
+            else:
+                try:
+                    retrieval_plan = await plan_collection_context(
+                        ai_service=retrieval_ai_service,
+                        user_id=current_user.user_id,
+                        message=request.new_message,
+                        history=request.conversation_history,
+                    )
+                except Exception as exc:
+                    logger.warning("Personal collection retrieval planning failed: %s", exc)
+                    retrieval_plan = None
+
+                if retrieval_plan and retrieval_plan.needs_retrieval:
+                    yield _phase_event("retrieving_collection")
+                    try:
+                        retrieval_outcome = await execute_collection_retrieval(
+                            ai_service=retrieval_ai_service,
+                            db=db,
+                            user_id=current_user.user_id,
+                            plan=retrieval_plan,
+                        )
+                    except Exception as exc:
+                        logger.warning("Personal collection retrieval execution failed: %s", exc)
+                        retrieval_outcome = _failed_retrieval_outcome("retrieval")
+                elif retrieval_plan:
+                    retrieval_outcome = _planner_skipped_retrieval_outcome(retrieval_plan)
+                else:
+                    retrieval_outcome = _failed_retrieval_outcome("planning")
+
+            image_bytes_list = await load_bootstrap_image_bytes(
+                request.items,
+                request.conversation_history,
+            )
             stream_chat_result = getattr(ai_service, "stream_session_chat_result", None)
             stream_kwargs = {
                 "items": build_session_chat_items_payload(request.items),
@@ -98,6 +158,9 @@ async def stream_session_chat(
                 "new_message": request.new_message,
                 "image_bytes_list": image_bytes_list,
             }
+            if retrieval_outcome.context:
+                stream_kwargs["retrieval_context"] = retrieval_outcome.context
+            yield _phase_event("generating_response")
             if callable(stream_chat_result):
                 stream = stream_chat_result(**stream_kwargs)
             else:
@@ -114,7 +177,7 @@ async def stream_session_chat(
                 full_text += chunk.text
                 yield f"event: chunk\ndata: {json.dumps({'type': 'text', 'content': chunk.text})}\n\n"
             succeed_ai_usage(usage_id, input_tokens=input_tokens, output_tokens=output_tokens)
-            yield f"event: complete\ndata: {json.dumps({'type': 'result', 'response': full_text})}\n\n"
+            yield f"event: complete\ndata: {json.dumps({'type': 'result', 'response': full_text, 'retrieval': retrieval_outcome.trace.model_dump()})}\n\n"
         except Exception as exc:
             fail_ai_usage(usage_id, exc)
             logger.exception("Exhibition chat stream failed")
@@ -134,3 +197,58 @@ async def stream_session_chat(
 # Backward-compat aliases for older imports/tests.
 visit_chat = session_chat
 visit_chat_stream = stream_session_chat
+
+
+def _phase_event(phase: str) -> str:
+    return f"event: phase\ndata: {json.dumps({'phase': phase})}\n\n"
+
+
+async def _retrieve_for_request(
+    *,
+    ai_service,
+    db: Session,
+    current_user: Optional[User],
+    request: SessionChatRequest,
+) -> RetrievalOutcome:
+    if current_user is None:
+        return _skipped_retrieval_outcome()
+
+    try:
+        return await retrieve_collection_context(
+            ai_service=ai_service,
+            db=db,
+            user_id=current_user.user_id,
+            message=request.new_message,
+            history=request.conversation_history,
+        )
+    except Exception as exc:
+        logger.warning("Personal collection retrieval failed: %s", exc)
+        return _failed_retrieval_outcome("planning_or_retrieval")
+
+
+def _skipped_retrieval_outcome() -> RetrievalOutcome:
+    return RetrievalOutcome(
+        plan=RetrievalPlan(needs_retrieval=False, filters={}),
+        trace=RetrievalTrace(status="skipped", skip_reason="unauthenticated"),
+        context=compose_no_collection_claims_context(),
+    )
+
+
+def _planner_skipped_retrieval_outcome(plan: RetrievalPlan) -> RetrievalOutcome:
+    return RetrievalOutcome(
+        plan=plan,
+        trace=RetrievalTrace(status="skipped", skip_reason="planner_not_needed"),
+        context=compose_no_collection_claims_context(),
+    )
+
+
+def _failed_retrieval_outcome(stage: str) -> RetrievalOutcome:
+    return RetrievalOutcome(
+        plan=RetrievalPlan(needs_retrieval=False, filters={}),
+        trace=RetrievalTrace(status="failed", failure_stage=stage),
+        context=(
+            "\n\nPERSONAL COLLECTION RETRIEVAL STATUS\n"
+            "The user's broader collection could not be searched for this response. "
+            "Do not imply that you accessed it or make claims about their broader collection."
+        ),
+    )

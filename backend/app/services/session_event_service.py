@@ -26,7 +26,7 @@ CANONICAL_TO_LEGACY_EVENT_TYPE = {
 
 VALID_ARTWORK_INPUT_SOURCES = {"upload", "capture", "library"}
 VALID_ARTWORK_RESULT_OUTCOMES = {"succeeded", "failed"}
-VALID_MODEL_RESPONSE_STATUSES = {"pending", "completed", "failed"}
+VALID_MODEL_RESPONSE_STATUSES = {"pending", "completed", "failed", "auth_required"}
 VALID_SESSION_EVENT_ROLES = {"user", "model", "system"}
 VALID_SESSION_EVENT_TYPES = {"user_input", "message", "artwork_result", "model_response"}
 

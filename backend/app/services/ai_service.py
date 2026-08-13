@@ -169,7 +169,10 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         return prompt + context_block
 
     @staticmethod
-    def build_session_chat_prompt(items: List[Dict[str, Any]]) -> str:
+    def build_session_chat_prompt(
+        items: List[Dict[str, Any]],
+        retrieval_context: str = "",
+    ) -> str:
         """System instructions for session chat.
 
         Keep current artwork metadata in the system prompt so the first response
@@ -206,10 +209,10 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
                 + "\nUse this only as helpful context; prioritize what is visible in the image when image data is provided."
             )
 
-        return get_session_chat_prompt("") + metadata_context
+        return get_session_chat_prompt("") + metadata_context + retrieval_context
 
     @staticmethod
-    def build_conversation_history(history: Optional[List[Dict[str, str]]]) -> List[ConversationMessage]:
+    def build_conversation_history(history: Optional[List[Dict[str, Any]]]) -> List[ConversationMessage]:
         """Normalize stored history into ConversationMessage objects."""
         if not history:
             return []
@@ -730,12 +733,13 @@ Return ONLY the updated narrative text.{language_instruction}"""
         history: list,
         new_message: str,
         image_bytes_list: List[bytes],
+        retrieval_context: str = "",
     ) -> AITextResult:
         """
         Exhibition curator chat: discuss a collection of works with the user.
         Implements provider-agnostic orchestration similar to other service methods.
         """
-        prompt = self.build_session_chat_prompt(items)
+        prompt = self.build_session_chat_prompt(items, retrieval_context)
         conversation_history = self.build_conversation_history(history)
         image_data = None if history else self.prepare_image_batch(image_bytes_list)
 
@@ -759,6 +763,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         history: list,
         new_message: str,
         image_bytes_list: List[bytes],
+        retrieval_context: str = "",
     ) -> AsyncGenerator[str, None]:
         """
         Stream exhibition curator response token by token.
@@ -769,6 +774,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
             history=history,
             new_message=new_message,
             image_bytes_list=image_bytes_list,
+            retrieval_context=retrieval_context,
         ):
             if chunk.type == "text":
                 yield chunk.text
@@ -779,9 +785,10 @@ Return ONLY the updated narrative text.{language_instruction}"""
         history: list,
         new_message: str,
         image_bytes_list: List[bytes],
+        retrieval_context: str = "",
     ) -> AsyncGenerator[AIStreamChunk, None]:
         """Stream session chat with usage metadata events when the provider exposes them."""
-        prompt = self.build_session_chat_prompt(items)
+        prompt = self.build_session_chat_prompt(items, retrieval_context)
         conversation_history = self.build_conversation_history(history)
         image_data = None if history else self.prepare_image_batch(image_bytes_list)
 

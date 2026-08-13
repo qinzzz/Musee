@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 import pytest
 
 from app.models.artwork import AIProvider
 from app.routers import session_chat as session_chat_router
 from app.services.ai_client_interface import AIStreamChunk
 from app.services.session_chat_service import ExhibitionItem, build_session_chat_items_payload, load_bootstrap_image_bytes
+from app.utils.auth_utils import create_access_token
 
 
 def _expected_item(item_id: str, keywords: list[str]) -> dict:
@@ -20,14 +23,14 @@ def _expected_item(item_id: str, keywords: list[str]) -> dict:
 
 
 class _SessionAIService:
-    async def session_chat(self, items, history, new_message, image_bytes_list):
+    async def session_chat(self, items, history, new_message, image_bytes_list, retrieval_context=""):
         assert items == [_expected_item("a1", ["red", "abstract"])]
         assert history == []
         assert new_message == "What do these have in common?"
         assert image_bytes_list == [b"image-a"]
         return "They share a rhythmic abstract language."
 
-    async def stream_session_chat(self, items, history, new_message, image_bytes_list):
+    async def stream_session_chat(self, items, history, new_message, image_bytes_list, retrieval_context=""):
         assert items == [_expected_item("a1", ["red", "abstract"])]
         assert history == [{"role": "user", "content": "hello"}]
         assert new_message == "Continue."
@@ -37,8 +40,14 @@ class _SessionAIService:
 
 
 class _SessionAIServiceWithUsage(_SessionAIService):
-    async def stream_session_chat_result(self, items, history, new_message, image_bytes_list):
-        async for text in super().stream_session_chat(items, history, new_message, image_bytes_list):
+    async def stream_session_chat_result(self, items, history, new_message, image_bytes_list, retrieval_context=""):
+        async for text in super().stream_session_chat(
+            items,
+            history,
+            new_message,
+            image_bytes_list,
+            retrieval_context,
+        ):
             yield AIStreamChunk(type="text", text=text)
         yield AIStreamChunk(type="usage", input_tokens=123, output_tokens=45)
 
@@ -172,6 +181,27 @@ def test_session_chat_stream_route(client, monkeypatch):
         },
     )
     assert legacy_response.status_code == 200
+
+
+def test_session_chat_stream_rejects_an_expired_presented_token(client):
+    expired_token = create_access_token(
+        {"sub": "user-1"},
+        expires_delta=timedelta(minutes=-1),
+    )
+
+    response = client.post(
+        "/api/session/chat-stream",
+        headers={"Authorization": f"Bearer {expired_token}"},
+        json={
+            "items": [],
+            "conversation_history": [],
+            "new_message": "What Monet works have I saved?",
+            "user_id": "user-1",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["error_code"] == "token_expired"
 
 
 def test_session_chat_stream_route_records_usage_tokens(client, monkeypatch):

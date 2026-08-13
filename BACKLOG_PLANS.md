@@ -996,3 +996,46 @@ Automatic client-side compression can be considered separately. Clear rejection 
 - backend size, unsupported-format, empty-file, unreadable-image, timeout, quota, and generic network failures are translated into user-facing messages
 - collection and session batches distinguish complete failure from partial success
 - artwork analysis failures now explain that the artwork was saved even though analysis did not complete
+
+## 14. Tag, Dimension, and Canonical Facet Consolidation
+
+Status: deferred; intentionally out of scope for the memory/retrieval branch
+
+### Problem
+
+Artwork meaning is currently represented in several overlapping places:
+
+- global free-form `Tag` records attached through `artwork_tags`
+- structured `ArtworkAnalysis.tags` and scored dimensions
+- canonical artwork fields such as movement, period, and medium
+- user-created organizational labels
+
+This creates duplicate concepts, unclear authority, possible contradictions, and unnecessary real-time AI calls when users hover over uncached tags.
+
+### Recommended direction
+
+Separate the responsibilities explicitly:
+
+- dimensions remain scored analytical qualities with artwork-specific evidence
+- canonical facets represent normalized movement, period, medium, themes, and techniques
+- user tags remain personal organizational labels created or approved by the user
+- a shared concept glossary provides stable definitions for movements and art-history terms
+
+AI-generated analytical labels should not automatically become ordinary global user tags. Terms such as `Modernism` should resolve to canonical concepts, with cached or curated definitions rather than hover-triggered generation.
+
+### Later scope
+
+1. Audit the provenance and consumers of `SavedArtwork.artwork_tags`, `ArtworkAnalysis.tags`, dimensions, and canonical artwork fields.
+2. Define which representation is authoritative for retrieval, filtering, display, and taste analysis.
+3. Add explicit provenance or type distinctions such as `user_tag`, `analysis_facet`, and `canonical_concept`.
+4. Normalize movement and other controlled concepts to stable identifiers rather than substring-matched free-form strings.
+5. Replace real-time hover generation with a canonical concept glossary and cache strategy.
+6. Plan migration or compatibility behavior for existing global tags without disrupting users' personal organization.
+
+### Acceptance criteria
+
+- retrieval has one authoritative source for each structured concept
+- user-created tags remain clearly distinct from AI-derived analysis
+- movement and related canonical concepts do not depend on free-form tag matching
+- hovering across artwork metadata does not launch unbounded AI requests
+- concept definitions are stable and reusable across users and artworks
