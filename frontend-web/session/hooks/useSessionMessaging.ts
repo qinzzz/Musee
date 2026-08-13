@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { streamSessionChat } from '../../api/chat';
+import { SessionAuthenticationError, streamSessionChat } from '../../api/chat';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import {
   appendSessionEvents as appendSessionEventsApi,
@@ -19,6 +19,14 @@ type ShowToast = (message: string, type?: ToastType) => void;
 
 const SESSION_EVENT_SAVE_ERROR = 'Couldn’t save this session update. Try again.';
 const MODEL_RESPONSE_SAVE_ERROR = 'This response couldn’t be saved. Try again.';
+const AUTH_REQUIRED_MESSAGE = 'Your session expired. Sign in again to continue.';
+
+export type SessionAuthenticationRetry = {
+  sessionId: string;
+  responseId: string;
+  message: string;
+  parentEventId?: string;
+};
 
 type UseSessionMessagingOptions = {
   defaultSessionTitle: string;
@@ -325,9 +333,9 @@ export function useSessionMessaging({
     sessionId: string,
     responseId: string,
     artworkIds: string[],
-    status: 'completed' | 'failed',
+    status: 'pending' | 'completed' | 'failed' | 'auth_required',
     parentEventId?: string,
-    options?: { content?: string; errorMessage?: string },
+    options?: { content?: string; errorMessage?: string; errorCode?: string; retryMessage?: string },
   ) => {
     const messagePayload = {
       role: 'model' as const,
@@ -338,6 +346,8 @@ export function useSessionMessaging({
       payload: {
         status,
         ...(options?.errorMessage ? { error_message: options.errorMessage } : {}),
+        ...(options?.errorCode ? { error_code: options.errorCode } : {}),
+        ...(options?.retryMessage ? { retry_message: options.retryMessage } : {}),
       },
     };
 
@@ -361,6 +371,7 @@ export function useSessionMessaging({
     sessionItemsOverride?: GalleryItem[],
     historyOverride?: SessionStreamMessage[],
     parentEventIdOverride?: string,
+    responseIdOverride?: string,
   ) => {
     markSessionReplyPending(targetSessionId);
 
@@ -370,7 +381,7 @@ export function useSessionMessaging({
       || (activeSessionSummary?.id === targetSessionId
         ? activeSessionSummary.items
         : items.filter((item) => itemBelongsToSession(item, targetSessionId)));
-    const responseId = newSessionEventId();
+    const responseId = responseIdOverride || newSessionEventId();
     const commentaryCreatedAt = getNextLocalEventCreatedAt(existingMessages);
     const commentaryArtworkIds = getSessionArtworkIds(sessionItems);
     const parentEventId = parentEventIdOverride;
@@ -386,15 +397,20 @@ export function useSessionMessaging({
       payload: { status: 'pending' },
     };
 
-    appendSessionEvents(targetSessionId, [pendingCommentaryMessage], { persist: false });
+    if (responseIdOverride) {
+      updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
+        ...event,
+        text: '',
+        payload: { status: 'pending' },
+      }));
+    } else {
+      appendSessionEvents(targetSessionId, [pendingCommentaryMessage], { persist: false });
+    }
 
-    void persistPendingModelResponse(
-      targetSessionId,
-      responseId,
-      commentaryArtworkIds,
-      commentaryCreatedAt,
-      parentEventId,
-    ).catch((error) => {
+    const pendingPersistence = responseIdOverride
+      ? finalizeModelResponse(targetSessionId, responseId, commentaryArtworkIds, 'pending', parentEventId, { content: '' })
+      : persistPendingModelResponse(targetSessionId, responseId, commentaryArtworkIds, commentaryCreatedAt, parentEventId);
+    void pendingPersistence.catch((error) => {
       // Completion performs an update-then-create retry, so only log this
       // preliminary failure and surface an error if the final save also fails.
       console.error('Failed to persist pending model response:', error);
@@ -440,7 +456,32 @@ export function useSessionMessaging({
         });
         clearSessionReplyPending(targetSessionId);
       },
-      () => {
+      (error) => {
+        if (error instanceof SessionAuthenticationError) {
+          updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
+            ...event,
+            text: AUTH_REQUIRED_MESSAGE,
+            payload: {
+              ...(event.payload || {}),
+              status: 'auth_required',
+              error_code: error.code,
+              retry_message: text,
+            },
+          }));
+          void finalizeModelResponse(
+            targetSessionId,
+            responseId,
+            commentaryArtworkIds,
+            'auth_required',
+            parentEventId,
+            { content: AUTH_REQUIRED_MESSAGE, errorCode: error.code, retryMessage: text },
+          ).catch((saveError) => {
+            console.error('Failed to persist authentication-required response:', saveError);
+            showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
+          });
+          clearSessionReplyPending(targetSessionId);
+          return;
+        }
         updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
           ...event,
           payload: {
@@ -482,6 +523,17 @@ export function useSessionMessaging({
     showToast,
     updateLocalSessionEvent,
   ]);
+
+  const retryAuthenticationRequiredResponse = useCallback((retry: SessionAuthenticationRetry) => {
+    streamSessionInquiryResponse(
+      retry.sessionId,
+      retry.message,
+      undefined,
+      sessionStreams[retry.sessionId] || [],
+      retry.parentEventId,
+      retry.responseId,
+    );
+  }, [sessionStreams, streamSessionInquiryResponse]);
 
   const sendSessionInquiryToSession = useCallback((
     targetSessionId: string,
@@ -626,6 +678,7 @@ export function useSessionMessaging({
     refreshPersistedSessions,
     sessionUserId,
     sendSessionInquiryToSession,
+    retryAuthenticationRequiredResponse,
     showToast,
     streamSessionInquiryResponse,
     sessionStreams,
@@ -638,6 +691,7 @@ export function useSessionMessaging({
     appendLocalSessionEvents,
     persistSessionArtworkInput,
     sendSessionInquiryToSession,
+    retryAuthenticationRequiredResponse,
     handleSessionInquiry,
   };
 }

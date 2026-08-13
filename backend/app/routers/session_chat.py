@@ -4,10 +4,11 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.models.artwork import AIProvider
+from app.database.models import User
 from app.services.ai_client_interface import AIStreamChunk, AITextResult
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
@@ -17,6 +18,7 @@ from app.services.session_chat_service import (
     build_session_chat_items_payload,
     load_bootstrap_image_bytes,
 )
+from app.utils.auth_utils import get_current_user, require_same_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -27,7 +29,9 @@ logger = logging.getLogger(__name__)
 async def session_chat(
     request: SessionChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
+    require_same_user(current_user, request.user_id)
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
     image_bytes_list = await load_bootstrap_image_bytes(
@@ -71,7 +75,9 @@ async def session_chat(
 async def stream_session_chat(
     request: SessionChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
+    require_same_user(current_user, request.user_id)
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
     image_bytes_list = await load_bootstrap_image_bytes(

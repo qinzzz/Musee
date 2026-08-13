@@ -26,6 +26,14 @@ vi.mock('../api/sessions', () => ({
 }));
 
 vi.mock('../../api/chat', () => ({
+  SessionAuthenticationError: class SessionAuthenticationError extends Error {
+    code: string;
+
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+    }
+  },
   streamSessionChat: mockStreamSessionChat,
 }));
 

@@ -175,6 +175,7 @@ function renderAppViewport(options: {
         setIsUnsortedFlowOpen: vi.fn(),
         handleToggleLike: vi.fn(),
         handleSessionInquiry,
+        onSessionAuthenticationRequired: vi.fn(),
       }}
     />,
   );

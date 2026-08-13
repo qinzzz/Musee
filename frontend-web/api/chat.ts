@@ -3,6 +3,40 @@ import { API_BASE_URL, API_TIMEOUT, fetchWithTimeout, getLanguage } from './core
 
 export const SESSION_STREAM_IDLE_TIMEOUT_MS = 60_000;
 
+export class SessionAuthenticationError extends Error {
+  readonly code: 'token_expired' | 'invalid_token' | 'authentication_required';
+
+  constructor(code: SessionAuthenticationError['code'], message: string) {
+    super(message);
+    this.name = 'SessionAuthenticationError';
+    this.code = code;
+  }
+}
+
+async function buildSessionChatError(response: Response): Promise<Error> {
+  const fallback = `session chat stream failed: ${response.status}`;
+  const text = await response.text();
+  if (response.status !== 401) return new Error(text || fallback);
+
+  try {
+    const body = JSON.parse(text) as { detail?: string | { error_code?: string; message?: string } };
+    const detail = body.detail;
+    const code = typeof detail === 'object' && detail?.error_code === 'token_expired'
+      ? 'token_expired'
+      : typeof detail === 'object' && detail?.error_code === 'invalid_token'
+        ? 'invalid_token'
+        : 'authentication_required';
+    return new SessionAuthenticationError(
+      code,
+      typeof detail === 'object' && detail?.message
+        ? detail.message
+        : 'Please sign in again.',
+    );
+  } catch {
+    return new SessionAuthenticationError('authentication_required', 'Please sign in again.');
+  }
+}
+
 async function readStreamWithIdleTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
 ): Promise<ReadableStreamReadResult<Uint8Array>> {
@@ -76,8 +110,7 @@ export async function streamSessionChat(
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `session chat stream failed: ${response.status}`);
+      throw await buildSessionChatError(response);
     }
 
     reader = response.body?.getReader();
