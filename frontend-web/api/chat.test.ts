@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SESSION_STREAM_IDLE_TIMEOUT_MS, SessionAuthenticationError, streamSessionChat } from './chat';
+import { SESSION_STREAM_IDLE_TIMEOUT_MS, streamSessionChat } from './chat';
 
 const encoder = new TextEncoder();
 
@@ -85,23 +85,6 @@ describe('streamSessionChat', () => {
       content: 'You saved Woman with a Hat.',
       retrieval_source_ids: ['saved-art-1'],
     }]);
-  });
-
-  it('returns a typed authentication error for an expired token', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      detail: {
-        error_code: 'token_expired',
-        message: 'Your session expired. Please sign in again.',
-      },
-    }), { status: 401 })));
-    const stream = startStream();
-
-    await stream.promise;
-
-    expect(stream.onComplete).not.toHaveBeenCalled();
-    expect(stream.onError).toHaveBeenCalledOnce();
-    expect(stream.onError.mock.calls[0][0]).toBeInstanceOf(SessionAuthenticationError);
-    expect(stream.onError.mock.calls[0][0]).toMatchObject({ code: 'token_expired' });
   });
 
   it('fails when the body ends without a complete or error event', async () => {

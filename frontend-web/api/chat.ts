@@ -23,48 +23,6 @@ export type SessionChatHistoryMessage = Message & {
   retrieval_source_ids?: string[];
 };
 
-export class SessionAuthenticationError extends Error {
-  readonly code: 'token_expired' | 'invalid_token' | 'authentication_required';
-
-  constructor(
-    code: 'token_expired' | 'invalid_token' | 'authentication_required',
-    message: string,
-  ) {
-    super(message);
-    this.name = 'SessionAuthenticationError';
-    this.code = code;
-  }
-}
-
-async function buildSessionChatError(response: Response): Promise<Error> {
-  const fallback = `session chat stream failed: ${response.status}`;
-  const text = await response.text();
-  if (response.status !== 401) {
-    return new Error(text || fallback);
-  }
-
-  try {
-    const body = JSON.parse(text) as {
-      detail?: string | { error_code?: string; message?: string };
-    };
-    const detail = body.detail;
-    const code = typeof detail === 'object' && detail?.error_code === 'token_expired'
-      ? 'token_expired'
-      : typeof detail === 'object' && detail?.error_code === 'invalid_token'
-        ? 'invalid_token'
-        : 'authentication_required';
-    const message = typeof detail === 'object' && detail?.message
-      ? detail.message
-      : 'Please sign in again to search your collection.';
-    return new SessionAuthenticationError(code, message);
-  } catch {
-    return new SessionAuthenticationError(
-      'authentication_required',
-      'Please sign in again to search your collection.',
-    );
-  }
-}
-
 async function readStreamWithIdleTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
 ): Promise<ReadableStreamReadResult<Uint8Array>> {
@@ -146,7 +104,8 @@ export async function streamSessionChat(
     });
 
     if (!response.ok) {
-      throw await buildSessionChatError(response);
+      const text = await response.text();
+      throw new Error(text || `session chat stream failed: ${response.status}`);
     }
 
     reader = response.body?.getReader();

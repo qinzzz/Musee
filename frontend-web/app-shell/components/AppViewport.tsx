@@ -130,12 +130,6 @@ type ViewportMutationProps = {
   setIsUnsortedFlowOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleToggleLike: (id: string) => void;
   handleSessionInquiry: (text: string) => Promise<boolean>;
-  onSessionAuthenticationRequired: (retry: {
-    sessionId: string;
-    responseId: string;
-    message: string;
-    parentEventId?: string;
-  }) => void;
 };
 
 type Props = {
@@ -243,7 +237,6 @@ export default function AppViewport({
     setIsUnsortedFlowOpen,
     handleToggleLike,
     handleSessionInquiry,
-    onSessionAuthenticationRequired,
   } = actions;
   const isSessionReplyPending = Boolean(
     activeSessionSummary
@@ -428,7 +421,6 @@ export default function AppViewport({
                   activeSessionSummary.items,
                 )
               }
-              onAuthenticationRequired={onSessionAuthenticationRequired}
             />
           ) : (
             <div className="relative flex flex-1 items-center justify-center bg-[var(--color-bg-primary)] px-6">

@@ -31,7 +31,6 @@ import { useArtworkLibrary } from './artwork/hooks/useArtworkLibrary';
 import { useArtworkAnalysis } from './artwork/hooks/useArtworkAnalysis';
 import { useBoards } from './boards/hooks/useBoards';
 import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
-import type { SessionAuthenticationRetry } from './session/hooks/useSessionMessaging';
 import { useSessionArtworkInputPipeline } from './session/hooks/useSessionArtworkInputPipeline';
 import { MAX_SESSION_ARTWORK_BATCH_SIZE } from './session/constants';
 import { useArtworkUploadOperations } from './artwork-ingest/hooks/useArtworkUploadOperations';
@@ -244,7 +243,6 @@ const App: React.FC = () => {
   });
 
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [pendingAuthenticationRetry, setPendingAuthenticationRetry] = useState<SessionAuthenticationRetry | null>(null);
   const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
@@ -252,6 +250,12 @@ const App: React.FC = () => {
     try { return new Set(JSON.parse(localStorage.getItem('musee_liked_ids') || '[]')); }
     catch { return new Set(); }
   });
+
+  const handleLoginSuccess = (user: any) => {
+    setCurrentUser(user);
+    // Reload artworks list for the new user
+    window.location.reload();
+  };
 
   const handleLogout = () => {
     logout();
@@ -398,7 +402,6 @@ const App: React.FC = () => {
       appendSessionEvents,
       persistSessionArtworkInput,
       sendSessionInquiryToSession,
-      retryAuthenticationRequiredResponse,
       handleSessionInquiry,
     },
     sessionActions: {
@@ -416,18 +419,6 @@ const App: React.FC = () => {
     enterBlankSession,
     openSessionSummary,
   } = sessionWorkspace;
-
-  const handleLoginSuccess = (user: any) => {
-    setCurrentUser(user);
-    setShowLoginModal(false);
-    if (pendingAuthenticationRetry) {
-      retryAuthenticationRequiredResponse(pendingAuthenticationRetry);
-      setPendingAuthenticationRetry(null);
-      return;
-    }
-    // A normal account switch still reloads user-scoped data from scratch.
-    window.location.reload();
-  };
 
   // When set, the library picker filters out artworks already in this ongoing
   // session; picks stage into the shared tray either way.
@@ -823,10 +814,6 @@ const App: React.FC = () => {
     setIsUnsortedFlowOpen,
     handleToggleLike,
     handleSessionInquiry,
-    onSessionAuthenticationRequired: (retry: SessionAuthenticationRetry) => {
-      setPendingAuthenticationRetry(retry);
-      setShowLoginModal(true);
-    },
   };
 
   return (
@@ -871,10 +858,11 @@ const App: React.FC = () => {
         />
 
         <LoginModal
-          open={showLoginModal && (!currentUser || Boolean(pendingAuthenticationRetry))}
+          open={showLoginModal && !currentUser}
           onClose={() => setShowLoginModal(false)}
           onLoginSuccess={(user) => {
             handleLoginSuccess(user);
+            setShowLoginModal(false);
           }}
           onLoginError={() => alert('Login Error')}
         />

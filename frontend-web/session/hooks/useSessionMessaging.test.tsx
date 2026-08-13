@@ -1,7 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionMessaging } from './useSessionMessaging';
-import { SessionAuthenticationError } from '../../api/chat';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import type { SessionStreamMessage, SessionSummary } from '../types';
 
@@ -27,14 +26,6 @@ vi.mock('../api/sessions', () => ({
 }));
 
 vi.mock('../../api/chat', () => ({
-  SessionAuthenticationError: class SessionAuthenticationError extends Error {
-    code: string;
-
-    constructor(code: string, message: string) {
-      super(message);
-      this.code = code;
-    }
-  },
   streamSessionChat: mockStreamSessionChat,
 }));
 
@@ -170,42 +161,6 @@ describe('useSessionMessaging', () => {
       }),
     );
     expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
-  });
-
-  it('persists an authentication-required response instead of a generic failure', async () => {
-    mockStreamSessionChat.mockImplementation((
-      _items: GalleryItem[],
-      _history: SessionStreamMessage[],
-      _text: string,
-      _onChunk: (chunk: string) => void,
-      _onComplete: (fullResponse: string) => void,
-      onError: (error: Error) => void,
-    ) => {
-      onError(new SessionAuthenticationError('token_expired', 'Expired'));
-    });
-    const summary = createSessionSummary({ id: 'visit-1' });
-    const { result } = renderUseSessionMessaging({
-      activeSessionSummary: summary,
-      sessionSummaries: [summary],
-      isComposingNewSession: false,
-    });
-
-    await act(async () => {
-      await result.current.handleSessionInquiry('What Monet works have I saved?');
-    });
-
-    await waitFor(() => expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
-      'visit-1',
-      expect.any(String),
-      expect.objectContaining({
-        content: 'Your session expired. Sign in again to search your collection.',
-        payload: expect.objectContaining({
-          status: 'auth_required',
-          error_code: 'token_expired',
-          retry_message: 'What Monet works have I saved?',
-        }),
-      }),
-    ));
   });
 
   it('rejects rapid duplicate submits before the first session event finishes saving', async () => {

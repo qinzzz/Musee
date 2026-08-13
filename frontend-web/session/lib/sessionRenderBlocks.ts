@@ -116,9 +116,9 @@ function getArtworkGroupLabel(
   return count === 1 ? 'Added an artwork' : `Added ${count} artworks from multiple sources`;
 }
 
-function getCommentaryStatus(message: SessionStreamMessage): 'pending' | 'completed' | 'failed' | 'auth_required' {
+function getCommentaryStatus(message: SessionStreamMessage): 'pending' | 'completed' | 'failed' {
   const status = message.payload?.status;
-  if (status === 'failed' || status === 'completed' || status === 'pending' || status === 'auth_required') {
+  if (status === 'failed' || status === 'completed' || status === 'pending') {
     return status;
   }
   return message.text ? 'completed' : 'pending';

@@ -78,7 +78,7 @@ export type SessionRenderBlock =
       sequenceNumber?: number;
       localOrder?: number;
       message: SessionStreamMessage;
-      status: 'pending' | 'completed' | 'failed' | 'auth_required';
+      status: 'pending' | 'completed' | 'failed';
     }
   | {
       type: 'message';
