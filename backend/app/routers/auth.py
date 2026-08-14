@@ -8,7 +8,7 @@ from app.config.plans import NEW_REGISTRATION_TIER
 from app.config.settings import settings
 from app.database.connection import get_db
 from app.database.models import User, UserCredential
-from app.services.account_service import adopt_anonymous_account
+from app.services.account_service import promote_guest_workspace
 from app.services.auth_session_service import (
     clear_refresh_cookie,
     issue_login_session,
@@ -19,6 +19,7 @@ from app.services.auth_session_service import (
 )
 from app.services.authorization_service import (
     capabilities_for,
+    clear_guest_cookie,
     create_guest_workspace,
     guest_quota_snapshot,
     resolve_guest_workspace,
@@ -31,17 +32,19 @@ logger = logging.getLogger(__name__)
 
 class GoogleLoginRequest(BaseModel):
     id_token: str
-    anonymous_user_id: Optional[str] = None
 
 @router.post("/auth/google")
 async def google_login(
     request: GoogleLoginRequest,
     response: Response,
+    http_request: Request,
+    guest_token: Optional[str] = Cookie(default=None, alias=settings.guest_cookie_name),
     db: Session = Depends(get_db)
 ):
     """
-    Login with Google ID Token and optionally migrate anonymous data
+    Login with Google and promote only a cookie-authenticated guest workspace.
     """
+    validate_auth_origin(http_request)
     # 1. Verify Google Token
     idinfo = verify_google_token(request.id_token)
     google_id = idinfo['sub']
@@ -92,11 +95,14 @@ async def google_login(
         user.profile_picture_url = picture
         logger.info(f"Logging in existing Google user: {user.user_id}")
 
-    # 3. Adopt the device account's records, if one was provided
-    if request.anonymous_user_id:
-        adopt_anonymous_account(db, request.anonymous_user_id, user)
+    # 3. Promote only the guest workspace proven by this browser's cookie.
+    guest_promoted = promote_guest_workspace(db, guest_token, user)
+    if guest_token:
+        clear_guest_cookie(response)
 
-    return issue_login_session(db, response, user)
+    result = issue_login_session(db, response, user)
+    result["guest_promoted"] = guest_promoted
+    return result
 
 
 @router.post("/auth/refresh")

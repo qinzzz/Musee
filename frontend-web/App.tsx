@@ -106,6 +106,27 @@ export const formatDisplayDate = (dateStr: string | null | undefined): string | 
 // Persistent user ID for the current browser session
 const USER_ID = getOrCreateUserId();
 const DEFAULT_VISIT_TITLE = 'Untitled Session';
+const PENDING_AUTH_RETRY_KEY = 'musee_pending_auth_retry';
+
+const readPendingAuthenticationRetry = (): SessionAuthenticationRetry | null => {
+  try {
+    const raw = sessionStorage.getItem(PENDING_AUTH_RETRY_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<SessionAuthenticationRetry>;
+    if (
+      typeof value.sessionId !== 'string'
+      || typeof value.responseId !== 'string'
+      || typeof value.message !== 'string'
+    ) {
+      sessionStorage.removeItem(PENDING_AUTH_RETRY_KEY);
+      return null;
+    }
+    return value as SessionAuthenticationRetry;
+  } catch {
+    sessionStorage.removeItem(PENDING_AUTH_RETRY_KEY);
+    return null;
+  }
+};
 
 const App: React.FC = () => {
   const queryClient = useQueryClient();
@@ -280,7 +301,9 @@ const App: React.FC = () => {
   });
 
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [pendingAuthenticationRetry, setPendingAuthenticationRetry] = useState<SessionAuthenticationRetry | null>(null);
+  const [pendingAuthenticationRetry, setPendingAuthenticationRetry] = useState<SessionAuthenticationRetry | null>(
+    readPendingAuthenticationRetry,
+  );
   const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
@@ -294,6 +317,12 @@ const App: React.FC = () => {
       setShowLoginModal(true);
     }
   }, [authStatus]);
+
+  useEffect(() => {
+    if (authStatus === 'guest' && pendingAuthenticationRetry) {
+      setShowLoginModal(true);
+    }
+  }, [authStatus, pendingAuthenticationRetry]);
 
   const handleLogout = async () => {
     await logoutCurrentSession();
@@ -460,15 +489,22 @@ const App: React.FC = () => {
   } = sessionWorkspace;
 
   const handleLoginSuccess = async (user: any) => {
+    const shouldResumePendingAction = Boolean(pendingAuthenticationRetry);
     await completeLogin(user);
     setShowLoginModal(false);
-    if (pendingAuthenticationRetry) {
-      retryAuthenticationRequiredResponse(pendingAuthenticationRetry);
-      setPendingAuthenticationRetry(null);
-      return;
-    }
-    window.location.reload();
+    if (!shouldResumePendingAction) window.location.reload();
   };
+
+  useEffect(() => {
+    if (!currentUser || !pendingAuthenticationRetry) return;
+    const retry = pendingAuthenticationRetry;
+    sessionStorage.removeItem(PENDING_AUTH_RETRY_KEY);
+    setPendingAuthenticationRetry(null);
+    void retryAuthenticationRequiredResponse(retry).catch((error) => {
+      console.error('Failed to resume the guest action after sign-in:', error);
+      showToast('Signed in, but couldn’t resume that message. Try sending it again.', 'info');
+    });
+  }, [currentUser, pendingAuthenticationRetry, retryAuthenticationRequiredResponse]);
 
   // When set, the library picker filters out artworks already in this ongoing
   // session; picks stage into the shared tray either way.
@@ -882,6 +918,7 @@ const App: React.FC = () => {
     handleToggleLike,
     handleSessionInquiry,
     onSessionAuthenticationRequired: (retry: SessionAuthenticationRetry) => {
+      sessionStorage.setItem(PENDING_AUTH_RETRY_KEY, JSON.stringify(retry));
       setPendingAuthenticationRetry(retry);
       setShowLoginModal(true);
     },

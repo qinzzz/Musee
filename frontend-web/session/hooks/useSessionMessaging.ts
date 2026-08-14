@@ -33,6 +33,8 @@ export type SessionAuthenticationRetry = {
   responseId: string;
   message: string;
   parentEventId?: string;
+  mode?: 'response_only' | 'append_message' | 'start_session';
+  sessionTitle?: string;
 };
 
 type UseSessionMessagingOptions = {
@@ -344,7 +346,14 @@ export function useSessionMessaging({
     artworkIds: string[],
     status: 'pending' | 'completed' | 'failed' | 'auth_required',
     parentEventId?: string,
-    options?: { content?: string; errorMessage?: string; errorCode?: string; retryMessage?: string },
+    options?: {
+      content?: string;
+      errorMessage?: string;
+      errorCode?: string;
+      retryMessage?: string;
+      retryMode?: SessionAuthenticationRetry['mode'];
+      sessionTitle?: string;
+    },
   ) => {
     const messagePayload = {
       role: 'model' as const,
@@ -357,6 +366,8 @@ export function useSessionMessaging({
         ...(options?.errorMessage ? { error_message: options.errorMessage } : {}),
         ...(options?.errorCode ? { error_code: options.errorCode } : {}),
         ...(options?.retryMessage ? { retry_message: options.retryMessage } : {}),
+        ...(options?.retryMode ? { retry_mode: options.retryMode } : {}),
+        ...(options?.sessionTitle ? { session_title: options.sessionTitle } : {}),
       },
     };
 
@@ -472,10 +483,28 @@ export function useSessionMessaging({
             text: GUEST_LIMIT_MESSAGE,
             payload: {
               ...(event.payload || {}),
-              status: 'failed',
+              status: 'auth_required',
               error_code: 'guest_quota_exhausted',
+              retry_message: text,
+              retry_mode: 'append_message',
             },
           }));
+          void finalizeModelResponse(
+            targetSessionId,
+            responseId,
+            commentaryArtworkIds,
+            'auth_required',
+            parentEventId,
+            {
+              content: GUEST_LIMIT_MESSAGE,
+              errorCode: 'guest_quota_exhausted',
+              retryMessage: text,
+              retryMode: 'append_message',
+            },
+          ).catch((saveError) => {
+            console.error('Failed to persist guest-limit response:', saveError);
+            showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
+          });
           clearSessionReplyPending(targetSessionId);
           return;
         }
@@ -546,16 +575,47 @@ export function useSessionMessaging({
     updateLocalSessionEvent,
   ]);
 
-  const retryAuthenticationRequiredResponse = useCallback((retry: SessionAuthenticationRetry) => {
+  const retryAuthenticationRequiredResponse = useCallback(async (retry: SessionAuthenticationRetry) => {
+    const messages = sessionStreams[retry.sessionId] || [];
+    const userMessage = retry.parentEventId
+      ? messages.find((message) => message.id === retry.parentEventId && message.role === 'user')
+      : undefined;
+
+    if (retry.mode === 'start_session') {
+      if (!userMessage) throw new Error('The original guest message is unavailable.');
+      await startSessionWithEvent(sessionUserId, {
+        session_id: retry.sessionId,
+        title: retry.sessionTitle || buildInitialSessionTitle(retry.message, defaultSessionTitle),
+        event: {
+          id: userMessage.id,
+          role: 'user',
+          event_type: 'user_input',
+          content: retry.message,
+          created_at: userMessage.createdAt,
+        },
+      });
+      refreshPersistedSessions();
+    } else if (retry.mode === 'append_message') {
+      if (!userMessage) throw new Error('The original guest message is unavailable.');
+      await persistSessionEvents(retry.sessionId, [userMessage]);
+    }
+
     streamSessionInquiryResponse(
       retry.sessionId,
       retry.message,
       undefined,
-      sessionStreams[retry.sessionId] || [],
+      messages,
       retry.parentEventId,
       retry.responseId,
     );
-  }, [sessionStreams, streamSessionInquiryResponse]);
+  }, [
+    defaultSessionTitle,
+    persistSessionEvents,
+    refreshPersistedSessions,
+    sessionStreams,
+    sessionUserId,
+    streamSessionInquiryResponse,
+  ]);
 
   const sendSessionInquiryToSession = useCallback((
     targetSessionId: string,
@@ -664,13 +724,20 @@ export function useSessionMessaging({
         const failureMessage = policyErrorCode === 'guest_quota_exhausted'
           ? GUEST_LIMIT_MESSAGE
           : SESSION_FAILURE_MESSAGES.session;
+        const retryMode = policyErrorCode === 'guest_quota_exhausted' ? 'start_session' : undefined;
+        const responseId = newSessionEventId();
         appendLocalSessionEvents(targetSessionId, [{
-          id: newSessionEventId(),
+          id: responseId,
           role: 'model',
-          type: 'text',
+          type: retryMode ? 'model_response' : 'text',
           text: failureMessage,
           payload: {
-            message_kind: 'session_failure',
+            ...(retryMode ? {
+              status: 'auth_required',
+              retry_message: text,
+              retry_mode: retryMode,
+              session_title: targetSummary?.title || buildInitialSessionTitle(text, defaultSessionTitle),
+            } : { message_kind: 'session_failure' }),
             error_code: policyErrorCode || 'session_save_failed',
           },
           triggerEventId: userEventId,

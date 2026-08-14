@@ -103,6 +103,8 @@ type SessionViewProps = {
     responseId: string;
     message: string;
     parentEventId?: string;
+    mode?: 'response_only' | 'append_message' | 'start_session';
+    sessionTitle?: string;
   }) => void;
 };
 
@@ -115,6 +117,14 @@ const SessionCommentaryBlock: React.FC<{
   const retryMessage = entry.status === 'auth_required' && typeof entry.message.payload?.retry_message === 'string'
     ? entry.message.payload.retry_message
     : '';
+  const retryMode = entry.message.payload?.retry_mode;
+  const normalizedRetryMode = retryMode === 'append_message' || retryMode === 'start_session' || retryMode === 'response_only'
+    ? retryMode
+    : undefined;
+  const sessionTitle = typeof entry.message.payload?.session_title === 'string'
+    ? entry.message.payload.session_title
+    : undefined;
+  const isGuestLimit = entry.message.payload?.error_code === 'guest_quota_exhausted';
   const matchingState = 'responseId' in sessionProcessingState
     && sessionProcessingState.responseId === entry.id
     ? sessionProcessingState
@@ -149,10 +159,12 @@ const SessionCommentaryBlock: React.FC<{
             responseId: entry.id,
             message: retryMessage,
             parentEventId: entry.message.triggerEventId,
+            mode: normalizedRetryMode,
+            sessionTitle,
           })}
           className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50"
         >
-          Sign in and retry
+          {isGuestLimit ? 'Sign in to continue' : 'Sign in and retry'}
         </button>
       ) : null}
     </div>

@@ -14,7 +14,7 @@ describe('email auth api', () => {
     localStorage.clear();
   });
 
-  it('signup sends the device id for adoption at verification', async () => {
+  it('signup relies on the credential-bound guest cookie instead of a device id', async () => {
     localStorage.setItem('musee_user_id', 'device-42');
     const fetchSpy = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
     vi.stubGlobal('fetch', fetchSpy);
@@ -23,7 +23,7 @@ describe('email auth api', () => {
     await signupWithEmail('ada@example.com', 'correct-horse');
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    expect(body.anonymous_user_id).toBe('device-42');
+    expect(body).toEqual({ email: 'ada@example.com', password: 'correct-horse' });
   });
 
   it('login keeps the access token in memory and removes legacy auth storage', async () => {
@@ -43,7 +43,7 @@ describe('email auth api', () => {
     expect(localStorage.getItem('musee_user_info')).toBeNull();
   });
 
-  it('reset sends the device id so this browser\'s records adopt', async () => {
+  it('reset relies on the credential-bound guest cookie instead of a device id', async () => {
     localStorage.setItem('musee_user_id', 'device-7');
     const fetchSpy = vi.fn().mockResolvedValue(jsonResponse({ access_token: 'j', user: { user_id: 'u9' } }));
     vi.stubGlobal('fetch', fetchSpy);
@@ -52,7 +52,7 @@ describe('email auth api', () => {
     await resetPassword('tok', 'new-password-1');
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    expect(body.anonymous_user_id).toBe('device-7');
+    expect(body).toEqual({ token: 'tok', new_password: 'new-password-1' });
   });
 
   it('verify and reset also store the session (auto-login)', async () => {

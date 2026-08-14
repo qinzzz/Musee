@@ -407,6 +407,144 @@ describe('useSessionMessaging', () => {
     expect(mockStreamSessionChat).not.toHaveBeenCalled();
   });
 
+  it('turns a guest limit into a resumable sign-in action', async () => {
+    mockStreamSessionChat.mockImplementation((
+      _items: GalleryItem[],
+      _history: SessionStreamMessage[],
+      _text: string,
+      _onChunk: (chunk: string) => void,
+      _onComplete: (fullResponse: string) => void,
+      onError: (error: Error) => void,
+    ) => {
+      onError(Object.assign(new Error('Guest limit'), { code: 'guest_quota_exhausted' }));
+    });
+    const summary = createSessionSummary({ id: 'visit-1' });
+    const { result } = renderUseSessionMessaging({
+      activeSessionSummary: summary,
+      sessionSummaries: [summary],
+      filteredSessionId: 'visit-1',
+      isComposingNewSession: false,
+      sessionStreams: { 'visit-1': [] },
+    });
+
+    await act(async () => {
+      result.current.sendSessionInquiryToSession('visit-1', 'Continue this thought');
+    });
+
+    await waitFor(() => {
+      expect(mockUpdateSessionEvent).toHaveBeenCalledWith(
+        'visit-1',
+        expect.stringMatching(/^evt-/),
+        expect.objectContaining({
+          content: 'You’ve reached the guest preview limit. Sign in to continue this conversation.',
+          payload: {
+            status: 'auth_required',
+            error_code: 'guest_quota_exhausted',
+            retry_message: 'Continue this thought',
+            retry_mode: 'append_message',
+          },
+        }),
+      );
+    });
+  });
+
+  it('makes a blocked first guest session resumable after sign-in', async () => {
+    mockStartSessionWithEvent.mockRejectedValue(
+      Object.assign(new Error('Guest limit'), { code: 'guest_quota_exhausted' }),
+    );
+    const { result, spies } = renderUseSessionMessaging();
+
+    await act(async () => {
+      await result.current.handleSessionInquiry('A second guest session');
+    });
+
+    const localStreams = spies.setSessionStreams.mock.calls.reduce<Record<string, SessionStreamMessage[]>>(
+      (state, [update]) => (typeof update === 'function' ? update(state) : update),
+      {},
+    );
+    const localSession = Object.values(localStreams)[0];
+    expect(localSession).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'user', text: 'A second guest session' }),
+      expect.objectContaining({
+        role: 'model',
+        type: 'model_response',
+        payload: expect.objectContaining({
+          status: 'auth_required',
+          error_code: 'guest_quota_exhausted',
+          retry_message: 'A second guest session',
+          retry_mode: 'start_session',
+        }),
+      }),
+    ]));
+  });
+
+  it('persists the blocked guest message before resuming after sign-in', async () => {
+    const userMessage: SessionStreamMessage = {
+      id: 'guest-message',
+      role: 'user',
+      text: 'Continue this thought',
+      createdAt: 100,
+    };
+    const summary = createSessionSummary({ id: 'visit-1' });
+    const { result } = renderUseSessionMessaging({
+      activeSessionSummary: summary,
+      sessionSummaries: [summary],
+      filteredSessionId: 'visit-1',
+      isComposingNewSession: false,
+      sessionStreams: { 'visit-1': [userMessage] },
+    });
+
+    await act(async () => {
+      await result.current.retryAuthenticationRequiredResponse({
+        sessionId: 'visit-1',
+        responseId: 'guest-response',
+        message: 'Continue this thought',
+        parentEventId: 'guest-message',
+        mode: 'append_message',
+      });
+    });
+
+    expect(mockAppendSessionMessages).toHaveBeenCalledWith(
+      'visit-1',
+      [expect.objectContaining({ id: 'guest-message', role: 'user', content: 'Continue this thought' })],
+    );
+    expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates a blocked first session before resuming it after sign-in', async () => {
+    const userMessage: SessionStreamMessage = {
+      id: 'first-guest-message',
+      role: 'user',
+      text: 'Start this thought',
+      createdAt: 100,
+    };
+    const { result } = renderUseSessionMessaging({
+      isComposingNewSession: false,
+      sessionStreams: { 'guest-session': [userMessage] },
+    });
+
+    await act(async () => {
+      await result.current.retryAuthenticationRequiredResponse({
+        sessionId: 'guest-session',
+        responseId: 'guest-response',
+        message: 'Start this thought',
+        parentEventId: 'first-guest-message',
+        mode: 'start_session',
+        sessionTitle: 'Start this thought',
+      });
+    });
+
+    expect(mockStartSessionWithEvent).toHaveBeenCalledWith('user-1', {
+      session_id: 'guest-session',
+      title: 'Start this thought',
+      event: expect.objectContaining({
+        id: 'first-guest-message',
+        content: 'Start this thought',
+      }),
+    });
+    expect(mockStreamSessionChat).toHaveBeenCalledTimes(1);
+  });
+
   it('allows a new submit after the initial event save fails', async () => {
     mockStartSessionWithEvent
       .mockRejectedValueOnce(new Error('network down'))

@@ -1,9 +1,10 @@
 """Guest principal binding and server-enforced preview limits."""
 
 import io
+from unittest.mock import patch
 
 from app.config.settings import settings
-from app.database.models import GuestQuotaReservation, GuestWorkspace, Session as SessionModel, SessionEvent, User
+from app.database.models import AuthSession, GuestQuotaReservation, GuestWorkspace, Session as SessionModel, SessionEvent, User
 
 
 def _bootstrap_guest(client, db, legacy_user_id="legacy-device") -> str:
@@ -245,3 +246,48 @@ def test_guest_cookie_mutations_reject_untrusted_origins(client, db):
     assert response.status_code == 403
     assert response.json()["detail"]["error_code"] == "origin_not_allowed"
     assert db.query(GuestQuotaReservation).count() == 0
+
+
+def test_google_login_promotes_only_cookie_bound_guest_workspace(client, db):
+    user_id = _bootstrap_guest(client, db, legacy_user_id="guest-to-promote")
+    assert _start_message(client, user_id, "promoted-session", "promoted-event").status_code == 200
+    db.add(User(user_id="forged-guest", device_id="forged-guest", tier="free"))
+    db.commit()
+
+    with patch("app.routers.auth.verify_google_token") as verify:
+        verify.return_value = {
+            "sub": "promotion-google-id",
+            "email": "promotion@example.com",
+            "name": "Promoted User",
+            "picture": None,
+        }
+        response = client.post("/api/auth/google", json={
+            "id_token": "fake",
+            "anonymous_user_id": "forged-guest",
+        })
+
+    assert response.status_code == 200
+    target_user_id = response.json()["user"]["user_id"]
+    assert response.json()["guest_promoted"] is True
+    assert db.query(SessionModel).filter(
+        SessionModel.id == "promoted-session",
+        SessionModel.user_id == target_user_id,
+    ).count() == 1
+    assert db.query(User).filter(User.user_id == "guest-to-promote").first() is None
+    assert db.query(User).filter(User.user_id == "forged-guest").first() is not None
+    assert db.query(GuestWorkspace).count() == 0
+    assert settings.guest_cookie_name not in client.cookies
+
+    with patch("app.routers.auth.verify_google_token") as verify:
+        verify.return_value = {
+            "sub": "promotion-google-id",
+            "email": "promotion@example.com",
+            "name": "Promoted User",
+            "picture": None,
+        }
+        retry = client.post("/api/auth/google", json={"id_token": "fake"})
+
+    assert retry.status_code == 200
+    assert retry.json()["guest_promoted"] is False
+    assert db.query(SessionModel).filter(SessionModel.id == "promoted-session").count() == 1
+    assert db.query(AuthSession).filter(AuthSession.user_id == target_user_id).count() == 2

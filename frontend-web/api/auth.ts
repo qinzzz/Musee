@@ -56,7 +56,6 @@ export async function signupWithEmail(email: string, password: string): Promise<
   return postAuth('/auth/signup', {
     email,
     password,
-    anonymous_user_id: getOrCreateUserId(),
   });
 }
 
@@ -64,7 +63,6 @@ export async function loginWithEmail(email: string, password: string): Promise<a
   const data = await postAuth('/auth/login', {
     email,
     password,
-    anonymous_user_id: getOrCreateUserId(),
   });
   storeSession(data);
   return data;
@@ -84,14 +82,12 @@ export async function resetPassword(token: string, newPassword: string): Promise
   const data = await postAuth('/auth/reset-password', {
     token,
     new_password: newPassword,
-    // Reset ends signed-in; adopt this device's anonymous records like login does.
-    anonymous_user_id: getOrCreateUserId(),
   });
   storeSession(data);
   return data;
 }
 
-export async function loginWithGoogle(idToken: string, anonymousUserId?: string): Promise<any> {
+export async function loginWithGoogle(idToken: string): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/auth/google`, {
     method: 'POST',
     headers: {
@@ -100,7 +96,6 @@ export async function loginWithGoogle(idToken: string, anonymousUserId?: string)
     credentials: 'include',
     body: JSON.stringify({
       id_token: idToken,
-      anonymous_user_id: anonymousUserId,
     }),
   });
 
