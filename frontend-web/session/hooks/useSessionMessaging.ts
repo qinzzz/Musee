@@ -20,6 +20,13 @@ type ShowToast = (message: string, type?: ToastType) => void;
 const SESSION_EVENT_SAVE_ERROR = 'Couldn’t save this session update. Try again.';
 const MODEL_RESPONSE_SAVE_ERROR = 'This response couldn’t be saved. Try again.';
 const AUTH_REQUIRED_MESSAGE = 'Your session expired. Sign in again to continue.';
+const GUEST_LIMIT_MESSAGE = 'You’ve reached the guest preview limit. Sign in to continue this conversation.';
+
+const getErrorCode = (error: unknown): string | undefined => (
+  error instanceof Error && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : undefined
+);
 
 export type SessionAuthenticationRetry = {
   sessionId: string;
@@ -270,7 +277,9 @@ export function useSessionMessaging({
     }
     void persistSessionEvents(sessionId, newEvents).catch((error) => {
       console.error('Failed to persist session events:', error);
-      showToast(SESSION_EVENT_SAVE_ERROR, 'info');
+      showToast(getErrorCode(error) === 'guest_quota_exhausted'
+        ? GUEST_LIMIT_MESSAGE
+        : SESSION_EVENT_SAVE_ERROR, 'info');
     });
   }, [
     appendLocalSessionEvents,
@@ -457,6 +466,19 @@ export function useSessionMessaging({
         clearSessionReplyPending(targetSessionId);
       },
       (error) => {
+        if (getErrorCode(error) === 'guest_quota_exhausted') {
+          updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
+            ...event,
+            text: GUEST_LIMIT_MESSAGE,
+            payload: {
+              ...(event.payload || {}),
+              status: 'failed',
+              error_code: 'guest_quota_exhausted',
+            },
+          }));
+          clearSessionReplyPending(targetSessionId);
+          return;
+        }
         if (error instanceof SessionAuthenticationError) {
           updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
             ...event,
@@ -638,14 +660,18 @@ export function useSessionMessaging({
         );
       } catch (error) {
         clearSessionReplyPending(targetSessionId);
+        const policyErrorCode = getErrorCode(error);
+        const failureMessage = policyErrorCode === 'guest_quota_exhausted'
+          ? GUEST_LIMIT_MESSAGE
+          : SESSION_FAILURE_MESSAGES.session;
         appendLocalSessionEvents(targetSessionId, [{
           id: newSessionEventId(),
           role: 'model',
           type: 'text',
-          text: SESSION_FAILURE_MESSAGES.session,
+          text: failureMessage,
           payload: {
             message_kind: 'session_failure',
-            error_code: 'session_save_failed',
+            error_code: policyErrorCode || 'session_save_failed',
           },
           triggerEventId: userEventId,
           createdAt: createdAt + 1,

@@ -13,14 +13,26 @@ export class SessionAuthenticationError extends Error {
   }
 }
 
+export class SessionGuestLimitError extends Error {
+  readonly code = 'guest_quota_exhausted';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'SessionGuestLimitError';
+  }
+}
+
 async function buildSessionChatError(response: Response): Promise<Error> {
   const fallback = `session chat stream failed: ${response.status}`;
   const text = await response.text();
-  if (response.status !== 401) return new Error(text || fallback);
 
   try {
     const body = JSON.parse(text) as { detail?: string | { error_code?: string; message?: string } };
     const detail = body.detail;
+    if (typeof detail === 'object' && detail?.error_code === 'guest_quota_exhausted') {
+      return new SessionGuestLimitError(detail.message || 'The guest preview has reached its limit.');
+    }
+    if (response.status !== 401) return new Error(text || fallback);
     const code = typeof detail === 'object' && detail?.error_code === 'token_expired'
       ? 'token_expired'
       : typeof detail === 'object' && detail?.error_code === 'invalid_token'
@@ -33,6 +45,7 @@ async function buildSessionChatError(response: Response): Promise<Error> {
         : 'Please sign in again.',
     );
   } catch {
+    if (response.status !== 401) return new Error(text || fallback);
     return new SessionAuthenticationError('authentication_required', 'Please sign in again.');
   }
 }

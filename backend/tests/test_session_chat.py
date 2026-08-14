@@ -3,6 +3,7 @@ from datetime import timedelta
 import pytest
 
 from app.models.artwork import AIProvider
+from app.database.models import User
 from app.routers import session_chat as session_chat_router
 from app.services.ai_client_interface import AIStreamChunk
 from app.services.session_chat_service import ExhibitionItem, build_session_chat_items_payload, load_bootstrap_image_bytes
@@ -20,6 +21,14 @@ def _expected_item(item_id: str, keywords: list[str]) -> dict:
         "date": None,
         "medium": None,
     }
+
+
+def _chat_auth(db) -> tuple[dict[str, str], str]:
+    user_id = "chat-test-user"
+    if db.query(User).filter(User.user_id == user_id).first() is None:
+        db.add(User(user_id=user_id, device_id=user_id))
+        db.commit()
+    return {"Authorization": f"Bearer {create_access_token({'sub': user_id})}"}, user_id
 
 
 class _SessionAIService:
@@ -74,7 +83,8 @@ async def test_load_bootstrap_image_bytes_only_for_new_conversation(monkeypatch)
     assert calls == []
 
 
-def test_session_chat_route(client, monkeypatch):
+def test_session_chat_route(client, monkeypatch, db):
+    headers, user_id = _chat_auth(db)
     monkeypatch.setattr(session_chat_router, "determine_ai_provider", lambda _model=None: AIProvider.OPENAI)
     monkeypatch.setattr(
         session_chat_router.AIServiceFactory,
@@ -91,6 +101,7 @@ def test_session_chat_route(client, monkeypatch):
 
     response = client.post(
         "/api/session/chat",
+        headers=headers,
         json={
             "items": [
                 {
@@ -101,6 +112,7 @@ def test_session_chat_route(client, monkeypatch):
             ],
             "conversation_history": [],
             "new_message": "What do these have in common?",
+            "user_id": user_id,
         },
     )
 
@@ -109,6 +121,7 @@ def test_session_chat_route(client, monkeypatch):
 
     legacy_response = client.post(
         "/api/visit/chat",
+        headers=headers,
         json={
             "items": [
                 {
@@ -119,12 +132,14 @@ def test_session_chat_route(client, monkeypatch):
             ],
             "conversation_history": [],
             "new_message": "What do these have in common?",
+            "user_id": user_id,
         },
     )
     assert legacy_response.status_code == 200
 
 
-def test_session_chat_stream_route(client, monkeypatch):
+def test_session_chat_stream_route(client, monkeypatch, db):
+    headers, user_id = _chat_auth(db)
     monkeypatch.setattr(session_chat_router, "determine_ai_provider", lambda _model=None: AIProvider.OPENAI)
     monkeypatch.setattr(
         session_chat_router.AIServiceFactory,
@@ -140,6 +155,7 @@ def test_session_chat_stream_route(client, monkeypatch):
 
     response = client.post(
         "/api/session/chat-stream",
+        headers=headers,
         json={
             "items": [
                 {
@@ -150,6 +166,7 @@ def test_session_chat_stream_route(client, monkeypatch):
             ],
             "conversation_history": [{"role": "user", "content": "hello"}],
             "new_message": "Continue.",
+            "user_id": user_id,
         },
     )
 
@@ -162,6 +179,7 @@ def test_session_chat_stream_route(client, monkeypatch):
 
     legacy_response = client.post(
         "/api/visit/chat-stream",
+        headers=headers,
         json={
             "items": [
                 {
@@ -172,6 +190,7 @@ def test_session_chat_stream_route(client, monkeypatch):
             ],
             "conversation_history": [{"role": "user", "content": "hello"}],
             "new_message": "Continue.",
+            "user_id": user_id,
         },
     )
     assert legacy_response.status_code == 200
@@ -195,7 +214,8 @@ def test_session_chat_stream_rejects_an_expired_presented_token(client):
     assert response.json()["detail"]["error_code"] == "token_expired"
 
 
-def test_session_chat_stream_route_records_usage_tokens(client, monkeypatch):
+def test_session_chat_stream_route_records_usage_tokens(client, monkeypatch, db):
+    headers, user_id = _chat_auth(db)
     completed: dict[str, int | None] = {}
 
     monkeypatch.setattr(session_chat_router, "determine_ai_provider", lambda _model=None: AIProvider.OPENAI)
@@ -219,10 +239,12 @@ def test_session_chat_stream_route_records_usage_tokens(client, monkeypatch):
 
     response = client.post(
         "/api/session/chat-stream",
+        headers=headers,
         json={
             "items": [{"id": "a1", "url": "https://example.com/a.jpg", "keywords": ["red", "abstract"]}],
             "conversation_history": [{"role": "user", "content": "hello"}],
             "new_message": "Continue.",
+            "user_id": user_id,
         },
     )
 

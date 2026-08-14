@@ -133,13 +133,14 @@ def test_session_without_access_token_is_guest_even_if_refresh_cookie_exists(cli
     response = client.get("/api/auth/session")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "state": "guest",
-        "principal": None,
-        "capabilities": {},
-        "quotas": {},
-        "plan": None,
-    }
+    body = response.json()
+    assert body["state"] == "guest"
+    assert body["principal"]["kind"] == "guest"
+    assert body["principal"]["user_id"].startswith("guest_")
+    assert body["capabilities"]["create_session"] is True
+    assert body["capabilities"]["search_collection"] is False
+    assert body["quotas"]["guest_messages"]["remaining"] == 1
+    assert body["plan"] == "guest"
 
 
 def test_refresh_cookie_mutations_reject_untrusted_browser_origins(client, db):

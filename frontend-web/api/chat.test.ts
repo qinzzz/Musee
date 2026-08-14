@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SESSION_STREAM_IDLE_TIMEOUT_MS, SessionAuthenticationError, streamSessionChat } from './chat';
+import {
+  SESSION_STREAM_IDLE_TIMEOUT_MS,
+  SessionAuthenticationError,
+  SessionGuestLimitError,
+  streamSessionChat,
+} from './chat';
 
 const encoder = new TextEncoder();
 
@@ -73,6 +78,19 @@ describe('streamSessionChat', () => {
     expect(stream.onError).toHaveBeenCalledOnce();
     expect(stream.onError.mock.calls[0][0]).toBeInstanceOf(SessionAuthenticationError);
     expect(stream.onError.mock.calls[0][0]).toMatchObject({ code: 'token_expired' });
+  });
+
+  it('returns a typed guest-limit error for an exhausted preview', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: { error_code: 'guest_quota_exhausted', message: 'Guest limit reached.' },
+    }), { status: 429 })));
+    const stream = startStream();
+
+    await stream.promise;
+
+    expect(stream.onError).toHaveBeenCalledOnce();
+    expect(stream.onError.mock.calls[0][0]).toBeInstanceOf(SessionGuestLimitError);
+    expect(stream.onError.mock.calls[0][0]).toMatchObject({ code: 'guest_quota_exhausted' });
   });
 
   it('forwards an SSE error exactly once', async () => {

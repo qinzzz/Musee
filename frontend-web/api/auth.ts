@@ -129,7 +129,7 @@ export async function logout(): Promise<void> {
 
 export type AuthSessionSnapshot = {
   state: 'guest' | 'authenticated';
-  principal: any | null;
+  principal: { kind: 'guest' | 'authenticated'; user_id: string; [key: string]: unknown } | null;
   capabilities: Record<string, boolean>;
   quotas: Record<string, unknown>;
   plan: string | null;
@@ -139,15 +139,18 @@ export async function bootstrapAuthSession(): Promise<AuthSessionSnapshot> {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(USER_INFO_KEY);
   const token = await refreshAccessToken();
-  if (!token) {
-    return { state: 'guest', principal: null, capabilities: {}, quotas: {}, plan: null };
-  }
-  const response = await fetchWithTimeout(`${API_BASE_URL}/auth/session`);
+  const guestUserId = !token ? localStorage.getItem(USER_ID_KEY) : null;
+  const query = guestUserId ? `?guest_user_id=${encodeURIComponent(guestUserId)}` : '';
+  const response = await fetchWithTimeout(`${API_BASE_URL}/auth/session${query}`);
   if (!response.ok) {
     setAccessToken(null);
     return { state: 'guest', principal: null, capabilities: {}, quotas: {}, plan: null };
   }
-  return response.json();
+  const snapshot = await response.json() as AuthSessionSnapshot;
+  if (snapshot.principal?.user_id) {
+    localStorage.setItem(USER_ID_KEY, snapshot.principal.user_id);
+  }
+  return snapshot;
 }
 
 export { getOrCreateUserId };

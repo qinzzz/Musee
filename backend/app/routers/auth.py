@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -17,6 +17,13 @@ from app.services.auth_session_service import (
     set_refresh_cookie,
     validate_auth_origin,
 )
+from app.services.authorization_service import (
+    capabilities_for,
+    create_guest_workspace,
+    guest_quota_snapshot,
+    resolve_guest_workspace,
+)
+from app.services.quota_service import get_account_usage
 from app.utils.auth_utils import create_access_token, get_current_user, verify_google_token
 
 router = APIRouter()
@@ -128,19 +135,31 @@ async def logout_session(
 
 
 @router.get("/auth/session")
-async def auth_session(current_user: Optional[User] = Depends(get_current_user)):
+async def auth_session(
+    request: Request,
+    response: Response,
+    guest_user_id: Optional[str] = Query(default=None),
+    current_user: Optional[User] = Depends(get_current_user),
+    guest_token: Optional[str] = Cookie(default=None, alias=settings.guest_cookie_name),
+    db: Session = Depends(get_db),
+):
+    validate_auth_origin(request)
     if current_user is None:
+        workspace = resolve_guest_workspace(db, guest_token)
+        if workspace is None:
+            workspace = create_guest_workspace(db, response, legacy_user_id=guest_user_id)
         return {
             "state": "guest",
-            "principal": None,
-            "capabilities": {},
-            "quotas": {},
-            "plan": None,
+            "principal": {"kind": "guest", "user_id": workspace.user_id},
+            "capabilities": capabilities_for("guest"),
+            "quotas": guest_quota_snapshot(db, workspace),
+            "plan": "guest",
         }
+    usage = get_account_usage(db, current_user.user_id)
     return {
         "state": "authenticated",
-        "principal": current_user.to_dict(),
-        "capabilities": {},
-        "quotas": {},
+        "principal": {"kind": "authenticated", **current_user.to_dict()},
+        "capabilities": capabilities_for("authenticated"),
+        "quotas": usage["quotas"],
         "plan": current_user.tier,
     }

@@ -105,6 +105,8 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "musee_refresh"
     refresh_cookie_samesite: str = "lax"
     refresh_cookie_secure: Optional[bool] = None
+    guest_workspace_expire_days: int = 30
+    guest_cookie_name: str = "musee_guest"
     auth_allowed_origins: str = (
         "https://museelab.com,https://www.museelab.com,"
         "https://musee-web.vercel.app,https://musee-web.qinzzz.workers.dev,"

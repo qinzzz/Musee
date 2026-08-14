@@ -111,6 +111,7 @@ const App: React.FC = () => {
   const {
     status: authStatus,
     currentUser,
+    guestUserId,
     completeLogin,
     continueAsGuest,
     logout: logoutCurrentSession,
@@ -126,7 +127,7 @@ const App: React.FC = () => {
   const [learningInitialGuide] = useState<string | null>(initialNavigationState.learningInitialGuide);
   const [collectTab, setCollectTab] = useState<CollectTab>(initialNavigationState.collectTab);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const sessionUserId = currentUser?.user_id || USER_ID;
+  const sessionUserId = currentUser?.user_id || guestUserId || USER_ID;
   // Single cached account-usage fetch, shared with the user-menu meter via
   // the query layer; the meter's mount-on-open refetch keeps both current.
   const { usage: accountUsage } = useAccountUsageQuery(sessionUserId);
@@ -429,8 +430,8 @@ const App: React.FC = () => {
     openSessionSummary,
   } = sessionWorkspace;
 
-  const handleLoginSuccess = (user: any) => {
-    completeLogin(user);
+  const handleLoginSuccess = async (user: any) => {
+    await completeLogin(user);
     setShowLoginModal(false);
     if (pendingAuthenticationRetry) {
       retryAuthenticationRequiredResponse(pendingAuthenticationRetry);
@@ -890,11 +891,11 @@ const App: React.FC = () => {
           onClose={() => {
             setShowLoginModal(false);
             if (authStatus === 'reauth_required') {
-              continueAsGuest();
+              void continueAsGuest();
             }
           }}
           onLoginSuccess={(user) => {
-            handleLoginSuccess(user);
+            void handleLoginSuccess(user);
           }}
           onLoginError={() => alert('Login Error')}
         />

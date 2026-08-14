@@ -41,6 +41,37 @@ export interface StartSessionWithArtworksPayload {
   artwork_ids: string[];
 }
 
+export class SessionPolicyError extends Error {
+  readonly code: string;
+  readonly requiresAuthentication: boolean;
+
+  constructor(code: string, message: string, requiresAuthentication = false) {
+    super(message);
+    this.name = 'SessionPolicyError';
+    this.code = code;
+    this.requiresAuthentication = requiresAuthentication;
+  }
+}
+
+async function buildSessionApiError(response: Response, fallback: string): Promise<Error> {
+  const text = await response.text();
+  try {
+    const body = JSON.parse(text) as {
+      detail?: string | { error_code?: string; message?: string; requires_authentication?: boolean };
+    };
+    if (typeof body.detail === 'object' && body.detail?.error_code) {
+      return new SessionPolicyError(
+        body.detail.error_code,
+        body.detail.message || fallback,
+        Boolean(body.detail.requires_authentication),
+      );
+    }
+  } catch {
+    // Keep the server text or caller fallback below.
+  }
+  return new Error(text ? `${fallback}: ${text}` : fallback);
+}
+
 export async function fetchSessionEvents(sessionId: string): Promise<SessionEventPayload[]> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}/events`, { timeout: 10000 });
   if (!response.ok) {
@@ -82,8 +113,7 @@ export async function appendSessionEvents(sessionId: string, events: SessionEven
     timeout: 10000,
   });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API error (${response.status}): ${errorText}`);
+    throw await buildSessionApiError(response, `API error (${response.status})`);
   }
 }
 
@@ -99,8 +129,7 @@ export async function updateSessionEvent(
     timeout: 10000,
   });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API error (${response.status}): ${errorText}`);
+    throw await buildSessionApiError(response, `API error (${response.status}): failed to update session event`);
   }
   return response.json();
 }
@@ -113,8 +142,7 @@ export async function startSessionWithEvent(userId: string, payload: StartSessio
     timeout: 10000,
   });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API error (${response.status}): ${errorText}`);
+    throw await buildSessionApiError(response, `API error (${response.status}): failed to start session`);
   }
   return response.json();
 }
