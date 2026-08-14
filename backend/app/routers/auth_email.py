@@ -11,7 +11,7 @@ import logging
 import re
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -31,7 +31,7 @@ from app.services.email_token_service import (
     consume_email_token,
     create_email_token,
 )
-from app.utils.auth_utils import create_access_token
+from app.services.auth_session_service import issue_login_session
 from app.utils.passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from app.utils.rate_limit import rate_limit
 
@@ -79,15 +79,6 @@ def _validate_signup_input(email: str, password: str) -> None:
             "error_code": "weak_password",
             "message": f"Password must be at least {MIN_PASSWORD_LENGTH} characters.",
         })
-
-
-def _login_response(user: User) -> dict:
-    # Same shape as /auth/google so the frontend has one session handler.
-    return {
-        "access_token": create_access_token(data={"sub": user.user_id}),
-        "token_type": "bearer",
-        "user": user.to_dict(),
-    }
 
 
 def _set_credential(db: Session, user_id: str, password: str) -> None:
@@ -145,7 +136,7 @@ async def signup(request: SignupRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/auth/login", dependencies=[Depends(rate_limit(10, 60))])
-async def login(request: LoginRequest, db: Session = Depends(get_db)):
+async def login(request: LoginRequest, response: Response, db: Session = Depends(get_db)):
     email = _normalize_email(request.email)
     user = db.query(User).filter(User.email == email).first()
     credential = (
@@ -175,12 +166,11 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
 
     if request.anonymous_user_id:
         adopt_anonymous_account(db, request.anonymous_user_id, user)
-    db.commit()
-    return _login_response(user)
+    return issue_login_session(db, response, user)
 
 
 @router.post("/auth/verify-email", dependencies=[Depends(rate_limit(10, 60))])
-async def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db)):
+async def verify_email(request: VerifyEmailRequest, response: Response, db: Session = Depends(get_db)):
     token = consume_email_token(db, raw_token=request.token, purpose=PURPOSE_VERIFY_EMAIL)
     if not token:
         raise HTTPException(status_code=400, detail={
@@ -197,9 +187,7 @@ async def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db
     # can never end up on an account someone else later proves to own.
     if token.anonymous_user_id:
         adopt_anonymous_account(db, token.anonymous_user_id, user)
-    db.commit()
-    db.refresh(user)
-    return _login_response(user)
+    return issue_login_session(db, response, user)
 
 
 @router.post("/auth/request-password-reset", dependencies=[Depends(rate_limit(3, 300))])
@@ -223,7 +211,7 @@ async def request_password_reset(request: RequestPasswordResetRequest, db: Sessi
 
 
 @router.post("/auth/reset-password", dependencies=[Depends(rate_limit(10, 60))])
-async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+async def reset_password(request: ResetPasswordRequest, response: Response, db: Session = Depends(get_db)):
     if len(request.new_password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail={
             "error_code": "weak_password",
@@ -249,6 +237,4 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     # filled — the right device for the data).
     if request.anonymous_user_id:
         adopt_anonymous_account(db, request.anonymous_user_id, user)
-    db.commit()
-    db.refresh(user)
-    return _login_response(user)
+    return issue_login_session(db, response, user)

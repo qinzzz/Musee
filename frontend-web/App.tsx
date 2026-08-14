@@ -3,8 +3,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
-import { getCurrentUser, getOrCreateUserId, logout } from './api/auth';
-import { AUTH_TOKEN_KEY, DEV_FIXED_USER_ID, DEV_FREE_TIER_USER_ID, USER_ID_KEY, USER_INFO_KEY } from './api/core';
+import { getOrCreateUserId } from './api/auth';
+import { DEV_FIXED_USER_ID, DEV_FREE_TIER_USER_ID, USER_ID_KEY } from './api/core';
+import { useAuth } from './auth/AuthProvider';
 import {
   batchDeleteArtworks,
   deleteArtwork,
@@ -107,6 +108,13 @@ const DEFAULT_VISIT_TITLE = 'Untitled Session';
 
 const App: React.FC = () => {
   const queryClient = useQueryClient();
+  const {
+    status: authStatus,
+    currentUser,
+    completeLogin,
+    continueAsGuest,
+    logout: logoutCurrentSession,
+  } = useAuth();
   const initialNavigationState = getInitialNavigationState(window.location.pathname);
   const goalGalleryInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -118,7 +126,6 @@ const App: React.FC = () => {
   const [learningInitialGuide] = useState<string | null>(initialNavigationState.learningInitialGuide);
   const [collectTab, setCollectTab] = useState<CollectTab>(initialNavigationState.collectTab);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(getCurrentUser());
   const sessionUserId = currentUser?.user_id || USER_ID;
   // Single cached account-usage fetch, shared with the user-menu meter via
   // the query layer; the meter's mount-on-open refetch keeps both current.
@@ -253,15 +260,20 @@ const App: React.FC = () => {
     catch { return new Set(); }
   });
 
-  const handleLogout = () => {
-    logout();
-    setCurrentUser(null);
+  useEffect(() => {
+    if (authStatus === 'reauth_required') {
+      setShowLoginModal(true);
+    }
+  }, [authStatus]);
+
+  const handleLogout = async () => {
+    await logoutCurrentSession();
+    queryClient.clear();
     window.location.reload();
   };
 
-  const handleSwitchDevProfile = (nextUserId: string) => {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    localStorage.removeItem(USER_INFO_KEY);
+  const handleSwitchDevProfile = async (nextUserId: string) => {
+    await logoutCurrentSession();
     localStorage.setItem(USER_ID_KEY, nextUserId);
     window.location.reload();
   };
@@ -281,7 +293,7 @@ const App: React.FC = () => {
               type="button"
               onClick={() => {
                 if (isActive) return;
-                handleSwitchDevProfile(profile.id);
+                void handleSwitchDevProfile(profile.id);
               }}
               className={`rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-colors ${
                 isActive
@@ -418,7 +430,7 @@ const App: React.FC = () => {
   } = sessionWorkspace;
 
   const handleLoginSuccess = (user: any) => {
-    setCurrentUser(user);
+    completeLogin(user);
     setShowLoginModal(false);
     if (pendingAuthenticationRetry) {
       retryAuthenticationRequiredResponse(pendingAuthenticationRetry);
@@ -870,8 +882,17 @@ const App: React.FC = () => {
         />
 
         <LoginModal
-          open={showLoginModal && (!currentUser || Boolean(pendingAuthenticationRetry))}
-          onClose={() => setShowLoginModal(false)}
+          open={showLoginModal && (
+            !currentUser
+            || authStatus === 'reauth_required'
+            || Boolean(pendingAuthenticationRetry)
+          )}
+          onClose={() => {
+            setShowLoginModal(false);
+            if (authStatus === 'reauth_required') {
+              continueAsGuest();
+            }
+          }}
           onLoginSuccess={(user) => {
             handleLoginSuccess(user);
           }}

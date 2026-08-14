@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from typing import Optional, Dict, Any
+import uuid
 from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError
 from google.oauth2 import id_token
@@ -26,7 +27,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
     
-    to_encode.update({"exp": expire})
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.now(UTC),
+        "jti": str(uuid.uuid4()),
+    })
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
 

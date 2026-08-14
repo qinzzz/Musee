@@ -1,14 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 import logging
 
 from app.config.plans import NEW_REGISTRATION_TIER
+from app.config.settings import settings
 from app.database.connection import get_db
 from app.database.models import User, UserCredential
 from app.services.account_service import adopt_anonymous_account
-from app.utils.auth_utils import verify_google_token, create_access_token
+from app.services.auth_session_service import (
+    clear_refresh_cookie,
+    issue_login_session,
+    revoke_refresh_session,
+    rotate_refresh_session,
+    set_refresh_cookie,
+    validate_auth_origin,
+)
+from app.utils.auth_utils import create_access_token, get_current_user, verify_google_token
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -20,6 +29,7 @@ class GoogleLoginRequest(BaseModel):
 @router.post("/auth/google")
 async def google_login(
     request: GoogleLoginRequest,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -79,14 +89,58 @@ async def google_login(
     if request.anonymous_user_id:
         adopt_anonymous_account(db, request.anonymous_user_id, user)
 
-    db.commit()
-    db.refresh(user)
+    return issue_login_session(db, response, user)
 
-    # 4. Generate JWT
-    access_token = create_access_token(data={"sub": user.user_id})
 
+@router.post("/auth/refresh")
+async def refresh_session(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    refresh_token: Optional[str] = Cookie(default=None, alias=settings.refresh_cookie_name),
+):
+    validate_auth_origin(request)
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error_code": "refresh_missing", "message": "No active sign-in session."},
+        )
+    result = rotate_refresh_session(db, refresh_token)
+    set_refresh_cookie(response, result.raw_token)
     return {
-        "access_token": access_token,
+        "access_token": create_access_token(data={"sub": result.user.user_id}),
+        "expires_in": settings.access_token_expire_minutes * 60,
         "token_type": "bearer",
-        "user": user.to_dict()
+    }
+
+
+@router.post("/auth/logout")
+async def logout_session(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    refresh_token: Optional[str] = Cookie(default=None, alias=settings.refresh_cookie_name),
+):
+    validate_auth_origin(request)
+    revoke_refresh_session(db, refresh_token)
+    clear_refresh_cookie(response)
+    return {"ok": True}
+
+
+@router.get("/auth/session")
+async def auth_session(current_user: Optional[User] = Depends(get_current_user)):
+    if current_user is None:
+        return {
+            "state": "guest",
+            "principal": None,
+            "capabilities": {},
+            "quotas": {},
+            "plan": None,
+        }
+    return {
+        "state": "authenticated",
+        "principal": current_user.to_dict(),
+        "capabilities": {},
+        "quotas": {},
+        "plan": current_user.tier,
     }

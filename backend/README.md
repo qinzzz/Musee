@@ -52,6 +52,10 @@ Key variables in your `.env.local`:
 - `AI_PROVIDER`: `gemini`, `openai`, or `claude`.
 - `MAX_FILE_SIZE_MB`: Defaults to 10.
 - `LOG_LEVEL`: `INFO` or `DEBUG`.
+- `SECRET_KEY`: Required in production for signing short-lived access tokens.
+- `AUTH_ALLOWED_ORIGINS`: Comma-separated frontend origins allowed to renew or revoke cookie sessions.
+- `REFRESH_COOKIE_SECURE`: Defaults to enabled in production. Set explicitly only when deployment topology requires it.
+- `REFRESH_COOKIE_SAMESITE`: Defaults to `lax`; cross-site frontend/API deployments require `none` together with secure cookies.
 
 ### 3. Running the Server
 ```bash
@@ -66,11 +70,9 @@ python scripts/run_dev_server.py --no-reload
 - **Health**: [http://localhost:8000/health](http://localhost:8000/health)
 
 ### 4. Database Migrations
-We use a custom migration script for high-speed schema updates:
+Apply the versioned database migrations before deploying:
 ```bash
-python migrate_tags.py  # Fixes legacy tag associations
-# For full schema init:
-python migrate_db.py
+alembic upgrade head
 ```
 
 ## AI Orchestration

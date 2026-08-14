@@ -26,7 +26,7 @@ describe('email auth api', () => {
     expect(body.anonymous_user_id).toBe('device-42');
   });
 
-  it('login stores the session like the google flow', async () => {
+  it('login keeps the access token in memory and removes legacy auth storage', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
       access_token: 'jwt-123',
       token_type: 'bearer',
@@ -34,11 +34,13 @@ describe('email auth api', () => {
     })));
 
     const { loginWithEmail } = await import('./auth');
+    const { getAccessToken } = await import('./core');
     await loginWithEmail('ada@example.com', 'correct-horse');
 
-    expect(localStorage.getItem('musee_auth_token')).toBe('jwt-123');
+    expect(getAccessToken()).toBe('jwt-123');
     expect(localStorage.getItem('musee_user_id')).toBe('u1');
-    expect(JSON.parse(localStorage.getItem('musee_user_info')!)).toMatchObject({ user_id: 'u1' });
+    expect(localStorage.getItem('musee_auth_token')).toBeNull();
+    expect(localStorage.getItem('musee_user_info')).toBeNull();
   });
 
   it('reset sends the device id so this browser\'s records adopt', async () => {
@@ -59,8 +61,9 @@ describe('email auth api', () => {
     })));
 
     const { verifyEmailToken } = await import('./auth');
+    const { getAccessToken } = await import('./core');
     await verifyEmailToken('some-token');
-    expect(localStorage.getItem('musee_auth_token')).toBe('jwt-456');
+    expect(getAccessToken()).toBe('jwt-456');
   });
 
   it('surfaces the structured error code and message', async () => {
