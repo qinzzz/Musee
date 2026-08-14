@@ -37,6 +37,7 @@ import { useSessionArtworkInputPipeline } from './session/hooks/useSessionArtwor
 import { MAX_SESSION_ARTWORK_BATCH_SIZE } from './session/constants';
 import { useArtworkUploadOperations } from './artwork-ingest/hooks/useArtworkUploadOperations';
 import {
+  buildRootHistoryState,
   getInitialNavigationState,
   type ArtistPageContext,
   type ArtworkDetailContext,
@@ -112,11 +113,24 @@ const App: React.FC = () => {
     status: authStatus,
     currentUser,
     guestUserId,
+    capabilities,
     completeLogin,
     continueAsGuest,
     logout: logoutCurrentSession,
   } = useAuth();
-  const initialNavigationState = getInitialNavigationState(window.location.pathname);
+  const requestedNavigationState = getInitialNavigationState(window.location.pathname);
+  const canSearchCollection = capabilities.search_collection === true;
+  const canViewProfile = capabilities.view_profile === true;
+  const initialNavigationState = (
+    (requestedNavigationState.activeTab === 'collect' && !canSearchCollection)
+    || (requestedNavigationState.activeTab === 'profile' && !canViewProfile)
+  )
+    ? {
+        ...requestedNavigationState,
+        activeTab: 'newSession' as const,
+        artistPageContext: null,
+      }
+    : requestedNavigationState;
   const goalGalleryInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const sessionStreamScrollRef = useRef<HTMLDivElement>(null);
@@ -136,6 +150,19 @@ const App: React.FC = () => {
   const [movementPageContext, setMovementPageContext] = useState<SmartCollection | null>(null);
   const [artworkDetailContext, setArtworkDetailContext] = useState<ArtworkDetailContext | null>(null);
   const [artworkHeaderEditToken, setArtworkHeaderEditToken] = useState(0);
+
+  useEffect(() => {
+    const isRestricted = (
+      (activeTab === 'collect' && !canSearchCollection)
+      || (activeTab === 'profile' && !canViewProfile)
+    );
+    if (!isRestricted) return;
+    setActiveTab('newSession');
+    setArtistPageContext(null);
+    setMovementPageContext(null);
+    setArtworkDetailContext(null);
+    window.history.replaceState(buildRootHistoryState('newSession', 'saved'), '', '/');
+  }, [activeTab, canSearchCollection, canViewProfile]);
 
   const showToast = (message: string, type: 'info' | 'success' = 'info', action?: ToastAction) => {
     const options = action
@@ -177,6 +204,7 @@ const App: React.FC = () => {
     updateItemMetadata,
   } = useArtworkLibrary({
     userId: sessionUserId,
+    canSearchCollection,
     showToast,
     onMissingArtworkFromHistory: () => setArtworkDetailContext(null),
     onArtworkDetailContextChange: setArtworkDetailContext,
@@ -334,7 +362,8 @@ const App: React.FC = () => {
     renameBoard,
     deleteBoard,
   } = useBoards({
-    userId: currentUser?.user_id || USER_ID,
+    userId: sessionUserId,
+    enabled: canSearchCollection,
     showToast,
   });
 
@@ -451,9 +480,21 @@ const App: React.FC = () => {
 
   const openSessionLibraryPicker = React.useCallback(() => {
     if (!activeSessionSummary) return;
+    if (!canSearchCollection) {
+      setShowLoginModal(true);
+      return;
+    }
     setLibraryPickerSessionId(activeSessionSummary.id);
     setIsLibraryPickerOpen(true);
-  }, [activeSessionSummary, setIsLibraryPickerOpen]);
+  }, [activeSessionSummary, canSearchCollection, setIsLibraryPickerOpen]);
+
+  const setAuthorizedLibraryPickerOpen: React.Dispatch<React.SetStateAction<boolean>> = (nextOpen) => {
+    if (nextOpen === true && !canSearchCollection) {
+      setShowLoginModal(true);
+      return;
+    }
+    setIsLibraryPickerOpen(nextOpen);
+  };
 
   // A staged batch belongs to the surface it was composed on; switching
   // sessions (or entering/leaving the composer) discards it.
@@ -680,6 +721,11 @@ const App: React.FC = () => {
     onEnterBlankSession: enterBlankSession,
     onOpenSessionSummary: openSessionSummary,
     onCloseSessionMenu: () => setOpenSessionMenuId(null),
+    canAccessTab: (tab) => (
+      (tab !== 'collect' || canSearchCollection)
+      && (tab !== 'profile' || canViewProfile)
+    ),
+    onRestrictedTab: () => setShowLoginModal(true),
   });
   const artworkHeaderActions = artworkDetailItem?.artworkId ? (
     <ArtworkActionsMenu
@@ -819,7 +865,7 @@ const App: React.FC = () => {
     setSessionGoalInput,
     onSaveSessionGoal: patchSessionGoal,
     setNewSessionDraftMessage,
-    setIsLibraryPickerOpen,
+    setIsLibraryPickerOpen: setAuthorizedLibraryPickerOpen,
     openSessionLibraryPicker,
     removePendingSessionArtwork,
     submitPreparedSession,

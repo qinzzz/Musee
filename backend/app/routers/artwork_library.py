@@ -14,12 +14,28 @@ from app.database.connection import get_db
 from app.database.connection import SessionLocal
 from app.database.models import ArtistEntity, ArtworkEntity, PublicComment, SavedArtwork, Session as SessionModel, SessionArtwork
 from app.services.artwork_analysis_task_service import get_current_analysis
+from app.services.authorization_service import (
+    SEARCH_COLLECTION,
+    RequestPrincipal,
+    get_request_principal,
+    require_capability,
+    require_principal_for_user,
+)
 from app.services.artwork_entity_service import normalize_entity_name, upsert_artist_entity, upsert_artwork_entity
 from app.services.artwork_enrichment_service import do_artist_bio
 from app.services.session_service import refresh_session_title
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _require_collection_search(
+    principal: RequestPrincipal | None,
+    user_id: str,
+) -> RequestPrincipal:
+    resolved = require_principal_for_user(principal, user_id)
+    require_capability(resolved, SEARCH_COLLECTION)
+    return resolved
 
 
 def _update_artwork_analysis_status(
@@ -57,7 +73,9 @@ def get_artworks(
     limit: int = Query(50, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
 ):
+    _require_collection_search(principal, user_id)
     try:
         query = (
             db.query(SavedArtwork)
@@ -96,7 +114,9 @@ def movement_hook(name: str, count: int) -> str:
 async def get_smart_collections(
     user_id: str = Query(...),
     db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
 ):
+    _require_collection_search(principal, user_id)
     from app.utils.prompt_loader import get_movement_by_name
 
     period_labels = {"Unknown", "Historical", "Modern", "Contemporary", "Now"}
@@ -152,7 +172,12 @@ async def get_smart_collections(
 
 
 @router.get("/artists")
-async def list_user_artists(user_id: str = Query(...), db: Session = Depends(get_db)):
+async def list_user_artists(
+    user_id: str = Query(...),
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
+):
+    _require_collection_search(principal, user_id)
     rows = (
         db.query(ArtistEntity, func.count(SavedArtwork.id).label("artwork_count"))
         .join(SavedArtwork, SavedArtwork.artist_entity_id == ArtistEntity.id)
@@ -180,7 +205,9 @@ async def get_artist_artworks(
     artist_id: str,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
 ):
+    _require_collection_search(principal, user_id)
     artworks = (
         db.query(SavedArtwork)
         .filter(

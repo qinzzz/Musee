@@ -203,6 +203,27 @@ def test_artwork_ingest_rejects_forged_guest_user_id(client, db):
     assert response.json()["detail"]["error_code"] == "principal_mismatch"
 
 
+def test_guest_cannot_load_collection_data(client, db):
+    user_id = _bootstrap_guest(client, db)
+
+    artworks = client.get("/api/artworks", params={"user_id": user_id})
+    boards = client.get("/api/collections", params={"user_id": user_id})
+
+    for response in (artworks, boards):
+        assert response.status_code == 403
+        assert response.json()["detail"]["error_code"] == "capability_required"
+        assert response.json()["detail"]["capability"] == "search_collection"
+
+
+def test_collection_api_rejects_spoofed_user_id(client, db):
+    _bootstrap_guest(client, db)
+
+    response = client.get("/api/artworks", params={"user_id": "someone-else"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["error_code"] == "principal_mismatch"
+
+
 def test_guest_cookie_mutations_reject_untrusted_origins(client, db):
     user_id = _bootstrap_guest(client, db)
 

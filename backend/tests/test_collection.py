@@ -1,4 +1,34 @@
+import pytest
+from fastapi import Request
+
 from app.database.models import Collection, SavedArtwork, User
+from app.main import app
+from app.services.authorization_service import RequestPrincipal, get_request_principal
+
+
+@pytest.fixture(autouse=True)
+def authenticated_collection_principal(db):
+    async def override_principal(request: Request):
+        user_id = request.query_params.get("user_id")
+        if not user_id and request.method == "POST":
+            try:
+                user_id = (await request.json()).get("user_id")
+            except Exception:
+                user_id = None
+        if not user_id:
+            collection_id = request.path_params.get("collection_id")
+            collection = db.query(Collection).filter(Collection.id == collection_id).first()
+            user_id = collection.user_id if collection else "collection-user"
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if user is None:
+            user = User(user_id=user_id, device_id=user_id, tier="free")
+            db.add(user)
+            db.commit()
+        return RequestPrincipal(state="authenticated", user_id=user_id, user=user)
+
+    app.dependency_overrides[get_request_principal] = override_principal
+    yield
+    app.dependency_overrides.pop(get_request_principal, None)
 
 
 def test_get_collections_returns_minimal_artwork_entries(client, db):

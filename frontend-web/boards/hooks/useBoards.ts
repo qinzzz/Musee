@@ -13,23 +13,25 @@ type ToastType = 'info' | 'success';
 
 type UseBoardsOptions = {
   userId: string;
+  enabled?: boolean;
   showToast: (message: string, type?: ToastType) => void;
 };
 
 // Boards are backend-owned; the query cache is the only client copy (no
 // durable local persistence). Mutations confirm against the server first,
 // then patch the cached list in place.
-export function useBoards({ userId, showToast }: UseBoardsOptions) {
+export function useBoards({ userId, enabled = true, showToast }: UseBoardsOptions) {
   const queryClient = useQueryClient();
   const boardsKey = queryKeys.boards(userId);
 
   const query = useQuery({
     queryKey: boardsKey,
     queryFn: () => fetchCollections(userId),
+    enabled,
   });
 
   const boards = query.data ?? [];
-  const boardsLoading = query.isFetching;
+  const boardsLoading = enabled && query.isFetching;
 
   const setBoards = useCallback((updater: (prev: Board[]) => Board[]) => {
     queryClient.setQueryData<Board[]>(queryKeys.boards(userId), (prev) => updater(prev ?? []));

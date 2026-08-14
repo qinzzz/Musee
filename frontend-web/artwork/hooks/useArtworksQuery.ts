@@ -16,7 +16,7 @@ export function shouldRefreshArtworks(dataUpdatedAt: number, now = Date.now()): 
 // mergeServerItemsWithLocalItems; the query result itself stays pure backend
 // truth. The bootstrap localStorage cache remains the paint layer and is
 // owned by useArtworkLibrary, not this query.
-export function useArtworksQuery(userId: string) {
+export function useArtworksQuery(userId: string, enabled = true) {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: queryKeys.artworks(userId),
@@ -25,6 +25,7 @@ export function useArtworksQuery(userId: string) {
       const records = Array.isArray(data?.items) ? data.items : [];
       return records.map(mapArtworkRecordToGalleryItem);
     },
+    enabled,
     staleTime: ARTWORKS_STALE_TIME_MS,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -47,9 +48,9 @@ export function useArtworksQuery(userId: string) {
     refreshArtworksIfStale,
     // Preserve the existing UI-loading contract: cached artwork remains usable
     // after a failed refresh instead of leaving the app in a permanent spinner.
-    artworksLoaded: query.isFetched,
+    artworksLoaded: !enabled || query.isFetched,
     // A failed request cannot prove that a missing artwork was deleted.
-    artworksAuthoritative: query.isSuccess,
+    artworksAuthoritative: enabled && query.isSuccess,
     artworksError: query.error,
   };
 }
