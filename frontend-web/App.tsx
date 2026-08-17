@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
-import { getOrCreateUserId } from './api/auth';
+import { consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
 import { DEV_FIXED_USER_ID, DEV_FREE_TIER_USER_ID, USER_ID_KEY } from './api/core';
 import { useAuth } from './auth/AuthProvider';
 import {
@@ -16,6 +16,8 @@ import IdentifyAgainModal from './components/IdentifyAgainModal';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import AddFromLibraryModal from './components/AddFromLibraryModal';
 import AppSidebar from './app-shell/components/AppSidebar';
+import GuestSidebar from './guest/GuestSidebar';
+import { deriveGuestExperience } from './guest/guestExperience';
 import AccountUsageMeter from './app-shell/components/AccountUsageMeter';
 import { useAccountUsageQuery } from './app-shell/hooks/useAccountUsageQuery';
 import AppConfirmationLayer, { type DeleteConfirmationState } from './app-shell/components/AppConfirmationLayer';
@@ -44,7 +46,7 @@ import {
   type CollectTab,
 } from './lib/appNavigation';
 import { parseAnalysis } from './artwork/lib/analysisText';
-import { queryKeys } from './lib/queryClient';
+import { queryKeys, transitionUserQueryCache } from './lib/queryClient';
 
 const UnsortedClassificationModal = lazy(() => import('./components/UnsortedClassificationModal'));
 
@@ -135,6 +137,7 @@ const App: React.FC = () => {
     currentUser,
     guestUserId,
     capabilities,
+    quotas,
     completeLogin,
     continueAsGuest,
     logout: logoutCurrentSession,
@@ -202,6 +205,12 @@ const App: React.FC = () => {
 
     sonnerToast.info(message, options);
   };
+
+  useEffect(() => {
+    const welcome = consumePostAuthWelcome();
+    if (!welcome) return;
+    showToast(welcome === 'new' ? 'Welcome to Musee.' : 'Welcome back.', 'success');
+  }, []);
 
   const {
     items,
@@ -440,6 +449,7 @@ const App: React.FC = () => {
       sessionGoals,
       setSessionGoal,
       persistedSessions,
+      persistedSessionsHydrated,
       sessionSummaries,
       activeSessionSummary,
       pendingDeleteSessionSummary,
@@ -488,12 +498,50 @@ const App: React.FC = () => {
     openSessionSummary,
   } = sessionWorkspace;
 
+  const guestUserMessageCount = React.useMemo(
+    () => Object.values(sessionStreams).reduce((count, messages) => (
+      count + messages.filter((message) => message.role === 'user').length
+    ), 0),
+    [sessionStreams],
+  );
+  const guestExperience = React.useMemo(() => deriveGuestExperience({
+    quotas,
+    hasSession: sessionSummaries.length > 0,
+    userMessageCount: guestUserMessageCount,
+    hasArtwork: items.length > 0 || pendingSessionArtworks.length > 0,
+  }), [guestUserMessageCount, items.length, pendingSessionArtworks.length, quotas, sessionSummaries.length]);
+
   const handleLoginSuccess = async (user: any) => {
-    const shouldResumePendingAction = Boolean(pendingAuthenticationRetry);
-    await completeLogin(user);
-    setShowLoginModal(false);
-    if (!shouldResumePendingAction) window.location.reload();
+    const previousUserId = sessionUserId;
+    try {
+      await completeLogin(user);
+      await transitionUserQueryCache(queryClient, previousUserId, user.user_id);
+      setShowLoginModal(false);
+      showToast(user?.is_new_user ? 'Welcome to Musee.' : 'Welcome back.', 'success');
+    } catch (error) {
+      console.error('Failed to complete sign-in:', error);
+      setShowLoginModal(true);
+      showToast('Musee couldn’t verify your sign-in. Please try again.', 'info');
+    }
   };
+
+  useEffect(() => {
+    if (
+      authStatus !== 'guest'
+      || !persistedSessionsHydrated
+      || !isComposingNewSession
+      || persistedSessions.length === 0
+    ) {
+      return;
+    }
+    openSessionSummary(persistedSessions[0].id);
+  }, [
+    authStatus,
+    isComposingNewSession,
+    openSessionSummary,
+    persistedSessions,
+    persistedSessionsHydrated,
+  ]);
 
   useEffect(() => {
     if (!currentUser || !pendingAuthenticationRetry) return;
@@ -612,6 +660,7 @@ const App: React.FC = () => {
     ingestPreparedUploads,
     setVisit: setArtworkWorkspace,
     showToast,
+    onAuthenticationRequired: () => setShowLoginModal(true),
   });
 
   const handleSessionCaptureSubmit = React.useCallback(async (payload: {
@@ -820,10 +869,13 @@ const App: React.FC = () => {
     activeTab,
     collectTab,
     learningInitialGuide,
-    userId: currentUser?.user_id || USER_ID,
+    userId: sessionUserId,
     headerMenuButton,
     collectionFloatingMenuButton,
     profileRefreshKey,
+    interactionGate: authStatus === 'guest' ? guestExperience.interactionGate : undefined,
+    artworkInputLimit: authStatus === 'guest' ? guestExperience.artworkRemaining : undefined,
+    onSignIn: () => setShowLoginModal(true),
   };
 
   const viewportState = {
@@ -998,7 +1050,21 @@ const App: React.FC = () => {
         />
 
         {!sessionCaptureState && (
-          <AppSidebar
+          authStatus === 'guest' ? (
+            <GuestSidebar
+              sidebarOpen={sidebarOpen}
+              sidebarCollapsed={sidebarCollapsed}
+              experience={guestExperience}
+              currentSession={sessionSummaries[0] ?? null}
+              sessionsLoading={sessionsLoading}
+              onSelectCurrentSession={handleSelectSessionSummary}
+              onSignIn={() => setShowLoginModal(true)}
+              onExpandSidebar={expandSidebar}
+              onCollapseSidebar={collapseSidebar}
+              onCloseMobileSidebar={closeMobileSidebar}
+            />
+          ) : (
+            <AppSidebar
             sidebarOpen={sidebarOpen}
             sidebarCollapsed={sidebarCollapsed}
             recentsOpen={recentsOpen}
@@ -1044,7 +1110,8 @@ const App: React.FC = () => {
             onExpandSidebar={expandSidebar}
             onCollapseSidebar={collapseSidebar}
             onCloseMobileSidebar={closeMobileSidebar}
-          />
+            />
+          )
         )}
 
         {/* Right-hand Canvas main container */}

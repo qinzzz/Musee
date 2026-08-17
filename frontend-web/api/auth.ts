@@ -9,6 +9,19 @@ import {
   setAccessToken,
 } from './core';
 
+const POST_AUTH_WELCOME_KEY = 'musee_post_auth_welcome';
+export type PostAuthWelcome = 'new' | 'returning';
+
+export function rememberPostAuthWelcome(isNewUser: boolean): void {
+  sessionStorage.setItem(POST_AUTH_WELCOME_KEY, isNewUser ? 'new' : 'returning');
+}
+
+export function consumePostAuthWelcome(): PostAuthWelcome | null {
+  const value = sessionStorage.getItem(POST_AUTH_WELCOME_KEY);
+  sessionStorage.removeItem(POST_AUTH_WELCOME_KEY);
+  return value === 'new' || value === 'returning' ? value : null;
+}
+
 // Persist a login response (google and email flows share the same shape).
 function storeSession(data: any) {
   if (data.access_token) {

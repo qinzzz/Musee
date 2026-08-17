@@ -26,9 +26,11 @@ from app.services.artwork_analysis_service import (
 )
 from app.services.authorization_service import (
     ANALYZE_ARTWORK,
+    GUEST_ARTWORK_QUOTA,
     SAVE_ARTWORK,
     RequestPrincipal,
     get_request_principal,
+    reserve_guest_quota,
     require_capability,
     require_principal_for_user,
     require_session_principal,
@@ -138,6 +140,7 @@ async def analyze_artwork_unified(
     photo_uri: Optional[str] = Form(None),
     client_type: Optional[str] = Form(None),
     session_id: Optional[str] = Form(None),
+    request_id: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
     photo_time: Optional[str] = Form(None),
     latitude: Optional[float] = Form(None),
@@ -174,13 +177,23 @@ async def analyze_artwork_unified(
 
     if existing_artwork is not None:
         user_id = user_id or existing_artwork.user_id or existing_artwork.device_id
-    _authorize_artwork_ingest(
+    resolved_principal = _authorize_artwork_ingest(
         db,
         principal,
         user_id,
         session_id,
         creates_saved_artwork=existing_artwork is None,
     )
+    if resolved_principal.state == "guest" and existing_artwork is None:
+        if not request_id:
+            raise HTTPException(status_code=400, detail="A guest artwork request id is required")
+        reserve_guest_quota(
+            db,
+            resolved_principal,
+            GUEST_ARTWORK_QUOTA,
+            request_id,
+            idempotent=False,
+        )
 
     if user_id and settings.use_database and not existing_artwork:
         check_artwork_quota(user_id, db)
@@ -515,16 +528,27 @@ async def save_artwork_upload(
     longitude: Optional[float] = Form(None),
     source: Optional[str] = Form("upload"),
     sequence_number: Optional[int] = Form(None),
+    request_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
-    _authorize_artwork_ingest(
+    resolved_principal = _authorize_artwork_ingest(
         db,
         principal,
         user_id,
         session_id,
         creates_saved_artwork=True,
     )
+    if resolved_principal.state == "guest":
+        if not request_id:
+            raise HTTPException(status_code=400, detail="A guest artwork request id is required")
+        reserve_guest_quota(
+            db,
+            resolved_principal,
+            GUEST_ARTWORK_QUOTA,
+            request_id,
+            idempotent=False,
+        )
     if user_id and settings.use_database:
         check_artwork_quota(user_id, db)
 
@@ -564,6 +588,8 @@ async def save_artwork_upload(
     saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
     if not saved_artwork:
         raise HTTPException(status_code=500, detail="Artwork was saved but could not be reloaded")
+
+    db.commit()
 
     response = saved_artwork.to_dict()
     response["photo_uri"] = generated_photo_uri

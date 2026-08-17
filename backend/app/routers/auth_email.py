@@ -181,6 +181,7 @@ async def login(
         clear_guest_cookie(response)
     result = issue_login_session(db, response, user)
     result["guest_promoted"] = guest_promoted
+    result["is_new_user"] = False
     return result
 
 
@@ -215,6 +216,7 @@ async def verify_email(
         clear_guest_cookie(response)
     result = issue_login_session(db, response, user)
     result["guest_promoted"] = guest_promoted
+    result["is_new_user"] = True
     return result
 
 
@@ -272,4 +274,5 @@ async def reset_password(
         clear_guest_cookie(response)
     result = issue_login_session(db, response, user)
     result["guest_promoted"] = guest_promoted
+    result["is_new_user"] = False
     return result

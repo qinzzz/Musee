@@ -31,6 +31,8 @@ import {
   getSessionComposerHeight,
   shouldSubmitSessionComposerOnEnter,
 } from '../lib/sessionComposerBehavior';
+import GuestInteractionPrompt from '../../guest/GuestInteractionPrompt';
+import type { GuestInteractionGate } from '../../guest/guestExperience';
 
 const MOBILE_COMPOSER_QUERY = '(max-width: 639px)';
 
@@ -106,6 +108,9 @@ type SessionViewProps = {
     mode?: 'response_only' | 'append_message' | 'start_session';
     sessionTitle?: string;
   }) => void;
+  interactionGate?: GuestInteractionGate;
+  artworkInputLimit?: number;
+  onSignIn?: () => void;
 };
 
 const SessionCommentaryBlock: React.FC<{
@@ -400,8 +405,13 @@ export default function SessionView({
   onFileUpload,
   onOpenSessionArtwork,
   onAuthenticationRequired,
+  interactionGate,
+  artworkInputLimit,
+  onSignIn,
 }: SessionViewProps) {
   const [sessionDetailsOpen, setSessionDetailsOpen] = React.useState(false);
+  const canAddArtwork = artworkInputLimit === undefined || artworkInputLimit > 0;
+  const allowMultipleArtworkUploads = artworkInputLimit === undefined || artworkInputLimit > 1;
   const [showSessionHistoryLoader, setShowSessionHistoryLoader] = React.useState(false);
   const [isComposerFocused, setIsComposerFocused] = React.useState(false);
   const [isMobileComposer, setIsMobileComposer] = React.useState(matchesMobileComposer);
@@ -597,7 +607,16 @@ export default function SessionView({
             </div>
           </div>
         ) : sessionRenderBlocks.length === 0 ? (
-          sessionGoalDismissed.has(activeSessionSummary.id) ? (
+          interactionGate?.blocked ? (
+            <div className="relative z-10 flex flex-1 items-center justify-center px-6 pb-20">
+              <div className="w-full max-w-[520px]">
+                <GuestInteractionPrompt
+                  gate={interactionGate}
+                  onSignIn={onSignIn || (() => {})}
+                />
+              </div>
+            </div>
+          ) : sessionGoalDismissed.has(activeSessionSummary.id) ? (
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center pb-20 px-6">
               <div className="text-center">
                 <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-tight text-neutral-800 font-sans mb-2">
@@ -622,7 +641,8 @@ export default function SessionView({
                   <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-neutral-800 font-sans text-center">
                     What are you drawn to today?
                   </h2>
-                  <div className={preparedSessionItems.length > 0 ? 'overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-sm' : ''}>
+                  <>
+                    <div className={preparedSessionItems.length > 0 ? 'overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-sm' : ''}>
                     {preparedSessionItems.length > 0 && (
                       <div className="border-b border-neutral-100 px-4 pb-3 pt-4">
                         <div className="flex gap-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
@@ -712,44 +732,45 @@ export default function SessionView({
                       </button>
                     </div>
                   </div>
-                  {sessionProcessingState.kind !== 'idle' ? (
-                    <SessionProcessingIndicator state={sessionProcessingState} />
-                  ) : null}
-                </div>
-                <input
-                  ref={goalGalleryInputRef}
-                  type="file"
-                  accept={SUPPORTED_UPLOAD_ACCEPT}
-                  multiple
-                  className="hidden"
-                  disabled={isSessionBusy}
-                  onChange={(event) => onFileUpload(event, 'gallery')}
-                />
-                <div className="mt-5 flex flex-wrap justify-center gap-3">
-                  <button
-                    onClick={onOpenLibraryPicker}
-                    disabled={isSessionBusy}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-5 py-3 text-[14px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40"
-                  >
-                    <AddFromCollectionIcon />
-                    {ARTWORK_CTA_ADD_FROM_COLLECTION}
-                  </button>
-                  <button
-                    onClick={() => goalGalleryInputRef.current?.click()}
-                    disabled={isSessionBusy}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[14px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100 disabled:opacity-40"
-                  >
-                    <UploadPhotosIcon />
-                    {ARTWORK_CTA_UPLOAD_PHOTOS}
-                  </button>
-                  <button
-                    onClick={onOpenSessionCapture}
-                    disabled={isSessionBusy}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[14px] font-medium disabled:opacity-40"
-                  >
-                    <ScanArtworkIcon />
-                    {ARTWORK_CTA_SCAN_ARTWORK}
-                  </button>
+                    {sessionProcessingState.kind !== 'idle' ? (
+                      <SessionProcessingIndicator state={sessionProcessingState} />
+                    ) : null}
+                    <input
+                      ref={goalGalleryInputRef}
+                      type="file"
+                      accept={SUPPORTED_UPLOAD_ACCEPT}
+                      multiple={allowMultipleArtworkUploads}
+                      className="hidden"
+                      disabled={isSessionBusy || !canAddArtwork}
+                      onChange={(event) => onFileUpload(event, 'gallery')}
+                    />
+                    {canAddArtwork ? <div className="mt-5 flex flex-wrap justify-center gap-3">
+                      <button
+                        onClick={onOpenLibraryPicker}
+                        disabled={isSessionBusy}
+                        className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-5 py-3 text-[14px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40"
+                      >
+                        <AddFromCollectionIcon />
+                        {ARTWORK_CTA_ADD_FROM_COLLECTION}
+                      </button>
+                      <button
+                        onClick={() => goalGalleryInputRef.current?.click()}
+                        disabled={isSessionBusy}
+                        className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[14px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100 disabled:opacity-40"
+                      >
+                        <UploadPhotosIcon />
+                        {ARTWORK_CTA_UPLOAD_PHOTOS}
+                      </button>
+                      <button
+                        onClick={onOpenSessionCapture}
+                        disabled={isSessionBusy}
+                        className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[14px] font-medium disabled:opacity-40"
+                      >
+                        <ScanArtworkIcon />
+                        {ARTWORK_CTA_SCAN_ARTWORK}
+                      </button>
+                    </div> : null}
+                  </>
                 </div>
               </div>
             </div>

@@ -109,4 +109,22 @@ describe('sessions api', () => {
       });
     }
   });
+
+  it('preserves guest quota policy when creating an artwork-first session', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: {
+        error_code: 'guest_quota_exhausted',
+        message: 'The guest preview has reached its limit.',
+        requires_authentication: true,
+      },
+    }), { status: 429 })));
+
+    const { ensureSession, SessionPolicyError } = await import('./sessions');
+
+    await expect(ensureSession('guest-1', 'session-2', 'Another session')).rejects.toMatchObject({
+      name: SessionPolicyError.name,
+      code: 'guest_quota_exhausted',
+      requiresAuthentication: true,
+    });
+  });
 });

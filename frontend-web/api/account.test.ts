@@ -24,6 +24,19 @@ describe('parseQuotaError', () => {
       .toBe('You have reached your plan limit.');
   });
 
+  it('parses guest preview quota errors', () => {
+    const parsed = parseQuotaError(new Error(
+      'API error (429): {"detail":{"error_code":"guest_quota_exhausted","quota":"guest_artworks","limit":1,"used":1,"message":"The guest preview has reached its limit."}}',
+    ));
+
+    expect(parsed).toMatchObject({
+      code: 'guest_quota_exhausted',
+      quota: 'guest_artworks',
+      limit: 1,
+      used: 1,
+    });
+  });
+
   it('returns null for non-quota errors', () => {
     expect(parseQuotaError(new Error('API error (500): boom'))).toBeNull();
     expect(parseQuotaError(new Error('network down'))).toBeNull();

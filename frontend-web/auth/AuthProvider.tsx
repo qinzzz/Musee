@@ -67,8 +67,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     capabilities,
     quotas,
     completeLogin: async (user) => {
-      setCurrentUser(user);
       const snapshot = await bootstrapAuthSession();
+      if (
+        snapshot.state !== 'authenticated'
+        || !snapshot.principal?.user_id
+        || (user?.user_id && snapshot.principal.user_id !== user.user_id)
+      ) {
+        throw new Error('The authenticated session could not be verified.');
+      }
       applySnapshot(snapshot);
     },
     continueAsGuest: async () => {

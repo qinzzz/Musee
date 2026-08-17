@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { EmailAuthError, resetPassword, verifyEmailToken } from '../../api/auth';
+import {
+  EmailAuthError,
+  rememberPostAuthWelcome,
+  resetPassword,
+  verifyEmailToken,
+} from '../../api/auth';
 
 // Standalone pages for the emailed links (/verify-email, /reset-password).
 // Rendered instead of the app shell (see index.tsx), so clicking a link in a
@@ -13,7 +18,7 @@ const primaryButtonClass =
   'w-full rounded-xl bg-neutral-900 px-3 py-2 text-[13px] font-semibold text-white transition-opacity ' +
   'hover:opacity-90 disabled:opacity-50';
 const inputClass =
-  'w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-[13px] text-neutral-900 ' +
+  'w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-base text-neutral-900 ' +
   'placeholder:text-neutral-400 outline-none transition-colors focus:border-neutral-400';
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -38,7 +43,10 @@ export const VerifyEmailPage: React.FC = () => {
 
   useEffect(() => {
     verifyEmailToken(tokenFromLocation())
-      .then(() => goHome())
+      .then((data) => {
+        rememberPostAuthWelcome(Boolean(data.is_new_user));
+        goHome();
+      })
       .catch((err) => {
         setMessage(err instanceof EmailAuthError ? err.message : 'Something went wrong. Please try again.');
         setState('error');

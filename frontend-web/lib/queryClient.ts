@@ -26,3 +26,30 @@ export const queryKeys = {
   artists: (userId: string) => ['artists', userId] as const,
   accountUsage: (userId: string) => ['account-usage', userId] as const,
 };
+
+const userScopedQueryKeys = (userId: string) => [
+  queryKeys.sessions(userId),
+  queryKeys.artworks(userId),
+  queryKeys.boards(userId),
+  queryKeys.artists(userId),
+  queryKeys.accountUsage(userId),
+];
+
+export async function transitionUserQueryCache(
+  queryClient: QueryClient,
+  previousUserId: string,
+  nextUserId: string,
+): Promise<void> {
+  if (previousUserId !== nextUserId) {
+    await Promise.all(userScopedQueryKeys(previousUserId).map((queryKey) => (
+      queryClient.cancelQueries({ queryKey, exact: true })
+    )));
+    userScopedQueryKeys(previousUserId).forEach((queryKey) => {
+      queryClient.removeQueries({ queryKey, exact: true });
+    });
+  }
+
+  await Promise.all(userScopedQueryKeys(nextUserId).map((queryKey) => (
+    queryClient.invalidateQueries({ queryKey, exact: true })
+  )));
+}

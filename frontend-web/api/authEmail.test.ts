@@ -12,6 +12,7 @@ describe('email auth api', () => {
     vi.restoreAllMocks();
     vi.resetModules();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it('signup relies on the credential-bound guest cookie instead of a device id', async () => {
@@ -64,6 +65,15 @@ describe('email auth api', () => {
     const { getAccessToken } = await import('./core');
     await verifyEmailToken('some-token');
     expect(getAccessToken()).toBe('jwt-456');
+  });
+
+  it('stores and consumes a one-time post-auth welcome', async () => {
+    const { consumePostAuthWelcome, rememberPostAuthWelcome } = await import('./auth');
+
+    rememberPostAuthWelcome(true);
+
+    expect(consumePostAuthWelcome()).toBe('new');
+    expect(consumePostAuthWelcome()).toBeNull();
   });
 
   it('surfaces the structured error code and message', async () => {

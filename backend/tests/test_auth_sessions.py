@@ -31,6 +31,7 @@ def test_login_creates_hashed_server_session_and_short_access_token(client, db):
     response = _google_login(client)
 
     assert response.status_code == 200
+    assert response.json()["is_new_user"] is True
     assert response.json()["expires_in"] == 15 * 60
     assert "httponly" in response.headers["set-cookie"].lower()
     assert "samesite=lax" in response.headers["set-cookie"].lower()
@@ -46,6 +47,10 @@ def test_login_creates_hashed_server_session_and_short_access_token(client, db):
         algorithms=[settings.algorithm],
     )
     assert 14 * 60 <= claims["exp"] - __import__("time").time() <= 15 * 60 + 5
+
+    returning = _google_login(client)
+    assert returning.status_code == 200
+    assert returning.json()["is_new_user"] is False
 
 
 def test_refresh_rotates_cookie_and_restores_authenticated_session(client, db):
@@ -139,7 +144,8 @@ def test_session_without_access_token_is_guest_even_if_refresh_cookie_exists(cli
     assert body["principal"]["user_id"].startswith("guest_")
     assert body["capabilities"]["create_session"] is True
     assert body["capabilities"]["search_collection"] is False
-    assert body["quotas"]["guest_messages"]["remaining"] == 1
+    assert body["quotas"]["guest_messages"]["remaining"] == 3
+    assert body["quotas"]["guest_artworks"]["remaining"] == 1
     assert body["plan"] == "guest"
 
 

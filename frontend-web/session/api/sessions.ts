@@ -181,8 +181,7 @@ export async function ensureSession(userId: string, sessionId: string, title: st
     }),
   });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API error (${response.status}): ${errorText}`);
+    throw await buildSessionApiError(response, `API error (${response.status}): failed to start session`);
   }
   const payload = await response.json();
   return payload.session as SessionRecord;
@@ -195,8 +194,7 @@ export async function startSessionWithArtworks(userId: string, payload: StartSes
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API error (${response.status}): ${errorText}`);
+    throw await buildSessionApiError(response, `API error (${response.status}): failed to start session`);
   }
   return response.json();
 }
@@ -215,8 +213,7 @@ export async function attachArtworksToSession(
     },
   );
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API error (${response.status}): ${errorText}`);
+    throw await buildSessionApiError(response, `API error (${response.status}): failed to attach artworks`);
   }
   return response.json();
 }
