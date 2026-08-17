@@ -10,6 +10,7 @@ import App from './App';
 import { ResetPasswordPage, VerifyEmailPage } from './app-shell/components/EmailAuthPages';
 import { createQueryClient } from './lib/queryClient';
 import './index.css';
+import { AuthProvider } from './auth/AuthProvider';
 
 const queryClient = createQueryClient();
 const SessionStatusPreviewPage = import.meta.env.DEV
@@ -34,7 +35,9 @@ root.render(
       ) : window.location.pathname === '/reset-password' ? (
         <ResetPasswordPage />
       ) : (
-        <App />
+        <AuthProvider>
+          <App />
+        </AuthProvider>
       )}
     </QueryClientProvider>
   </React.StrictMode>

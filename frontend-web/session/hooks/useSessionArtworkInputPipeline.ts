@@ -13,6 +13,7 @@ import {
 import {
   attachArtworksToSession,
   ensureSession,
+  SessionPolicyError,
 } from '../api/sessions';
 import { buildArtworkInputEntries } from '../lib/batchEvents';
 import {
@@ -100,7 +101,10 @@ type UseSessionArtworkInputPipelineOptions = {
     },
   ) => void;
   showToast: (message: string, type?: ToastType) => void;
+  onAuthenticationRequired?: () => void;
 };
+
+const GUEST_PREVIEW_LIMIT_MESSAGE = 'You’ve used your guest preview. Sign in to continue.';
 
 const pendingEntrySource = (entry: PendingSessionArtwork): ArtworkInputSource => {
   if (entry.kind === 'library') return 'library';
@@ -132,6 +136,7 @@ export function useSessionArtworkInputPipeline({
   ingestPreparedUploads,
   sendSessionInquiryToSession,
   showToast,
+  onAuthenticationRequired,
 }: UseSessionArtworkInputPipelineOptions) {
   const [isSubmittingStagedBatch, setIsSubmittingStagedBatch] = useState(false);
   const [activeInputPipelineSessionId, setActiveInputPipelineSessionId] = useState<string | null>(null);
@@ -386,6 +391,13 @@ export function useSessionArtworkInputPipeline({
       const resolvedItems = [...resolvedLibraryItems, ...persistedUploadItems];
       if (resolvedItems.length === 0) {
         const uploadFailureCodes = uploadResult?.failedEntries.map((entry) => entry.errorCode) || [];
+        if (uploadFailureCodes.includes('guest_quota_exhausted')) {
+          throw new SessionPolicyError(
+            'guest_quota_exhausted',
+            GUEST_PREVIEW_LIMIT_MESSAGE,
+            true,
+          );
+        }
         const uploadFailureStatus = getSessionUploadFailureStatus(
           uploadFailureCodes,
         );
@@ -518,6 +530,25 @@ export function useSessionArtworkInputPipeline({
       return true;
     } catch (error) {
       console.error('Failed to submit artwork input:', error);
+      if (error instanceof SessionPolicyError && error.code === 'guest_quota_exhausted') {
+        if (optimisticSessionId && optimisticEventId) {
+          setSessionStreams((prev) => ({
+            ...prev,
+            [optimisticSessionId!]: (prev[optimisticSessionId!] || []).filter(
+              (entry) => entry.id !== optimisticEventId,
+            ),
+          }));
+          if (target.kind === 'new' && !hasPersistedSession) {
+            setSessionDrafts((prev) => prev.filter((draft) => draft.id !== optimisticSessionId));
+            setFilteredSessionId(null);
+            setIsComposingNewSession(true);
+            setVisit({ id: '', itemIds: [], globalConversation: [] });
+          }
+        }
+        showToast(GUEST_PREVIEW_LIMIT_MESSAGE, 'info');
+        onAuthenticationRequired?.();
+        return false;
+      }
       const shouldShowInlineUploadFailure = Boolean(
         optimisticSessionId
         && optimisticEventId
@@ -590,6 +621,7 @@ export function useSessionArtworkInputPipeline({
     isSubmittingStagedBatch,
     items,
     newSessionDraftMessage,
+    onAuthenticationRequired,
     pendingSessionArtworks,
     persistedSessionIds,
     persistSessionArtworkInput,

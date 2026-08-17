@@ -1,8 +1,27 @@
+import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routers import artwork_library as artwork_library_router
 from app.database.models import ArtistEntity, SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
+from app.services.authorization_service import RequestPrincipal, get_request_principal
+
+
+@pytest.fixture(autouse=True)
+def authenticated_library_principal(db):
+    async def override_principal(request: Request):
+        user_id = request.query_params.get("user_id") or "art-user"
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if user is None:
+            user = User(user_id=user_id, device_id=user_id, tier="free")
+            db.add(user)
+            db.commit()
+        return RequestPrincipal(state="authenticated", user_id=user_id, user=user)
+
+    app.dependency_overrides[get_request_principal] = override_principal
+    yield
+    app.dependency_overrides.pop(get_request_principal, None)
 
 
 def test_get_artworks_returns_user_items(client, db):

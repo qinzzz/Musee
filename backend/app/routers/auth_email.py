@@ -3,7 +3,7 @@
 Design rule shared with the Google flow: email is the account key, and
 attaching any credential to an email requires proof of inbox ownership.
 Password signups prove it by clicking the verification link (which also
-adopts the device account and logs the user in); Google proves it via the
+promotes the credential-bound guest workspace and logs the user in); Google proves it via the
 verified token. Until verified, a password account cannot log in and is
 treated as unclaimed territory by the linking rules.
 """
@@ -11,7 +11,7 @@ import logging
 import re
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,9 @@ from app.config.plans import NEW_REGISTRATION_TIER
 from app.config.settings import settings
 from app.database.connection import get_db
 from app.database.models import User, UserCredential
-from app.services.account_service import adopt_anonymous_account
+from app.services.account_service import adopt_anonymous_account, promote_guest_workspace
+from app.services.auth_session_service import issue_login_session, validate_auth_origin
+from app.services.authorization_service import clear_guest_cookie, resolve_guest_workspace
 from app.services.email_service import (
     build_password_reset_email,
     build_verification_email,
@@ -31,7 +33,6 @@ from app.services.email_token_service import (
     consume_email_token,
     create_email_token,
 )
-from app.utils.auth_utils import create_access_token
 from app.utils.passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from app.utils.rate_limit import rate_limit
 
@@ -44,13 +45,11 @@ EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 class SignupRequest(BaseModel):
     email: str
     password: str
-    anonymous_user_id: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
     email: str
     password: str
-    anonymous_user_id: Optional[str] = None
 
 
 class VerifyEmailRequest(BaseModel):
@@ -64,7 +63,6 @@ class RequestPasswordResetRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
-    anonymous_user_id: Optional[str] = None
 
 
 def _normalize_email(email: str) -> str:
@@ -81,15 +79,6 @@ def _validate_signup_input(email: str, password: str) -> None:
         })
 
 
-def _login_response(user: User) -> dict:
-    # Same shape as /auth/google so the frontend has one session handler.
-    return {
-        "access_token": create_access_token(data={"sub": user.user_id}),
-        "token_type": "bearer",
-        "user": user.to_dict(),
-    }
-
-
 def _set_credential(db: Session, user_id: str, password: str) -> None:
     credential = db.query(UserCredential).filter(UserCredential.user_id == user_id).first()
     if credential:
@@ -98,12 +87,12 @@ def _set_credential(db: Session, user_id: str, password: str) -> None:
         db.add(UserCredential(user_id=user_id, password_hash=hash_password(password)))
 
 
-async def _send_verification(db: Session, user: User, anonymous_user_id: Optional[str]) -> bool:
+async def _send_verification(db: Session, user: User, guest_user_id: Optional[str]) -> bool:
     raw_token = create_email_token(
         db,
         user_id=user.user_id,
         purpose=PURPOSE_VERIFY_EMAIL,
-        anonymous_user_id=anonymous_user_id,
+        anonymous_user_id=guest_user_id,
     )
     link = f"{settings.app_base_url}/verify-email?token={raw_token}"
     subject, html = build_verification_email(link)
@@ -111,7 +100,13 @@ async def _send_verification(db: Session, user: User, anonymous_user_id: Optiona
 
 
 @router.post("/auth/signup", dependencies=[Depends(rate_limit(5, 300))])
-async def signup(request: SignupRequest, db: Session = Depends(get_db)):
+async def signup(
+    request: SignupRequest,
+    http_request: Request,
+    guest_token: Optional[str] = Cookie(default=None, alias=settings.guest_cookie_name),
+    db: Session = Depends(get_db),
+):
+    validate_auth_origin(http_request)
     email = _normalize_email(request.email)
     _validate_signup_input(email, request.password)
 
@@ -139,13 +134,21 @@ async def signup(request: SignupRequest, db: Session = Depends(get_db)):
         db.flush()
         _set_credential(db, user.user_id, request.password)
 
-    email_sent = await _send_verification(db, user, request.anonymous_user_id)
+    workspace = resolve_guest_workspace(db, guest_token)
+    email_sent = await _send_verification(db, user, workspace.user_id if workspace else None)
     db.commit()
     return {"ok": True, "verification_required": True, "email_sent": email_sent}
 
 
 @router.post("/auth/login", dependencies=[Depends(rate_limit(10, 60))])
-async def login(request: LoginRequest, db: Session = Depends(get_db)):
+async def login(
+    request: LoginRequest,
+    response: Response,
+    http_request: Request,
+    guest_token: Optional[str] = Cookie(default=None, alias=settings.guest_cookie_name),
+    db: Session = Depends(get_db),
+):
+    validate_auth_origin(http_request)
     email = _normalize_email(request.email)
     user = db.query(User).filter(User.email == email).first()
     credential = (
@@ -173,14 +176,24 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             "message": "Check your inbox for the verification link, or sign up again to resend it.",
         })
 
-    if request.anonymous_user_id:
-        adopt_anonymous_account(db, request.anonymous_user_id, user)
-    db.commit()
-    return _login_response(user)
+    guest_promoted = promote_guest_workspace(db, guest_token, user)
+    if guest_token:
+        clear_guest_cookie(response)
+    result = issue_login_session(db, response, user)
+    result["guest_promoted"] = guest_promoted
+    result["is_new_user"] = False
+    return result
 
 
 @router.post("/auth/verify-email", dependencies=[Depends(rate_limit(10, 60))])
-async def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db)):
+async def verify_email(
+    request: VerifyEmailRequest,
+    response: Response,
+    http_request: Request,
+    guest_token: Optional[str] = Cookie(default=None, alias=settings.guest_cookie_name),
+    db: Session = Depends(get_db),
+):
+    validate_auth_origin(http_request)
     token = consume_email_token(db, raw_token=request.token, purpose=PURPOSE_VERIFY_EMAIL)
     if not token:
         raise HTTPException(status_code=400, detail={
@@ -193,13 +206,18 @@ async def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=400, detail={"error_code": "invalid_token"})
 
     user.email_verified = True
-    # Adoption happens here — at proof time, not signup — so device records
-    # can never end up on an account someone else later proves to own.
-    if token.anonymous_user_id:
-        adopt_anonymous_account(db, token.anonymous_user_id, user)
-    db.commit()
-    db.refresh(user)
-    return _login_response(user)
+    # Prefer the browser's credential-bound workspace. The token association
+    # is server-resolved at signup and supports verification in another tab or
+    # browser without trusting a user id from the verification request.
+    guest_promoted = promote_guest_workspace(db, guest_token, user)
+    if not guest_promoted and token.anonymous_user_id:
+        guest_promoted = adopt_anonymous_account(db, token.anonymous_user_id, user)
+    if guest_token:
+        clear_guest_cookie(response)
+    result = issue_login_session(db, response, user)
+    result["guest_promoted"] = guest_promoted
+    result["is_new_user"] = True
+    return result
 
 
 @router.post("/auth/request-password-reset", dependencies=[Depends(rate_limit(3, 300))])
@@ -223,7 +241,14 @@ async def request_password_reset(request: RequestPasswordResetRequest, db: Sessi
 
 
 @router.post("/auth/reset-password", dependencies=[Depends(rate_limit(10, 60))])
-async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+async def reset_password(
+    request: ResetPasswordRequest,
+    response: Response,
+    http_request: Request,
+    guest_token: Optional[str] = Cookie(default=None, alias=settings.guest_cookie_name),
+    db: Session = Depends(get_db),
+):
+    validate_auth_origin(http_request)
     if len(request.new_password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail={
             "error_code": "weak_password",
@@ -244,11 +269,10 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     _set_credential(db, user.user_id, request.new_password)
     # Clicking an emailed link is proof of inbox ownership.
     user.email_verified = True
-    # Reset ends signed-in, so it adopts the device account like every other
-    # door into an account (the id comes from the browser where the form was
-    # filled — the right device for the data).
-    if request.anonymous_user_id:
-        adopt_anonymous_account(db, request.anonymous_user_id, user)
-    db.commit()
-    db.refresh(user)
-    return _login_response(user)
+    guest_promoted = promote_guest_workspace(db, guest_token, user)
+    if guest_token:
+        clear_guest_cookie(response)
+    result = issue_login_session(db, response, user)
+    result["guest_promoted"] = guest_promoted
+    result["is_new_user"] = False
+    return result

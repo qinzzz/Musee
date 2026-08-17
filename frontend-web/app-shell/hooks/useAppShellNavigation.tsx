@@ -18,6 +18,8 @@ type UseAppShellNavigationOptions = {
   onEnterBlankSession: () => void;
   onOpenSessionSummary: (summaryId: string) => void;
   onCloseSessionMenu: () => void;
+  canAccessTab?: (tab: AppTab) => boolean;
+  onRestrictedTab?: (tab: AppTab) => void;
 };
 
 const SHOW_LEARN_TAB = false;
@@ -77,6 +79,8 @@ export function useAppShellNavigation({
   onEnterBlankSession,
   onOpenSessionSummary,
   onCloseSessionMenu,
+  canAccessTab = () => true,
+  onRestrictedTab,
 }: UseAppShellNavigationOptions) {
   const [isDesktopViewport, setIsDesktopViewport] = useState(() => window.innerWidth >= 768);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
@@ -105,6 +109,11 @@ export function useAppShellNavigation({
   const isNewSessionEntryActive = activeTab === 'newSession' && isComposingNewSession;
 
   const handleSwitchTopLevelTab = (tabId: AppTab) => {
+    if (!canAccessTab(tabId)) {
+      closeFloatingShellMenus();
+      onRestrictedTab?.(tabId);
+      return;
+    }
     onSetActiveTab(tabId);
     closeFloatingShellMenus();
 
@@ -139,7 +148,7 @@ export function useAppShellNavigation({
       isActive: tab.id === 'newSession' ? isNewSessionEntryActive : activeTab === tab.id,
       onSelect: () => handleSwitchTopLevelTab(tab.id),
     }));
-  }, [activeTab, isNewSessionEntryActive]);
+  }, [activeTab, canAccessTab, isNewSessionEntryActive, onRestrictedTab]);
 
   const openSidebar = () => {
     closeFloatingShellMenus();

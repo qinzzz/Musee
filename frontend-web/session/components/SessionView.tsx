@@ -32,6 +32,8 @@ import {
   getSessionComposerHeight,
   shouldSubmitSessionComposerOnEnter,
 } from '../lib/sessionComposerBehavior';
+import GuestInteractionPrompt from '../../guest/GuestInteractionPrompt';
+import type { GuestInteractionGate } from '../../guest/guestExperience';
 
 const MOBILE_COMPOSER_QUERY = '(max-width: 639px)';
 
@@ -99,12 +101,36 @@ type SessionViewProps = {
   onRetrySessionHistory: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   onOpenSessionArtwork: (item: GalleryItem) => void;
+  onAuthenticationRequired: (retry: {
+    sessionId: string;
+    responseId: string;
+    message: string;
+    parentEventId?: string;
+    mode?: 'response_only' | 'append_message' | 'start_session';
+    sessionTitle?: string;
+  }) => void;
+  interactionGate?: GuestInteractionGate;
+  artworkInputLimit?: number;
+  onSignIn?: () => void;
 };
 
 const SessionCommentaryBlock: React.FC<{
   entry: Extract<SessionRenderBlock, { type: 'commentary' }>;
   sessionProcessingState: SessionProcessingState;
-}> = ({ entry, sessionProcessingState }) => {
+  sessionId: string;
+  onAuthenticationRequired: SessionViewProps['onAuthenticationRequired'];
+}> = ({ entry, sessionProcessingState, sessionId, onAuthenticationRequired }) => {
+  const retryMessage = entry.status === 'auth_required' && typeof entry.message.payload?.retry_message === 'string'
+    ? entry.message.payload.retry_message
+    : '';
+  const retryMode = entry.message.payload?.retry_mode;
+  const normalizedRetryMode = retryMode === 'append_message' || retryMode === 'start_session' || retryMode === 'response_only'
+    ? retryMode
+    : undefined;
+  const sessionTitle = typeof entry.message.payload?.session_title === 'string'
+    ? entry.message.payload.session_title
+    : undefined;
+  const isGuestLimit = entry.message.payload?.error_code === 'guest_quota_exhausted';
   const matchingState = 'responseId' in sessionProcessingState
     && sessionProcessingState.responseId === entry.id
     ? sessionProcessingState
@@ -130,6 +156,22 @@ const SessionCommentaryBlock: React.FC<{
       ) : null}
       {effectiveState?.kind === 'failed' ? (
         <SessionProcessingIndicator state={effectiveState} />
+      ) : null}
+      {retryMessage ? (
+        <button
+          type="button"
+          onClick={() => onAuthenticationRequired({
+            sessionId,
+            responseId: entry.id,
+            message: retryMessage,
+            parentEventId: entry.message.triggerEventId,
+            mode: normalizedRetryMode,
+            sessionTitle,
+          })}
+          className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50"
+        >
+          {isGuestLimit ? 'Sign in to continue' : 'Sign in and retry'}
+        </button>
       ) : null}
     </div>
   );
@@ -363,8 +405,14 @@ export default function SessionView({
   onRetrySessionHistory,
   onFileUpload,
   onOpenSessionArtwork,
+  onAuthenticationRequired,
+  interactionGate,
+  artworkInputLimit,
+  onSignIn,
 }: SessionViewProps) {
   const [sessionDetailsOpen, setSessionDetailsOpen] = React.useState(false);
+  const canAddArtwork = artworkInputLimit === undefined || artworkInputLimit > 0;
+  const allowMultipleArtworkUploads = artworkInputLimit === undefined || artworkInputLimit > 1;
   const [showSessionHistoryLoader, setShowSessionHistoryLoader] = React.useState(false);
   const [isComposerFocused, setIsComposerFocused] = React.useState(false);
   const [isMobileComposer, setIsMobileComposer] = React.useState(matchesMobileComposer);
@@ -560,7 +608,16 @@ export default function SessionView({
             </div>
           </div>
         ) : sessionRenderBlocks.length === 0 ? (
-          sessionGoalDismissed.has(activeSessionSummary.id) ? (
+          interactionGate?.blocked ? (
+            <div className="relative z-10 flex flex-1 items-center justify-center px-6 pb-20">
+              <div className="w-full max-w-[520px]">
+                <GuestInteractionPrompt
+                  gate={interactionGate}
+                  onSignIn={onSignIn || (() => {})}
+                />
+              </div>
+            </div>
+          ) : sessionGoalDismissed.has(activeSessionSummary.id) ? (
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center pb-20 px-6">
               <div className="text-center">
                 <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-tight text-neutral-800 font-sans mb-2">
@@ -585,7 +642,8 @@ export default function SessionView({
                   <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-neutral-800 font-sans text-center">
                     What are you drawn to today?
                   </h2>
-                  <div className={preparedSessionItems.length > 0 ? 'overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-sm' : ''}>
+                  <>
+                    <div className={preparedSessionItems.length > 0 ? 'overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-sm' : ''}>
                     {preparedSessionItems.length > 0 && (
                       <div className="border-b border-neutral-100 px-4 pb-3 pt-4">
                         <div className="flex gap-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
@@ -675,44 +733,45 @@ export default function SessionView({
                       </button>
                     </div>
                   </div>
-                  {sessionProcessingState.kind !== 'idle' ? (
-                    <SessionProcessingIndicator state={sessionProcessingState} />
-                  ) : null}
-                </div>
-                <input
-                  ref={goalGalleryInputRef}
-                  type="file"
-                  accept={SUPPORTED_UPLOAD_ACCEPT}
-                  multiple
-                  className="hidden"
-                  disabled={isSessionBusy}
-                  onChange={(event) => onFileUpload(event, 'gallery')}
-                />
-                <div className="mt-5 flex flex-wrap justify-center gap-3">
-                  <button
-                    onClick={onOpenLibraryPicker}
-                    disabled={isSessionBusy}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-5 py-3 text-[14px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40"
-                  >
-                    <AddFromCollectionIcon />
-                    {ARTWORK_CTA_ADD_FROM_COLLECTION}
-                  </button>
-                  <button
-                    onClick={() => goalGalleryInputRef.current?.click()}
-                    disabled={isSessionBusy}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[14px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100 disabled:opacity-40"
-                  >
-                    <UploadPhotosIcon />
-                    {ARTWORK_CTA_UPLOAD_PHOTOS}
-                  </button>
-                  <button
-                    onClick={onOpenSessionCapture}
-                    disabled={isSessionBusy}
-                    className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[14px] font-medium disabled:opacity-40"
-                  >
-                    <ScanArtworkIcon />
-                    {ARTWORK_CTA_SCAN_ARTWORK}
-                  </button>
+                    {sessionProcessingState.kind !== 'idle' ? (
+                      <SessionProcessingIndicator state={sessionProcessingState} />
+                    ) : null}
+                    <input
+                      ref={goalGalleryInputRef}
+                      type="file"
+                      accept={SUPPORTED_UPLOAD_ACCEPT}
+                      multiple={allowMultipleArtworkUploads}
+                      className="hidden"
+                      disabled={isSessionBusy || !canAddArtwork}
+                      onChange={(event) => onFileUpload(event, 'gallery')}
+                    />
+                    {canAddArtwork ? <div className="mt-5 flex flex-wrap justify-center gap-3">
+                      <button
+                        onClick={onOpenLibraryPicker}
+                        disabled={isSessionBusy}
+                        className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-5 py-3 text-[14px] font-medium text-neutral-800 transition-colors hover:bg-neutral-50 disabled:opacity-40"
+                      >
+                        <AddFromCollectionIcon />
+                        {ARTWORK_CTA_ADD_FROM_COLLECTION}
+                      </button>
+                      <button
+                        onClick={() => goalGalleryInputRef.current?.click()}
+                        disabled={isSessionBusy}
+                        className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-neutral-200 bg-[var(--color-bg-tertiary)] px-5 py-3 text-[14px] font-medium text-neutral-800 transition-colors hover:bg-neutral-100 disabled:opacity-40"
+                      >
+                        <UploadPhotosIcon />
+                        {ARTWORK_CTA_UPLOAD_PHOTOS}
+                      </button>
+                      <button
+                        onClick={onOpenSessionCapture}
+                        disabled={isSessionBusy}
+                        className="flex items-center justify-center gap-2 whitespace-nowrap bg-white border border-neutral-200 text-neutral-700 rounded-full px-5 py-3 text-[14px] font-medium disabled:opacity-40"
+                      >
+                        <ScanArtworkIcon />
+                        {ARTWORK_CTA_SCAN_ARTWORK}
+                      </button>
+                    </div> : null}
+                  </>
                 </div>
               </div>
             </div>
@@ -764,6 +823,8 @@ export default function SessionView({
                       key={entry.id}
                       entry={entry}
                       sessionProcessingState={sessionProcessingState}
+                      sessionId={activeSessionSummary.id}
+                      onAuthenticationRequired={onAuthenticationRequired}
                     />
                   ) : entry.type === 'status' ? (
                     <SessionThreadStatus

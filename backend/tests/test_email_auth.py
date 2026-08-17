@@ -4,8 +4,10 @@ from unittest.mock import patch
 
 import pytest
 
+from app.config.settings import settings
 from app.database.models import (
     DailyUsage,
+    GuestWorkspace,
     SavedArtwork,
     TasteProfile,
     User,
@@ -68,10 +70,12 @@ class TestSignupVerifyLogin:
         assert body["user"]["email"] == "ada@example.com"
         assert body["user"]["email_verified"] is True
         assert body["user"]["tier"] == "unlimited"
+        assert body["is_new_user"] is True
 
         # Password login now works; email is case/whitespace-insensitive.
         r = client.post("/api/auth/login", json={"email": "  ADA@Example.com ", "password": "correct-horse"})
         assert r.status_code == 200
+        assert r.json()["is_new_user"] is False
 
     def test_wrong_password_and_unknown_email_are_indistinguishable(self, client, sent_emails):
         _signup(client)
@@ -201,23 +205,37 @@ class TestAnonymousAdoption:
         db.add(TasteProfile(user_id=anon_id, status="ready"))
         db.commit()
 
+    def _bind_guest_cookie(self, client, anon_id):
+        response = client.get("/api/auth/session", params={"guest_user_id": anon_id})
+        assert response.status_code == 200
+        assert response.json()["principal"]["user_id"] == anon_id
+
     def test_records_carry_over_at_verification(self, client, sent_emails, db):
         self._seed_anon(db)
+        self._bind_guest_cookie(client, "device-1")
 
-        _signup(client, anon="device-1")
+        _signup(client, anon="forged-device")
         token = _extract_token(sent_emails[-1]["html"])
+        # Verification may open outside the original guest tab. The email
+        # token carries the server-resolved association from signup.
+        client.cookies.delete(settings.guest_cookie_name)
         r = client.post("/api/auth/verify-email", json={"token": token})
         user_id = r.json()["user"]["user_id"]
 
-        assert db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).count() == 1
+        assert r.json()["guest_promoted"] is True
+        promoted_artwork = db.query(SavedArtwork).filter(SavedArtwork.user_id == user_id).one()
+        assert promoted_artwork.device_id == user_id
         usage = db.query(DailyUsage).filter(DailyUsage.user_id == user_id).one()
         assert (usage.tokens_in, usage.tokens_out, usage.artworks_uploaded) == (100, 50, 3)
         assert db.query(TasteProfile).filter(TasteProfile.user_id == user_id).count() == 1
         assert db.query(User).filter(User.user_id == "device-1").first() is None
+        assert db.query(GuestWorkspace).count() == 0
+        assert settings.guest_cookie_name not in client.cookies
 
     def test_daily_usage_sums_when_both_have_counters(self, client, sent_emails, db):
         self._seed_anon(db)
-        _signup(client, anon="device-1")
+        self._bind_guest_cookie(client, "device-1")
+        _signup(client, anon="forged-device")
         token = _extract_token(sent_emails[-1]["html"])
         user_id = client.post("/api/auth/verify-email", json={"token": token}).json()["user"]["user_id"]
 
@@ -228,14 +246,31 @@ class TestAnonymousAdoption:
         db.add(DailyUsage(user_id="device-2", day=datetime.date.today(),
                           tokens_in=10, tokens_out=5, artworks_uploaded=2))
         db.commit()
+        self._bind_guest_cookie(client, "device-2")
 
         r = client.post("/api/auth/login", json={
-            "email": "ada@example.com", "password": "correct-horse", "anonymous_user_id": "device-2",
+            "email": "ada@example.com", "password": "correct-horse", "anonymous_user_id": "forged-device",
         })
         assert r.status_code == 200
 
         usage = db.query(DailyUsage).filter(DailyUsage.user_id == user_id).one()
         assert (usage.tokens_in, usage.tokens_out, usage.artworks_uploaded) == (110, 55, 5)
+
+    def test_forged_anonymous_id_is_ignored_without_guest_cookie(self, client, sent_emails, db):
+        self._seed_anon(db, anon_id="forged-device")
+        _signup(client)
+        token = _extract_token(sent_emails[-1]["html"])
+        client.post("/api/auth/verify-email", json={"token": token})
+
+        response = client.post("/api/auth/login", json={
+            "email": "ada@example.com",
+            "password": "correct-horse",
+            "anonymous_user_id": "forged-device",
+        })
+
+        assert response.status_code == 200
+        assert response.json()["guest_promoted"] is False
+        assert db.query(User).filter(User.user_id == "forged-device").first() is not None
 
     def test_real_accounts_are_never_absorbed(self, client, sent_emails, db):
         # A verified (real) account id passed as "anonymous" must be ignored.
@@ -285,11 +320,13 @@ class TestResetPasswordAdoption:
         db.flush()
         db.add(SavedArtwork(id="art-9", photo_uri="r2://a", artist_name="X", artwork_name="Y", user_id="device-9"))
         db.commit()
+        guest = client.get("/api/auth/session", params={"guest_user_id": "device-9"})
+        assert guest.json()["principal"]["user_id"] == "device-9"
 
         client.post("/api/auth/request-password-reset", json={"email": "ada@example.com"})
         token = _extract_token(sent_emails[-1]["html"])
         r = client.post("/api/auth/reset-password", json={
-            "token": token, "new_password": "brand-new-pass", "anonymous_user_id": "device-9",
+            "token": token, "new_password": "brand-new-pass", "anonymous_user_id": "forged-device",
         })
         assert r.status_code == 200
         user_id = r.json()["user"]["user_id"]

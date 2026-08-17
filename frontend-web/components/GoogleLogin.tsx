@@ -1,6 +1,6 @@
 import React from 'react';
 import { GoogleLogin as GoogleOAuthButton, CredentialResponse } from '@react-oauth/google';
-import { loginWithGoogle, getOrCreateUserId } from '../api/auth';
+import { loginWithGoogle } from '../api/auth';
 
 interface GoogleLoginProps {
     onLoginSuccess: (user: any) => void;
@@ -15,9 +15,11 @@ const GoogleLogin: React.FC<GoogleLoginProps> = ({ onLoginSuccess, onLoginError 
         }
 
         try {
-            const anonymousId = getOrCreateUserId();
-            const result = await loginWithGoogle(response.credential, anonymousId);
-            onLoginSuccess(result.user);
+            const result = await loginWithGoogle(response.credential);
+            onLoginSuccess({
+                ...result.user,
+                is_new_user: Boolean(result.is_new_user),
+            });
         } catch (error) {
             console.error('Google login error:', error);
             onLoginError(error instanceof Error ? error.message : 'Login failed');

@@ -1,11 +1,8 @@
-"""Account lifecycle shared between auth flows.
+"""Account lifecycle shared between authentication flows.
 
-adopt_anonymous_account is the single implementation of "the device
-account's records now belong to this real account" — used by Google login
-and email verification. It supersedes the inline migration that lived in
-the Google route, which predated several tables: deleting the anonymous
-user used to cascade away daily_usage (an accidental daily-quota reset on
-registration), skill_events, and taste_profiles.
+Public auth routes enter through promote_guest_workspace, which validates the
+HttpOnly guest credential. adopt_anonymous_account is the internal data mover
+also used by server-bound email verification tokens.
 """
 import logging
 
@@ -15,6 +12,7 @@ from app.database.models import (
     AIUsage,
     Collection,
     DailyUsage,
+    GuestWorkspace,
     Journal,
     PublicComment,
     SavedArtwork,
@@ -24,6 +22,7 @@ from app.database.models import (
     User,
     UserCredential,
 )
+from app.services.authorization_service import resolve_guest_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +47,14 @@ def adopt_anonymous_account(db: Session, anonymous_user_id: str, target_user: Us
 
     logger.info("Adopting anonymous account %s into %s", anonymous_user_id, target_user.user_id)
 
-    for model in (SavedArtwork, Collection, UserSession, Journal, SkillEvent, PublicComment, AIUsage):
+    # Retire the legacy device ownership marker along with the guest principal;
+    # no promoted artwork should remain addressable by the old guest id.
+    db.query(SavedArtwork).filter(SavedArtwork.user_id == anonymous_user_id).update({
+        SavedArtwork.user_id: target_user.user_id,
+        SavedArtwork.device_id: target_user.user_id,
+    })
+
+    for model in (Collection, UserSession, Journal, SkillEvent, PublicComment, AIUsage):
         db.query(model).filter(model.user_id == anonymous_user_id).update(
             {model.user_id: target_user.user_id}
         )
@@ -81,3 +87,26 @@ def adopt_anonymous_account(db: Session, anonymous_user_id: str, target_user: Us
     db.flush()
     db.delete(anon)
     return True
+
+
+def promote_guest_workspace(db: Session, guest_token: str | None, target_user: User) -> bool:
+    """Promote the guest workspace proven by its HttpOnly credential.
+
+    The raw token is validated before any user id is considered. The workspace
+    row is then locked so concurrent login callbacks cannot promote the same
+    guest account twice. The existing adoption routine remains the canonical
+    transactional data mover.
+    """
+    workspace = resolve_guest_workspace(db, guest_token)
+    if workspace is None:
+        return False
+
+    locked_workspace = (
+        db.query(GuestWorkspace)
+        .filter(GuestWorkspace.id == workspace.id)
+        .with_for_update()
+        .first()
+    )
+    if locked_workspace is None:
+        return False
+    return adopt_anonymous_account(db, locked_workspace.user_id, target_user)

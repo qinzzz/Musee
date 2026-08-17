@@ -37,6 +37,8 @@ class User(Base):
     artworks = relationship("SavedArtwork", back_populates="user", cascade="all, delete-orphan")
     collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+    auth_sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
+    guest_workspace = relationship("GuestWorkspace", back_populates="user", cascade="all, delete-orphan", uselist=False)
     journals = relationship("Journal", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self):
@@ -805,6 +807,66 @@ class UserCredential(Base):
     password_hash = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class AuthSession(Base):
+    """Revocable browser login session backed by rotating refresh tokens."""
+
+    __tablename__ = "auth_sessions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False, index=True)
+    token_family_id = Column(String, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
+    current_token_hash = Column(String(64), nullable=False, unique=True)
+    previous_token_hash = Column(String(64), nullable=True)
+    previous_token_valid_until = Column(DateTime, nullable=True)
+    rotation_version = Column(Integer, nullable=False, server_default='0')
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    last_used_at = Column(DateTime, nullable=False, server_default=func.now())
+    absolute_expires_at = Column(DateTime, nullable=False, index=True)
+    revoked_at = Column(DateTime, nullable=True)
+    revocation_reason = Column(String(40), nullable=True)
+
+    user = relationship("User", back_populates="auth_sessions")
+
+    __table_args__ = (
+        Index("ix_auth_sessions_user_active", "user_id", "revoked_at"),
+    )
+
+
+class GuestWorkspace(Base):
+    """Credential-bound workspace for a browser that has not signed in."""
+
+    __tablename__ = "guest_workspaces"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    credential_hash = Column(String(64), nullable=False, unique=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    last_seen_at = Column(DateTime, nullable=False, server_default=func.now())
+    absolute_expires_at = Column(DateTime, nullable=False, index=True)
+    revoked_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", back_populates="guest_workspace")
+    reservations = relationship("GuestQuotaReservation", back_populates="workspace", cascade="all, delete-orphan")
+
+
+class GuestQuotaReservation(Base):
+    """Idempotent guest quota consumption, serialized through its workspace."""
+
+    __tablename__ = "guest_quota_reservations"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "quota_key", "idempotency_key", name="uq_guest_quota_reservation"),
+        Index("ix_guest_quota_workspace_key", "workspace_id", "quota_key"),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, ForeignKey('guest_workspaces.id', ondelete='CASCADE'), nullable=False)
+    quota_key = Column(String(40), nullable=False)
+    idempotency_key = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    workspace = relationship("GuestWorkspace", back_populates="reservations")
 
 
 class EmailToken(Base):

@@ -9,7 +9,20 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
-from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
+from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent
+from app.services.authorization_service import (
+    GUEST_MESSAGE_QUOTA,
+    GUEST_SESSION_QUOTA,
+    CREATE_SESSION,
+    SEND_MESSAGE,
+    RequestPrincipal,
+    get_request_principal,
+    require_principal_for_user,
+    require_capability,
+    require_session_principal,
+    reserve_guest_quota,
+)
+from app.services.auth_session_service import validate_auth_origin
 from app.services.session_service import (
     DEFAULT_SESSION_TITLE,
     SESSION_ARTWORK_LIMIT,
@@ -19,13 +32,11 @@ from app.services.session_service import (
     get_session_or_404,
     normalize_session_title,
     refresh_session_title,
-    require_session_access,
     update_session_event,
 )
 from app.services.session_event_service import derive_session_event_artwork_ids, validate_and_normalize_session_event
-from app.utils.auth_utils import get_current_user, require_same_user
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(validate_auth_origin)])
 
 
 class UpdateSessionRequest(BaseModel):
@@ -80,10 +91,10 @@ class SessionEventUpdateRequest(BaseModel):
 async def get_session_events(
     session_id: str,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
     session_record = get_session_or_404(db, session_id)
-    require_session_access(current_user, session_record)
+    require_session_principal(principal, session_record)
     msgs = (
         db.query(SessionEvent)
         .filter(SessionEvent.session_id == session_id)
@@ -133,17 +144,32 @@ async def append_session_events(
     session_id: str,
     messages: List[SessionEventIn],
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
     session_record = get_session_or_404(db, session_id)
-    require_session_access(current_user, session_record)
+    resolved_principal = require_session_principal(principal, session_record)
     if not messages:
         return {"inserted": 0}
+
+    normalized_messages = []
+    for message in messages:
+        normalized = validate_and_normalize_session_event(message.model_dump())
+        event_id = message.id or str(uuid_mod.uuid4())
+        normalized["id"] = event_id
+        if normalized["event_type"] == "user_input":
+            require_capability(resolved_principal, SEND_MESSAGE)
+            reserve_guest_quota(
+                db,
+                resolved_principal,
+                GUEST_MESSAGE_QUOTA,
+                event_id,
+            )
+        normalized_messages.append(normalized)
 
     inserted = append_events_to_session(
         db,
         session_record,
-        [msg.model_dump() for msg in messages],
+        normalized_messages,
     )
     db.commit()
     return {"inserted": inserted}
@@ -156,10 +182,10 @@ async def patch_session_event(
     event_id: str,
     request: SessionEventUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
     session_record = get_session_or_404(db, session_id)
-    require_session_access(current_user, session_record)
+    require_session_principal(principal, session_record)
 
     updated = update_session_event(
         db,
@@ -178,9 +204,11 @@ async def start_session_with_event(
     request: StartSessionWithEventRequest,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
-    require_same_user(current_user, user_id)
+    resolved_principal = require_principal_for_user(principal, user_id)
+    require_capability(resolved_principal, CREATE_SESSION)
+    require_capability(resolved_principal, SEND_MESSAGE)
 
     submitted_event = request.event or request.message
     if submitted_event is None:
@@ -190,10 +218,16 @@ async def start_session_with_event(
     if normalized_event["event_type"] != "user_input" or not normalized_event.get("content"):
         raise HTTPException(status_code=400, detail="A non-empty user input event is required")
 
+    session_id = request.session_id or f"sess_{uuid_mod.uuid4().hex[:8]}"
+    event_id = submitted_event.id or str(uuid_mod.uuid4())
+    reserve_guest_quota(db, resolved_principal, GUEST_SESSION_QUOTA, session_id)
+    reserve_guest_quota(db, resolved_principal, GUEST_MESSAGE_QUOTA, event_id)
+    normalized_event["id"] = event_id
+
     session_record = get_or_create_owned_session(
         db,
         user_id=user_id,
-        session_id=request.session_id,
+        session_id=session_id,
         requested_title=request.title,
     )
     inserted = append_events_to_session(db, session_record, [normalized_event])
@@ -211,10 +245,10 @@ async def delete_session(
     session_id: str,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
     session_record = get_session_or_404(db, session_id)
-    require_same_user(current_user, user_id)
+    require_principal_for_user(principal, user_id)
     if session_record.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this session")
 
@@ -229,9 +263,9 @@ async def delete_session(
 def list_sessions(
     user_id: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
-    require_same_user(current_user, user_id)
+    require_principal_for_user(principal, user_id)
     sessions = (
         db.query(SessionModel)
         .filter(SessionModel.user_id == user_id)
@@ -246,13 +280,16 @@ async def create_session(
     request: CreateSessionRequest,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
-    require_same_user(current_user, user_id)
+    resolved_principal = require_principal_for_user(principal, user_id)
+    require_capability(resolved_principal, CREATE_SESSION)
+    session_id = request.session_id or f"sess_{uuid_mod.uuid4().hex[:8]}"
+    reserve_guest_quota(db, resolved_principal, GUEST_SESSION_QUOTA, session_id)
     session_record = get_or_create_owned_session(
         db,
         user_id=user_id,
-        session_id=request.session_id,
+        session_id=session_id,
         requested_title=request.title,
     )
     db.commit()
@@ -269,15 +306,19 @@ async def start_session_with_artworks(
     request: StartSessionWithArtworksRequest,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
-    require_same_user(current_user, user_id)
+    resolved_principal = require_principal_for_user(principal, user_id)
+    require_capability(resolved_principal, CREATE_SESSION)
 
     artwork_ids = [artwork_id for artwork_id in request.artwork_ids if artwork_id]
     if not artwork_ids:
         raise HTTPException(status_code=400, detail="At least one artwork is required")
     if len(artwork_ids) > SESSION_ARTWORK_LIMIT:
         raise HTTPException(status_code=400, detail=f"At most {SESSION_ARTWORK_LIMIT} artworks can be attached at once")
+
+    session_id = request.session_id or f"sess_{uuid_mod.uuid4().hex[:8]}"
+    reserve_guest_quota(db, resolved_principal, GUEST_SESSION_QUOTA, session_id)
 
     artworks = db.query(SavedArtwork).filter(
         SavedArtwork.id.in_(artwork_ids),
@@ -292,7 +333,7 @@ async def start_session_with_artworks(
     session_record = get_or_create_owned_session(
         db,
         user_id=user_id,
-        session_id=request.session_id,
+        session_id=session_id,
         requested_title=request.title,
     )
 
@@ -328,10 +369,10 @@ async def attach_artworks_to_session(
     request: AttachSessionArtworksRequest,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
     session_record = get_session_or_404(db, session_id)
-    require_same_user(current_user, user_id)
+    require_principal_for_user(principal, user_id)
     if session_record.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to update this session")
 
@@ -379,10 +420,10 @@ async def get_session_artworks(
     session_id: str,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
     session_record = get_session_or_404(db, session_id)
-    require_same_user(current_user, user_id)
+    require_principal_for_user(principal, user_id)
     if session_record.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to access this session")
 
@@ -403,10 +444,10 @@ async def update_session(
     request: UpdateSessionRequest,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
     session_record = get_session_or_404(db, session_id)
-    require_same_user(current_user, user_id)
+    require_principal_for_user(principal, user_id)
     if session_record.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to update this session")
 
@@ -430,10 +471,10 @@ async def set_session_goal(
     session_id: str,
     body: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
     session_record = get_session_or_404(db, session_id)
-    require_session_access(current_user, session_record)
+    require_session_principal(principal, session_record)
     goal = (body.get("goal") or "").strip()
     meta = dict(session_record.metadata_json or {})
     meta["user_goal"] = goal

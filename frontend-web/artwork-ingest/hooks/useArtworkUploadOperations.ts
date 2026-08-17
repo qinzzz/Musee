@@ -229,6 +229,7 @@ export function useArtworkUploadOperations({
     location?: string;
     sessionId?: string;
     sequenceNumber?: number;
+    requestId?: string;
   }): Promise<GalleryItem> => {
     const saved = await saveArtworkUpload(
       options.file,
@@ -240,6 +241,7 @@ export function useArtworkUploadOperations({
       options.coords?.longitude,
       options.mode === 'camera' ? 'camera' : 'upload',
       options.sequenceNumber,
+      options.requestId,
     );
 
     return createPersistedUploadItem(saved, options);
@@ -369,6 +371,7 @@ export function useArtworkUploadOperations({
           location: uploadEntry.location,
           sessionId: context.sessionId,
           sequenceNumber,
+          requestId: uploadEntry.id,
         });
         persistedItemId = persistedItem.id;
         const liveItem = reconcilePlaceholderWithSavedArtwork(placeholder, persistedItem);
@@ -402,7 +405,7 @@ export function useArtworkUploadOperations({
         failedEntries.push({
           entryId: uploadEntry.id,
           message,
-          errorCode: quotaError ? 'quota_exceeded' : getArtworkUploadFailureCode(error),
+          errorCode: quotaError?.code || getArtworkUploadFailureCode(error),
         });
         if (placeholderId && persistedItemId) {
           markArtworkAnalysisFailed(persistedItemId, message);

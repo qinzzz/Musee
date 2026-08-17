@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GalleryItem } from '../../types';
 import type { PendingSessionArtwork, SessionStreamMessage } from '../types';
 import { buildSessionRenderBlocks } from '../lib/sessionRenderBlocks';
+import { SessionPolicyError } from '../api/sessions';
 import { useSessionArtworkInputPipeline } from './useSessionArtworkInputPipeline';
 
 const {
@@ -18,7 +19,8 @@ const {
   mockBuildStagedSessionAdditionPrompt: vi.fn(),
 }));
 
-vi.mock('../api/sessions', () => ({
+vi.mock('../api/sessions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/sessions')>()),
   attachArtworksToSession: mockAttachArtworksToSession,
   ensureSession: mockEnsureSession,
 }));
@@ -79,6 +81,7 @@ function renderPipeline(options: {
   persistedSessionIds?: string[];
   sessionTitleById?: Record<string, string>;
   newSessionDraftMessage?: string;
+  onAuthenticationRequired?: ReturnType<typeof vi.fn>;
 }) {
   const persistSessionArtworkInput = options.persistSessionArtworkInput
     || vi.fn().mockResolvedValue(undefined);
@@ -142,6 +145,7 @@ function renderPipeline(options: {
       ingestPreparedUploads: options.ingestPreparedUploads,
       sendSessionInquiryToSession,
       showToast,
+      onAuthenticationRequired: options.onAuthenticationRequired,
     });
 
     return { api, sessionStreams, sessionDrafts };
@@ -477,6 +481,60 @@ describe('useSessionArtworkInputPipeline', () => {
     });
     expect(spies.persistSessionArtworkInput).not.toHaveBeenCalled();
     expect(spies.showToast).not.toHaveBeenCalled();
+  });
+
+  it('removes a rejected guest draft and opens sign-in when artwork-first creation reaches the quota', async () => {
+    mockEnsureSession.mockRejectedValueOnce(new SessionPolicyError(
+      'guest_quota_exhausted',
+      'Guest preview used',
+      true,
+    ));
+    const onAuthenticationRequired = vi.fn();
+    const { result, spies } = renderPipeline({
+      pending: [createUploadEntry('upload-1')],
+      ingestPreparedUploads: vi.fn(),
+      onAuthenticationRequired,
+    });
+
+    await act(async () => {
+      await result.current.api.submitPreparedSession();
+    });
+
+    expect(result.current.sessionDrafts).toHaveLength(0);
+    expect(result.current.sessionStreams).toEqual(expect.objectContaining({}));
+    expect(spies.showToast).toHaveBeenCalledWith(
+      'You’ve used your guest preview. Sign in to continue.',
+      'info',
+    );
+    expect(onAuthenticationRequired).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens sign-in when a stale client attempts a second guest artwork', async () => {
+    const onAuthenticationRequired = vi.fn();
+    const { result, spies } = renderPipeline({
+      pending: [createUploadEntry('upload-2')],
+      ingestPreparedUploads: vi.fn().mockResolvedValue({
+        persistedItems: [],
+        persistedEntries: [],
+        failedEntries: [{
+          entryId: 'upload-2',
+          message: 'Guest artwork limit reached',
+          errorCode: 'guest_quota_exhausted',
+        }],
+        analysisPromise: Promise.resolve([]),
+      }),
+      onAuthenticationRequired,
+    });
+
+    await act(async () => {
+      await result.current.api.submitPreparedSession();
+    });
+
+    expect(spies.showToast).toHaveBeenCalledWith(
+      'You’ve used your guest preview. Sign in to continue.',
+      'info',
+    );
+    expect(onAuthenticationRequired).toHaveBeenCalledTimes(1);
   });
 
   it('ensures an unpersisted local session before retrying artwork input', async () => {

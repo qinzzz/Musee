@@ -18,6 +18,7 @@ import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 type UseArtworkLibraryOptions = {
   userId: string;
+  canSearchCollection?: boolean;
   showToast: (message: string, type?: 'info' | 'success') => void;
   onMissingArtworkFromHistory?: () => void;
   onArtworkDetailContextChange?: (context: ArtworkDetailContext | null) => void;
@@ -133,12 +134,14 @@ function resolveArtworkDetailNavigationItems(
 
 export function useArtworkLibrary({
   userId,
+  canSearchCollection = true,
   showToast,
   onMissingArtworkFromHistory,
   onArtworkDetailContextChange,
   onTagPositionsLoaded,
 }: UseArtworkLibraryOptions) {
   const [items, setItems] = useState<GalleryItem[]>(() => {
+    if (!canSearchCollection) return [];
     const cachedItems = readArtworkBootstrapCache(userId);
     return cachedItems ? cachedItems.map(mapCachedArtworkToGalleryItem) : [];
   });
@@ -153,7 +156,7 @@ export function useArtworkLibrary({
     artworksError,
     refreshArtworks,
     refreshArtworksIfStale,
-  } = useArtworksQuery(userId);
+  } = useArtworksQuery(userId, canSearchCollection);
 
   // The narrow write API for artwork state. Everything outside this hook goes
   // through these intent mutators (or the handlers below) instead of a raw

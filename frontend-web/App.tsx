@@ -3,8 +3,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
-import { getCurrentUser, getOrCreateUserId, logout } from './api/auth';
-import { AUTH_TOKEN_KEY, DEV_FIXED_USER_ID, DEV_FREE_TIER_USER_ID, USER_ID_KEY, USER_INFO_KEY } from './api/core';
+import { consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
+import { DEV_FIXED_USER_ID, DEV_FREE_TIER_USER_ID, USER_ID_KEY } from './api/core';
+import { useAuth } from './auth/AuthProvider';
 import {
   batchDeleteArtworks,
   deleteArtwork,
@@ -15,6 +16,8 @@ import IdentifyAgainModal from './components/IdentifyAgainModal';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import AddFromLibraryModal from './components/AddFromLibraryModal';
 import AppSidebar from './app-shell/components/AppSidebar';
+import GuestSidebar from './guest/GuestSidebar';
+import { deriveGuestExperience } from './guest/guestExperience';
 import AccountUsageMeter from './app-shell/components/AccountUsageMeter';
 import { useAccountUsageQuery } from './app-shell/hooks/useAccountUsageQuery';
 import AppConfirmationLayer, { type DeleteConfirmationState } from './app-shell/components/AppConfirmationLayer';
@@ -31,17 +34,19 @@ import { useArtworkLibrary } from './artwork/hooks/useArtworkLibrary';
 import { useArtworkAnalysis } from './artwork/hooks/useArtworkAnalysis';
 import { useBoards } from './boards/hooks/useBoards';
 import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
+import type { SessionAuthenticationRetry } from './session/hooks/useSessionMessaging';
 import { useSessionArtworkInputPipeline } from './session/hooks/useSessionArtworkInputPipeline';
 import { MAX_SESSION_ARTWORK_BATCH_SIZE } from './session/constants';
 import { useArtworkUploadOperations } from './artwork-ingest/hooks/useArtworkUploadOperations';
 import {
+  buildRootHistoryState,
   getInitialNavigationState,
   type ArtistPageContext,
   type ArtworkDetailContext,
   type CollectTab,
 } from './lib/appNavigation';
 import { parseAnalysis } from './artwork/lib/analysisText';
-import { queryKeys } from './lib/queryClient';
+import { queryKeys, transitionUserQueryCache } from './lib/queryClient';
 
 const UnsortedClassificationModal = lazy(() => import('./components/UnsortedClassificationModal'));
 
@@ -103,10 +108,53 @@ export const formatDisplayDate = (dateStr: string | null | undefined): string | 
 // Persistent user ID for the current browser session
 const USER_ID = getOrCreateUserId();
 const DEFAULT_VISIT_TITLE = 'Untitled Session';
+const PENDING_AUTH_RETRY_KEY = 'musee_pending_auth_retry';
+
+const readPendingAuthenticationRetry = (): SessionAuthenticationRetry | null => {
+  try {
+    const raw = sessionStorage.getItem(PENDING_AUTH_RETRY_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<SessionAuthenticationRetry>;
+    if (
+      typeof value.sessionId !== 'string'
+      || typeof value.responseId !== 'string'
+      || typeof value.message !== 'string'
+    ) {
+      sessionStorage.removeItem(PENDING_AUTH_RETRY_KEY);
+      return null;
+    }
+    return value as SessionAuthenticationRetry;
+  } catch {
+    sessionStorage.removeItem(PENDING_AUTH_RETRY_KEY);
+    return null;
+  }
+};
 
 const App: React.FC = () => {
   const queryClient = useQueryClient();
-  const initialNavigationState = getInitialNavigationState(window.location.pathname);
+  const {
+    status: authStatus,
+    currentUser,
+    guestUserId,
+    capabilities,
+    quotas,
+    completeLogin,
+    continueAsGuest,
+    logout: logoutCurrentSession,
+  } = useAuth();
+  const requestedNavigationState = getInitialNavigationState(window.location.pathname);
+  const canSearchCollection = capabilities.search_collection === true;
+  const canViewProfile = capabilities.view_profile === true;
+  const initialNavigationState = (
+    (requestedNavigationState.activeTab === 'collect' && !canSearchCollection)
+    || (requestedNavigationState.activeTab === 'profile' && !canViewProfile)
+  )
+    ? {
+        ...requestedNavigationState,
+        activeTab: 'newSession' as const,
+        artistPageContext: null,
+      }
+    : requestedNavigationState;
   const goalGalleryInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const sessionStreamScrollRef = useRef<HTMLDivElement>(null);
@@ -117,8 +165,7 @@ const App: React.FC = () => {
   const [learningInitialGuide] = useState<string | null>(initialNavigationState.learningInitialGuide);
   const [collectTab, setCollectTab] = useState<CollectTab>(initialNavigationState.collectTab);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(getCurrentUser());
-  const sessionUserId = currentUser?.user_id || USER_ID;
+  const sessionUserId = currentUser?.user_id || guestUserId || USER_ID;
   // Single cached account-usage fetch, shared with the user-menu meter via
   // the query layer; the meter's mount-on-open refetch keeps both current.
   const { usage: accountUsage } = useAccountUsageQuery(sessionUserId);
@@ -127,6 +174,19 @@ const App: React.FC = () => {
   const [movementPageContext, setMovementPageContext] = useState<SmartCollection | null>(null);
   const [artworkDetailContext, setArtworkDetailContext] = useState<ArtworkDetailContext | null>(null);
   const [artworkHeaderEditToken, setArtworkHeaderEditToken] = useState(0);
+
+  useEffect(() => {
+    const isRestricted = (
+      (activeTab === 'collect' && !canSearchCollection)
+      || (activeTab === 'profile' && !canViewProfile)
+    );
+    if (!isRestricted) return;
+    setActiveTab('newSession');
+    setArtistPageContext(null);
+    setMovementPageContext(null);
+    setArtworkDetailContext(null);
+    window.history.replaceState(buildRootHistoryState('newSession', 'saved'), '', '/');
+  }, [activeTab, canSearchCollection, canViewProfile]);
 
   const showToast = (message: string, type: 'info' | 'success' = 'info', action?: ToastAction) => {
     const options = action
@@ -145,6 +205,12 @@ const App: React.FC = () => {
 
     sonnerToast.info(message, options);
   };
+
+  useEffect(() => {
+    const welcome = consumePostAuthWelcome();
+    if (!welcome) return;
+    showToast(welcome === 'new' ? 'Welcome to Musee.' : 'Welcome back.', 'success');
+  }, []);
 
   const {
     items,
@@ -168,6 +234,7 @@ const App: React.FC = () => {
     updateItemMetadata,
   } = useArtworkLibrary({
     userId: sessionUserId,
+    canSearchCollection,
     showToast,
     onMissingArtworkFromHistory: () => setArtworkDetailContext(null),
     onArtworkDetailContextChange: setArtworkDetailContext,
@@ -243,6 +310,9 @@ const App: React.FC = () => {
   });
 
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingAuthenticationRetry, setPendingAuthenticationRetry] = useState<SessionAuthenticationRetry | null>(
+    readPendingAuthenticationRetry,
+  );
   const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
@@ -251,21 +321,26 @@ const App: React.FC = () => {
     catch { return new Set(); }
   });
 
-  const handleLoginSuccess = (user: any) => {
-    setCurrentUser(user);
-    // Reload artworks list for the new user
+  useEffect(() => {
+    if (authStatus === 'reauth_required') {
+      setShowLoginModal(true);
+    }
+  }, [authStatus]);
+
+  useEffect(() => {
+    if (authStatus === 'guest' && pendingAuthenticationRetry) {
+      setShowLoginModal(true);
+    }
+  }, [authStatus, pendingAuthenticationRetry]);
+
+  const handleLogout = async () => {
+    await logoutCurrentSession();
+    queryClient.clear();
     window.location.reload();
   };
 
-  const handleLogout = () => {
-    logout();
-    setCurrentUser(null);
-    window.location.reload();
-  };
-
-  const handleSwitchDevProfile = (nextUserId: string) => {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    localStorage.removeItem(USER_INFO_KEY);
+  const handleSwitchDevProfile = async (nextUserId: string) => {
+    await logoutCurrentSession();
     localStorage.setItem(USER_ID_KEY, nextUserId);
     window.location.reload();
   };
@@ -285,7 +360,7 @@ const App: React.FC = () => {
               type="button"
               onClick={() => {
                 if (isActive) return;
-                handleSwitchDevProfile(profile.id);
+                void handleSwitchDevProfile(profile.id);
               }}
               className={`rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-colors ${
                 isActive
@@ -325,7 +400,8 @@ const App: React.FC = () => {
     renameBoard,
     deleteBoard,
   } = useBoards({
-    userId: currentUser?.user_id || USER_ID,
+    userId: sessionUserId,
+    enabled: canSearchCollection,
     showToast,
   });
 
@@ -373,6 +449,7 @@ const App: React.FC = () => {
       sessionGoals,
       setSessionGoal,
       persistedSessions,
+      persistedSessionsHydrated,
       sessionSummaries,
       activeSessionSummary,
       pendingDeleteSessionSummary,
@@ -402,6 +479,7 @@ const App: React.FC = () => {
       appendSessionEvents,
       persistSessionArtworkInput,
       sendSessionInquiryToSession,
+      retryAuthenticationRequiredResponse,
       handleSessionInquiry,
     },
     sessionActions: {
@@ -420,6 +498,62 @@ const App: React.FC = () => {
     openSessionSummary,
   } = sessionWorkspace;
 
+  const guestUserMessageCount = React.useMemo(
+    () => Object.values(sessionStreams).reduce((count, messages) => (
+      count + messages.filter((message) => message.role === 'user').length
+    ), 0),
+    [sessionStreams],
+  );
+  const guestExperience = React.useMemo(() => deriveGuestExperience({
+    quotas,
+    hasSession: sessionSummaries.length > 0,
+    userMessageCount: guestUserMessageCount,
+    hasArtwork: items.length > 0 || pendingSessionArtworks.length > 0,
+  }), [guestUserMessageCount, items.length, pendingSessionArtworks.length, quotas, sessionSummaries.length]);
+
+  const handleLoginSuccess = async (user: any) => {
+    const previousUserId = sessionUserId;
+    try {
+      await completeLogin(user);
+      await transitionUserQueryCache(queryClient, previousUserId, user.user_id);
+      setShowLoginModal(false);
+      showToast(user?.is_new_user ? 'Welcome to Musee.' : 'Welcome back.', 'success');
+    } catch (error) {
+      console.error('Failed to complete sign-in:', error);
+      setShowLoginModal(true);
+      showToast('Musee couldn’t verify your sign-in. Please try again.', 'info');
+    }
+  };
+
+  useEffect(() => {
+    if (
+      authStatus !== 'guest'
+      || !persistedSessionsHydrated
+      || !isComposingNewSession
+      || persistedSessions.length === 0
+    ) {
+      return;
+    }
+    openSessionSummary(persistedSessions[0].id);
+  }, [
+    authStatus,
+    isComposingNewSession,
+    openSessionSummary,
+    persistedSessions,
+    persistedSessionsHydrated,
+  ]);
+
+  useEffect(() => {
+    if (!currentUser || !pendingAuthenticationRetry) return;
+    const retry = pendingAuthenticationRetry;
+    sessionStorage.removeItem(PENDING_AUTH_RETRY_KEY);
+    setPendingAuthenticationRetry(null);
+    void retryAuthenticationRequiredResponse(retry).catch((error) => {
+      console.error('Failed to resume the guest action after sign-in:', error);
+      showToast('Signed in, but couldn’t resume that message. Try sending it again.', 'info');
+    });
+  }, [currentUser, pendingAuthenticationRetry, retryAuthenticationRequiredResponse]);
+
   // When set, the library picker filters out artworks already in this ongoing
   // session; picks stage into the shared tray either way.
   const [libraryPickerSessionId, setLibraryPickerSessionId] = React.useState<string | null>(null);
@@ -430,9 +564,21 @@ const App: React.FC = () => {
 
   const openSessionLibraryPicker = React.useCallback(() => {
     if (!activeSessionSummary) return;
+    if (!canSearchCollection) {
+      setShowLoginModal(true);
+      return;
+    }
     setLibraryPickerSessionId(activeSessionSummary.id);
     setIsLibraryPickerOpen(true);
-  }, [activeSessionSummary, setIsLibraryPickerOpen]);
+  }, [activeSessionSummary, canSearchCollection, setIsLibraryPickerOpen]);
+
+  const setAuthorizedLibraryPickerOpen: React.Dispatch<React.SetStateAction<boolean>> = (nextOpen) => {
+    if (nextOpen === true && !canSearchCollection) {
+      setShowLoginModal(true);
+      return;
+    }
+    setIsLibraryPickerOpen(nextOpen);
+  };
 
   // A staged batch belongs to the surface it was composed on; switching
   // sessions (or entering/leaving the composer) discards it.
@@ -514,6 +660,7 @@ const App: React.FC = () => {
     ingestPreparedUploads,
     setVisit: setArtworkWorkspace,
     showToast,
+    onAuthenticationRequired: () => setShowLoginModal(true),
   });
 
   const handleSessionCaptureSubmit = React.useCallback(async (payload: {
@@ -659,6 +806,11 @@ const App: React.FC = () => {
     onEnterBlankSession: enterBlankSession,
     onOpenSessionSummary: openSessionSummary,
     onCloseSessionMenu: () => setOpenSessionMenuId(null),
+    canAccessTab: (tab) => (
+      (tab !== 'collect' || canSearchCollection)
+      && (tab !== 'profile' || canViewProfile)
+    ),
+    onRestrictedTab: () => setShowLoginModal(true),
   });
   const artworkHeaderActions = artworkDetailItem?.artworkId ? (
     <ArtworkActionsMenu
@@ -717,10 +869,13 @@ const App: React.FC = () => {
     activeTab,
     collectTab,
     learningInitialGuide,
-    userId: currentUser?.user_id || USER_ID,
+    userId: sessionUserId,
     headerMenuButton,
     collectionFloatingMenuButton,
     profileRefreshKey,
+    interactionGate: authStatus === 'guest' ? guestExperience.interactionGate : undefined,
+    artworkInputLimit: authStatus === 'guest' ? guestExperience.artworkRemaining : undefined,
+    onSignIn: () => setShowLoginModal(true),
   };
 
   const viewportState = {
@@ -798,7 +953,7 @@ const App: React.FC = () => {
     setSessionGoalInput,
     onSaveSessionGoal: patchSessionGoal,
     setNewSessionDraftMessage,
-    setIsLibraryPickerOpen,
+    setIsLibraryPickerOpen: setAuthorizedLibraryPickerOpen,
     openSessionLibraryPicker,
     removePendingSessionArtwork,
     submitPreparedSession,
@@ -814,6 +969,11 @@ const App: React.FC = () => {
     setIsUnsortedFlowOpen,
     handleToggleLike,
     handleSessionInquiry,
+    onSessionAuthenticationRequired: (retry: SessionAuthenticationRetry) => {
+      sessionStorage.setItem(PENDING_AUTH_RETRY_KEY, JSON.stringify(retry));
+      setPendingAuthenticationRetry(retry);
+      setShowLoginModal(true);
+    },
   };
 
   return (
@@ -858,11 +1018,19 @@ const App: React.FC = () => {
         />
 
         <LoginModal
-          open={showLoginModal && !currentUser}
-          onClose={() => setShowLoginModal(false)}
-          onLoginSuccess={(user) => {
-            handleLoginSuccess(user);
+          open={showLoginModal && (
+            !currentUser
+            || authStatus === 'reauth_required'
+            || Boolean(pendingAuthenticationRetry)
+          )}
+          onClose={() => {
             setShowLoginModal(false);
+            if (authStatus === 'reauth_required') {
+              void continueAsGuest();
+            }
+          }}
+          onLoginSuccess={(user) => {
+            void handleLoginSuccess(user);
           }}
           onLoginError={() => alert('Login Error')}
         />
@@ -882,7 +1050,21 @@ const App: React.FC = () => {
         />
 
         {!sessionCaptureState && (
-          <AppSidebar
+          authStatus === 'guest' ? (
+            <GuestSidebar
+              sidebarOpen={sidebarOpen}
+              sidebarCollapsed={sidebarCollapsed}
+              experience={guestExperience}
+              currentSession={sessionSummaries[0] ?? null}
+              sessionsLoading={sessionsLoading}
+              onSelectCurrentSession={handleSelectSessionSummary}
+              onSignIn={() => setShowLoginModal(true)}
+              onExpandSidebar={expandSidebar}
+              onCollapseSidebar={collapseSidebar}
+              onCloseMobileSidebar={closeMobileSidebar}
+            />
+          ) : (
+            <AppSidebar
             sidebarOpen={sidebarOpen}
             sidebarCollapsed={sidebarCollapsed}
             recentsOpen={recentsOpen}
@@ -928,7 +1110,8 @@ const App: React.FC = () => {
             onExpandSidebar={expandSidebar}
             onCollapseSidebar={collapseSidebar}
             onCloseMobileSidebar={closeMobileSidebar}
-          />
+            />
+          )
         )}
 
         {/* Right-hand Canvas main container */}

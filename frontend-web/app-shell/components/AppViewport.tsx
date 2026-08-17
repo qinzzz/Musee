@@ -14,6 +14,7 @@ import type { ActiveSessionStreamEntry, SessionRenderBlock, SessionSummary } fro
 import { useSessionProcessingState } from '../../session/hooks/useSessionProcessingState';
 import { isSessionProcessing } from '../../session/lib/sessionProcessingState';
 import type { CaptureState } from '../hooks/useCaptureNavigation';
+import type { GuestInteractionGate } from '../../guest/guestExperience';
 
 const CollectionView = lazy(() => import('../../collection/components/CollectionView'));
 const TasteProfileView = lazy(() => import('../../components/TasteProfileView'));
@@ -43,6 +44,9 @@ type ShellViewportProps = {
   headerMenuButton: React.ReactNode;
   collectionFloatingMenuButton: React.ReactNode;
   profileRefreshKey: number;
+  interactionGate?: GuestInteractionGate;
+  artworkInputLimit?: number;
+  onSignIn?: () => void;
 };
 
 type ViewportStateProps = {
@@ -130,6 +134,12 @@ type ViewportMutationProps = {
   setIsUnsortedFlowOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleToggleLike: (id: string) => void;
   handleSessionInquiry: (text: string) => Promise<boolean>;
+  onSessionAuthenticationRequired: (retry: {
+    sessionId: string;
+    responseId: string;
+    message: string;
+    parentEventId?: string;
+  }) => void;
 };
 
 type Props = {
@@ -153,6 +163,9 @@ export default function AppViewport({
     headerMenuButton,
     collectionFloatingMenuButton,
     profileRefreshKey,
+    interactionGate,
+    artworkInputLimit,
+    onSignIn,
   } = shell;
   const {
     artworksLoaded,
@@ -237,6 +250,7 @@ export default function AppViewport({
     setIsUnsortedFlowOpen,
     handleToggleLike,
     handleSessionInquiry,
+    onSessionAuthenticationRequired,
   } = actions;
   const isSessionReplyPending = Boolean(
     activeSessionSummary
@@ -421,6 +435,10 @@ export default function AppViewport({
                   activeSessionSummary.items,
                 )
               }
+              onAuthenticationRequired={onSessionAuthenticationRequired}
+              interactionGate={interactionGate}
+              artworkInputLimit={artworkInputLimit}
+              onSignIn={onSignIn}
             />
           ) : (
             <div className="relative flex flex-1 items-center justify-center bg-[var(--color-bg-primary)] px-6">
@@ -600,6 +618,9 @@ export default function AppViewport({
           isCommunityActive={artworkDetailRightMode === 'community'}
           activeItem={artworkDetailItem as unknown as GalleryItem || undefined}
           placeholder={activeSessionSummary ? SESSION_QUESTION_PLACEHOLDER : 'Start a session or capture an artwork...'}
+          interactionGate={interactionGate}
+          artworkInputLimit={artworkInputLimit}
+          onSignIn={onSignIn}
         />
       )}
     </>

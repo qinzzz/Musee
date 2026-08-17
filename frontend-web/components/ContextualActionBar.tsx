@@ -22,6 +22,8 @@ import {
   getSessionComposerHeight,
   shouldSubmitSessionComposerOnEnter,
 } from '../session/lib/sessionComposerBehavior';
+import GuestInteractionPrompt from '../guest/GuestInteractionPrompt';
+import type { GuestInteractionGate } from '../guest/guestExperience';
 import { SESSION_ARTWORK_QUESTION_PLACEHOLDER } from '../session/constants';
 
 const MOBILE_COMPOSER_QUERY = '(max-width: 639px)';
@@ -62,6 +64,9 @@ interface Props {
   isLiked?: boolean;
   activeItem?: GalleryItem;
   placeholder?: string;
+  interactionGate?: GuestInteractionGate;
+  artworkInputLimit?: number;
+  onSignIn?: () => void;
 }
 
 const ContextualActionBar: React.FC<Props> = ({
@@ -84,6 +89,9 @@ const ContextualActionBar: React.FC<Props> = ({
   isLiked,
   activeItem,
   placeholder,
+  interactionGate,
+  artworkInputLimit,
+  onSignIn,
 }) => {
   const [text, setText] = useState('');
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -92,6 +100,8 @@ const ContextualActionBar: React.FC<Props> = ({
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const sessionBusy = Boolean(isBusy || isAnalyzing || isInquiryDisabled || isSubmittingStagedBatch);
+  const canAddArtwork = artworkInputLimit === undefined || artworkInputLimit > 0;
+  const allowMultipleArtworkUploads = artworkInputLimit === undefined || artworkInputLimit > 1;
   const isComposerExpanded = isComposerFocused;
 
   const resizeComposerTextarea = React.useCallback(() => {
@@ -146,13 +156,13 @@ const ContextualActionBar: React.FC<Props> = ({
       label: ARTWORK_CTA_ADD_FROM_COLLECTION,
       icon: <AddFromCollectionIcon size={18} />,
       onSelect: onOpenLibraryPicker,
-      disabled: sessionBusy,
+      disabled: sessionBusy || !canAddArtwork,
     },
     {
       label: ARTWORK_CTA_UPLOAD_PHOTOS,
       icon: <UploadPhotosIcon size={18} />,
       onSelect: () => galleryInputRef.current?.click(),
-      disabled: sessionBusy,
+      disabled: sessionBusy || !canAddArtwork,
     },
   ];
 
@@ -185,10 +195,10 @@ const ContextualActionBar: React.FC<Props> = ({
         ref={galleryInputRef}
         type="file"
         accept={SUPPORTED_UPLOAD_ACCEPT}
-        multiple
+        multiple={allowMultipleArtworkUploads}
         className="hidden"
         onChange={(e) => onUpload(e, 'gallery')}
-        disabled={sessionBusy}
+        disabled={sessionBusy || !canAddArtwork}
       />
 
       <div className="absolute bottom-0 left-0 right-0 z-[20] px-3 sm:px-6 pb-3 sm:pb-5 bg-gradient-to-t from-[var(--color-bg-primary)] via-[color:rgba(255,255,255,0.95)] to-transparent pt-8" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}>
@@ -247,10 +257,17 @@ const ContextualActionBar: React.FC<Props> = ({
             </div>
           )}
 
-          <form
-            onSubmit={submit}
-            className="relative rounded-[34px] border border-neutral-200 bg-white px-4 sm:px-6 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)]"
-          >
+          {interactionGate?.blocked ? (
+            <GuestInteractionPrompt
+              gate={interactionGate}
+              onSignIn={onSignIn || (() => {})}
+              compact
+            />
+          ) : (
+            <form
+              onSubmit={submit}
+              className="relative rounded-[34px] border border-neutral-200 bg-white px-4 sm:px-6 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)]"
+            >
             {hasStagedItems && (
               <div className="mb-3 flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                 {stagedItems.map((entry) => (
@@ -277,7 +294,7 @@ const ContextualActionBar: React.FC<Props> = ({
             )}
 
             <div className={`flex gap-2 ${isComposerExpanded ? 'flex-wrap items-end' : 'items-center'}`}>
-              <button
+              {canAddArtwork ? <button
                 type="button"
                 onClick={onOpenSessionCapture}
                 disabled={sessionBusy}
@@ -286,8 +303,8 @@ const ContextualActionBar: React.FC<Props> = ({
                 className={`w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100 disabled:opacity-40 ${isComposerExpanded ? 'order-2' : ''}`}
               >
                 <ScanArtworkIcon size={20} />
-              </button>
-              <div className={isComposerExpanded ? 'order-2' : ''}>
+              </button> : null}
+              {canAddArtwork ? <div className={isComposerExpanded ? 'order-2' : ''}>
               <DropdownMenu
                 open={isAddMenuOpen}
                 onOpenChange={(open) => setIsAddMenuOpen(open && !sessionBusy)}
@@ -332,7 +349,7 @@ const ContextualActionBar: React.FC<Props> = ({
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              </div>
+              </div> : null}
               <textarea
                 ref={composerTextareaRef}
                 value={text}
@@ -376,7 +393,8 @@ const ContextualActionBar: React.FC<Props> = ({
                 )}
               </button>
             </div>
-          </form>
+            </form>
+          )}
         </div>
       </div>
     </>

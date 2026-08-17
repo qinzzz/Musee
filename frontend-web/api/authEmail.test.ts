@@ -12,9 +12,10 @@ describe('email auth api', () => {
     vi.restoreAllMocks();
     vi.resetModules();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
-  it('signup sends the device id for adoption at verification', async () => {
+  it('signup relies on the credential-bound guest cookie instead of a device id', async () => {
     localStorage.setItem('musee_user_id', 'device-42');
     const fetchSpy = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
     vi.stubGlobal('fetch', fetchSpy);
@@ -23,10 +24,10 @@ describe('email auth api', () => {
     await signupWithEmail('ada@example.com', 'correct-horse');
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    expect(body.anonymous_user_id).toBe('device-42');
+    expect(body).toEqual({ email: 'ada@example.com', password: 'correct-horse' });
   });
 
-  it('login stores the session like the google flow', async () => {
+  it('login keeps the access token in memory and removes legacy auth storage', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
       access_token: 'jwt-123',
       token_type: 'bearer',
@@ -34,14 +35,16 @@ describe('email auth api', () => {
     })));
 
     const { loginWithEmail } = await import('./auth');
+    const { getAccessToken } = await import('./core');
     await loginWithEmail('ada@example.com', 'correct-horse');
 
-    expect(localStorage.getItem('musee_auth_token')).toBe('jwt-123');
+    expect(getAccessToken()).toBe('jwt-123');
     expect(localStorage.getItem('musee_user_id')).toBe('u1');
-    expect(JSON.parse(localStorage.getItem('musee_user_info')!)).toMatchObject({ user_id: 'u1' });
+    expect(localStorage.getItem('musee_auth_token')).toBeNull();
+    expect(localStorage.getItem('musee_user_info')).toBeNull();
   });
 
-  it('reset sends the device id so this browser\'s records adopt', async () => {
+  it('reset relies on the credential-bound guest cookie instead of a device id', async () => {
     localStorage.setItem('musee_user_id', 'device-7');
     const fetchSpy = vi.fn().mockResolvedValue(jsonResponse({ access_token: 'j', user: { user_id: 'u9' } }));
     vi.stubGlobal('fetch', fetchSpy);
@@ -50,7 +53,7 @@ describe('email auth api', () => {
     await resetPassword('tok', 'new-password-1');
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    expect(body.anonymous_user_id).toBe('device-7');
+    expect(body).toEqual({ token: 'tok', new_password: 'new-password-1' });
   });
 
   it('verify and reset also store the session (auto-login)', async () => {
@@ -59,8 +62,18 @@ describe('email auth api', () => {
     })));
 
     const { verifyEmailToken } = await import('./auth');
+    const { getAccessToken } = await import('./core');
     await verifyEmailToken('some-token');
-    expect(localStorage.getItem('musee_auth_token')).toBe('jwt-456');
+    expect(getAccessToken()).toBe('jwt-456');
+  });
+
+  it('stores and consumes a one-time post-auth welcome', async () => {
+    const { consumePostAuthWelcome, rememberPostAuthWelcome } = await import('./auth');
+
+    rememberPostAuthWelcome(true);
+
+    expect(consumePostAuthWelcome()).toBe('new');
+    expect(consumePostAuthWelcome()).toBeNull();
   });
 
   it('surfaces the structured error code and message', async () => {

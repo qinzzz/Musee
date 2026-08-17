@@ -154,4 +154,28 @@ describe('useAppShellNavigation', () => {
     expect(result.current.isNewSessionEntryActive).toBe(true);
     expect(result.current.navigationItems.find((item) => item.id === 'newSession')?.isActive).toBe(true);
   });
+
+  it('opens authentication instead of navigating to a restricted collection', () => {
+    const onSetActiveTab = vi.fn();
+    const onRestrictedTab = vi.fn();
+    const { result } = renderHook(() => useAppShellNavigation({
+      activeTab: 'newSession',
+      isComposingNewSession: true,
+      editingSessionId: null,
+      clearShellOverlays: vi.fn(),
+      onSetActiveTab,
+      onEnterBlankSession: vi.fn(),
+      onOpenSessionSummary: vi.fn(),
+      onCloseSessionMenu: vi.fn(),
+      canAccessTab: (tab) => tab !== 'collect',
+      onRestrictedTab,
+    }));
+
+    act(() => {
+      result.current.navigationItems.find((item) => item.id === 'collect')?.onSelect();
+    });
+
+    expect(onRestrictedTab).toHaveBeenCalledWith('collect');
+    expect(onSetActiveTab).not.toHaveBeenCalled();
+  });
 });

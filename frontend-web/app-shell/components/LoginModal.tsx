@@ -25,7 +25,7 @@ const FRIENDLY_ERRORS: Record<string, string> = {
 };
 
 const inputClass =
-  'w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-[13px] text-neutral-900 ' +
+  'w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-base text-neutral-900 ' +
   'placeholder:text-neutral-400 outline-none transition-colors focus:border-neutral-400';
 
 const primaryButtonClass =
@@ -70,7 +70,10 @@ const LoginModal: React.FC<Props> = ({
         setNotice('Almost there — check your inbox and click the verification link to finish signing up.');
       } else {
         const data = await loginWithEmail(email, password);
-        onLoginSuccess(data.user);
+        onLoginSuccess({
+          ...data.user,
+          is_new_user: Boolean(data.is_new_user),
+        });
       }
     } catch (err) {
       if (err instanceof EmailAuthError && err.code === 'email_unverified') {

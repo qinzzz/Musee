@@ -61,7 +61,21 @@ describe('LoginModal', () => {
 
     await waitFor(() => {
       expect(mockLoginWithEmail).toHaveBeenCalledWith('ada@example.com', 'correct-horse');
-      expect(onLoginSuccess).toHaveBeenCalledWith({ user_id: 'u1' });
+      expect(onLoginSuccess).toHaveBeenCalledWith({ user_id: 'u1', is_new_user: false });
+    });
+  });
+
+  it('preserves the backend first-login signal', async () => {
+    mockLoginWithEmail.mockResolvedValue({
+      user: { user_id: 'u1' },
+      is_new_user: true,
+    });
+    const { onLoginSuccess } = renderModal();
+
+    fillAndSubmit('ada@example.com', 'correct-horse');
+
+    await waitFor(() => {
+      expect(onLoginSuccess).toHaveBeenCalledWith({ user_id: 'u1', is_new_user: true });
     });
   });
 

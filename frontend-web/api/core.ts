@@ -16,6 +16,46 @@ const USER_INFO_KEY = 'musee_user_info';
 const USER_ID_KEY = 'musee_user_id';
 const DEV_FIXED_USER_ID = import.meta.env.VITE_DEV_USER_ID || 'musee-dev-user';
 const DEV_FREE_TIER_USER_ID = import.meta.env.VITE_DEV_FREE_TIER_USER_ID || 'musee-dev-user-freetier';
+const REAUTH_REQUIRED_EVENT = 'musee:reauth-required';
+
+let accessToken: string | null = null;
+let refreshPromise: Promise<string | null> | null = null;
+
+function setAccessToken(token: string | null): void {
+  accessToken = token;
+}
+
+function getAccessToken(): string | null {
+  return accessToken;
+}
+
+async function requestAccessToken(allowSupersededRetry = true): Promise<string | null> {
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (response.status === 409 && allowSupersededRetry) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return requestAccessToken(false);
+  }
+  if (!response.ok) {
+    setAccessToken(null);
+    return null;
+  }
+  const data = await response.json() as { access_token?: string };
+  const token = data.access_token || null;
+  setAccessToken(token);
+  return token;
+}
+
+function refreshAccessToken(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = requestAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
 
 function getLanguage(): string | null {
   return localStorage.getItem('musee_language');
@@ -27,11 +67,10 @@ async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestIni
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
 
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
   const headers = new Headers(options.headers || {});
 
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
   const method = (options.method || 'GET').toUpperCase();
@@ -43,11 +82,31 @@ async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestIni
   const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
   try {
-    const response = await fetch(resource, {
+    let response = await fetch(resource, {
       ...options,
       headers,
+      credentials: options.credentials || 'include',
       signal: controller.signal,
     });
+
+    if (response.status === 401 && accessToken && !resourceLabel.includes('/auth/')) {
+      const renewedToken = await refreshAccessToken();
+      if (renewedToken) {
+        headers.set('Authorization', `Bearer ${renewedToken}`);
+        response = await fetch(resource, {
+          ...options,
+          headers,
+          credentials: options.credentials || 'include',
+          signal: controller.signal,
+        });
+      }
+      if (!renewedToken || response.status === 401) {
+        setAccessToken(null);
+      }
+      if ((!renewedToken || response.status === 401) && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(REAUTH_REQUIRED_EVENT));
+      }
+    }
 
     const durationMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - start;
     const { serverTiming, responseTime } = getApiTimingHeaders(response);
@@ -127,6 +186,10 @@ export {
   USER_ID_KEY,
   DEV_FIXED_USER_ID,
   DEV_FREE_TIER_USER_ID,
+  REAUTH_REQUIRED_EVENT,
+  getAccessToken,
+  setAccessToken,
+  refreshAccessToken,
   getLanguage,
   fetchWithTimeout,
   getBaseDomain,

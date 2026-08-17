@@ -1,12 +1,33 @@
 import io
 
+import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 from app.database.models import ArtworkEvent, SavedArtwork, Session as SessionModel, User
 from app.main import app
 from app.models.artwork import AIProvider
 from app.routers import artwork_ingest
+from app.services.authorization_service import RequestPrincipal, get_request_principal
 from tests.conftest import TestingSessionLocal
+
+
+@pytest.fixture(autouse=True)
+def authenticated_artwork_ingest_principal(db):
+    """Keep ingest behavior tests focused while endpoint policy is tested separately."""
+    async def override_principal(request: Request):
+        form = await request.form()
+        user_id = str(form.get("user_id") or "upload-user")
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if user is None:
+            user = User(user_id=user_id, device_id=user_id, tier="free")
+            db.add(user)
+            db.commit()
+        return RequestPrincipal(state="authenticated", user_id=user_id, user=user)
+
+    app.dependency_overrides[get_request_principal] = override_principal
+    yield
+    app.dependency_overrides.pop(get_request_principal, None)
 
 
 class _FakeStorage:

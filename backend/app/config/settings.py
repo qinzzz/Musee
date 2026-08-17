@@ -101,7 +101,20 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = "your-secret-key-change-this-in-production"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 15
+    refresh_session_expire_days: int = 30
+    refresh_session_inactivity_days: int = 30
+    refresh_rotation_grace_seconds: int = 10
+    refresh_cookie_name: str = "musee_refresh"
+    refresh_cookie_samesite: str = "lax"
+    refresh_cookie_secure: Optional[bool] = None
+    guest_workspace_expire_days: int = 30
+    guest_cookie_name: str = "musee_guest"
+    auth_allowed_origins: str = (
+        "https://museelab.com,https://www.museelab.com,"
+        "https://musee-web.vercel.app,https://musee-web.qinzzz.workers.dev,"
+        "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173"
+    )
 
     # PhotoRoom API
     photoroom_api_key: Optional[str] = None

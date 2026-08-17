@@ -9,12 +9,23 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
-from app.database.models import User
+from app.database.models import Session as SessionModel, User
 from app.models.artwork import AIProvider
 from app.services.ai_client_interface import AIStreamChunk, AITextResult
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import determine_ai_provider
+from app.services.auth_session_service import validate_auth_origin
+from app.services.authorization_service import (
+    GUEST_MESSAGE_QUOTA,
+    SEND_MESSAGE,
+    RequestPrincipal,
+    get_request_principal,
+    require_guest_quota_reservation,
+    require_capability,
+    require_principal_for_user,
+    require_session_principal,
+)
 from app.services.session_chat_service import (
     SessionChatRequest,
     build_session_chat_items_payload,
@@ -23,10 +34,8 @@ from app.services.session_chat_service import (
 from app.services.retrieval import execute_collection_retrieval, plan_collection_context, retrieve_collection_context
 from app.services.retrieval.contracts import RetrievalOutcome, RetrievalPlan, RetrievalTrace
 from app.services.retrieval.context_composer import compose_no_collection_claims_context
-from app.services.session_service import get_session_or_404, require_session_access
-from app.utils.auth_utils import get_current_user, require_same_user
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(validate_auth_origin)])
 logger = logging.getLogger(__name__)
 
 
@@ -36,11 +45,30 @@ async def session_chat(
     request: SessionChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
-    require_same_user(current_user, request.user_id)
-    if current_user and request.session_id:
-        require_session_access(current_user, get_session_or_404(db, request.session_id))
+    claimed_user_id = request.user_id or (principal.user_id if principal else None)
+    resolved_principal = require_principal_for_user(principal, claimed_user_id)
+    require_capability(resolved_principal, SEND_MESSAGE)
+    if resolved_principal.state == "guest":
+        if not request.session_id:
+            require_guest_quota_reservation(db, resolved_principal, GUEST_MESSAGE_QUOTA, None)
+        session_record = db.query(SessionModel).filter(SessionModel.id == request.session_id).first()
+        if session_record is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        require_session_principal(resolved_principal, session_record)
+        require_guest_quota_reservation(
+            db,
+            resolved_principal,
+            GUEST_MESSAGE_QUOTA,
+            request.trigger_event_id,
+        )
+    elif request.session_id:
+        session_record = db.query(SessionModel).filter(SessionModel.id == request.session_id).first()
+        if session_record is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        require_session_principal(resolved_principal, session_record)
+    current_user = resolved_principal.user if resolved_principal.state == "authenticated" else None
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
     retrieval_ai_service = AIServiceFactory.get_fast_service(ai_provider) if current_user else None
@@ -57,7 +85,7 @@ async def session_chat(
             request=request,
         )
         usage_id = start_ai_usage(
-            user_id=request.user_id,
+            user_id=resolved_principal.user_id,
             job_type="session_chat",
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="session_event" if request.trigger_event_id else "session",
@@ -94,11 +122,30 @@ async def stream_session_chat(
     request: SessionChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
-    require_same_user(current_user, request.user_id)
-    if current_user and request.session_id:
-        require_session_access(current_user, get_session_or_404(db, request.session_id))
+    claimed_user_id = request.user_id or (principal.user_id if principal else None)
+    resolved_principal = require_principal_for_user(principal, claimed_user_id)
+    require_capability(resolved_principal, SEND_MESSAGE)
+    if resolved_principal.state == "guest":
+        if not request.session_id:
+            require_guest_quota_reservation(db, resolved_principal, GUEST_MESSAGE_QUOTA, None)
+        session_record = db.query(SessionModel).filter(SessionModel.id == request.session_id).first()
+        if session_record is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        require_session_principal(resolved_principal, session_record)
+        require_guest_quota_reservation(
+            db,
+            resolved_principal,
+            GUEST_MESSAGE_QUOTA,
+            request.trigger_event_id,
+        )
+    elif request.session_id:
+        session_record = db.query(SessionModel).filter(SessionModel.id == request.session_id).first()
+        if session_record is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        require_session_principal(resolved_principal, session_record)
+    current_user = resolved_principal.user if resolved_principal.state == "authenticated" else None
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
     retrieval_ai_service = AIServiceFactory.get_fast_service(ai_provider) if current_user else None
@@ -108,7 +155,7 @@ async def stream_session_chat(
         input_tokens = None
         output_tokens = None
         usage_id = start_ai_usage(
-            user_id=request.user_id,
+            user_id=resolved_principal.user_id,
             job_type="session_chat",
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="session_event" if request.trigger_event_id else "session",

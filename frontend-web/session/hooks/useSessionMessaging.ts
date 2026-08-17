@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { streamSessionChat } from '../../api/chat';
+import { SessionAuthenticationError, streamSessionChat } from '../../api/chat';
 import type { SessionRetrievalTrace } from '../../api/chat';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import {
@@ -21,6 +21,23 @@ type ShowToast = (message: string, type?: ToastType) => void;
 const SESSION_EVENT_SAVE_ERROR = 'Couldn’t save this session update. Try again.';
 const MODEL_RESPONSE_SAVE_ERROR = 'This response couldn’t be saved. Try again.';
 const COLLECTION_SEARCH_MIN_VISIBLE_MS = 600;
+const AUTH_REQUIRED_MESSAGE = 'Your session expired. Sign in again to continue.';
+const GUEST_LIMIT_MESSAGE = 'You’ve reached the guest preview limit. Sign in to continue this conversation.';
+
+const getErrorCode = (error: unknown): string | undefined => (
+  error instanceof Error && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : undefined
+);
+
+export type SessionAuthenticationRetry = {
+  sessionId: string;
+  responseId: string;
+  message: string;
+  parentEventId?: string;
+  mode?: 'response_only' | 'append_message' | 'start_session';
+  sessionTitle?: string;
+};
 
 type UseSessionMessagingOptions = {
   defaultSessionTitle: string;
@@ -264,7 +281,9 @@ export function useSessionMessaging({
     }
     void persistSessionEvents(sessionId, newEvents).catch((error) => {
       console.error('Failed to persist session events:', error);
-      showToast(SESSION_EVENT_SAVE_ERROR, 'info');
+      showToast(getErrorCode(error) === 'guest_quota_exhausted'
+        ? GUEST_LIMIT_MESSAGE
+        : SESSION_EVENT_SAVE_ERROR, 'info');
     });
   }, [
     appendLocalSessionEvents,
@@ -327,12 +346,16 @@ export function useSessionMessaging({
     sessionId: string,
     responseId: string,
     artworkIds: string[],
-    status: 'completed' | 'failed',
+    status: 'pending' | 'completed' | 'failed' | 'auth_required',
     parentEventId?: string,
     options?: {
       content?: string;
       errorMessage?: string;
       retrieval?: SessionRetrievalTrace;
+      errorCode?: string;
+      retryMessage?: string;
+      retryMode?: SessionAuthenticationRetry['mode'];
+      sessionTitle?: string;
     },
   ) => {
     const messagePayload = {
@@ -344,6 +367,11 @@ export function useSessionMessaging({
       payload: {
         status,
         ...(options?.errorMessage ? { error_message: options.errorMessage } : {}),
+        ...(options?.retrieval ? { retrieval: options.retrieval } : {}),
+        ...(options?.errorCode ? { error_code: options.errorCode } : {}),
+        ...(options?.retryMessage ? { retry_message: options.retryMessage } : {}),
+        ...(options?.retryMode ? { retry_mode: options.retryMode } : {}),
+        ...(options?.sessionTitle ? { session_title: options.sessionTitle } : {}),
         ...(options?.retrieval ? { retrieval: options.retrieval } : {}),
       },
     };
@@ -368,6 +396,7 @@ export function useSessionMessaging({
     sessionItemsOverride?: GalleryItem[],
     historyOverride?: SessionStreamMessage[],
     parentEventIdOverride?: string,
+    responseIdOverride?: string,
   ) => {
     markSessionReplyPending(targetSessionId);
 
@@ -377,7 +406,7 @@ export function useSessionMessaging({
       || (activeSessionSummary?.id === targetSessionId
         ? activeSessionSummary.items
         : items.filter((item) => itemBelongsToSession(item, targetSessionId)));
-    const responseId = newSessionEventId();
+    const responseId = responseIdOverride || newSessionEventId();
     const commentaryCreatedAt = getNextLocalEventCreatedAt(existingMessages);
     const commentaryArtworkIds = getSessionArtworkIds(sessionItems);
     const parentEventId = parentEventIdOverride;
@@ -393,7 +422,15 @@ export function useSessionMessaging({
       payload: { status: 'pending' },
     };
 
-    appendSessionEvents(targetSessionId, [pendingCommentaryMessage], { persist: false });
+    if (responseIdOverride) {
+      updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
+        ...event,
+        text: '',
+        payload: { status: 'pending' },
+      }));
+    } else {
+      appendSessionEvents(targetSessionId, [pendingCommentaryMessage], { persist: false });
+    }
 
     let collectionSearchShownAt: number | null = null;
     let pendingPhaseTimer: ReturnType<typeof setTimeout> | null = null;
@@ -414,13 +451,10 @@ export function useSessionMessaging({
       }));
     };
 
-    void persistPendingModelResponse(
-      targetSessionId,
-      responseId,
-      commentaryArtworkIds,
-      commentaryCreatedAt,
-      parentEventId,
-    ).catch((error) => {
+    const pendingPersistence = responseIdOverride
+      ? finalizeModelResponse(targetSessionId, responseId, commentaryArtworkIds, 'pending', parentEventId, { content: '' })
+      : persistPendingModelResponse(targetSessionId, responseId, commentaryArtworkIds, commentaryCreatedAt, parentEventId);
+    void pendingPersistence.catch((error) => {
       // Completion performs an update-then-create retry, so only log this
       // preliminary failure and surface an error if the final save also fails.
       console.error('Failed to persist pending model response:', error);
@@ -471,8 +505,64 @@ export function useSessionMessaging({
         });
         clearSessionReplyPending(targetSessionId);
       },
-      () => {
+      (error) => {
         clearPendingPhaseTimer();
+        if (getErrorCode(error) === 'guest_quota_exhausted') {
+          updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
+            ...event,
+            text: GUEST_LIMIT_MESSAGE,
+            payload: {
+              ...(event.payload || {}),
+              status: 'auth_required',
+              error_code: 'guest_quota_exhausted',
+              retry_message: text,
+              retry_mode: 'append_message',
+            },
+          }));
+          void finalizeModelResponse(
+            targetSessionId,
+            responseId,
+            commentaryArtworkIds,
+            'auth_required',
+            parentEventId,
+            {
+              content: GUEST_LIMIT_MESSAGE,
+              errorCode: 'guest_quota_exhausted',
+              retryMessage: text,
+              retryMode: 'append_message',
+            },
+          ).catch((saveError) => {
+            console.error('Failed to persist guest-limit response:', saveError);
+            showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
+          });
+          clearSessionReplyPending(targetSessionId);
+          return;
+        }
+        if (error instanceof SessionAuthenticationError) {
+          updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
+            ...event,
+            text: AUTH_REQUIRED_MESSAGE,
+            payload: {
+              ...(event.payload || {}),
+              status: 'auth_required',
+              error_code: error.code,
+              retry_message: text,
+            },
+          }));
+          void finalizeModelResponse(
+            targetSessionId,
+            responseId,
+            commentaryArtworkIds,
+            'auth_required',
+            parentEventId,
+            { content: AUTH_REQUIRED_MESSAGE, errorCode: error.code, retryMessage: text },
+          ).catch((saveError) => {
+            console.error('Failed to persist authentication-required response:', saveError);
+            showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
+          });
+          clearSessionReplyPending(targetSessionId);
+          return;
+        }
         updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
           ...event,
           payload: {
@@ -534,6 +624,48 @@ export function useSessionMessaging({
     sessionStreams,
     showToast,
     updateLocalSessionEvent,
+  ]);
+
+  const retryAuthenticationRequiredResponse = useCallback(async (retry: SessionAuthenticationRetry) => {
+    const messages = sessionStreams[retry.sessionId] || [];
+    const userMessage = retry.parentEventId
+      ? messages.find((message) => message.id === retry.parentEventId && message.role === 'user')
+      : undefined;
+
+    if (retry.mode === 'start_session') {
+      if (!userMessage) throw new Error('The original guest message is unavailable.');
+      await startSessionWithEvent(sessionUserId, {
+        session_id: retry.sessionId,
+        title: retry.sessionTitle || buildInitialSessionTitle(retry.message, defaultSessionTitle),
+        event: {
+          id: userMessage.id,
+          role: 'user',
+          event_type: 'user_input',
+          content: retry.message,
+          created_at: userMessage.createdAt,
+        },
+      });
+      refreshPersistedSessions();
+    } else if (retry.mode === 'append_message') {
+      if (!userMessage) throw new Error('The original guest message is unavailable.');
+      await persistSessionEvents(retry.sessionId, [userMessage]);
+    }
+
+    streamSessionInquiryResponse(
+      retry.sessionId,
+      retry.message,
+      undefined,
+      messages,
+      retry.parentEventId,
+      retry.responseId,
+    );
+  }, [
+    defaultSessionTitle,
+    persistSessionEvents,
+    refreshPersistedSessions,
+    sessionStreams,
+    sessionUserId,
+    streamSessionInquiryResponse,
   ]);
 
   const sendSessionInquiryToSession = useCallback((
@@ -639,14 +771,25 @@ export function useSessionMessaging({
         );
       } catch (error) {
         clearSessionReplyPending(targetSessionId);
+        const policyErrorCode = getErrorCode(error);
+        const failureMessage = policyErrorCode === 'guest_quota_exhausted'
+          ? GUEST_LIMIT_MESSAGE
+          : SESSION_FAILURE_MESSAGES.session;
+        const retryMode = policyErrorCode === 'guest_quota_exhausted' ? 'start_session' : undefined;
+        const responseId = newSessionEventId();
         appendLocalSessionEvents(targetSessionId, [{
-          id: newSessionEventId(),
+          id: responseId,
           role: 'model',
-          type: 'text',
-          text: SESSION_FAILURE_MESSAGES.session,
+          type: retryMode ? 'model_response' : 'text',
+          text: failureMessage,
           payload: {
-            message_kind: 'session_failure',
-            error_code: 'session_save_failed',
+            ...(retryMode ? {
+              status: 'auth_required',
+              retry_message: text,
+              retry_mode: retryMode,
+              session_title: targetSummary?.title || buildInitialSessionTitle(text, defaultSessionTitle),
+            } : { message_kind: 'session_failure' }),
+            error_code: policyErrorCode || 'session_save_failed',
           },
           triggerEventId: userEventId,
           createdAt: createdAt + 1,
@@ -679,6 +822,7 @@ export function useSessionMessaging({
     refreshPersistedSessions,
     sessionUserId,
     sendSessionInquiryToSession,
+    retryAuthenticationRequiredResponse,
     showToast,
     streamSessionInquiryResponse,
     sessionStreams,
@@ -691,6 +835,7 @@ export function useSessionMessaging({
     appendLocalSessionEvents,
     persistSessionArtworkInput,
     sendSessionInquiryToSession,
+    retryAuthenticationRequiredResponse,
     handleSessionInquiry,
   };
 }
