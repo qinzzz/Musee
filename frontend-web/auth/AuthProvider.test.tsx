@@ -22,6 +22,7 @@ function AuthProbe() {
       <span data-testid="guest-user">{auth.guestUserId || 'none'}</span>
       <span data-testid="create-session">{String(auth.capabilities.create_session)}</span>
       <button onClick={auth.continueAsGuest}>Continue as guest</button>
+      <button onClick={() => void auth.completeLogin({ user_id: 'u2' })}>Complete login</button>
     </div>
   );
 }
@@ -83,5 +84,34 @@ describe('AuthProvider', () => {
     );
 
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('guest'));
+  });
+
+  it('does not expose an authenticated user until the renewed session is verified', async () => {
+    bootstrapAuthSession
+      .mockResolvedValueOnce({
+        state: 'guest',
+        principal: { kind: 'guest', user_id: 'guest-1' },
+        capabilities: { create_session: true },
+        quotas: {},
+        plan: 'guest',
+      })
+      .mockResolvedValueOnce({
+        state: 'authenticated',
+        principal: { kind: 'authenticated', user_id: 'u2' },
+        capabilities: { create_session: true },
+        quotas: {},
+        plan: 'free',
+      });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('guest'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Complete login' }));
+    expect(screen.getByTestId('user').textContent).toBe('none');
+    await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('u2'));
   });
 });

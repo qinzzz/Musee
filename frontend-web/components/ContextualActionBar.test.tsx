@@ -11,6 +11,30 @@ import ContextualActionBar, {
 import { SESSION_ARTWORK_QUESTION_PLACEHOLDER } from '../session/constants';
 
 describe('ContextualActionBar session busy state', () => {
+  it('replaces every session input with the guest sign-in prompt when the preview is exhausted', () => {
+    const onSignIn = vi.fn();
+    render(
+      <ContextualActionBar
+        mode="session"
+        onUpload={vi.fn()}
+        onOpenSessionCapture={vi.fn()}
+        onOpenLibraryPicker={vi.fn()}
+        interactionGate={{
+          blocked: true,
+          title: 'Keep exploring with an account',
+          message: 'You’ve used your guest preview. Sign in to continue this conversation.',
+          actionLabel: 'Sign in to continue',
+        }}
+        onSignIn={onSignIn}
+      />,
+    );
+
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByLabelText(ARTWORK_CTA_SCAN_ARTWORK)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in to continue' }));
+    expect(onSignIn).toHaveBeenCalledTimes(1);
+  });
+
   it('disables the empty composer and every session input action', () => {
     const onInquiry = vi.fn(async () => true);
     const onOpenSessionCapture = vi.fn();

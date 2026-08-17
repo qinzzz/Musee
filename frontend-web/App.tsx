@@ -16,6 +16,8 @@ import IdentifyAgainModal from './components/IdentifyAgainModal';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import AddFromLibraryModal from './components/AddFromLibraryModal';
 import AppSidebar from './app-shell/components/AppSidebar';
+import GuestSidebar from './guest/GuestSidebar';
+import { deriveGuestExperience } from './guest/guestExperience';
 import AccountUsageMeter from './app-shell/components/AccountUsageMeter';
 import { useAccountUsageQuery } from './app-shell/hooks/useAccountUsageQuery';
 import AppConfirmationLayer, { type DeleteConfirmationState } from './app-shell/components/AppConfirmationLayer';
@@ -44,7 +46,7 @@ import {
   type CollectTab,
 } from './lib/appNavigation';
 import { parseAnalysis } from './artwork/lib/analysisText';
-import { queryKeys } from './lib/queryClient';
+import { queryKeys, transitionUserQueryCache } from './lib/queryClient';
 
 const UnsortedClassificationModal = lazy(() => import('./components/UnsortedClassificationModal'));
 
@@ -135,6 +137,7 @@ const App: React.FC = () => {
     currentUser,
     guestUserId,
     capabilities,
+    quotas,
     completeLogin,
     continueAsGuest,
     logout: logoutCurrentSession,
@@ -440,6 +443,7 @@ const App: React.FC = () => {
       sessionGoals,
       setSessionGoal,
       persistedSessions,
+      persistedSessionsHydrated,
       sessionSummaries,
       activeSessionSummary,
       pendingDeleteSessionSummary,
@@ -488,12 +492,48 @@ const App: React.FC = () => {
     openSessionSummary,
   } = sessionWorkspace;
 
+  const guestHasUserMessage = React.useMemo(
+    () => Object.values(sessionStreams).some((messages) => (
+      messages.some((message) => message.role === 'user')
+    )),
+    [sessionStreams],
+  );
+  const guestExperience = React.useMemo(() => deriveGuestExperience({
+    quotas,
+    hasSession: sessionSummaries.length > 0,
+    hasUserMessage: guestHasUserMessage,
+  }), [guestHasUserMessage, quotas, sessionSummaries.length]);
+
   const handleLoginSuccess = async (user: any) => {
-    const shouldResumePendingAction = Boolean(pendingAuthenticationRetry);
-    await completeLogin(user);
-    setShowLoginModal(false);
-    if (!shouldResumePendingAction) window.location.reload();
+    const previousUserId = sessionUserId;
+    try {
+      await completeLogin(user);
+      await transitionUserQueryCache(queryClient, previousUserId, user.user_id);
+      setShowLoginModal(false);
+    } catch (error) {
+      console.error('Failed to complete sign-in:', error);
+      setShowLoginModal(true);
+      showToast('Musee couldn’t verify your sign-in. Please try again.', 'info');
+    }
   };
+
+  useEffect(() => {
+    if (
+      authStatus !== 'guest'
+      || !persistedSessionsHydrated
+      || !isComposingNewSession
+      || persistedSessions.length === 0
+    ) {
+      return;
+    }
+    openSessionSummary(persistedSessions[0].id);
+  }, [
+    authStatus,
+    isComposingNewSession,
+    openSessionSummary,
+    persistedSessions,
+    persistedSessionsHydrated,
+  ]);
 
   useEffect(() => {
     if (!currentUser || !pendingAuthenticationRetry) return;
@@ -612,6 +652,7 @@ const App: React.FC = () => {
     ingestPreparedUploads,
     setVisit: setArtworkWorkspace,
     showToast,
+    onAuthenticationRequired: () => setShowLoginModal(true),
   });
 
   const handleSessionCaptureSubmit = React.useCallback(async (payload: {
@@ -820,10 +861,12 @@ const App: React.FC = () => {
     activeTab,
     collectTab,
     learningInitialGuide,
-    userId: currentUser?.user_id || USER_ID,
+    userId: sessionUserId,
     headerMenuButton,
     collectionFloatingMenuButton,
     profileRefreshKey,
+    interactionGate: authStatus === 'guest' ? guestExperience.interactionGate : undefined,
+    onSignIn: () => setShowLoginModal(true),
   };
 
   const viewportState = {
@@ -998,7 +1041,21 @@ const App: React.FC = () => {
         />
 
         {!sessionCaptureState && (
-          <AppSidebar
+          authStatus === 'guest' ? (
+            <GuestSidebar
+              sidebarOpen={sidebarOpen}
+              sidebarCollapsed={sidebarCollapsed}
+              experience={guestExperience}
+              currentSession={sessionSummaries[0] ?? null}
+              sessionsLoading={sessionsLoading}
+              onSelectCurrentSession={handleSelectSessionSummary}
+              onSignIn={() => setShowLoginModal(true)}
+              onExpandSidebar={expandSidebar}
+              onCollapseSidebar={collapseSidebar}
+              onCloseMobileSidebar={closeMobileSidebar}
+            />
+          ) : (
+            <AppSidebar
             sidebarOpen={sidebarOpen}
             sidebarCollapsed={sidebarCollapsed}
             recentsOpen={recentsOpen}
@@ -1044,7 +1101,8 @@ const App: React.FC = () => {
             onExpandSidebar={expandSidebar}
             onCollapseSidebar={collapseSidebar}
             onCloseMobileSidebar={closeMobileSidebar}
-          />
+            />
+          )
         )}
 
         {/* Right-hand Canvas main container */}

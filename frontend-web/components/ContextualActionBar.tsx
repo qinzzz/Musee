@@ -22,6 +22,8 @@ import {
   getSessionComposerHeight,
   shouldSubmitSessionComposerOnEnter,
 } from '../session/lib/sessionComposerBehavior';
+import GuestInteractionPrompt from '../guest/GuestInteractionPrompt';
+import type { GuestInteractionGate } from '../guest/guestExperience';
 import { SESSION_ARTWORK_QUESTION_PLACEHOLDER } from '../session/constants';
 
 const MOBILE_COMPOSER_QUERY = '(max-width: 639px)';
@@ -62,6 +64,8 @@ interface Props {
   isLiked?: boolean;
   activeItem?: GalleryItem;
   placeholder?: string;
+  interactionGate?: GuestInteractionGate;
+  onSignIn?: () => void;
 }
 
 const ContextualActionBar: React.FC<Props> = ({
@@ -84,6 +88,8 @@ const ContextualActionBar: React.FC<Props> = ({
   isLiked,
   activeItem,
   placeholder,
+  interactionGate,
+  onSignIn,
 }) => {
   const [text, setText] = useState('');
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -247,10 +253,17 @@ const ContextualActionBar: React.FC<Props> = ({
             </div>
           )}
 
-          <form
-            onSubmit={submit}
-            className="relative rounded-[34px] border border-neutral-200 bg-white px-4 sm:px-6 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)]"
-          >
+          {interactionGate?.blocked ? (
+            <GuestInteractionPrompt
+              gate={interactionGate}
+              onSignIn={onSignIn || (() => {})}
+              compact
+            />
+          ) : (
+            <form
+              onSubmit={submit}
+              className="relative rounded-[34px] border border-neutral-200 bg-white px-4 sm:px-6 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.10)]"
+            >
             {hasStagedItems && (
               <div className="mb-3 flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                 {stagedItems.map((entry) => (
@@ -376,7 +389,8 @@ const ContextualActionBar: React.FC<Props> = ({
                 )}
               </button>
             </div>
-          </form>
+            </form>
+          )}
         </div>
       </div>
     </>
