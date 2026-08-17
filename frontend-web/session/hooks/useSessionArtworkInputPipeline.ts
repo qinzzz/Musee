@@ -391,6 +391,13 @@ export function useSessionArtworkInputPipeline({
       const resolvedItems = [...resolvedLibraryItems, ...persistedUploadItems];
       if (resolvedItems.length === 0) {
         const uploadFailureCodes = uploadResult?.failedEntries.map((entry) => entry.errorCode) || [];
+        if (uploadFailureCodes.includes('guest_quota_exhausted')) {
+          throw new SessionPolicyError(
+            'guest_quota_exhausted',
+            GUEST_PREVIEW_LIMIT_MESSAGE,
+            true,
+          );
+        }
         const uploadFailureStatus = getSessionUploadFailureStatus(
           uploadFailureCodes,
         );

@@ -183,6 +183,7 @@ export async function saveArtworkUpload(
   longitude?: number,
   source: 'upload' | 'camera' = 'upload',
   sequenceNumber?: number,
+  requestId?: string,
 ): Promise<SavedArtworkUploadResult> {
   const formData = new FormData();
   formData.append('image', imageSource);
@@ -196,6 +197,7 @@ export async function saveArtworkUpload(
   if (latitude !== undefined) formData.append('latitude', latitude.toString());
   if (longitude !== undefined) formData.append('longitude', longitude.toString());
   if (sequenceNumber !== undefined) formData.append('sequence_number', sequenceNumber.toString());
+  if (requestId) formData.append('request_id', requestId);
 
   const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/upload`, {
     method: 'POST',

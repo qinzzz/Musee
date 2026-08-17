@@ -509,6 +509,34 @@ describe('useSessionArtworkInputPipeline', () => {
     expect(onAuthenticationRequired).toHaveBeenCalledTimes(1);
   });
 
+  it('opens sign-in when a stale client attempts a second guest artwork', async () => {
+    const onAuthenticationRequired = vi.fn();
+    const { result, spies } = renderPipeline({
+      pending: [createUploadEntry('upload-2')],
+      ingestPreparedUploads: vi.fn().mockResolvedValue({
+        persistedItems: [],
+        persistedEntries: [],
+        failedEntries: [{
+          entryId: 'upload-2',
+          message: 'Guest artwork limit reached',
+          errorCode: 'guest_quota_exhausted',
+        }],
+        analysisPromise: Promise.resolve([]),
+      }),
+      onAuthenticationRequired,
+    });
+
+    await act(async () => {
+      await result.current.api.submitPreparedSession();
+    });
+
+    expect(spies.showToast).toHaveBeenCalledWith(
+      'You’ve used your guest preview. Sign in to continue.',
+      'info',
+    );
+    expect(onAuthenticationRequired).toHaveBeenCalledTimes(1);
+  });
+
   it('ensures an unpersisted local session before retrying artwork input', async () => {
     const upload = createUploadEntry('upload-1');
     const persisted = createItem({ artworkId: 'saved-artwork-1' });

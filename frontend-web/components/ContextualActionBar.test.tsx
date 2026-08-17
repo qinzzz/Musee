@@ -11,6 +11,22 @@ import ContextualActionBar, {
 import { SESSION_ARTWORK_QUESTION_PLACEHOLDER } from '../session/constants';
 
 describe('ContextualActionBar session busy state', () => {
+  it('keeps follow-up messaging available after the single guest artwork is used', () => {
+    render(
+      <ContextualActionBar
+        mode="session"
+        onUpload={vi.fn()}
+        onOpenSessionCapture={vi.fn()}
+        onOpenLibraryPicker={vi.fn()}
+        artworkInputLimit={0}
+      />,
+    );
+
+    expect(screen.getByRole('textbox')).toBeTruthy();
+    expect(screen.queryByLabelText(ARTWORK_CTA_SCAN_ARTWORK)).toBeNull();
+    expect(screen.queryByLabelText(ARTWORK_CTA_ADD_MENU)).toBeNull();
+  });
+
   it('replaces every session input with the guest sign-in prompt when the preview is exhausted', () => {
     const onSignIn = vi.fn();
     render(

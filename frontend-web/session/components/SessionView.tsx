@@ -109,6 +109,7 @@ type SessionViewProps = {
     sessionTitle?: string;
   }) => void;
   interactionGate?: GuestInteractionGate;
+  artworkInputLimit?: number;
   onSignIn?: () => void;
 };
 
@@ -405,9 +406,12 @@ export default function SessionView({
   onOpenSessionArtwork,
   onAuthenticationRequired,
   interactionGate,
+  artworkInputLimit,
   onSignIn,
 }: SessionViewProps) {
   const [sessionDetailsOpen, setSessionDetailsOpen] = React.useState(false);
+  const canAddArtwork = artworkInputLimit === undefined || artworkInputLimit > 0;
+  const allowMultipleArtworkUploads = artworkInputLimit === undefined || artworkInputLimit > 1;
   const [showSessionHistoryLoader, setShowSessionHistoryLoader] = React.useState(false);
   const [isComposerFocused, setIsComposerFocused] = React.useState(false);
   const [isMobileComposer, setIsMobileComposer] = React.useState(matchesMobileComposer);
@@ -735,12 +739,12 @@ export default function SessionView({
                       ref={goalGalleryInputRef}
                       type="file"
                       accept={SUPPORTED_UPLOAD_ACCEPT}
-                      multiple
+                      multiple={allowMultipleArtworkUploads}
                       className="hidden"
-                      disabled={isSessionBusy}
+                      disabled={isSessionBusy || !canAddArtwork}
                       onChange={(event) => onFileUpload(event, 'gallery')}
                     />
-                    <div className="mt-5 flex flex-wrap justify-center gap-3">
+                    {canAddArtwork ? <div className="mt-5 flex flex-wrap justify-center gap-3">
                       <button
                         onClick={onOpenLibraryPicker}
                         disabled={isSessionBusy}
@@ -765,7 +769,7 @@ export default function SessionView({
                         <ScanArtworkIcon />
                         {ARTWORK_CTA_SCAN_ARTWORK}
                       </button>
-                    </div>
+                    </div> : null}
                   </>
                 </div>
               </div>

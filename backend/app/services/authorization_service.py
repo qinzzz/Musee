@@ -13,7 +13,15 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import settings
 from app.database.connection import get_db
-from app.database.models import GuestQuotaReservation, GuestWorkspace, Session as SessionModel, SessionEvent, User, UserCredential
+from app.database.models import (
+    GuestQuotaReservation,
+    GuestWorkspace,
+    SavedArtwork,
+    Session as SessionModel,
+    SessionEvent,
+    User,
+    UserCredential,
+)
 from app.services.auth_session_service import refresh_cookie_secure, utc_now
 from app.utils.auth_utils import get_current_user
 
@@ -27,9 +35,12 @@ VIEW_PROFILE = "view_profile"
 
 GUEST_SESSION_QUOTA = "guest_sessions"
 GUEST_MESSAGE_QUOTA = "guest_messages"
+GUEST_ARTWORK_QUOTA = "guest_artworks"
 GUEST_QUOTA_LIMITS = {
     GUEST_SESSION_QUOTA: 1,
-    GUEST_MESSAGE_QUOTA: 1,
+    # The artwork-led preview is one artwork turn plus two follow-up questions.
+    GUEST_MESSAGE_QUOTA: 3,
+    GUEST_ARTWORK_QUOTA: 1,
 }
 
 ALL_CAPABILITIES = (
@@ -173,7 +184,7 @@ def create_guest_workspace(
             quota_key=GUEST_SESSION_QUOTA,
             idempotency_key=existing_session.id,
         ))
-        existing_user_event = (
+        existing_user_events = (
             db.query(SessionEvent)
             .join(SessionModel, SessionModel.id == SessionEvent.session_id)
             .filter(
@@ -181,14 +192,30 @@ def create_guest_workspace(
                 SessionEvent.role == "user",
             )
             .order_by(SessionEvent.created_at.asc(), SessionEvent.sequence_number.asc())
-            .first()
+            .limit(GUEST_QUOTA_LIMITS[GUEST_MESSAGE_QUOTA])
+            .all()
         )
-        if existing_user_event is not None:
+        for existing_user_event in existing_user_events:
             db.add(GuestQuotaReservation(
                 workspace_id=workspace.id,
                 quota_key=GUEST_MESSAGE_QUOTA,
                 idempotency_key=existing_user_event.id,
             ))
+    existing_artwork = (
+        db.query(SavedArtwork)
+        .filter(
+            SavedArtwork.user_id == user.user_id,
+            SavedArtwork.active_filter(),
+        )
+        .order_by(SavedArtwork.created_at.asc())
+        .first()
+    )
+    if existing_artwork is not None:
+        db.add(GuestQuotaReservation(
+            workspace_id=workspace.id,
+            quota_key=GUEST_ARTWORK_QUOTA,
+            idempotency_key=str(existing_artwork.id),
+        ))
     db.commit()
     db.refresh(workspace)
     set_guest_cookie(response, raw_token)
@@ -265,11 +292,36 @@ def require_session_principal(
     return require_principal_for_user(principal, session_record.user_id)
 
 
+def _guest_quota_capability(quota_key: str) -> str:
+    if quota_key == GUEST_SESSION_QUOTA:
+        return CREATE_SESSION
+    if quota_key == GUEST_ARTWORK_QUOTA:
+        return ANALYZE_ARTWORK
+    return SEND_MESSAGE
+
+
+def _raise_guest_quota_exhausted(quota_key: str, used: int) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail={
+            "error_code": "guest_quota_exhausted",
+            "message": "The guest preview has reached its limit.",
+            "capability": _guest_quota_capability(quota_key),
+            "quota": quota_key,
+            "limit": GUEST_QUOTA_LIMITS[quota_key],
+            "used": used,
+            "requires_authentication": True,
+        },
+    )
+
+
 def reserve_guest_quota(
     db: Session,
     principal: RequestPrincipal,
     quota_key: str,
     idempotency_key: str,
+    *,
+    idempotent: bool = True,
 ) -> bool:
     if principal.state != "guest":
         return False
@@ -285,7 +337,13 @@ def reserve_guest_quota(
         GuestQuotaReservation.idempotency_key == idempotency_key,
     ).first()
     if existing is not None:
-        return False
+        if idempotent:
+            return False
+        used = db.query(GuestQuotaReservation).filter(
+            GuestQuotaReservation.workspace_id == workspace.id,
+            GuestQuotaReservation.quota_key == quota_key,
+        ).count()
+        _raise_guest_quota_exhausted(quota_key, used)
 
     used = db.query(GuestQuotaReservation).filter(
         GuestQuotaReservation.workspace_id == workspace.id,
@@ -293,19 +351,7 @@ def reserve_guest_quota(
     ).count()
     limit = GUEST_QUOTA_LIMITS[quota_key]
     if used >= limit:
-        capability = CREATE_SESSION if quota_key == GUEST_SESSION_QUOTA else SEND_MESSAGE
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "error_code": "guest_quota_exhausted",
-                "message": "The guest preview has reached its limit.",
-                "capability": capability,
-                "quota": quota_key,
-                "limit": limit,
-                "used": used,
-                "requires_authentication": True,
-            },
-        )
+        _raise_guest_quota_exhausted(quota_key, used)
     db.add(GuestQuotaReservation(
         workspace_id=workspace.id,
         quota_key=quota_key,

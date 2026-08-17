@@ -5,6 +5,12 @@ from unittest.mock import patch
 
 from app.config.settings import settings
 from app.database.models import AuthSession, GuestQuotaReservation, GuestWorkspace, Session as SessionModel, SessionEvent, User
+from app.routers import artwork_ingest
+
+
+class _FakeStorage:
+    async def save(self, *_args, **_kwargs):
+        return "r2://guest-artwork.jpg"
 
 
 def _bootstrap_guest(client, db, legacy_user_id="legacy-device") -> str:
@@ -55,17 +61,37 @@ def test_guest_bootstrap_binds_legacy_workspace_with_http_only_credential(client
     assert settings.guest_cookie_name in set_cookie
 
 
-def test_guest_can_create_one_session_and_one_idempotent_message(client, db):
+def test_guest_can_create_one_session_and_three_idempotent_messages(client, db):
     user_id = _bootstrap_guest(client, db)
 
     first = _start_message(client, user_id, "guest-session-1", "guest-event-1")
     retry = _start_message(client, user_id, "guest-session-1", "guest-event-1")
+    second = client.post(
+        "/api/sessions/guest-session-1/events",
+        json=[{
+            "id": "guest-event-2",
+            "role": "user",
+            "event_type": "user_input",
+            "content": "Tell me more",
+        }],
+    )
+    third = client.post(
+        "/api/sessions/guest-session-1/events",
+        json=[{
+            "id": "guest-event-3",
+            "role": "user",
+            "event_type": "user_input",
+            "content": "One last question",
+        }],
+    )
 
     assert first.status_code == 200
     assert retry.status_code == 200
+    assert second.status_code == 200
+    assert third.status_code == 200
     assert db.query(SessionModel).filter(SessionModel.user_id == user_id).count() == 1
-    assert db.query(SessionEvent).filter(SessionEvent.session_id == "guest-session-1").count() == 1
-    assert db.query(GuestQuotaReservation).count() == 2
+    assert db.query(SessionEvent).filter(SessionEvent.session_id == "guest-session-1").count() == 3
+    assert db.query(GuestQuotaReservation).count() == 4
 
 
 def test_legacy_guest_history_seeds_preview_usage(client, db):
@@ -87,6 +113,7 @@ def test_legacy_guest_history_seeds_preview_usage(client, db):
 
     assert bootstrap.json()["quotas"]["guest_sessions"]["used"] == 1
     assert bootstrap.json()["quotas"]["guest_messages"]["used"] == 1
+    assert bootstrap.json()["quotas"]["guest_messages"]["remaining"] == 2
     assert second.status_code == 429
 
 
@@ -111,14 +138,26 @@ def test_second_guest_session_is_rejected_without_partial_writes(client, db):
     assert db.query(SessionEvent).filter(SessionEvent.id == "guest-event-2").first() is None
 
 
-def test_second_message_in_guest_session_is_rejected(client, db):
+def test_fourth_message_in_guest_session_is_rejected(client, db):
     user_id = _bootstrap_guest(client, db)
     assert _start_message(client, user_id, "guest-session-1", "guest-event-1").status_code == 200
+
+    for event_id in ("guest-event-2", "guest-event-3"):
+        response = client.post(
+            "/api/sessions/guest-session-1/events",
+            json=[{
+                "id": event_id,
+                "role": "user",
+                "event_type": "user_input",
+                "content": "A follow-up",
+            }],
+        )
+        assert response.status_code == 200
 
     response = client.post(
         "/api/sessions/guest-session-1/events",
         json=[{
-            "id": "guest-event-2",
+            "id": "guest-event-4",
             "role": "user",
             "event_type": "user_input",
             "content": "Tell me more",
@@ -127,7 +166,7 @@ def test_second_message_in_guest_session_is_rejected(client, db):
 
     assert response.status_code == 429
     assert response.json()["detail"]["capability"] == "send_message"
-    assert db.query(SessionEvent).filter(SessionEvent.id == "guest-event-2").first() is None
+    assert db.query(SessionEvent).filter(SessionEvent.id == "guest-event-4").first() is None
 
 
 def test_guest_chat_must_reference_the_reserved_message(client, db):
@@ -189,6 +228,40 @@ def test_guest_cannot_save_artwork_outside_preview_session(client, db):
         "capability": "save_artwork",
         "requires_authentication": True,
     }
+
+
+def test_guest_can_upload_only_one_artwork_in_the_preview_session(client, db, monkeypatch):
+    async def fake_process_image(_image):
+        return b"image-bytes", {}
+
+    monkeypatch.setattr(artwork_ingest, "process_image", fake_process_image)
+    monkeypatch.setattr(artwork_ingest, "get_storage_service", lambda: _FakeStorage())
+    user_id = _bootstrap_guest(client, db)
+    assert _start_message(client, user_id, "guest-session-1", "guest-event-1").status_code == 200
+
+    first = client.post(
+        "/api/artworks/upload",
+        files={"image": ("art.jpg", io.BytesIO(b"first"), "image/jpeg")},
+        data={
+            "user_id": user_id,
+            "session_id": "guest-session-1",
+            "request_id": "guest-artwork-request-1",
+        },
+    )
+    second = client.post(
+        "/api/artworks/upload",
+        files={"image": ("art.jpg", io.BytesIO(b"second"), "image/jpeg")},
+        data={
+            "user_id": user_id,
+            "session_id": "guest-session-1",
+            "request_id": "guest-artwork-request-2",
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["detail"]["quota"] == "guest_artworks"
+    assert second.json()["detail"]["capability"] == "analyze_artwork"
 
 
 def test_artwork_ingest_rejects_forged_guest_user_id(client, db):

@@ -45,6 +45,7 @@ type ShellViewportProps = {
   collectionFloatingMenuButton: React.ReactNode;
   profileRefreshKey: number;
   interactionGate?: GuestInteractionGate;
+  artworkInputLimit?: number;
   onSignIn?: () => void;
 };
 
@@ -163,6 +164,7 @@ export default function AppViewport({
     collectionFloatingMenuButton,
     profileRefreshKey,
     interactionGate,
+    artworkInputLimit,
     onSignIn,
   } = shell;
   const {
@@ -435,6 +437,7 @@ export default function AppViewport({
               }
               onAuthenticationRequired={onSessionAuthenticationRequired}
               interactionGate={interactionGate}
+              artworkInputLimit={artworkInputLimit}
               onSignIn={onSignIn}
             />
           ) : (
@@ -616,6 +619,7 @@ export default function AppViewport({
           activeItem={artworkDetailItem as unknown as GalleryItem || undefined}
           placeholder={activeSessionSummary ? SESSION_QUESTION_PLACEHOLDER : 'Start a session or capture an artwork...'}
           interactionGate={interactionGate}
+          artworkInputLimit={artworkInputLimit}
           onSignIn={onSignIn}
         />
       )}

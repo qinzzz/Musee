@@ -492,17 +492,18 @@ const App: React.FC = () => {
     openSessionSummary,
   } = sessionWorkspace;
 
-  const guestHasUserMessage = React.useMemo(
-    () => Object.values(sessionStreams).some((messages) => (
-      messages.some((message) => message.role === 'user')
-    )),
+  const guestUserMessageCount = React.useMemo(
+    () => Object.values(sessionStreams).reduce((count, messages) => (
+      count + messages.filter((message) => message.role === 'user').length
+    ), 0),
     [sessionStreams],
   );
   const guestExperience = React.useMemo(() => deriveGuestExperience({
     quotas,
     hasSession: sessionSummaries.length > 0,
-    hasUserMessage: guestHasUserMessage,
-  }), [guestHasUserMessage, quotas, sessionSummaries.length]);
+    userMessageCount: guestUserMessageCount,
+    hasArtwork: items.length > 0 || pendingSessionArtworks.length > 0,
+  }), [guestUserMessageCount, items.length, pendingSessionArtworks.length, quotas, sessionSummaries.length]);
 
   const handleLoginSuccess = async (user: any) => {
     const previousUserId = sessionUserId;
@@ -866,6 +867,7 @@ const App: React.FC = () => {
     collectionFloatingMenuButton,
     profileRefreshKey,
     interactionGate: authStatus === 'guest' ? guestExperience.interactionGate : undefined,
+    artworkInputLimit: authStatus === 'guest' ? guestExperience.artworkRemaining : undefined,
     onSignIn: () => setShowLoginModal(true),
   };
 

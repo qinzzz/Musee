@@ -1,5 +1,6 @@
 export const GUEST_SESSION_QUOTA = 'guest_sessions';
 export const GUEST_MESSAGE_QUOTA = 'guest_messages';
+export const GUEST_ARTWORK_QUOTA = 'guest_artworks';
 
 type GuestQuota = {
   limit?: number;
@@ -23,8 +24,10 @@ export type GuestExperience = {
   stage: GuestExperienceStage;
   canStartSession: boolean;
   canInteract: boolean;
+  canUploadArtwork: boolean;
   sessionRemaining: number;
   messageRemaining: number;
+  artworkRemaining: number;
   sidebarTitle: string;
   sidebarMessage: string;
   signInLabel: string;
@@ -34,11 +37,11 @@ export type GuestExperience = {
 export const GUEST_EXPERIENCE_COPY = {
   fresh: {
     title: 'Your guest preview',
-    message: 'Start one session and ask one question to try Musee.',
+    message: 'Explore one artwork, then ask two follow-up questions.',
   },
   active: {
     title: 'Your preview session',
-    message: 'This is your one guest session. Sign in whenever you want to keep exploring.',
+    message: 'Keep exploring in this session. Sign in whenever you want to continue beyond the preview.',
   },
   exhausted: {
     title: 'Your preview is complete',
@@ -58,21 +61,37 @@ function quotaRemaining(quotas: GuestQuotas, key: string): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(value, 0) : 0;
 }
 
+function quotaLimit(quotas: GuestQuotas, key: string): number {
+  const quota = quotas[key];
+  if (!quota || typeof quota !== 'object') return 0;
+  const value = (quota as GuestQuota).limit;
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(value, 0) : 0;
+}
+
 export function deriveGuestExperience({
   quotas,
   hasSession,
-  hasUserMessage,
+  userMessageCount,
+  hasArtwork,
 }: {
   quotas: GuestQuotas;
   hasSession: boolean;
-  hasUserMessage: boolean;
+  userMessageCount: number;
+  hasArtwork: boolean;
 }): GuestExperience {
   const serverSessionRemaining = quotaRemaining(quotas, GUEST_SESSION_QUOTA);
   const serverMessageRemaining = quotaRemaining(quotas, GUEST_MESSAGE_QUOTA);
+  const serverArtworkRemaining = quotaRemaining(quotas, GUEST_ARTWORK_QUOTA);
   const sessionRemaining = hasSession ? 0 : serverSessionRemaining;
-  const messageRemaining = hasUserMessage ? 0 : serverMessageRemaining;
+  const locallyObservedMessageRemaining = Math.max(
+    quotaLimit(quotas, GUEST_MESSAGE_QUOTA) - userMessageCount,
+    0,
+  );
+  const messageRemaining = Math.min(serverMessageRemaining, locallyObservedMessageRemaining);
+  const artworkRemaining = hasArtwork ? 0 : serverArtworkRemaining;
   const canStartSession = !hasSession && sessionRemaining > 0 && messageRemaining > 0;
   const canInteract = messageRemaining > 0 && (hasSession || sessionRemaining > 0);
+  const canUploadArtwork = canInteract && artworkRemaining > 0;
   const stage: GuestExperienceStage = !canInteract
     ? 'exhausted'
     : hasSession
@@ -84,8 +103,10 @@ export function deriveGuestExperience({
     stage,
     canStartSession,
     canInteract,
+    canUploadArtwork,
     sessionRemaining,
     messageRemaining,
+    artworkRemaining,
     sidebarTitle: sidebarCopy.title,
     sidebarMessage: sidebarCopy.message,
     signInLabel: stage === 'exhausted' ? 'Sign in to continue' : 'Sign in',

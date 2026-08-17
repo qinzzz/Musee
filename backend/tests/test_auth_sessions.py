@@ -139,7 +139,8 @@ def test_session_without_access_token_is_guest_even_if_refresh_cookie_exists(cli
     assert body["principal"]["user_id"].startswith("guest_")
     assert body["capabilities"]["create_session"] is True
     assert body["capabilities"]["search_collection"] is False
-    assert body["quotas"]["guest_messages"]["remaining"] == 1
+    assert body["quotas"]["guest_messages"]["remaining"] == 3
+    assert body["quotas"]["guest_artworks"]["remaining"] == 1
     assert body["plan"] == "guest"
 
 

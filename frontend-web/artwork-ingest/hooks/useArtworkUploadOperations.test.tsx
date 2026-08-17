@@ -268,6 +268,7 @@ describe('useArtworkUploadOperations', () => {
       -122.4,
       'upload',
       0,
+      undefined,
     );
     expect(mockAnalyzeArtworkFromExisting).toHaveBeenCalledWith('saved-1', {
       labelFile: null,

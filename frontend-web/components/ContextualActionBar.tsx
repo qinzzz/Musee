@@ -65,6 +65,7 @@ interface Props {
   activeItem?: GalleryItem;
   placeholder?: string;
   interactionGate?: GuestInteractionGate;
+  artworkInputLimit?: number;
   onSignIn?: () => void;
 }
 
@@ -89,6 +90,7 @@ const ContextualActionBar: React.FC<Props> = ({
   activeItem,
   placeholder,
   interactionGate,
+  artworkInputLimit,
   onSignIn,
 }) => {
   const [text, setText] = useState('');
@@ -98,6 +100,8 @@ const ContextualActionBar: React.FC<Props> = ({
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const sessionBusy = Boolean(isBusy || isAnalyzing || isInquiryDisabled || isSubmittingStagedBatch);
+  const canAddArtwork = artworkInputLimit === undefined || artworkInputLimit > 0;
+  const allowMultipleArtworkUploads = artworkInputLimit === undefined || artworkInputLimit > 1;
   const isComposerExpanded = isComposerFocused;
 
   const resizeComposerTextarea = React.useCallback(() => {
@@ -152,13 +156,13 @@ const ContextualActionBar: React.FC<Props> = ({
       label: ARTWORK_CTA_ADD_FROM_COLLECTION,
       icon: <AddFromCollectionIcon size={18} />,
       onSelect: onOpenLibraryPicker,
-      disabled: sessionBusy,
+      disabled: sessionBusy || !canAddArtwork,
     },
     {
       label: ARTWORK_CTA_UPLOAD_PHOTOS,
       icon: <UploadPhotosIcon size={18} />,
       onSelect: () => galleryInputRef.current?.click(),
-      disabled: sessionBusy,
+      disabled: sessionBusy || !canAddArtwork,
     },
   ];
 
@@ -191,10 +195,10 @@ const ContextualActionBar: React.FC<Props> = ({
         ref={galleryInputRef}
         type="file"
         accept={SUPPORTED_UPLOAD_ACCEPT}
-        multiple
+        multiple={allowMultipleArtworkUploads}
         className="hidden"
         onChange={(e) => onUpload(e, 'gallery')}
-        disabled={sessionBusy}
+        disabled={sessionBusy || !canAddArtwork}
       />
 
       <div className="absolute bottom-0 left-0 right-0 z-[20] px-3 sm:px-6 pb-3 sm:pb-5 bg-gradient-to-t from-[var(--color-bg-primary)] via-[color:rgba(255,255,255,0.95)] to-transparent pt-8" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}>
@@ -290,7 +294,7 @@ const ContextualActionBar: React.FC<Props> = ({
             )}
 
             <div className={`flex gap-2 ${isComposerExpanded ? 'flex-wrap items-end' : 'items-center'}`}>
-              <button
+              {canAddArtwork ? <button
                 type="button"
                 onClick={onOpenSessionCapture}
                 disabled={sessionBusy}
@@ -299,8 +303,8 @@ const ContextualActionBar: React.FC<Props> = ({
                 className={`w-10 h-10 shrink-0 rounded-full text-neutral-700 flex items-center justify-center transition-colors hover:bg-neutral-100 disabled:opacity-40 ${isComposerExpanded ? 'order-2' : ''}`}
               >
                 <ScanArtworkIcon size={20} />
-              </button>
-              <div className={isComposerExpanded ? 'order-2' : ''}>
+              </button> : null}
+              {canAddArtwork ? <div className={isComposerExpanded ? 'order-2' : ''}>
               <DropdownMenu
                 open={isAddMenuOpen}
                 onOpenChange={(open) => setIsAddMenuOpen(open && !sessionBusy)}
@@ -345,7 +349,7 @@ const ContextualActionBar: React.FC<Props> = ({
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              </div>
+              </div> : null}
               <textarea
                 ref={composerTextareaRef}
                 value={text}

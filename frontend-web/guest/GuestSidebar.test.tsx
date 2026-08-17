@@ -7,10 +7,12 @@ import { deriveGuestExperience } from './guestExperience';
 const experience = deriveGuestExperience({
   quotas: {
     guest_sessions: { remaining: 0 },
-    guest_messages: { remaining: 0 },
+    guest_messages: { limit: 3, remaining: 0 },
+    guest_artworks: { limit: 1, remaining: 0 },
   },
   hasSession: true,
-  hasUserMessage: true,
+  userMessageCount: 3,
+  hasArtwork: true,
 });
 
 describe('GuestSidebar', () => {

@@ -16,6 +16,7 @@ export type ArtworkUploadFailureCode =
   | 'request_timeout'
   | 'server_error'
   | 'quota_exceeded'
+  | 'guest_quota_exhausted'
   | 'validation_error';
 
 const SUPPORTED_IMAGE_EXTENSIONS = new Set([
