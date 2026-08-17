@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
-import { getOrCreateUserId } from './api/auth';
+import { consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
 import { DEV_FIXED_USER_ID, DEV_FREE_TIER_USER_ID, USER_ID_KEY } from './api/core';
 import { useAuth } from './auth/AuthProvider';
 import {
@@ -205,6 +205,12 @@ const App: React.FC = () => {
 
     sonnerToast.info(message, options);
   };
+
+  useEffect(() => {
+    const welcome = consumePostAuthWelcome();
+    if (!welcome) return;
+    showToast(welcome === 'new' ? 'Welcome to Musee.' : 'Welcome back.', 'success');
+  }, []);
 
   const {
     items,
@@ -511,6 +517,7 @@ const App: React.FC = () => {
       await completeLogin(user);
       await transitionUserQueryCache(queryClient, previousUserId, user.user_id);
       setShowLoginModal(false);
+      showToast(user?.is_new_user ? 'Welcome to Musee.' : 'Welcome back.', 'success');
     } catch (error) {
       console.error('Failed to complete sign-in:', error);
       setShowLoginModal(true);

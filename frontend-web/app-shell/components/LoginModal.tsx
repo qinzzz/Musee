@@ -70,7 +70,10 @@ const LoginModal: React.FC<Props> = ({
         setNotice('Almost there — check your inbox and click the verification link to finish signing up.');
       } else {
         const data = await loginWithEmail(email, password);
-        onLoginSuccess(data.user);
+        onLoginSuccess({
+          ...data.user,
+          is_new_user: Boolean(data.is_new_user),
+        });
       }
     } catch (err) {
       if (err instanceof EmailAuthError && err.code === 'email_unverified') {

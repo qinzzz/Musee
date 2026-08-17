@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { EmailAuthError, resetPassword, verifyEmailToken } from '../../api/auth';
+import {
+  EmailAuthError,
+  rememberPostAuthWelcome,
+  resetPassword,
+  verifyEmailToken,
+} from '../../api/auth';
 
 // Standalone pages for the emailed links (/verify-email, /reset-password).
 // Rendered instead of the app shell (see index.tsx), so clicking a link in a
@@ -38,7 +43,10 @@ export const VerifyEmailPage: React.FC = () => {
 
   useEffect(() => {
     verifyEmailToken(tokenFromLocation())
-      .then(() => goHome())
+      .then((data) => {
+        rememberPostAuthWelcome(Boolean(data.is_new_user));
+        goHome();
+      })
       .catch((err) => {
         setMessage(err instanceof EmailAuthError ? err.message : 'Something went wrong. Please try again.');
         setState('error');

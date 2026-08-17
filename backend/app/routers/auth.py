@@ -54,12 +54,14 @@ async def google_login(
 
     # 2. Find or create user
     user = db.query(User).filter(User.google_id == google_id).first()
+    is_new_user = user is None
     
     if not user and email:
         # Link by email: Google has verified this address, so whoever holds
         # the Google account owns it.
         user = db.query(User).filter(User.email == email).first()
         if user:
+            is_new_user = not user.email_verified
             user.google_id = google_id
             if not user.email_verified:
                 # The row was unclaimed territory: a password signup that never
@@ -102,6 +104,7 @@ async def google_login(
 
     result = issue_login_session(db, response, user)
     result["guest_promoted"] = guest_promoted
+    result["is_new_user"] = is_new_user
     return result
 
 

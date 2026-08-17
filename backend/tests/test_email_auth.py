@@ -70,10 +70,12 @@ class TestSignupVerifyLogin:
         assert body["user"]["email"] == "ada@example.com"
         assert body["user"]["email_verified"] is True
         assert body["user"]["tier"] == "unlimited"
+        assert body["is_new_user"] is True
 
         # Password login now works; email is case/whitespace-insensitive.
         r = client.post("/api/auth/login", json={"email": "  ADA@Example.com ", "password": "correct-horse"})
         assert r.status_code == 200
+        assert r.json()["is_new_user"] is False
 
     def test_wrong_password_and_unknown_email_are_indistinguishable(self, client, sent_emails):
         _signup(client)
