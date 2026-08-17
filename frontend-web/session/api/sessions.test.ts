@@ -81,4 +81,32 @@ describe('sessions api', () => {
       payload: { status: 'completed' },
     }])).rejects.toThrow('API error (500): not saved');
   });
+
+  it('preserves structured guest quota errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: {
+        error_code: 'guest_quota_exhausted',
+        message: 'The guest preview has reached its limit.',
+        requires_authentication: true,
+      },
+    }), { status: 429 })));
+
+    const { appendSessionEvents, SessionPolicyError } = await import('./sessions');
+
+    try {
+      await appendSessionEvents('session-1', [{
+        id: 'evt-2',
+        role: 'user',
+        event_type: 'user_input',
+        content: 'Another question',
+      }]);
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(SessionPolicyError);
+      expect(error).toMatchObject({
+        code: 'guest_quota_exhausted',
+        requiresAuthentication: true,
+      });
+    }
+  });
 });

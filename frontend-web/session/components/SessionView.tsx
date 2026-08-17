@@ -98,12 +98,33 @@ type SessionViewProps = {
   onRetrySessionHistory: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>, mode: 'gallery' | 'camera') => void;
   onOpenSessionArtwork: (item: GalleryItem) => void;
+  onAuthenticationRequired: (retry: {
+    sessionId: string;
+    responseId: string;
+    message: string;
+    parentEventId?: string;
+    mode?: 'response_only' | 'append_message' | 'start_session';
+    sessionTitle?: string;
+  }) => void;
 };
 
 const SessionCommentaryBlock: React.FC<{
   entry: Extract<SessionRenderBlock, { type: 'commentary' }>;
   sessionProcessingState: SessionProcessingState;
-}> = ({ entry, sessionProcessingState }) => {
+  sessionId: string;
+  onAuthenticationRequired: SessionViewProps['onAuthenticationRequired'];
+}> = ({ entry, sessionProcessingState, sessionId, onAuthenticationRequired }) => {
+  const retryMessage = entry.status === 'auth_required' && typeof entry.message.payload?.retry_message === 'string'
+    ? entry.message.payload.retry_message
+    : '';
+  const retryMode = entry.message.payload?.retry_mode;
+  const normalizedRetryMode = retryMode === 'append_message' || retryMode === 'start_session' || retryMode === 'response_only'
+    ? retryMode
+    : undefined;
+  const sessionTitle = typeof entry.message.payload?.session_title === 'string'
+    ? entry.message.payload.session_title
+    : undefined;
+  const isGuestLimit = entry.message.payload?.error_code === 'guest_quota_exhausted';
   const matchingState = 'responseId' in sessionProcessingState
     && sessionProcessingState.responseId === entry.id
     ? sessionProcessingState
@@ -129,6 +150,22 @@ const SessionCommentaryBlock: React.FC<{
       ) : null}
       {effectiveState?.kind === 'failed' ? (
         <SessionProcessingIndicator state={effectiveState} />
+      ) : null}
+      {retryMessage ? (
+        <button
+          type="button"
+          onClick={() => onAuthenticationRequired({
+            sessionId,
+            responseId: entry.id,
+            message: retryMessage,
+            parentEventId: entry.message.triggerEventId,
+            mode: normalizedRetryMode,
+            sessionTitle,
+          })}
+          className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50"
+        >
+          {isGuestLimit ? 'Sign in to continue' : 'Sign in and retry'}
+        </button>
       ) : null}
     </div>
   );
@@ -362,6 +399,7 @@ export default function SessionView({
   onRetrySessionHistory,
   onFileUpload,
   onOpenSessionArtwork,
+  onAuthenticationRequired,
 }: SessionViewProps) {
   const [sessionDetailsOpen, setSessionDetailsOpen] = React.useState(false);
   const [showSessionHistoryLoader, setShowSessionHistoryLoader] = React.useState(false);
@@ -763,6 +801,8 @@ export default function SessionView({
                       key={entry.id}
                       entry={entry}
                       sessionProcessingState={sessionProcessingState}
+                      sessionId={activeSessionSummary.id}
+                      onAuthenticationRequired={onAuthenticationRequired}
                     />
                   ) : entry.type === 'status' ? (
                     <SessionThreadStatus

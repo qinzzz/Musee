@@ -6,9 +6,27 @@ import logging
 from app.database.connection import get_db
 from app.database.models import Collection, SavedArtwork, User
 from app.models.collection import CollectionCreate, CollectionUpdate
+from app.services.authorization_service import (
+    SAVE_ARTWORK,
+    SEARCH_COLLECTION,
+    RequestPrincipal,
+    get_request_principal,
+    require_capability,
+    require_principal_for_user,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _require_collection_capability(
+    principal: RequestPrincipal | None,
+    user_id: str,
+    capability: str,
+) -> RequestPrincipal:
+    resolved = require_principal_for_user(principal, user_id)
+    require_capability(resolved, capability)
+    return resolved
 
 
 def _collection_with_artwork_ids_query(db: Session):
@@ -67,8 +85,13 @@ def _get_owned_artworks(db: Session, user_id: str, artwork_ids: List[str]) -> Li
 
 
 @router.post("/collections")
-async def create_collection(request: CollectionCreate, db: Session = Depends(get_db)):
+async def create_collection(
+    request: CollectionCreate,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
+):
     """Create a new collection"""
+    _require_collection_capability(principal, request.user_id, SAVE_ARTWORK)
     try:
         # Verify user exists
         user = db.query(User).filter(User.user_id == request.user_id).first()
@@ -100,8 +123,13 @@ async def create_collection(request: CollectionCreate, db: Session = Depends(get
 
 
 @router.get("/collections")
-def get_collections(user_id: str, db: Session = Depends(get_db)):
+def get_collections(
+    user_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
+):
     """Get all collections for a user"""
+    _require_collection_capability(principal, user_id, SEARCH_COLLECTION)
     try:
         collections = (
             _collection_with_artwork_ids_query(db)
@@ -118,12 +146,17 @@ def get_collections(user_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/collections/{collection_id}")
-async def get_collection(collection_id: str, db: Session = Depends(get_db)):
+async def get_collection(
+    collection_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
+):
     """Get a specific collection with artworks"""
     try:
         collection = _collection_with_artwork_ids_query(db).filter(Collection.id == collection_id).first()
         if not collection:
             raise HTTPException(status_code=404, detail="Collection not found")
+        _require_collection_capability(principal, collection.user_id, SEARCH_COLLECTION)
         return _serialize_collection(collection)
     except HTTPException:
         raise
@@ -138,8 +171,10 @@ async def update_collection(
     request: CollectionUpdate,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
 ):
     """Update collection details or artworks"""
+    _require_collection_capability(principal, user_id, SAVE_ARTWORK)
     try:
         collection = _get_owned_collection(db, collection_id, user_id)
 
@@ -167,8 +202,10 @@ async def delete_collection(
     collection_id: str,
     user_id: str = Query(...),
     db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
 ):
     """Delete a collection"""
+    _require_collection_capability(principal, user_id, SAVE_ARTWORK)
     try:
         collection = _get_owned_collection(db, collection_id, user_id)
         

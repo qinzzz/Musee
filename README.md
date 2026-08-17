@@ -75,6 +75,8 @@ graph LR
 - **Universal AI Service**: A provider-agnostic bridge that supports OpenAI, Anthropic, and Google Gemini.
 - **Streaming SSE**: Real-time analysis streaming for instant feedback.
 - **Structured History**: Every conversation and analysis is stored and indexed via AI-generated tags for easy discovery.
+- **Renewable Web Sessions**: The web client keeps 15-minute access tokens in memory and renews them through rotating, HttpOnly refresh cookies backed by revocable database sessions.
+- **Credential-bound Guest Conversion**: Guest workspaces and preview quotas are proven by an HttpOnly cookie; successful authentication promotes that workspace transactionally and can resume the blocked guest action without trusting client-supplied user IDs.
 - **Domain-first Web Client**: The web app is being reorganized around layers and feature domains such as `app-shell/`, `artist/`, `artwork/`, `boards/`, `session/`, `artwork-ingest/`, and `capture/`, so navigation, artist state, artwork state, board logic, session logic, ingest orchestration, and camera UX each live behind clearer boundaries instead of being scattered across flat folders.
 
 ## Detailed Documentation

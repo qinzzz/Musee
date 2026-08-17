@@ -1,10 +1,16 @@
 from datetime import UTC, datetime
 
+import pytest
+from fastapi import Depends, Request
 from fastapi.testclient import TestClient
+from jose import jwt
 
+from app.config.settings import settings
+from app.database.connection import get_db
 from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
 from app.main import app
 from app.routers import sessions as sessions_router
+from app.services.authorization_service import RequestPrincipal, get_request_principal
 from app.utils.auth_utils import create_access_token
 from tests.conftest import TestingSessionLocal
 
@@ -12,6 +18,36 @@ from tests.conftest import TestingSessionLocal
 def _auth_headers(user_id: str) -> dict[str, str]:
     token = create_access_token({"sub": user_id})
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(autouse=True)
+def authenticated_session_route_context():
+    """Keep domain-route tests authenticated; guest policy has focused tests."""
+    async def _resolve_test_principal(request: Request, db=Depends(get_db)):
+        user_id = request.query_params.get("user_id")
+        authorization = request.headers.get("authorization", "")
+        if authorization.startswith("Bearer "):
+            claims = jwt.decode(
+                authorization.removeprefix("Bearer "),
+                settings.secret_key,
+                algorithms=[settings.algorithm],
+            )
+            user_id = claims["sub"]
+        if not user_id:
+            session_id = request.path_params.get("session_id")
+            session_record = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            user_id = session_record.user_id if session_record else "session-route-test-user"
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if user is None:
+            user = User(user_id=user_id, device_id=user_id)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return RequestPrincipal(state="authenticated", user_id=user.user_id, user=user)
+
+    app.dependency_overrides[get_request_principal] = _resolve_test_principal
+    yield
+    app.dependency_overrides.pop(get_request_principal, None)
 
 
 def test_list_sessions_returns_user_sessions(client, db):
@@ -60,7 +96,7 @@ def test_get_session_messages_rejects_authenticated_non_owner(client, db):
     response = client.get("/api/sessions/visit-1/messages", headers=_auth_headers("other"))
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "Not authorized to access this session"
+    assert response.json()["detail"]["error_code"] == "principal_mismatch"
 
 
 def test_session_events_include_deleted_artwork_display_metadata(client, db):
@@ -116,7 +152,7 @@ def test_append_session_messages_rejects_authenticated_non_owner(client, db):
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "Not authorized to access this session"
+    assert response.json()["detail"]["error_code"] == "principal_mismatch"
 
 
 def test_start_session_with_message_creates_session_and_first_message(client, db):

@@ -1,6 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from typing import Optional, Dict, Any
+import uuid
 from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from fastapi import HTTPException, status, Depends
@@ -25,7 +27,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
     
-    to_encode.update({"exp": expire})
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.now(UTC),
+        "jti": str(uuid.uuid4()),
+    })
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
 
@@ -77,11 +83,32 @@ async def get_current_user(
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         user_id: str = payload.get("sub")
         if user_id is None:
-            return None
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error_code": "invalid_token", "message": "Your sign-in is no longer valid. Please sign in again."},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error_code": "token_expired", "message": "Your session expired. Please sign in again."},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except JWTError:
-        return None
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error_code": "invalid_token", "message": "Your sign-in is no longer valid. Please sign in again."},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    return db.query(User).filter(User.user_id == user_id).first()
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error_code": "invalid_token", "message": "Your account could not be found. Please sign in again."},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
 
 
 def require_same_user(current_user: Optional[User], user_id: Optional[str]) -> None:
