@@ -113,5 +113,6 @@ describe('AuthProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Complete login' }));
     expect(screen.getByTestId('user').textContent).toBe('none');
     await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('u2'));
+    expect(bootstrapAuthSession).toHaveBeenLastCalledWith({ requireAuthenticatedSession: true });
   });
 });
