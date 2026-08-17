@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import GoogleLogin from '../../components/GoogleLogin';
+import type { AuthDiagnosticError } from '../../api/auth';
 import {
   EmailAuthError,
   loginWithEmail,
@@ -11,7 +12,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onLoginSuccess: (user: any) => void;
-  onLoginError?: () => void;
+  onLoginError?: (error: AuthDiagnosticError) => void;
 };
 
 type Mode = 'login' | 'signup' | 'forgot';

@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     capabilities,
     quotas,
     completeLogin: async (user) => {
-      const snapshot = await bootstrapAuthSession();
+      const snapshot = await bootstrapAuthSession({ requireAuthenticatedSession: true });
       if (
         snapshot.state !== 'authenticated'
         || !snapshot.principal?.user_id

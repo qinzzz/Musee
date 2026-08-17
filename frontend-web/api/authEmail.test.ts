@@ -91,4 +91,31 @@ describe('email auth api', () => {
       expect((err as Error).message).toBe('Check your inbox.');
     }
   });
+
+  it('classifies a rejected Google credential separately from an interrupted Google flow', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(
+      { detail: 'Could not validate Google token' },
+      401,
+    )));
+
+    const { AuthDiagnosticError, loginWithGoogle } = await import('./auth');
+
+    await expect(loginWithGoogle('invalid-google-token')).rejects.toMatchObject({
+      name: AuthDiagnosticError.name,
+      code: 'google_credential_rejected',
+      status: 401,
+      message: 'Musee’s server could not verify the Google credential.',
+    });
+  });
+
+  it('identifies a missing refresh cookie while verifying a completed login', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, 401)));
+
+    const { bootstrapAuthSession } = await import('./auth');
+
+    await expect(bootstrapAuthSession({ requireAuthenticatedSession: true })).rejects.toMatchObject({
+      code: 'session_cookie_blocked',
+      message: 'Your browser blocked the Musee session cookie.',
+    });
+  });
 });

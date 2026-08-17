@@ -1,16 +1,16 @@
 import React from 'react';
 import { GoogleLogin as GoogleOAuthButton, CredentialResponse } from '@react-oauth/google';
-import { loginWithGoogle } from '../api/auth';
+import { AuthDiagnosticError, loginWithGoogle } from '../api/auth';
 
 interface GoogleLoginProps {
     onLoginSuccess: (user: any) => void;
-    onLoginError: (error: string) => void;
+    onLoginError: (error: AuthDiagnosticError) => void;
 }
 
 const GoogleLogin: React.FC<GoogleLoginProps> = ({ onLoginSuccess, onLoginError }) => {
     const handleSuccess = async (response: CredentialResponse) => {
         if (!response.credential) {
-            onLoginError('No credential received from Google');
+            onLoginError(new AuthDiagnosticError('google_interrupted'));
             return;
         }
 
@@ -22,12 +22,14 @@ const GoogleLogin: React.FC<GoogleLoginProps> = ({ onLoginSuccess, onLoginError 
             });
         } catch (error) {
             console.error('Google login error:', error);
-            onLoginError(error instanceof Error ? error.message : 'Login failed');
+            onLoginError(error instanceof AuthDiagnosticError
+                ? error
+                : new AuthDiagnosticError('google_credential_rejected', { detail: error }));
         }
     };
 
     const handleError = () => {
-        onLoginError('Google Login failed');
+        onLoginError(new AuthDiagnosticError('google_interrupted'));
     };
 
     return (
