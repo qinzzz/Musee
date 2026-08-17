@@ -13,6 +13,7 @@ describe('email auth api', () => {
     vi.resetModules();
     localStorage.clear();
     sessionStorage.clear();
+    window.history.replaceState({}, '', '/');
   });
 
   it('signup relies on the credential-bound guest cookie instead of a device id', async () => {
@@ -74,6 +75,15 @@ describe('email auth api', () => {
 
     expect(consumePostAuthWelcome()).toBe('new');
     expect(consumePostAuthWelcome()).toBeNull();
+  });
+
+  it('consumes and removes a successful Google redirect result from the URL', async () => {
+    window.history.replaceState({}, '', '/?google_auth=success&welcome=new');
+    const { consumeGoogleRedirectResult } = await import('./auth');
+
+    expect(consumeGoogleRedirectResult()).toEqual({ status: 'success', welcome: 'new' });
+    expect(window.location.search).toBe('');
+    expect(consumeGoogleRedirectResult()).toBeNull();
   });
 
   it('surfaces the structured error code and message', async () => {

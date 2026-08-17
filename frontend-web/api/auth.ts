@@ -11,6 +11,9 @@ import {
 
 const POST_AUTH_WELCOME_KEY = 'musee_post_auth_welcome';
 export type PostAuthWelcome = 'new' | 'returning';
+export type GoogleRedirectResult =
+  | { status: 'success'; welcome: PostAuthWelcome }
+  | { status: 'error'; error: string };
 
 export const AUTH_DIAGNOSTIC_MESSAGES = {
   google_interrupted: 'Google sign-in was interrupted.',
@@ -42,6 +45,31 @@ export function consumePostAuthWelcome(): PostAuthWelcome | null {
   const value = sessionStorage.getItem(POST_AUTH_WELCOME_KEY);
   sessionStorage.removeItem(POST_AUTH_WELCOME_KEY);
   return value === 'new' || value === 'returning' ? value : null;
+}
+
+export function consumeGoogleRedirectResult(): GoogleRedirectResult | null {
+  const url = new URL(window.location.href);
+  const status = url.searchParams.get('google_auth');
+  if (status !== 'success' && status !== 'error') return null;
+
+  const welcome = url.searchParams.get('welcome');
+  const error = url.searchParams.get('error') || 'credential_rejected';
+  url.searchParams.delete('google_auth');
+  url.searchParams.delete('welcome');
+  url.searchParams.delete('error');
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+
+  if (status === 'success') {
+    return {
+      status,
+      welcome: welcome === 'new' ? 'new' : 'returning',
+    };
+  }
+  return { status, error };
 }
 
 // Persist a login response (google and email flows share the same shape).

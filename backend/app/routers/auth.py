@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
+from urllib.parse import urlencode
+import hmac
 import logging
 
 from app.config.plans import NEW_REGISTRATION_TIER
@@ -33,29 +36,37 @@ logger = logging.getLogger(__name__)
 class GoogleLoginRequest(BaseModel):
     id_token: str
 
-@router.post("/auth/google")
-async def google_login(
-    request: GoogleLoginRequest,
+
+GOOGLE_REDIRECT_SUCCESS = "success"
+GOOGLE_REDIRECT_CREDENTIAL_ERROR = "credential_rejected"
+GOOGLE_REDIRECT_CSRF_ERROR = "csrf_rejected"
+
+
+def _google_redirect_url(*, welcome: Optional[str] = None, error: Optional[str] = None) -> str:
+    query: dict[str, str] = {"google_auth": GOOGLE_REDIRECT_SUCCESS if not error else "error"}
+    if welcome:
+        query["welcome"] = welcome
+    if error:
+        query["error"] = error
+    return f"{settings.app_base_url.rstrip('/')}/?{urlencode(query)}"
+
+
+def _complete_google_login(
+    id_token: str,
     response: Response,
-    http_request: Request,
-    guest_token: Optional[str] = Cookie(default=None, alias=settings.guest_cookie_name),
-    db: Session = Depends(get_db)
-):
-    """
-    Login with Google and promote only a cookie-authenticated guest workspace.
-    """
-    validate_auth_origin(http_request)
-    # 1. Verify Google Token
-    idinfo = verify_google_token(request.id_token)
+    guest_token: Optional[str],
+    db: Session,
+) -> dict:
+    """Verify a Google credential and create Musee's normal login session."""
+    idinfo = verify_google_token(id_token)
     google_id = idinfo['sub']
     email = idinfo.get('email')
     full_name = idinfo.get('name')
     picture = idinfo.get('picture')
 
-    # 2. Find or create user
     user = db.query(User).filter(User.google_id == google_id).first()
     is_new_user = user is None
-    
+
     if not user and email:
         # Link by email: Google has verified this address, so whoever holds
         # the Google account owns it.
@@ -78,26 +89,23 @@ async def google_login(
             logger.info(f"Linked existing user {user.user_id} by email to google_id {google_id}")
 
     if not user:
-        # Create new user
         user = User(
             google_id=google_id,
             email=email,
-            email_verified=True,  # Google verified it
+            email_verified=True,
             full_name=full_name,
             profile_picture_url=picture,
             username=email.split('@')[0] if email else None,
             tier=NEW_REGISTRATION_TIER,
         )
         db.add(user)
-        db.flush() # Get user_id before commit
+        db.flush()
         logger.info(f"Created new Google user: {user.user_id}")
     else:
-        # Update profile info if changed
         user.full_name = full_name
         user.profile_picture_url = picture
         logger.info(f"Logging in existing Google user: {user.user_id}")
 
-    # 3. Promote only the guest workspace proven by this browser's cookie.
     guest_promoted = promote_guest_workspace(db, guest_token, user)
     if guest_token:
         clear_guest_cookie(response)
@@ -106,6 +114,60 @@ async def google_login(
     result["guest_promoted"] = guest_promoted
     result["is_new_user"] = is_new_user
     return result
+
+@router.post("/auth/google")
+async def google_login(
+    request: GoogleLoginRequest,
+    response: Response,
+    http_request: Request,
+    guest_token: Optional[str] = Cookie(default=None, alias=settings.guest_cookie_name),
+    db: Session = Depends(get_db)
+):
+    """
+    Login with Google and promote only a cookie-authenticated guest workspace.
+    """
+    validate_auth_origin(http_request)
+    return _complete_google_login(request.id_token, response, guest_token, db)
+
+
+@router.post("/auth/google/redirect")
+async def google_login_redirect(
+    credential: str = Form(...),
+    csrf_form_token: str = Form(..., alias="g_csrf_token"),
+    csrf_cookie_token: Optional[str] = Cookie(default=None, alias="g_csrf_token"),
+    guest_token: Optional[str] = Cookie(default=None, alias=settings.guest_cookie_name),
+    db: Session = Depends(get_db),
+):
+    """Complete Google Identity Services' full-page mobile redirect flow."""
+    if (
+        not csrf_cookie_token
+        or not csrf_form_token
+        or not hmac.compare_digest(csrf_cookie_token, csrf_form_token)
+    ):
+        logger.warning("Rejected Google redirect because its CSRF tokens did not match")
+        return RedirectResponse(
+            _google_redirect_url(error=GOOGLE_REDIRECT_CSRF_ERROR),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    redirect_response = RedirectResponse(
+        _google_redirect_url(),
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+    try:
+        result = _complete_google_login(credential, redirect_response, guest_token, db)
+    except HTTPException as exc:
+        db.rollback()
+        logger.warning("Google redirect credential verification failed with status %s", exc.status_code)
+        return RedirectResponse(
+            _google_redirect_url(error=GOOGLE_REDIRECT_CREDENTIAL_ERROR),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    redirect_response.headers["location"] = _google_redirect_url(
+        welcome="new" if result["is_new_user"] else "returning",
+    )
+    return redirect_response
 
 
 @router.post("/auth/refresh")

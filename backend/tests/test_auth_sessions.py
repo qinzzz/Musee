@@ -3,6 +3,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+from fastapi import HTTPException
 from jose import jwt
 
 from app.config.settings import settings
@@ -51,6 +52,70 @@ def test_login_creates_hashed_server_session_and_short_access_token(client, db):
     returning = _google_login(client)
     assert returning.status_code == 200
     assert returning.json()["is_new_user"] is False
+
+
+def test_mobile_google_redirect_verifies_csrf_and_creates_session(client, db):
+    client.cookies.set("g_csrf_token", "google-csrf")
+    with (
+        patch.object(settings, "app_base_url", "https://museelab.com"),
+        patch("app.routers.auth.verify_google_token") as mock_verify,
+    ):
+        mock_verify.return_value = {
+            "sub": "mobile-google-user",
+            "email": "mobile@example.com",
+            "name": "Mobile User",
+            "picture": None,
+        }
+        response = client.post(
+            "/api/auth/google/redirect",
+            data={"credential": "fake", "g_csrf_token": "google-csrf"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "https://museelab.com/?google_auth=success&welcome=new"
+    assert settings.refresh_cookie_name in client.cookies
+    assert db.query(AuthSession).count() == 1
+
+
+def test_mobile_google_redirect_rejects_csrf_mismatch(client, db):
+    client.cookies.set("g_csrf_token", "cookie-value")
+    with (
+        patch.object(settings, "app_base_url", "https://museelab.com"),
+        patch("app.routers.auth.verify_google_token") as mock_verify,
+    ):
+        response = client.post(
+            "/api/auth/google/redirect",
+            data={"credential": "fake", "g_csrf_token": "form-value"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "https://museelab.com/?google_auth=error&error=csrf_rejected"
+    )
+    mock_verify.assert_not_called()
+    assert db.query(AuthSession).count() == 0
+
+
+def test_mobile_google_redirect_returns_safe_error_after_invalid_credential(client, db):
+    client.cookies.set("g_csrf_token", "google-csrf")
+    with (
+        patch.object(settings, "app_base_url", "https://museelab.com"),
+        patch("app.routers.auth.verify_google_token") as mock_verify,
+    ):
+        mock_verify.side_effect = HTTPException(status_code=401)
+        response = client.post(
+            "/api/auth/google/redirect",
+            data={"credential": "bad", "g_csrf_token": "google-csrf"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "https://museelab.com/?google_auth=error&error=credential_rejected"
+    )
+    assert db.query(AuthSession).count() == 0
 
 
 def test_refresh_rotates_cookie_and_restores_authenticated_session(client, db):

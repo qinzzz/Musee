@@ -3,7 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
-import { AuthDiagnosticError, consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
+import {
+  AuthDiagnosticError,
+  consumeGoogleRedirectResult,
+  consumePostAuthWelcome,
+  getOrCreateUserId,
+} from './api/auth';
 import { DEV_FIXED_USER_ID, DEV_FREE_TIER_USER_ID, USER_ID_KEY } from './api/core';
 import { useAuth } from './auth/AuthProvider';
 import {
@@ -207,6 +212,23 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    const redirectResult = consumeGoogleRedirectResult();
+    if (redirectResult?.status === 'error') {
+      showToast(
+        redirectResult.error === 'csrf_rejected'
+          ? 'Google sign-in could not be validated. Please try again.'
+          : 'Musee’s server could not verify the Google credential.',
+        'info',
+      );
+      return;
+    }
+    if (redirectResult?.status === 'success') {
+      showToast(
+        redirectResult.welcome === 'new' ? 'Welcome to Musee.' : 'Welcome back.',
+        'success',
+      );
+      return;
+    }
     const welcome = consumePostAuthWelcome();
     if (!welcome) return;
     showToast(welcome === 'new' ? 'Welcome to Musee.' : 'Welcome back.', 'success');
