@@ -764,6 +764,53 @@ The future model should:
 - Narrow local guard fixes have been made in a few places, but they do not resolve the broader architectural weakness in anonymous identity handling.
 
 
+## 8.1 Mobile Safari Google Sign-In Redirect
+
+Status: deferred; blocked on access to the Google OAuth client configuration
+
+### Current behavior
+
+- desktop and mobile Chrome can complete Google sign-in through the existing popup/callback flow
+- mobile Safari can reach Google's account chooser, but may remain stuck on an `accounts.google.com/gsi/transform` page after account selection
+- email/password sign-in is not affected
+
+### Cause
+
+The current Google Identity Services button uses popup mode and also enables One Tap. On iOS, Safari's tracking protections can prevent Google's intermediate browsing context from returning the credential to the original Musee page reliably.
+
+### Recommended fix
+
+Keep the current popup behavior on desktop, but use Google Identity Services redirect mode on mobile devices:
+
+1. disable One Tap for the mobile button
+2. set the mobile button to redirect mode
+3. POST Google's credential to a backend redirect callback
+4. validate Google's double-submit CSRF cookie and form token
+5. verify the Google ID token through the existing server verifier
+6. create the normal Musee refresh session
+7. redirect the browser back to Musee and restore the authenticated frontend session
+
+### Required external configuration
+
+This cannot ship until someone with access to the existing Google OAuth web client adds this authorized redirect URI:
+
+- `https://api.museelab.com/api/auth/google/redirect`
+
+Also verify these deployment values:
+
+- Railway: `APP_BASE_URL=https://museelab.com`
+- Cloudflare frontend build: `VITE_API_URL=https://api.museelab.com/api`
+- the frontend `VITE_GOOGLE_CLIENT_ID` and backend `GOOGLE_CLIENT_ID` refer to the same OAuth client
+
+### Preserved implementation
+
+A tested implementation is preserved in commit `9f9cac5` on branch `codex/google-auth-diagnostics`. It includes mobile-only mode selection, the CSRF-protected backend callback, redirect-result handling, and automated coverage. Rebase or cherry-pick it after the Google OAuth configuration becomes accessible, then retest current main before shipping.
+
+### Interim limitation
+
+Until the authorized redirect URI is configured and the preserved implementation is shipped, Google sign-in on mobile Safari remains unsupported. Keep the existing popup flow in production so working Chrome sign-in is not regressed.
+
+
 ## 9. Capture Photo Quality Improvement
 
 Status: deferred for later product / architecture pass
