@@ -248,6 +248,17 @@ def test_guest_can_upload_only_one_artwork_in_the_preview_session(client, db, mo
             "request_id": "guest-artwork-request-1",
         },
     )
+    assert first.status_code == 200
+
+    # Simulate a workspace created before the artwork quota existed. The next
+    # bootstrap must recover usage from the canonical artwork record.
+    db.query(GuestQuotaReservation).filter(
+        GuestQuotaReservation.quota_key == "guest_artworks",
+    ).delete()
+    db.commit()
+    snapshot = client.get("/api/auth/session")
+    assert snapshot.json()["quotas"]["guest_artworks"]["remaining"] == 0
+
     second = client.post(
         "/api/artworks/upload",
         files={"image": ("art.jpg", io.BytesIO(b"second"), "image/jpeg")},
@@ -258,7 +269,6 @@ def test_guest_can_upload_only_one_artwork_in_the_preview_session(client, db, mo
         },
     )
 
-    assert first.status_code == 200
     assert second.status_code == 429
     assert second.json()["detail"]["quota"] == "guest_artworks"
     assert second.json()["detail"]["capability"] == "analyze_artwork"
