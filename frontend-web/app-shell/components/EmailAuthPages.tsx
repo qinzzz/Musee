@@ -18,7 +18,7 @@ const primaryButtonClass =
   'w-full rounded-xl bg-neutral-900 px-3 py-2 text-[13px] font-semibold text-white transition-opacity ' +
   'hover:opacity-90 disabled:opacity-50';
 const inputClass =
-  'w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-[13px] text-neutral-900 ' +
+  'w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-base text-neutral-900 ' +
   'placeholder:text-neutral-400 outline-none transition-colors focus:border-neutral-400';
 
 function Shell({ children }: { children: React.ReactNode }) {
