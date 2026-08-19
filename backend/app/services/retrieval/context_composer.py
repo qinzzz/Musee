@@ -15,6 +15,23 @@ def compose_no_collection_claims_context() -> str:
     )
 
 
+def compose_failed_collection_context() -> str:
+    return (
+        "\n\nPERSONAL COLLECTION LOOKUP FAILED — STRICT RESPONSE SCOPE\n"
+        "Musee could not access the user's broader collection for this response. "
+        "You MUST disclose this before answering any collection-dependent part of the question. "
+        "Use only artwork facts explicitly present in the current artwork context or conversation history; "
+        "general art knowledge may explain those known works but must not be presented as personal collection evidence. "
+        "If directly relevant session evidence exists, begin with 'I couldn't access your broader collection, "
+        "but among the works in this session…' and make only a session-scoped answer. "
+        "Never say or imply 'in your collection', 'the closest', 'the most similar', 'all', 'none', or another "
+        "collection-wide or exhaustive conclusion. "
+        "If the available session context cannot concretely answer the question, say 'I couldn't access your "
+        "collection, so I can't answer that from the information available. Feel free to ask me something else.' "
+        "Do not suggest retrying, refreshing, or searching the collection again."
+    )
+
+
 def compose_collection_context(
     items: list[RetrievedSavedArtwork],
     *,

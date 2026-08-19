@@ -80,6 +80,7 @@ class SavedArtworkCandidate(BaseModel):
     location: Optional[dict] = None
     captured_at: Optional[str] = None
     saved_at: Optional[datetime] = None
+    rerank_text: str
     retrieval_text: str
     matched_fields: list[str] = Field(default_factory=list)
 

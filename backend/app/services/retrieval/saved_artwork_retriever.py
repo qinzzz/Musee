@@ -7,6 +7,8 @@ from app.database.models import ArtworkAnalysis, Collection, SavedArtwork
 from app.services.retrieval.contracts import SavedArtworkCandidate, SavedArtworkFilters
 
 MAX_RETRIEVAL_TEXT_CHARS = 600
+MAX_RERANK_TEXT_CHARS = 400
+MAX_RERANK_TAGS = 6
 MAX_ELIGIBLE_SCAN = 300
 
 
@@ -46,6 +48,27 @@ def _build_retrieval_text(artwork: SavedArtwork) -> str:
     return " ".join(part for part in parts if part)[:MAX_RETRIEVAL_TEXT_CHARS]
 
 
+def _build_rerank_text(artwork: SavedArtwork) -> str:
+    """Build a compact, concept-focused projection for the bounded reranker."""
+    analysis = _current_analysis(artwork)
+    params = artwork.params if isinstance(artwork.params, dict) else {}
+    summary = _clean(analysis.visual_description if analysis else None) or _clean(artwork.analysis)
+    tags = [
+        _clean(tag.name).lstrip("#")
+        for tag in artwork.artwork_tags
+        if tag.name
+    ][:MAX_RERANK_TAGS]
+    parts = [
+        f"{_clean(artwork.artwork_name)} by {_clean(artwork.artist_name)}",
+        f"Movement: {_clean(artwork.movement)}" if artwork.movement else "",
+        f"Classification: {_clean(artwork.classification)}" if artwork.classification else "",
+        f"Medium: {_clean(params.get('medium'))}" if params.get("medium") else "",
+        f"Tags: {', '.join(tags)}" if tags else "",
+        f"Summary: {summary}" if summary else "",
+    ]
+    return " | ".join(part for part in parts if part)[:MAX_RERANK_TEXT_CHARS]
+
+
 def _evenly_sample(rows: list[SavedArtwork], limit: int) -> list[SavedArtwork]:
     if len(rows) <= limit:
         return rows
@@ -80,7 +103,11 @@ def _filtered_saved_artwork_query(
     if filters.classifications:
         query = query.filter(SavedArtwork.classification.in_(filters.classifications))
     if filters.collection_name:
-        query = query.join(SavedArtwork.collections).filter(Collection.name.ilike(f"%{filters.collection_name.strip()}%"))
+        query = query.filter(
+            SavedArtwork.collections.any(
+                Collection.name.ilike(f"%{filters.collection_name.strip()}%")
+            )
+        )
     if filters.location:
         query = query.filter(or_(
             SavedArtwork.museum_name.ilike(f"%{filters.location.strip()}%"),
@@ -91,7 +118,7 @@ def _filtered_saved_artwork_query(
     if filters.saved_before:
         query = query.filter(SavedArtwork.created_at <= filters.saved_before)
 
-    return query.distinct()
+    return query
 
 
 def count_saved_artworks(
@@ -144,6 +171,7 @@ def retrieve_saved_artwork_candidates(
             location=row.location if isinstance(row.location, dict) else None,
             captured_at=row.photo_time,
             saved_at=row.created_at,
+            rerank_text=_build_rerank_text(row),
             retrieval_text=_build_retrieval_text(row),
             matched_fields=[
                 field for field, value in (

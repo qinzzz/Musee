@@ -33,7 +33,10 @@ from app.services.session_chat_service import (
 )
 from app.services.retrieval import execute_collection_retrieval, plan_collection_context, retrieve_collection_context
 from app.services.retrieval.contracts import RetrievalOutcome, RetrievalPlan, RetrievalTrace
-from app.services.retrieval.context_composer import compose_no_collection_claims_context
+from app.services.retrieval.context_composer import (
+    compose_failed_collection_context,
+    compose_no_collection_claims_context,
+)
 
 router = APIRouter(dependencies=[Depends(validate_auth_origin)])
 logger = logging.getLogger(__name__)
@@ -293,9 +296,5 @@ def _failed_retrieval_outcome(stage: str) -> RetrievalOutcome:
     return RetrievalOutcome(
         plan=RetrievalPlan(needs_retrieval=False, filters={}),
         trace=RetrievalTrace(status="failed", failure_stage=stage),
-        context=(
-            "\n\nPERSONAL COLLECTION RETRIEVAL STATUS\n"
-            "The user's broader collection could not be searched for this response. "
-            "Do not imply that you accessed it or make claims about their broader collection."
-        ),
+        context=compose_failed_collection_context(),
     )

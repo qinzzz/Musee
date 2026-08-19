@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -10,8 +10,16 @@ from app.services.ai_client_interface import AIStreamChunk, AITextResult
 from app.services.retrieval.contracts import RetrievalPlan, SavedArtworkCandidate, SavedArtworkFilters
 from app.services.retrieval.orchestrator import execute_collection_retrieval
 from app.services.retrieval.planner import plan_collection_retrieval
-from app.services.retrieval.reranker import rerank_saved_artworks
-from app.services.retrieval.saved_artwork_retriever import retrieve_saved_artwork_candidates
+from app.services.retrieval.reranker import (
+    MAX_RERANK_CANDIDATE_TEXT_CHARS,
+    _build_candidate_payload,
+    rerank_saved_artworks,
+)
+from app.services.retrieval.saved_artwork_retriever import (
+    MAX_RERANK_TEXT_CHARS,
+    count_saved_artworks,
+    retrieve_saved_artwork_candidates,
+)
 from app.utils.auth_utils import create_access_token
 
 
@@ -32,6 +40,10 @@ def test_saved_artwork_retriever_applies_owned_exact_filters(db):
     other = User(user_id="user-2", device_id="device-2")
     db.add_all([user, other])
     loved_turner = _artwork("user-1", "art-1", "Snow Storm", "J. M. W. Turner", "love", "Turbulent light")
+    loved_turner.location = {"city": "London", "country": "UK"}
+    loved_turner.params = {"medium": "Oil on canvas"}
+    loved_turner.reference_urls = ["https://example.com/reference"]
+    loved_turner.insights = [{"title": "Atmosphere", "text": "Light dissolves form."}]
     respected_turner = _artwork("user-1", "art-2", "Rain, Steam and Speed", "J. M. W. Turner", "respect", "Steam and motion")
     other_turner = _artwork("user-2", "art-3", "The Fighting Temeraire", "J. M. W. Turner", "love", "Sunset")
     loved_turner.artwork_tags.append(Tag(id="tag-1", name="#sublime"))
@@ -56,10 +68,67 @@ def test_saved_artwork_retriever_applies_owned_exact_filters(db):
     assert [candidate.source_id for candidate in candidates] == ["art-1"]
     assert "Turbulent light" in candidates[0].retrieval_text
     assert "sublime" in candidates[0].retrieval_text
+    assert len(candidates[0].rerank_text) <= MAX_RERANK_TEXT_CHARS
+    assert "Snow Storm by J. M. W. Turner" in candidates[0].rerank_text
+    assert "Oil on canvas" in candidates[0].rerank_text
+    assert "London" not in candidates[0].rerank_text
+    assert "Atmosphere" not in candidates[0].rerank_text
+
+
+def test_saved_artwork_retriever_supports_combined_fields_and_excludes_deleted(db):
+    now = datetime(2026, 8, 19, 12, 0, 0)
+    active = _artwork("user-1", "art-1", "Impression, Sunrise", "Claude Monet", "love", "Harbor light")
+    active.movement = "Impressionism"
+    active.museum_name = "Musée Marmottan Monet"
+    active.location = {"city": "Paris", "country": "France"}
+    active.created_at = now
+    deleted = _artwork("user-1", "art-2", "Water Lilies", "Claude Monet", "love", "Reflections")
+    deleted.movement = "Impressionism"
+    deleted.location = {"city": "Paris", "country": "France"}
+    deleted.created_at = now
+    deleted.deleted_at = now
+    db.add_all([User(user_id="user-1", device_id="device-1"), active, deleted])
+    db.commit()
+
+    filters = SavedArtworkFilters(
+        artist_name="Monet",
+        artwork_title="Sunrise",
+        movement="Impressionism",
+        classifications=["love"],
+        location="Paris",
+        saved_after=now - timedelta(days=1),
+        saved_before=now + timedelta(days=1),
+    )
+    candidates, eligible_count, truncated = retrieve_saved_artwork_candidates(
+        db,
+        user_id="user-1",
+        filters=filters,
+        candidate_limit=30,
+    )
+
+    assert eligible_count == 1
+    assert truncated is False
+    assert [candidate.source_id for candidate in candidates] == ["art-1"]
+    assert set(candidates[0].matched_fields) == {
+        "artist_name",
+        "artwork_title",
+        "movement",
+        "classification",
+        "location",
+        "saved_after",
+        "saved_before",
+    }
+    assert count_saved_artworks(db, user_id="user-1", filters=filters) == 1
 
 
 class _RerankerClient:
+    def __init__(self):
+        self.prompt = ""
+        self.max_tokens = None
+
     async def call_text_only_result(self, **_kwargs):
+        self.prompt = _kwargs["prompt"]
+        self.max_tokens = _kwargs["max_tokens"]
         return AITextResult(text=json.dumps({
             "ranked_results": [
                 {"source_id": "invented", "relevance": 1, "reason": "Not supplied"},
@@ -70,7 +139,8 @@ class _RerankerClient:
 
 
 class _RerankerService:
-    ai_client = _RerankerClient()
+    def __init__(self):
+        self.ai_client = _RerankerClient()
 
 
 @pytest.mark.asyncio
@@ -83,6 +153,7 @@ async def test_reranker_cannot_expand_or_duplicate_candidates(monkeypatch):
             title="One",
             artist="Artist",
             classification="love",
+            rerank_text="One | quiet geometry",
             retrieval_text="Quiet geometry",
         ),
         SavedArtworkCandidate(
@@ -90,12 +161,14 @@ async def test_reranker_cannot_expand_or_duplicate_candidates(monkeypatch):
             title="Two",
             artist="Artist",
             classification="love",
+            rerank_text="Two | turbulent atmospheric space",
             retrieval_text="Turbulent atmospheric space",
         ),
     ]
 
+    service = _RerankerService()
     ranked = await rerank_saved_artworks(
-        ai_service=_RerankerService(),
+        ai_service=service,
         user_id="user-1",
         concept_query="overwhelming",
         candidates=candidates,
@@ -103,6 +176,29 @@ async def test_reranker_cannot_expand_or_duplicate_candidates(monkeypatch):
     )
 
     assert [item.source_id for item in ranked] == ["art-2"]
+    assert "turbulent atmospheric space" in service.ai_client.prompt
+    assert "retrieval_text" not in service.ai_client.prompt
+    assert service.ai_client.max_tokens == 300
+
+
+def test_reranker_candidate_payload_has_a_hard_text_budget():
+    candidates = [
+        SavedArtworkCandidate(
+            source_id=f"art-{index}",
+            title=f"Artwork {index}",
+            artist="Artist",
+            classification="love",
+            rerank_text="x" * MAX_RERANK_TEXT_CHARS,
+            retrieval_text="richer final context",
+        )
+        for index in range(30)
+    ]
+
+    payload = _build_candidate_payload(candidates)
+
+    assert len(payload) == 30
+    assert sum(len(item["text"]) for item in payload) <= MAX_RERANK_CANDIDATE_TEXT_CHARS
+    assert all("richer final context" not in item["text"] for item in payload)
 
 
 class _RoutePlannerClient:
@@ -395,3 +491,14 @@ async def test_skipped_planner_forbids_unsupported_personal_collection_claims(db
 
     assert outcome.trace.skip_reason == "planner_not_needed"
     assert "Do not claim knowledge of the user's collection" in outcome.context
+
+
+def test_failed_retrieval_requires_session_scoped_fallback_without_retry_language():
+    outcome = session_chat_router._failed_retrieval_outcome("retrieval")
+
+    assert outcome.trace.status == "failed"
+    assert outcome.trace.failure_stage == "retrieval"
+    assert "MUST disclose" in outcome.context
+    assert "among the works in this session" in outcome.context
+    assert "I can't answer that from the information available" in outcome.context
+    assert "Do not suggest retrying" in outcome.context

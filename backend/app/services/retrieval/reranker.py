@@ -9,6 +9,8 @@ from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, star
 from app.services.retrieval.contracts import RerankResponse, RankedArtwork, SavedArtworkCandidate, parse_structured_json
 
 logger = logging.getLogger(__name__)
+MAX_RERANK_CANDIDATE_TEXT_CHARS = 12_000
+MAX_RERANK_OUTPUT_TOKENS = 300
 
 RERANK_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
@@ -30,6 +32,18 @@ RERANK_RESPONSE_SCHEMA: dict[str, Any] = {
 }
 
 
+def _build_candidate_payload(candidates: list[SavedArtworkCandidate]) -> list[dict[str, str]]:
+    remaining_chars = MAX_RERANK_CANDIDATE_TEXT_CHARS
+    payload: list[dict[str, str]] = []
+    for item in candidates:
+        if remaining_chars <= 0:
+            break
+        text = item.rerank_text[:remaining_chars]
+        payload.append({"source_id": item.source_id, "text": text})
+        remaining_chars -= len(text)
+    return payload
+
+
 async def rerank_saved_artworks(
     *,
     ai_service,
@@ -38,16 +52,13 @@ async def rerank_saved_artworks(
     candidates: list[SavedArtworkCandidate],
     limit: int,
 ) -> list[RankedArtwork]:
-    payload = [
-        {"source_id": item.source_id, "retrieval_text": item.retrieval_text}
-        for item in candidates
-    ]
+    payload = _build_candidate_payload(candidates)
     prompt = f"""Rank only the supplied saved artworks by relevance to the conceptual query.
 
 Conceptual query: {concept_query}
 
 Candidates:
-{json.dumps(payload, ensure_ascii=False)}
+{json.dumps(payload, ensure_ascii=False, separators=(",", ":"))}
 
 Return at most {limit} results. You may return fewer when evidence is weak. Never add an artwork ID that is not supplied. Base each concise reason only on the candidate text. Relevance must be between 0 and 1.
 
@@ -66,7 +77,7 @@ Return exactly one JSON object shaped like:
         call_result = getattr(ai_service.ai_client, "call_text_only_result", None)
         kwargs = {
             "prompt": prompt,
-            "max_tokens": 900,
+            "max_tokens": MAX_RERANK_OUTPUT_TOKENS,
             "temperature": 0,
             "response_schema": RERANK_RESPONSE_SCHEMA,
         }

@@ -1,17 +1,19 @@
-"""Shared pytest fixtures — SQLite in-memory DB, FastAPI TestClient.
+"""Shared pytest fixtures — selectable test DB and FastAPI TestClient.
 
 We must patch the DB engine BEFORE any app module is imported so the
-module-level `create_engine()` call in connection.py uses SQLite instead
-of trying to connect to Postgres.
+module-level `create_engine()` call in connection.py uses the isolated
+test database instead of a configured development or production database.
 """
 
 import os
 import sys
 
-# Override every possible DB-URL env var so settings always sees SQLite
-os.environ["NEON_DATABASE_URL"]      = "sqlite://"
-os.environ["NEON_DATABASE_URL_DEV"]  = "sqlite://"
-os.environ["NEON_DATABASE_URL_PROD"] = "sqlite://"
+_TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "sqlite://")
+
+# Override every possible DB-URL env var so settings always sees the test DB.
+os.environ["NEON_DATABASE_URL"]      = _TEST_DATABASE_URL
+os.environ["NEON_DATABASE_URL_DEV"]  = _TEST_DATABASE_URL
+os.environ["NEON_DATABASE_URL_PROD"] = _TEST_DATABASE_URL
 os.environ["ENV"]          = "test"
 os.environ["USE_DATABASE"] = "true"
 os.environ["OPENAI_API_KEY"] = "sk-test"
@@ -31,14 +33,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pytest
 from sqlalchemy import create_engine, event as sa_event
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool, StaticPool
 
-# Build a shared SQLite engine with WAL disabled (single-connection safe)
-_TEST_ENGINE = create_engine(
-    "sqlite://",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
+if _TEST_DATABASE_URL == "sqlite://":
+    # StaticPool keeps the in-memory schema available across test sessions.
+    _TEST_ENGINE = create_engine(
+        _TEST_DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+else:
+    # Do not retain connections across PostgreSQL test resets.
+    _TEST_ENGINE = create_engine(_TEST_DATABASE_URL, poolclass=NullPool)
 
 # Patch connection.py before the app imports it
 import app.database.connection as _conn_mod  # type: ignore
@@ -47,7 +53,7 @@ _conn_mod.configure_session_factory(_TEST_ENGINE)
 from app.database.connection import Base, get_db, SessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
 
-# Create tables once (StaticPool keeps schema across sessions)
+# Create tables once; the reset fixture recreates them between tests.
 Base.metadata.create_all(bind=_TEST_ENGINE)
 
 

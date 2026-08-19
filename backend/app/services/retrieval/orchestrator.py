@@ -168,7 +168,7 @@ async def execute_collection_retrieval(
         )
         results = [
             RetrievedSavedArtwork(
-                **candidate_by_id[rank.source_id].model_dump(),
+                **candidate_by_id[rank.source_id].model_dump(exclude={"rerank_text"}),
                 match_reason=rank.reason,
                 relevance=rank.relevance,
             )
@@ -176,7 +176,7 @@ async def execute_collection_retrieval(
         ]
     else:
         results = [
-            RetrievedSavedArtwork(**candidate.model_dump())
+            RetrievedSavedArtwork(**candidate.model_dump(exclude={"rerank_text"}))
             for candidate in candidates[:limit]
         ]
 
