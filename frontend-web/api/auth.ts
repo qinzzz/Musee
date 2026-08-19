@@ -12,6 +12,28 @@ import {
 const POST_AUTH_WELCOME_KEY = 'musee_post_auth_welcome';
 export type PostAuthWelcome = 'new' | 'returning';
 
+export const AUTH_DIAGNOSTIC_MESSAGES = {
+  google_interrupted: 'Google sign-in was interrupted.',
+  session_cookie_blocked: 'Your browser blocked the Musee session cookie.',
+  google_credential_rejected: 'Musee’s server could not verify the Google credential.',
+} as const;
+
+export type AuthDiagnosticCode = keyof typeof AUTH_DIAGNOSTIC_MESSAGES;
+
+export class AuthDiagnosticError extends Error {
+  readonly code: AuthDiagnosticCode;
+  readonly status?: number;
+  readonly detail?: unknown;
+
+  constructor(code: AuthDiagnosticCode, options?: { status?: number; detail?: unknown }) {
+    super(AUTH_DIAGNOSTIC_MESSAGES[code]);
+    this.name = 'AuthDiagnosticError';
+    this.code = code;
+    this.status = options?.status;
+    this.detail = options?.detail;
+  }
+}
+
 export function rememberPostAuthWelcome(isNewUser: boolean): void {
   sessionStorage.setItem(POST_AUTH_WELCOME_KEY, isNewUser ? 'new' : 'returning');
 }
@@ -101,20 +123,34 @@ export async function resetPassword(token: string, newPassword: string): Promise
 }
 
 export async function loginWithGoogle(idToken: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/auth/google`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
-    body: JSON.stringify({
-      id_token: idToken,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/google`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        id_token: idToken,
+      }),
+    });
+  } catch (error) {
+    throw new AuthDiagnosticError('google_credential_rejected', { detail: error });
+  }
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Login failed: ${errorText}`);
+    const responseText = await response.text();
+    let detail: unknown = responseText;
+    try {
+      detail = JSON.parse(responseText);
+    } catch {
+      // Keep the original non-JSON response for console diagnostics.
+    }
+    throw new AuthDiagnosticError('google_credential_rejected', {
+      status: response.status,
+      detail,
+    });
   }
 
   const data = await response.json();
@@ -143,10 +179,15 @@ export type AuthSessionSnapshot = {
   plan: string | null;
 };
 
-export async function bootstrapAuthSession(): Promise<AuthSessionSnapshot> {
+export async function bootstrapAuthSession(
+  options: { requireAuthenticatedSession?: boolean } = {},
+): Promise<AuthSessionSnapshot> {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(USER_INFO_KEY);
   const token = await refreshAccessToken();
+  if (options.requireAuthenticatedSession && !token) {
+    throw new AuthDiagnosticError('session_cookie_blocked');
+  }
   const guestUserId = !token ? localStorage.getItem(USER_ID_KEY) : null;
   const query = guestUserId ? `?guest_user_id=${encodeURIComponent(guestUserId)}` : '';
   const response = await fetchWithTimeout(`${API_BASE_URL}/auth/session${query}`);

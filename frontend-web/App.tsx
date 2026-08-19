@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
-import { consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
+import { AuthDiagnosticError, consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
 import { DEV_FIXED_USER_ID, DEV_FREE_TIER_USER_ID, USER_ID_KEY } from './api/core';
 import { useAuth } from './auth/AuthProvider';
 import {
@@ -521,7 +521,12 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Failed to complete sign-in:', error);
       setShowLoginModal(true);
-      showToast('Musee couldn’t verify your sign-in. Please try again.', 'info');
+      showToast(
+        error instanceof AuthDiagnosticError
+          ? error.message
+          : 'Musee couldn’t verify your sign-in. Please try again.',
+        'info',
+      );
     }
   };
 
@@ -1032,7 +1037,14 @@ const App: React.FC = () => {
           onLoginSuccess={(user) => {
             void handleLoginSuccess(user);
           }}
-          onLoginError={() => alert('Login Error')}
+          onLoginError={(error) => {
+            console.error('Google sign-in diagnostic:', {
+              code: error.code,
+              status: error.status,
+              detail: error.detail,
+            });
+            showToast(error.message, 'info');
+          }}
         />
 
         <UserSettingsModal
