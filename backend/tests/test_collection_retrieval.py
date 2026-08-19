@@ -17,6 +17,7 @@ from app.services.retrieval.reranker import (
 )
 from app.services.retrieval.saved_artwork_retriever import (
     MAX_RERANK_TEXT_CHARS,
+    _normalize_captured_at,
     count_saved_artworks,
     retrieve_saved_artwork_candidates,
 )
@@ -119,6 +120,12 @@ def test_saved_artwork_retriever_supports_combined_fields_and_excludes_deleted(d
         "saved_before",
     }
     assert count_saved_artworks(db, user_id="user-1", filters=filters) == 1
+
+
+def test_saved_artwork_retriever_normalizes_database_capture_timestamps():
+    assert _normalize_captured_at(datetime(2026, 8, 15, 12, 30, 0)) == "2026-08-15T12:30:00"
+    assert _normalize_captured_at("2026-08-15T12:30:00-07:00") == "2026-08-15T12:30:00-07:00"
+    assert _normalize_captured_at(None) is None
 
 
 class _RerankerClient:
