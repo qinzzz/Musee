@@ -21,6 +21,14 @@ def _display_location(artwork: SavedArtwork) -> str:
     return _clean(artwork.museum_name or payload.get("museum") or payload.get("city") or payload.get("country"))
 
 
+def _normalize_captured_at(value: object) -> str | None:
+    if value is None:
+        return None
+    isoformat = getattr(value, "isoformat", None)
+    normalized = isoformat() if callable(isoformat) else _clean(value)
+    return normalized or None
+
+
 def _current_analysis(artwork: SavedArtwork) -> ArtworkAnalysis | None:
     return next(
         (
@@ -169,7 +177,7 @@ def retrieve_saved_artwork_candidates(
             movement=row.movement,
             museum_name=row.museum_name,
             location=row.location if isinstance(row.location, dict) else None,
-            captured_at=row.photo_time,
+            captured_at=_normalize_captured_at(row.photo_time),
             saved_at=row.created_at,
             rerank_text=_build_rerank_text(row),
             retrieval_text=_build_retrieval_text(row),
