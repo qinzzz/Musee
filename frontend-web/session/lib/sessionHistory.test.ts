@@ -55,6 +55,25 @@ describe('sessionHistory', () => {
     ]);
   });
 
+  it('carries retrieved source IDs into follow-up planner history', () => {
+    const messages: SessionStreamMessage[] = [{
+      id: 'evt-1',
+      role: 'model',
+      text: 'You saved Woman with a Hat.',
+      createdAt: 1000,
+      payload: {
+        status: 'completed',
+        retrieval: { selected_source_ids: ['saved-art-1'] },
+      },
+    }];
+
+    expect(serializeSessionHistory(messages, [])).toEqual([{
+      role: 'model',
+      text: 'You saved Woman with a Hat.',
+      retrieval_source_ids: ['saved-art-1'],
+    }]);
+  });
+
   it('drops pending commentary linked to a missing trigger instead of echoing it back into context', () => {
     const messages: SessionStreamMessage[] = [
       { id: 'evt-1', role: 'user', text: 'previous question', createdAt: 1000, sequenceNumber: 1 },

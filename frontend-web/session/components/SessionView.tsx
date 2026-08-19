@@ -23,6 +23,7 @@ import SessionArtworkCards from './SessionArtworkCards';
 import SessionProcessingIndicator from './SessionProcessingIndicator';
 import SessionThreadStatus from './SessionThreadStatus';
 import {
+  isSessionProcessing,
   isPendingCommentaryStale,
   SESSION_PROCESSING_LABELS,
   type SessionProcessingState,
@@ -150,7 +151,7 @@ const SessionCommentaryBlock: React.FC<{
           <SessionMessageMarkdown>{entry.message.text}</SessionMessageMarkdown>
         </div>
       ) : null}
-      {!entry.message.text && effectiveState?.kind === 'writing_response' ? (
+      {!entry.message.text && effectiveState && effectiveState.kind !== 'failed' ? (
         <SessionProcessingIndicator state={effectiveState} />
       ) : null}
       {effectiveState?.kind === 'failed' ? (
@@ -847,12 +848,8 @@ export default function SessionView({
                     </React.Fragment>
                   ),
                 )}
-                {sessionProcessingState.kind === 'adding_artworks'
-                || sessionProcessingState.kind === 'analyzing_artworks'
-                || (
-                  sessionProcessingState.kind === 'writing_response'
-                  && !sessionProcessingState.responseId
-                ) ? (
+                {isSessionProcessing(sessionProcessingState)
+                && (!('responseId' in sessionProcessingState) || !sessionProcessingState.responseId) ? (
                   <SessionProcessingIndicator state={sessionProcessingState} />
                 ) : null}
                 <div ref={sessionStreamEndRef} className="h-24 shrink-0" />

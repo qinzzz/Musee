@@ -123,6 +123,7 @@ describe('useSessionMessaging', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     consoleErrorSpy.mockRestore();
     vi.clearAllMocks();
   });
@@ -270,6 +271,51 @@ describe('useSessionMessaging', () => {
         content: 'assistant reply',
       }),
     );
+  });
+
+  it('keeps the collection-search phase visible before returning to writing', () => {
+    vi.useFakeTimers();
+    mockStreamSessionChat.mockImplementation((
+      _items: GalleryItem[],
+      _history: SessionStreamMessage[],
+      _text: string,
+      _onChunk: (chunk: string) => void,
+      _onComplete: (fullResponse: string) => void,
+      _onError: () => void,
+      context: { onPhase?: (phase: 'planning' | 'retrieving_collection' | 'generating_response') => void },
+    ) => {
+      context.onPhase?.('planning');
+      context.onPhase?.('retrieving_collection');
+      context.onPhase?.('generating_response');
+    });
+
+    const summary = createSessionSummary({ id: 'visit-1' });
+    const { result, spies } = renderUseSessionMessaging({
+      activeSessionSummary: summary,
+      sessionSummaries: [summary],
+      filteredSessionId: 'visit-1',
+      isComposingNewSession: false,
+      sessionStreams: { 'visit-1': [] },
+    });
+
+    act(() => {
+      result.current.sendSessionInquiryToSession('visit-1', 'Search my collection');
+    });
+
+    const readLatestPhase = () => {
+      const streams = spies.setSessionStreams.mock.calls.reduce<Record<string, SessionStreamMessage[]>>(
+        (state, [update]) => (typeof update === 'function' ? update(state) : update),
+        {},
+      );
+      return streams['visit-1']?.find((message) => message.role === 'model')?.payload?.phase;
+    };
+
+    expect(readLatestPhase()).toBe('retrieving_collection');
+
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+    expect(readLatestPhase()).toBe('generating_response');
   });
 
   it('persists failed commentary status when the stream errors', async () => {

@@ -53,6 +53,45 @@ describe('streamSessionChat', () => {
     expect(stream.onError).not.toHaveBeenCalled();
   });
 
+  it('forwards retrieval phases and completion provenance', async () => {
+    const onPhase = vi.fn();
+    const retrieval = { status: 'completed', selected_source_ids: ['artwork-1'] };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(createStreamResponse([
+      'event: phase\ndata: {"phase":"retrieving_collection"}\n\n',
+      `event: complete\ndata: ${JSON.stringify({ type: 'result', response: 'Found it', retrieval })}\n\n`,
+    ])));
+    const onComplete = vi.fn();
+
+    await streamSessionChat([], [], 'Search mine', vi.fn(), onComplete, vi.fn(), { onPhase });
+
+    expect(onPhase).toHaveBeenCalledWith('retrieving_collection');
+    expect(onComplete).toHaveBeenCalledWith('Found it', retrieval);
+  });
+
+  it('forwards prior retrieval source IDs for follow-up reference resolution', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(createStreamResponse([
+      'event: complete\ndata: {"type":"result","response":"Done"}\n\n',
+    ]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await streamSessionChat(
+      [],
+      [{ role: 'model', text: 'You saved Woman with a Hat.', retrieval_source_ids: ['saved-art-1'] }],
+      'When and where did I find this?',
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+    );
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(String(request.body));
+    expect(body.conversation_history).toEqual([{
+      role: 'assistant',
+      content: 'You saved Woman with a Hat.',
+      retrieval_source_ids: ['saved-art-1'],
+    }]);
+  });
+
   it('fails when the body ends without a complete or error event', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(createStreamResponse([
       'event: chunk\ndata: {"type":"text","content":"Partial"}\n\n',

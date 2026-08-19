@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { SessionAuthenticationError, streamSessionChat } from '../../api/chat';
+import type { SessionRetrievalTrace } from '../../api/chat';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import {
   appendSessionEvents as appendSessionEventsApi,
@@ -19,6 +20,7 @@ type ShowToast = (message: string, type?: ToastType) => void;
 
 const SESSION_EVENT_SAVE_ERROR = 'Couldn’t save this session update. Try again.';
 const MODEL_RESPONSE_SAVE_ERROR = 'This response couldn’t be saved. Try again.';
+const COLLECTION_SEARCH_MIN_VISIBLE_MS = 600;
 const AUTH_REQUIRED_MESSAGE = 'Your session expired. Sign in again to continue.';
 const GUEST_LIMIT_MESSAGE = 'You’ve reached the guest preview limit. Sign in to continue this conversation.';
 
@@ -349,6 +351,7 @@ export function useSessionMessaging({
     options?: {
       content?: string;
       errorMessage?: string;
+      retrieval?: SessionRetrievalTrace;
       errorCode?: string;
       retryMessage?: string;
       retryMode?: SessionAuthenticationRetry['mode'];
@@ -364,10 +367,12 @@ export function useSessionMessaging({
       payload: {
         status,
         ...(options?.errorMessage ? { error_message: options.errorMessage } : {}),
+        ...(options?.retrieval ? { retrieval: options.retrieval } : {}),
         ...(options?.errorCode ? { error_code: options.errorCode } : {}),
         ...(options?.retryMessage ? { retry_message: options.retryMessage } : {}),
         ...(options?.retryMode ? { retry_mode: options.retryMode } : {}),
         ...(options?.sessionTitle ? { session_title: options.sessionTitle } : {}),
+        ...(options?.retrieval ? { retrieval: options.retrieval } : {}),
       },
     };
 
@@ -427,6 +432,25 @@ export function useSessionMessaging({
       appendSessionEvents(targetSessionId, [pendingCommentaryMessage], { persist: false });
     }
 
+    let collectionSearchShownAt: number | null = null;
+    let pendingPhaseTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearPendingPhaseTimer = () => {
+      if (pendingPhaseTimer) {
+        clearTimeout(pendingPhaseTimer);
+        pendingPhaseTimer = null;
+      }
+    };
+    const applyResponsePhase = (phase: 'planning' | 'retrieving_collection' | 'generating_response') => {
+      updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
+        ...event,
+        payload: {
+          ...(event.payload || {}),
+          status: 'pending',
+          phase,
+        },
+      }));
+    };
+
     const pendingPersistence = responseIdOverride
       ? finalizeModelResponse(targetSessionId, responseId, commentaryArtworkIds, 'pending', parentEventId, { content: '' })
       : persistPendingModelResponse(targetSessionId, responseId, commentaryArtworkIds, commentaryCreatedAt, parentEventId);
@@ -441,12 +465,15 @@ export function useSessionMessaging({
       serializeSessionHistory(historyForPrompt, sessionItems),
       text,
       (chunk) => {
+        clearPendingPhaseTimer();
+        collectionSearchShownAt = null;
         updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
           ...event,
           text: `${event.text || ''}${chunk}`,
           payload: {
             ...(event.payload || {}),
             status: 'pending',
+            phase: 'generating_response',
           },
         }));
         setStreamingSessionResponses((prev) => ({
@@ -454,13 +481,15 @@ export function useSessionMessaging({
           [targetSessionId]: (prev[targetSessionId] || '') + chunk,
         }));
       },
-      (fullResponse) => {
+      (fullResponse, retrieval) => {
+        clearPendingPhaseTimer();
         updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
           ...event,
           text: fullResponse,
           payload: {
             ...(event.payload || {}),
             status: 'completed',
+            ...(retrieval ? { retrieval } : {}),
           },
         }));
         void finalizeModelResponse(
@@ -469,7 +498,7 @@ export function useSessionMessaging({
           commentaryArtworkIds,
           'completed',
           parentEventId,
-          { content: fullResponse },
+          { content: fullResponse, retrieval },
         ).catch((error) => {
           console.error('Failed to persist completed model response:', error);
           showToast(MODEL_RESPONSE_SAVE_ERROR, 'info');
@@ -477,6 +506,7 @@ export function useSessionMessaging({
         clearSessionReplyPending(targetSessionId);
       },
       (error) => {
+        clearPendingPhaseTimer();
         if (getErrorCode(error) === 'guest_quota_exhausted') {
           updateLocalSessionEvent(targetSessionId, responseId, (event) => ({
             ...event,
@@ -558,6 +588,27 @@ export function useSessionMessaging({
         userId: sessionUserId,
         sessionId: targetSessionId,
         triggerEventId: parentEventId,
+        onPhase: (phase) => {
+          clearPendingPhaseTimer();
+          if (phase === 'retrieving_collection') {
+            collectionSearchShownAt = Date.now();
+            applyResponsePhase(phase);
+            return;
+          }
+          if (phase === 'generating_response' && collectionSearchShownAt !== null) {
+            const remaining = COLLECTION_SEARCH_MIN_VISIBLE_MS - (Date.now() - collectionSearchShownAt);
+            if (remaining > 0) {
+              pendingPhaseTimer = setTimeout(() => {
+                pendingPhaseTimer = null;
+                collectionSearchShownAt = null;
+                applyResponsePhase(phase);
+              }, remaining);
+              return;
+            }
+            collectionSearchShownAt = null;
+          }
+          applyResponsePhase(phase);
+        },
       },
     );
   }, [

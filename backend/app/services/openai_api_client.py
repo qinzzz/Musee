@@ -30,6 +30,9 @@ class OpenAIAPIClient(AIClientInterface):
     def _get_common_params(self, **kwargs):
         """Get common parameters for API calls"""
         params = kwargs.copy()
+        response_schema = params.pop("response_schema", None)
+        if response_schema:
+            params["response_format"] = {"type": "json_object"}
         if settings.openai_reasoning_effort:
             params["reasoning_effort"] = settings.openai_reasoning_effort
         if settings.openai_verbosity:
@@ -104,7 +107,7 @@ class OpenAIAPIClient(AIClientInterface):
                         "content": self._build_image_parts(image_data) or "Please proceed."
                     }
                 ],
-                **self._get_common_params()
+                **self._get_common_params(response_schema=response_schema)
             )
             input_tokens, output_tokens = self._extract_usage(response)
             return AITextResult(
@@ -145,7 +148,7 @@ class OpenAIAPIClient(AIClientInterface):
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                **self._get_common_params()
+                **self._get_common_params(response_schema=response_schema)
             )
             input_tokens, output_tokens = self._extract_usage(response)
             return AITextResult(
@@ -189,7 +192,7 @@ class OpenAIAPIClient(AIClientInterface):
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": "Please proceed."},
                 ],
-                **self._get_common_params()
+                **self._get_common_params(response_schema=response_schema)
             )
             input_tokens, output_tokens = self._extract_usage(response)
             return AITextResult(
@@ -290,7 +293,7 @@ class OpenAIAPIClient(AIClientInterface):
         """Stream OpenAI image+text chunks and emit final token usage when available."""
         logger.info(f"OpenAI streaming API call: model={self.model}, max_tokens={max_tokens}, reasoning_effort={reasoning_effort or '(default)'}")
         try:
-            params = self._get_common_params()
+            params = self._get_common_params(response_schema=response_schema)
             if reasoning_effort:
                 params["reasoning_effort"] = reasoning_effort
             response = await self.client.chat.completions.create(
@@ -351,7 +354,7 @@ class OpenAIAPIClient(AIClientInterface):
                 messages=messages,
                 stream=True,
                 stream_options={"include_usage": True},
-                **self._get_common_params()
+                **self._get_common_params(response_schema=response_schema)
             )
             async for chunk in response:
                 input_tokens, output_tokens = self._extract_usage(chunk)

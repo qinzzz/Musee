@@ -6,6 +6,17 @@ import { getArtworkClientId } from '../../lib/artworkIdentity';
 
 const compareSessionHistoryOrder = compareSessionEvents;
 
+function getRetrievalSourceIds(message: SessionStreamMessage): string[] {
+  const retrieval = message.payload?.retrieval;
+  if (!retrieval || typeof retrieval !== 'object' || !('selected_source_ids' in retrieval)) {
+    return [];
+  }
+  const sourceIds = retrieval.selected_source_ids;
+  return Array.isArray(sourceIds)
+    ? sourceIds.filter((sourceId): sourceId is string => typeof sourceId === 'string')
+    : [];
+}
+
 export function sortSessionHistory(messages: SessionStreamMessage[]): SessionStreamMessage[] {
   return [...messages].sort(compareSessionHistoryOrder);
 }
@@ -30,7 +41,7 @@ export function getSessionHistoryBeforeTrigger(
 export function serializeSessionHistory(
   messages: SessionStreamMessage[],
   items: GalleryItem[],
-): { role: 'user' | 'model'; text: string }[] {
+): { role: 'user' | 'model'; text: string; retrieval_source_ids?: string[] }[] {
   const byId = new Map<string, GalleryItem>();
   items.forEach((item) => {
     if (item.artworkId) byId.set(item.artworkId, item);
@@ -38,7 +49,7 @@ export function serializeSessionHistory(
     byId.set(getArtworkClientId(item), item);
   });
 
-  const out: { role: 'user' | 'model'; text: string }[] = [];
+  const out: { role: 'user' | 'model'; text: string; retrieval_source_ids?: string[] }[] = [];
   for (const message of sortSessionHistory(messages)) {
     if (message.type === 'artwork_capture') {
       const artworkId = getPrimarySessionEventArtworkId(message);
@@ -84,7 +95,14 @@ export function serializeSessionHistory(
           : `I added ${labels.length} artworks: ${labels.join('; ')}.`,
       });
     } else if (message.text) {
-      out.push({ role: message.role as 'user' | 'model', text: message.text });
+      const retrievalSourceIds = getRetrievalSourceIds(message);
+      out.push({
+        role: message.role as 'user' | 'model',
+        text: message.text,
+        ...(Array.isArray(retrievalSourceIds) && retrievalSourceIds.length > 0
+          ? { retrieval_source_ids: retrievalSourceIds }
+          : {}),
+      });
     }
   }
   return out;

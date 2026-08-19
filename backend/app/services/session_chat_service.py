@@ -20,7 +20,7 @@ class ExhibitionItem(BaseModel):
 
 class SessionChatRequest(BaseModel):
     items: List[ExhibitionItem]
-    conversation_history: List[Dict[str, str]]
+    conversation_history: List[Dict[str, Any]]
     new_message: str
     user_id: Optional[str] = None
     session_id: Optional[str] = None

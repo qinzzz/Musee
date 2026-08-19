@@ -5,6 +5,8 @@ export const SESSION_PENDING_RESPONSE_STALE_MS = 3 * 60 * 1000;
 export const SESSION_PROCESSING_LABELS = {
   addingArtworks: 'Adding artworks…',
   analyzingArtworks: 'Analyzing artworks…',
+  preparingResponse: 'Preparing response…',
+  searchingCollection: 'Searching your collection…',
   writingResponse: 'Writing response…',
   responseFailed: 'Response interrupted. Please try again.',
 } as const;
@@ -13,6 +15,8 @@ export type SessionProcessingState =
   | { kind: 'idle' }
   | { kind: 'adding_artworks' }
   | { kind: 'analyzing_artworks' }
+  | { kind: 'preparing_response'; responseId?: string }
+  | { kind: 'searching_collection'; responseId?: string }
   | { kind: 'writing_response'; responseId?: string }
   | { kind: 'failed'; responseId: string; message: string };
 
@@ -28,6 +32,8 @@ type SessionProcessingStateInput = {
 export function isSessionProcessing(state: SessionProcessingState): boolean {
   return state.kind === 'adding_artworks'
     || state.kind === 'analyzing_artworks'
+    || state.kind === 'preparing_response'
+    || state.kind === 'searching_collection'
     || state.kind === 'writing_response';
 }
 
@@ -60,6 +66,13 @@ export function getSessionProcessingState({
 
   const tailCommentary = getTailCommentaryBlock(sessionRenderBlocks);
   if (hasLiveResponse || (tailCommentary?.status === 'pending' && !isPendingCommentaryStale(tailCommentary, now))) {
+    const phase = tailCommentary?.message.payload?.phase;
+    if (phase === 'planning') {
+      return { kind: 'preparing_response', responseId: tailCommentary?.id };
+    }
+    if (phase === 'retrieving_collection') {
+      return { kind: 'searching_collection', responseId: tailCommentary?.id };
+    }
     return { kind: 'writing_response', responseId: tailCommentary?.id };
   }
 
@@ -87,6 +100,10 @@ export function getSessionProcessingLabel(state: SessionProcessingState): string
       return SESSION_PROCESSING_LABELS.addingArtworks;
     case 'analyzing_artworks':
       return SESSION_PROCESSING_LABELS.analyzingArtworks;
+    case 'preparing_response':
+      return SESSION_PROCESSING_LABELS.preparingResponse;
+    case 'searching_collection':
+      return SESSION_PROCESSING_LABELS.searchingCollection;
     case 'writing_response':
       return SESSION_PROCESSING_LABELS.writingResponse;
     case 'failed':

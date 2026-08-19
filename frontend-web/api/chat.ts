@@ -3,6 +3,26 @@ import { API_BASE_URL, API_TIMEOUT, fetchWithTimeout, getLanguage } from './core
 
 export const SESSION_STREAM_IDLE_TIMEOUT_MS = 60_000;
 
+export type SessionChatPhase = 'planning' | 'retrieving_collection' | 'generating_response';
+
+export type SessionRetrievalTrace = {
+  status: 'skipped' | 'completed' | 'empty' | 'failed';
+  strategy?: 'structured' | 'conceptual_rerank' | 'hybrid' | null;
+  eligible_count?: number;
+  candidate_count?: number;
+  selected_count?: number;
+  candidates_truncated?: boolean;
+  completeness?: 'complete' | 'bounded' | 'unknown';
+  total_count?: number | null;
+  skip_reason?: 'planner_not_needed' | 'unauthenticated' | 'feature_disabled' | null;
+  selected_source_ids?: string[];
+  failure_stage?: string | null;
+};
+
+export type SessionChatHistoryMessage = Message & {
+  retrieval_source_ids?: string[];
+};
+
 export class SessionAuthenticationError extends Error {
   readonly code: 'token_expired' | 'invalid_token' | 'authentication_required';
 
@@ -83,16 +103,24 @@ export interface CommunityData {
 
 export async function streamSessionChat(
   items: { id: string; url: string; keywords: string[]; artistName?: string; artworkName?: string; description?: string; date?: string; medium?: string }[],
-  conversationHistory: Message[],
+  conversationHistory: SessionChatHistoryMessage[],
   newMessage: string,
   onChunk: (text: string) => void,
-  onComplete: (response: string) => void,
+  onComplete: (response: string, retrieval?: SessionRetrievalTrace) => void,
   onError: (error: Error) => void,
-  context?: { userId?: string; sessionId?: string; triggerEventId?: string },
+  context?: {
+    userId?: string;
+    sessionId?: string;
+    triggerEventId?: string;
+    onPhase?: (phase: SessionChatPhase) => void;
+  },
 ): Promise<void> {
   const history = conversationHistory.map((message) => ({
     role: message.role === 'model' ? 'assistant' : message.role,
     content: message.text,
+    ...(message.retrieval_source_ids?.length
+      ? { retrieval_source_ids: message.retrieval_source_ids }
+      : {}),
   }));
 
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -153,11 +181,13 @@ export async function streamSessionChat(
         if (!eventData) continue;
         try {
           const data = JSON.parse(eventData);
-          if (eventType === 'chunk' && data.type === 'text') {
+          if (eventType === 'phase' && typeof data.phase === 'string') {
+            context?.onPhase?.(data.phase as SessionChatPhase);
+          } else if (eventType === 'chunk' && data.type === 'text') {
             onChunk(data.content);
           } else if (eventType === 'complete' && data.type === 'result') {
             terminalEventReceived = true;
-            onComplete(data.response || '');
+            onComplete(data.response || '', data.retrieval);
           } else if (eventType === 'error') {
             throw new Error(data.message || 'Stream error');
           }

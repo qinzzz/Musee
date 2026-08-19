@@ -32,14 +32,14 @@ def _chat_auth(db) -> tuple[dict[str, str], str]:
 
 
 class _SessionAIService:
-    async def session_chat(self, items, history, new_message, image_bytes_list):
+    async def session_chat(self, items, history, new_message, image_bytes_list, retrieval_context=""):
         assert items == [_expected_item("a1", ["red", "abstract"])]
         assert history == []
         assert new_message == "What do these have in common?"
         assert image_bytes_list == [b"image-a"]
         return "They share a rhythmic abstract language."
 
-    async def stream_session_chat(self, items, history, new_message, image_bytes_list):
+    async def stream_session_chat(self, items, history, new_message, image_bytes_list, retrieval_context=""):
         assert items == [_expected_item("a1", ["red", "abstract"])]
         assert history == [{"role": "user", "content": "hello"}]
         assert new_message == "Continue."
@@ -49,8 +49,14 @@ class _SessionAIService:
 
 
 class _SessionAIServiceWithUsage(_SessionAIService):
-    async def stream_session_chat_result(self, items, history, new_message, image_bytes_list):
-        async for text in super().stream_session_chat(items, history, new_message, image_bytes_list):
+    async def stream_session_chat_result(self, items, history, new_message, image_bytes_list, retrieval_context=""):
+        async for text in super().stream_session_chat(
+            items,
+            history,
+            new_message,
+            image_bytes_list,
+            retrieval_context,
+        ):
             yield AIStreamChunk(type="text", text=text)
         yield AIStreamChunk(type="usage", input_tokens=123, output_tokens=45)
 
