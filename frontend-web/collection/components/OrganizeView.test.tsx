@@ -23,6 +23,14 @@ vi.mock('../../artist/hooks/useUserArtists', () => ({
   }),
 }));
 
+vi.mock('../../museum/hooks/useUserMuseums', () => ({
+  useUserMuseums: () => ({
+    museums: [],
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 function createItem(id: string): GalleryItem {
   return {
     id,

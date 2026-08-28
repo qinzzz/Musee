@@ -114,10 +114,14 @@ export function useAppNavigationSync({
       return;
     }
 
-    const path = stateToPath(activeTab, collectTab);
+    let path = stateToPath(activeTab, collectTab);
+    if (path === '/museums' && window.location.pathname === '/museums') {
+      const museumId = new URLSearchParams(window.location.search).get('museum');
+      if (museumId) path = `/museums?museum=${encodeURIComponent(museumId)}`;
+    }
     const historyState = buildRootHistoryState(activeTab, collectTab);
 
-    if (window.location.pathname !== path) {
+    if (`${window.location.pathname}${window.location.search}` !== path) {
       window.history.pushState(historyState, '', path);
       return;
     }

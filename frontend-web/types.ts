@@ -67,6 +67,10 @@ export interface ArtworkRecord {
   medium?: string;
   location?: any;
   photoTime?: string;
+  captureMuseum?: {
+    id: string;
+    canonicalName: string;
+  };
   movement?: string;
   periodBucket?: string;
   referenceUrls?: ReferenceItem[];

@@ -4,6 +4,7 @@ import type { CollectTab } from '../../lib/appNavigation';
 
 const TABS: { id: CollectTab; label: string }[] = [
   { id: 'saved', label: 'All Artworks' },
+  { id: 'museums', label: 'Museums' },
   { id: 'boards', label: 'Boards' },
   { id: 'artists', label: 'Artists' },
 ];

@@ -1,13 +1,15 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Board } from '../../boards/types';
 import { buildArtistInvalidationKey, useUserArtists } from '../../artist/hooks/useUserArtists';
 import type { CollectTab } from '../../lib/appNavigation';
+import { useUserMuseums } from '../../museum/hooks/useUserMuseums';
 import { SUPPORTED_UPLOAD_ACCEPT } from '../../lib/uploadValidation';
 import type { ArtworkWorkspace, GalleryItem } from '../../types';
 import ArtistsSection from './ArtistsSection';
 import BoardsSection from './BoardsSection';
 import CollectionChrome from './CollectionChrome';
+import MuseumsSection from './MuseumsSection';
 import SavedArtworksSection from './SavedArtworksSection';
 import { useArtworkSelection } from '../hooks/useArtworkSelection';
 import { useBoardWorkflow } from '../hooks/useBoardWorkflow';
@@ -33,7 +35,7 @@ interface Props {
   onDeleteBoard: (boardId: string) => Promise<void>;
   onAddItemsToBoard: (boardId: string, itemIds: string[]) => Promise<void>;
   onOpenArtist: (artistEntityId: string, artistName: string) => void;
-  onInterpret: (item: GalleryItem, context?: { items: GalleryItem[]; label: string }) => void;
+  onInterpret: (item: GalleryItem, context?: { items: GalleryItem[]; label: string; basePath?: string }) => void;
   onDelete: (id: string) => void;
   onDeleteArtworks: (itemIds: string[]) => void | Promise<void>;
   onStartUnsortedFlow: () => void;
@@ -66,6 +68,9 @@ export default function OrganizeView({
   const [savedLayout, setSavedLayout] = useState<SavedLayout>('grid');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [collectionSearch, setCollectionSearch] = useState('');
+  const [selectedMuseumId, setSelectedMuseumId] = useState<string | null>(() => (
+    new URLSearchParams(window.location.search).get('museum')
+  ));
 
   const collectionUploadInputRef = useRef<HTMLInputElement>(null);
   const resolvedBoards = boards || [];
@@ -78,6 +83,36 @@ export default function OrganizeView({
     invalidationKey: artistInvalidationKey,
     enabled: collectTab === 'artists',
   });
+  const museumInvalidationKey = useMemo(
+    () => items
+      .filter((item) => !item.isDeletedPlaceholder)
+      .map((item) => `${item.artworkId || item.id}:${item.captureMuseum?.id || ''}`)
+      .join('|'),
+    [items],
+  );
+  const { museums, isLoading: museumsLoading, error: museumsError } = useUserMuseums({
+    userId,
+    invalidationKey: museumInvalidationKey,
+    enabled: collectTab === 'museums',
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setSelectedMuseumId(new URLSearchParams(window.location.search).get('museum'));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const selectMuseum = (museumId: string | null) => {
+    setSelectedMuseumId(museumId);
+    const nextPath = museumId ? `/museums?museum=${encodeURIComponent(museumId)}` : '/museums';
+    if (museumId) {
+      window.history.pushState(window.history.state, '', nextPath);
+    } else {
+      window.history.replaceState(window.history.state, '', nextPath);
+    }
+  };
 
   const {
     selectedBoard,
@@ -242,6 +277,19 @@ export default function OrganizeView({
               onSubmitRenameBoard={submitRenameBoard}
               onConfirmDeleteBoard={handleDeleteBoard}
               onInterpret={(item, context) => onInterpret(item, context)}
+            />
+          )}
+
+          {collectTab === 'museums' && (
+            <MuseumsSection
+              museums={museums}
+              museumsLoading={museumsLoading}
+              museumsError={museumsError}
+              normalizedCollectionSearch={normalizedCollectionSearch}
+              selectedMuseumId={selectedMuseumId}
+              items={items}
+              onSelectMuseum={selectMuseum}
+              onInterpret={onInterpret}
             />
           )}
 

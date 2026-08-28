@@ -89,7 +89,17 @@ type ViewportStateProps = {
 type ViewportNavigationProps = {
   closeSessionCapturePage: () => void;
   handleSessionCaptureDirtyChange: (hasUnsavedCaptures: boolean) => void;
-  handleSessionCaptureSubmit: (payload: { artwork: File; label: File | null; coords?: { latitude: number; longitude: number } }) => Promise<void>;
+  handleSessionCaptureSubmit: (payload: {
+    artwork: File;
+    label: File | null;
+    coords?: {
+      latitude: number;
+      longitude: number;
+      accuracyMeters?: number;
+      positionTimestamp?: number;
+      source?: 'device_live' | 'image_exif';
+    };
+  }) => Promise<void>;
   closeArtistDetail: () => void;
   openArtworkDetail: (item: GalleryItem, context: ArtworkDetailContext, allItems?: GalleryItem[]) => void;
   navigateArtistIndex: () => void;
@@ -510,7 +520,7 @@ export default function AppViewport({
                 });
               }}
               onInterpretArtwork={(item, context) => {
-                const basePath = stateToPath(activeTab, collectTab);
+                const basePath = context?.basePath || stateToPath(activeTab, collectTab);
                 openArtworkDetail(item, {
                   parentLabel: context?.label || 'All Artworks',
                   basePath,

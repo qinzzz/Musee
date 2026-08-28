@@ -40,6 +40,7 @@ import {
   buildUploadPlaceholders,
   prepareUploadCandidates,
 } from '../lib/uploadWorkflow';
+import type { CaptureCoordinates } from '../types';
 import type {
   CaptureSubmission,
   IngestMode,
@@ -112,6 +113,12 @@ function buildAnalyzedItem(
           ? JSON.stringify(analysis.location)
           : analysis.location || baseItem.location,
       photoTime: analysis.photo_time || baseItem.photoTime,
+      captureMuseum: analysis.capture_museum
+        ? {
+            id: analysis.capture_museum.id,
+            canonicalName: analysis.capture_museum.canonical_name,
+          }
+        : baseItem.captureMuseum,
       referenceUrls: analysis.reference_urls || [],
       artistEntityId: analysis.artist_entity_id || undefined,
       ...(patch?.record || {}),
@@ -183,22 +190,37 @@ export function useArtworkUploadOperations({
       return updated;
     });
 
+    const analysisRecord: NonNullable<ArtworkStatePatch['record']> = {
+      keywords,
+      artistName: analysis.artist_name,
+      artworkName: analysis.artwork_name,
+      description: parseAnalysis(analysis.description),
+      referenceUrls: analysis.reference_urls || [],
+    };
+    if (analysis.date !== undefined) analysisRecord.date = analysis.date;
+    if (analysis.medium !== undefined) analysisRecord.medium = analysis.medium;
+    if (analysis.artwork_id !== undefined) analysisRecord.artworkId = analysis.artwork_id;
+    if (analysis.location !== undefined && analysis.location !== null) {
+      analysisRecord.location = typeof analysis.location === 'object'
+        ? JSON.stringify(analysis.location)
+        : analysis.location;
+    }
+    if (analysis.photo_time !== undefined && analysis.photo_time !== null) {
+      analysisRecord.photoTime = analysis.photo_time;
+    }
+    if (analysis.artist_entity_id !== undefined) {
+      analysisRecord.artistEntityId = analysis.artist_entity_id;
+    }
+    if (analysis.capture_museum) {
+      analysisRecord.captureMuseum = {
+        id: analysis.capture_museum.id,
+        canonicalName: analysis.capture_museum.canonical_name,
+      };
+    }
+
     const updates: ArtworkStatePatch = {
       record: {
-        keywords,
-        artistName: analysis.artist_name,
-        artworkName: analysis.artwork_name,
-        description: parseAnalysis(analysis.description),
-        date: analysis.date,
-        medium: analysis.medium,
-        artworkId: analysis.artwork_id,
-        location:
-          analysis.location && typeof analysis.location === 'object'
-            ? JSON.stringify(analysis.location)
-            : analysis.location,
-        photoTime: analysis.photo_time,
-        referenceUrls: analysis.reference_urls || [],
-        artistEntityId: analysis.artist_entity_id || undefined,
+        ...analysisRecord,
         ...extras,
       },
       clientState: {
@@ -225,7 +247,7 @@ export function useArtworkUploadOperations({
     mode: IngestMode;
     timestamp: number;
     photoTime: string;
-    coords?: { latitude?: number; longitude?: number };
+    coords?: Partial<CaptureCoordinates>;
     location?: string;
     sessionId?: string;
     sequenceNumber?: number;
@@ -239,6 +261,9 @@ export function useArtworkUploadOperations({
       options.photoTime,
       options.coords?.latitude,
       options.coords?.longitude,
+      options.coords?.accuracyMeters,
+      options.coords?.positionTimestamp,
+      options.coords?.source,
       options.mode === 'camera' ? 'camera' : 'upload',
       options.sequenceNumber,
       options.requestId,
@@ -269,7 +294,7 @@ export function useArtworkUploadOperations({
     return reconciled;
   }, [replaceArtwork]);
 
-  const maybeResolveLocation = useCallback((itemId: string, coords?: { latitude?: number; longitude?: number }) => {
+  const maybeResolveLocation = useCallback((itemId: string, coords?: Partial<CaptureCoordinates>) => {
     if (coords?.latitude === undefined || coords.longitude === undefined) {
       return;
     }
@@ -622,7 +647,7 @@ export function useArtworkUploadOperations({
     rawFiles: File[],
     mode: IngestMode = 'camera',
     resetInput?: () => void,
-    options?: { labelFile?: File | null; captureCoords?: { latitude: number; longitude: number } | null },
+    options?: { labelFile?: File | null; captureCoords?: CaptureCoordinates | null },
   ) => {
     const invalidFiles = rawFiles.filter((file) => !isSupportedUploadImage(file));
     if (invalidFiles.length > 0) {

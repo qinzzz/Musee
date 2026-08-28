@@ -16,6 +16,15 @@ describe('artworkDetailPresentation helpers', () => {
     expect(
       getArtworkDisplayLocation('{"museum":"MoMA","city":"New York","country":"USA"}'),
     ).toBe('MoMA, New York, USA');
+
+    expect(
+      getArtworkDisplayLocation(
+        { museum: 'J. Paul Getty Museum', city: 'Los Angeles', country: 'United States' },
+        'Getty Center',
+      ),
+    ).toBe('Getty Center, Los Angeles, United States');
+
+    expect(getArtworkDisplayLocation(null, 'Getty Center')).toBe('Getty Center');
   });
 
   it('never renders raw json when location fields are empty', () => {

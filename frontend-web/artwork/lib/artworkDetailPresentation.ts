@@ -9,8 +9,12 @@ type ArtworkStreamingFields = {
   description?: string;
 };
 
-export function getArtworkDisplayLocation(location: unknown): string | null {
-  if (!location) return null;
+export function getArtworkDisplayLocation(
+  location: unknown,
+  canonicalMuseumName?: string | null,
+): string | null {
+  const normalizedCanonicalMuseum = canonicalMuseumName?.trim() || null;
+  if (!location) return normalizedCanonicalMuseum;
 
   // A plain string that looks like serialized JSON must never be shown as-is.
   const plainString =
@@ -25,16 +29,16 @@ export function getArtworkDisplayLocation(location: unknown): string | null {
     }
 
     if (data) {
-      const parts = [data.museum, data.city, data.country]
+      const parts = [normalizedCanonicalMuseum || data.museum, data.city, data.country]
         .filter((part): part is string => typeof part === 'string' && part.trim().length > 0);
       if (parts.length > 0) return parts.join(', ');
       const raw = data.raw;
       return typeof raw === 'string' && raw.trim().length > 0 ? raw : null;
     }
 
-    return plainString;
+    return normalizedCanonicalMuseum || plainString;
   } catch {
-    return plainString;
+    return normalizedCanonicalMuseum || plainString;
   }
 }
 

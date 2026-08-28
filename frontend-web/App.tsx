@@ -671,7 +671,13 @@ const App: React.FC = () => {
   const handleSessionCaptureSubmit = React.useCallback(async (payload: {
     artwork: File;
     label: File | null;
-    coords?: { latitude: number; longitude: number };
+    coords?: {
+      latitude: number;
+      longitude: number;
+      accuracyMeters?: number;
+      positionTimestamp?: number;
+      source?: 'device_live' | 'image_exif';
+    };
   }) => {
     const preparedCapture = await prepareCaptureSubmission(payload);
     if (!preparedCapture) return;

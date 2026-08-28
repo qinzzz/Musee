@@ -14,7 +14,15 @@ type CapturedSlot = {
 type SessionCaptureSubmission = {
   artwork: File;
   label: File | null;
-  coords?: { latitude: number; longitude: number };
+  coords?: CaptureCoordinates;
+};
+
+type CaptureCoordinates = {
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number;
+  positionTimestamp?: number;
+  source: 'device_live';
 };
 
 type DragPoint = { x: number; y: number };
@@ -175,7 +183,7 @@ const SessionCapturePage: React.FC<Props> = ({
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const stageRef = React.useRef<HTMLDivElement | null>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
-  const captureCoordsRef = React.useRef<{ latitude: number; longitude: number } | undefined>(undefined);
+  const captureCoordsRef = React.useRef<CaptureCoordinates | undefined>(undefined);
   const locationRequestRef = React.useRef<Promise<void> | null>(null);
   const currentPreviewUrlsRef = React.useRef<{ artwork: string | null; label: string | null }>({
     artwork: null,
@@ -193,7 +201,7 @@ const SessionCapturePage: React.FC<Props> = ({
   const [isCapturing, setIsCapturing] = React.useState(false);
   const [viewportFitMode, setViewportFitMode] = React.useState<'contain' | 'cover'>('contain');
   const [edgeGestureGutter, setEdgeGestureGutter] = React.useState(0);
-  const [captureCoords, setCaptureCoords] = React.useState<{ latitude: number; longitude: number } | undefined>(undefined);
+  const [captureCoords, setCaptureCoords] = React.useState<CaptureCoordinates | undefined>(undefined);
   const hasRequestedLocationRef = React.useRef(false);
 
   const hasCapturedSlots = Boolean(artworkSlot || labelSlot);
@@ -276,6 +284,9 @@ const SessionCapturePage: React.FC<Props> = ({
           const nextCoords = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
+            accuracyMeters: position.coords.accuracy,
+            positionTimestamp: position.timestamp,
+            source: 'device_live' as const,
           };
           captureCoordsRef.current = nextCoords;
           setCaptureCoords(nextCoords);

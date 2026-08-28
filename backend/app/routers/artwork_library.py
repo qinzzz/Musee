@@ -82,6 +82,7 @@ def get_artworks(
             .options(
                 selectinload(SavedArtwork.session_links),
                 selectinload(SavedArtwork.artwork_tags),
+                selectinload(SavedArtwork.capture_museum_entity),
             )
             .filter(SavedArtwork.user_id == user_id, SavedArtwork.active_filter())
         )
@@ -279,10 +280,15 @@ async def backfill_artwork_artist(
 
 @router.get("/artworks/{artwork_id}")
 async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
-    artwork = db.query(SavedArtwork).filter(
-        SavedArtwork.id == artwork_id,
-        SavedArtwork.active_filter(),
-    ).first()
+    artwork = (
+        db.query(SavedArtwork)
+        .options(selectinload(SavedArtwork.capture_museum_entity))
+        .filter(
+            SavedArtwork.id == artwork_id,
+            SavedArtwork.active_filter(),
+        )
+        .first()
+    )
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
     return artwork.to_dict()

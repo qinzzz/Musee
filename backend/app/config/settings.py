@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     gemini_api_key: Optional[str] = None
     google_client_id: Optional[str] = None
     google_vision_api_key: Optional[str] = None
+    wikidata_user_agent: str = "Musee/0.1 (https://museelab.com)"
 
     # Outbound email (email auth flows). Transport is chosen by config:
     # SMTP when fully configured (host+username+password), else Resend when

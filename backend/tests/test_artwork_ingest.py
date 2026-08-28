@@ -4,7 +4,7 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from app.database.models import ArtworkEvent, SavedArtwork, Session as SessionModel, User
+from app.database.models import ArtworkEvent, MuseumEntity, SavedArtwork, Session as SessionModel, User
 from app.main import app
 from app.models.artwork import AIProvider
 from app.routers import artwork_ingest
@@ -90,6 +90,52 @@ def test_artworks_upload_persists_pending_artwork(client, monkeypatch):
             .all()
         )
         assert [event.event_type for event in events] == ["artwork_created"]
+
+
+def test_artworks_upload_resolves_capture_museum_in_background(client, db, monkeypatch):
+    async def fake_process_image(_image):
+        return b"image-bytes", {}
+
+    museum = MuseumEntity(
+        canonical_name="Musée du Louvre",
+        latitude=48.8606,
+        longitude=2.3376,
+        country_code="FR",
+        wikidata_qid="Q19675",
+    )
+    db.add(museum)
+    db.commit()
+    museum_id = museum.id
+
+    monkeypatch.setattr(artwork_ingest, "process_image", fake_process_image)
+    monkeypatch.setattr(artwork_ingest, "get_storage_service", lambda: _FakeStorage())
+
+    response = client.post(
+        "/api/artworks/upload",
+        files={"image": ("louvre.jpg", io.BytesIO(b"stub"), "image/jpeg")},
+        data={
+            "user_id": "museum-upload-user",
+            "location": '{"city":"Paris","country":"France"}',
+            "latitude": "48.86062",
+            "longitude": "2.33761",
+            "accuracy_meters": "15",
+            "position_timestamp": "1787500000000",
+            "location_source": "device_live",
+        },
+    )
+
+    assert response.status_code == 200
+    artwork_id = response.json()["id"]
+
+    with TestingSessionLocal() as verification_db:
+        saved = verification_db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).one()
+        assert saved.capture_museum_entity_id == museum_id
+        assert saved.to_dict()["capture_museum"] == {
+            "id": museum_id,
+            "canonical_name": "Musée du Louvre",
+        }
+        assert saved.location["source"] == "device_live"
+        assert saved.location["accuracy_meters"] == 15
 
 
 def test_artworks_upload_does_not_leave_shell_session_when_first_save_fails(monkeypatch):

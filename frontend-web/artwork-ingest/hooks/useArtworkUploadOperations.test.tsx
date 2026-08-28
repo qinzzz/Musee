@@ -266,6 +266,9 @@ describe('useArtworkUploadOperations', () => {
       'Mar 9, 2024',
       37.78,
       -122.4,
+      undefined,
+      undefined,
+      'image_exif',
       'upload',
       0,
       undefined,
@@ -282,6 +285,53 @@ describe('useArtworkUploadOperations', () => {
     });
     expect(spies.showToast).toHaveBeenCalledWith('Added an artwork to collection', 'success');
     expect(resetInput).toHaveBeenCalled();
+  });
+
+  it('preserves upload EXIF location and time when analysis omits them', async () => {
+    mockReadExifMetadata.mockResolvedValue({ timestamp: 1710000000000 });
+    mockSaveArtworkUpload.mockResolvedValue({
+      ...createSavedUpload(),
+      location: {
+        museum: 'The J. Paul Getty Museum',
+        city: 'Los Angeles',
+        country: 'United States',
+      },
+      photo_time: 'Sep 05, 2025',
+    });
+    mockAnalyzeArtworkFromExisting.mockResolvedValue(createAnalysis({
+      location: undefined,
+      photo_time: undefined,
+      capture_museum: {
+        id: 'getty-center-id',
+        canonical_name: 'Getty Center',
+      },
+    }));
+
+    const { result } = renderUseArtworkUploadOperations({
+      activeTab: 'collect',
+      canStageSessionArtworks: false,
+      items: [],
+    });
+
+    await act(async () => {
+      await result.current.api.processArtworkFiles([createFile('getty.jpg')], 'gallery');
+    });
+
+    await waitFor(() => {
+      expect(result.current.state.items[0]).toMatchObject({
+        location: JSON.stringify({
+          museum: 'The J. Paul Getty Museum',
+          city: 'Los Angeles',
+          country: 'United States',
+        }),
+        photoTime: 'Sep 05, 2025',
+        captureMuseum: {
+          id: 'getty-center-id',
+          canonicalName: 'Getty Center',
+        },
+        analysisStatus: 'analyzed',
+      });
+    });
   });
 
   it('keeps a persisted upload and marks it failed when analysis rejects', async () => {

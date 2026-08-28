@@ -165,8 +165,8 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
   }, [item.clientId, item.id, item.artworkId, item.insights, item.artistName]);
 
   const displayLocation = useMemo(
-    () => getArtworkDisplayLocation(item.location),
-    [item.location],
+    () => getArtworkDisplayLocation(item.location, item.captureMuseum?.canonicalName),
+    [item.captureMuseum?.canonicalName, item.location],
   );
 
   const streamingFields = useMemo(

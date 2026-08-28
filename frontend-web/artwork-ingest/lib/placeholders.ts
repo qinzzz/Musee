@@ -2,7 +2,7 @@ import type { SavedArtworkUploadResult } from '../../api/analysis';
 import { buildArtworkListItem } from '../../artwork/lib/artworkState';
 import { buildSessionLink } from '../../session/lib/sessionLinks';
 import type { GalleryItem, SessionLink } from '../../types';
-import type { IngestMode, LocationInfo } from '../types';
+import type { CaptureCoordinates, IngestMode, LocationInfo } from '../types';
 
 type BasePlaceholderOptions = {
   previewUrl: string;
@@ -19,7 +19,7 @@ function buildSource(mode: IngestMode): SessionLink['source'] {
 }
 
 export function buildUploadLocationString(
-  coords?: { latitude?: number; longitude?: number },
+  coords?: Partial<CaptureCoordinates>,
   resolved?: Partial<LocationInfo>,
 ): string | undefined {
   if (coords?.latitude === undefined || coords.longitude === undefined) {
@@ -29,6 +29,9 @@ export function buildUploadLocationString(
   return JSON.stringify({
     latitude: coords.latitude,
     longitude: coords.longitude,
+    ...(coords.accuracyMeters !== undefined ? { accuracy_meters: coords.accuracyMeters } : {}),
+    ...(coords.positionTimestamp !== undefined ? { position_timestamp: coords.positionTimestamp } : {}),
+    ...(coords.source ? { source: coords.source } : {}),
     city: resolved?.city ?? '',
     country: resolved?.country ?? '',
     museum: resolved?.museum ?? '',
@@ -100,6 +103,12 @@ export function createPersistedUploadItem(
           ? JSON.stringify(saved.location)
           : saved.location) || options.location,
       photoTime: saved.photo_time || options.photoTime,
+      captureMuseum: saved.capture_museum
+        ? {
+            id: saved.capture_museum.id,
+            canonicalName: saved.capture_museum.canonical_name,
+          }
+        : undefined,
       artistName: saved.artist_name || 'Unknown Artist',
       artworkName: saved.artwork_name || 'Untitled',
     },
