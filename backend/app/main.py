@@ -13,7 +13,7 @@ from app.config.settings import settings
 from app.database.bootstrap import initialize_database
 from app.middleware.request_timing import add_request_timing_middleware
 from app.observability.telemetry import configure_metrics
-from app.routers import admin_maintenance, artwork_identify, artwork_ingest, artwork_library, artwork_metadata, artwork_mutations, artwork_utilities, auth, auth_email, collection, journals, session_chat, tag, taste_profile, users
+from app.routers import admin_maintenance, artwork_identify, artwork_ingest, artwork_library, artwork_metadata, artwork_mutations, artwork_utilities, auth, auth_email, collection, journals, museums, session_chat, tag, taste_profile, users
 from app.routers import sessions as sessions_router
 
 
@@ -121,6 +121,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(artwork_library.router, prefix="/api", tags=["artwork-library"])
     app.include_router(taste_profile.router, prefix="/api", tags=["taste-profile"])
     app.include_router(journals.router, prefix="/api", tags=["journals"])
+    app.include_router(museums.router, prefix="/api", tags=["museums"])
     app.include_router(session_chat.router, prefix="/api", tags=["session-chat"])
     app.include_router(users.router, prefix="/api", tags=["users"])
     app.include_router(collection.router, prefix="/api", tags=["collection"])

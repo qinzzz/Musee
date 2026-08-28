@@ -1,5 +1,6 @@
 import { createUploadPlaceholder } from './placeholders';
 import type {
+  CaptureCoordinates,
   IngestMode,
   PreparedSessionUploadEntry,
   PreparedUploadCandidate,
@@ -35,10 +36,10 @@ export async function prepareUploadCandidates(
   files: File[],
   mode: IngestMode,
   options: {
-    captureCoords?: { latitude: number; longitude: number } | null;
+    captureCoords?: CaptureCoordinates | null;
     readExifMetadata: (file: File) => Promise<{ latitude?: number; longitude?: number; timestamp?: number }>;
     formatPhotoTime: (timestamp: number) => string;
-    buildUploadLocationString: (coords?: { latitude?: number; longitude?: number }) => string | undefined;
+    buildUploadLocationString: (coords?: Partial<CaptureCoordinates>) => string | undefined;
   },
 ): Promise<PreparedUploadCandidate[]> {
   return Promise.all(files.map(async (file) => {
@@ -48,6 +49,11 @@ export async function prepareUploadCandidates(
     const coords = {
       latitude: options.captureCoords?.latitude ?? metadata.latitude,
       longitude: options.captureCoords?.longitude ?? metadata.longitude,
+      accuracyMeters: options.captureCoords?.accuracyMeters,
+      positionTimestamp: options.captureCoords?.positionTimestamp,
+      source: options.captureCoords?.source ?? (
+        metadata.latitude !== undefined && metadata.longitude !== undefined ? 'image_exif' as const : undefined
+      ),
     };
     const timestamp = metadata.timestamp || Date.now();
 

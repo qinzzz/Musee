@@ -24,6 +24,7 @@ export const queryKeys = {
   artworks: (userId: string) => ['artworks', userId] as const,
   boards: (userId: string) => ['boards', userId] as const,
   artists: (userId: string) => ['artists', userId] as const,
+  museums: (userId: string) => ['museums', userId] as const,
   accountUsage: (userId: string) => ['account-usage', userId] as const,
 };
 
@@ -32,6 +33,7 @@ const userScopedQueryKeys = (userId: string) => [
   queryKeys.artworks(userId),
   queryKeys.boards(userId),
   queryKeys.artists(userId),
+  queryKeys.museums(userId),
   queryKeys.accountUsage(userId),
 ];
 

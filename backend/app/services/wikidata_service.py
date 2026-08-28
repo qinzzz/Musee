@@ -9,9 +9,11 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from app.config.settings import settings
+
 logger = logging.getLogger(__name__)
 
-_HEADERS = {"User-Agent": "Musee/1.0 (https://musee.app; art-gallery-app)"}
+_HEADERS = {"User-Agent": settings.wikidata_user_agent}
 _MW_API = "https://www.wikidata.org/w/api.php"
 _WIKI_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary"
 

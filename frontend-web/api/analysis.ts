@@ -13,8 +13,12 @@ export interface ArtworkAnalysisResult {
   model_used: string;
   artwork_id?: string;
   photo_uri?: string;
-  location?: string;
+  location?: string | Record<string, unknown>;
   photo_time?: string;
+  capture_museum?: {
+    id: string;
+    canonical_name: string;
+  } | null;
   reference_urls?: ReferenceItem[];
   artist_entity_id?: string;
   analysis_status?: 'pending' | 'analyzing' | 'failed' | 'analyzed';
@@ -28,6 +32,10 @@ export interface SavedArtworkUploadResult {
   artwork_name: string;
   location?: string | Record<string, unknown> | null;
   photo_time?: string | null;
+  capture_museum?: {
+    id: string;
+    canonical_name: string;
+  } | null;
   session_links?: Array<{
     id?: string;
     session_id: string;
@@ -166,6 +174,7 @@ export async function analyzeArtwork(
     photo_uri: data.photo_uri,
     location: data.location,
     photo_time: data.photo_time,
+    capture_museum: data.capture_museum,
     reference_urls: data.reference_urls || [],
     artist_entity_id: data.artist_entity_id,
     analysis_status: data.analysis_status,
@@ -181,6 +190,9 @@ export async function saveArtworkUpload(
   photoTime?: string,
   latitude?: number,
   longitude?: number,
+  accuracyMeters?: number,
+  positionTimestamp?: number,
+  locationSource?: 'device_live' | 'image_exif',
   source: 'upload' | 'camera' = 'upload',
   sequenceNumber?: number,
   requestId?: string,
@@ -196,6 +208,9 @@ export async function saveArtworkUpload(
   if (photoTime) formData.append('photo_time', photoTime);
   if (latitude !== undefined) formData.append('latitude', latitude.toString());
   if (longitude !== undefined) formData.append('longitude', longitude.toString());
+  if (accuracyMeters !== undefined) formData.append('accuracy_meters', accuracyMeters.toString());
+  if (positionTimestamp !== undefined) formData.append('position_timestamp', positionTimestamp.toString());
+  if (locationSource) formData.append('location_source', locationSource);
   if (sequenceNumber !== undefined) formData.append('sequence_number', sequenceNumber.toString());
   if (requestId) formData.append('request_id', requestId);
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Date, Integer, SmallInteger, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint, Index, text
+from sqlalchemy import Boolean, Column, Date, Float, Integer, SmallInteger, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint, Index, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.connection import Base
@@ -59,6 +59,95 @@ class User(Base):
         }
 
 
+class MuseumEntity(Base):
+    """Canonical physical museum venue used for capture-location association."""
+
+    __tablename__ = "museum_entities"
+    __table_args__ = (
+        UniqueConstraint("wikidata_qid", name="uq_museum_entities_wikidata_qid"),
+        UniqueConstraint("osm_type", "osm_id", name="uq_museum_entities_osm_identity"),
+        Index("idx_museum_entities_coordinates", "latitude", "longitude"),
+        Index("idx_museum_entities_country", "country_code"),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    canonical_name = Column(String, nullable=False)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    country_code = Column(String(2), nullable=True)
+    wikidata_qid = Column(String, nullable=True)
+    osm_type = Column(String(20), nullable=True)
+    osm_id = Column(String, nullable=True)
+    is_physical_venue = Column(Boolean, nullable=False, server_default=text("true"))
+    resolution_eligible = Column(Boolean, nullable=False, server_default=text("true"))
+    has_child_venues = Column(Boolean, nullable=False, server_default=text("false"))
+    parent_wikidata_qid = Column(String, nullable=True, index=True)
+    validation_source = Column(String(30), nullable=True)
+    validated_at = Column(DateTime, nullable=True)
+    footprint_geojson = Column(JSON, nullable=True)
+    footprint_min_latitude = Column(Float, nullable=True)
+    footprint_max_latitude = Column(Float, nullable=True)
+    footprint_min_longitude = Column(Float, nullable=True)
+    footprint_max_longitude = Column(Float, nullable=True)
+    footprint_source = Column(String(30), nullable=True)
+    footprint_license = Column(String(30), nullable=True)
+    footprint_updated_at = Column(DateTime, nullable=True)
+    thumbnail_file_name = Column(String, nullable=True)
+    thumbnail_url = Column(String, nullable=True)
+    thumbnail_source = Column(String(30), nullable=True)
+    thumbnail_source_url = Column(String, nullable=True)
+    thumbnail_attribution = Column(Text, nullable=True)
+    thumbnail_license = Column(String, nullable=True)
+    thumbnail_updated_at = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, server_default="active")
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    captured_artworks = relationship("SavedArtwork", back_populates="capture_museum_entity")
+
+    def to_summary_dict(self):
+        return {
+            "id": self.id,
+            "canonical_name": self.canonical_name,
+        }
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "canonical_name": self.canonical_name,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "country_code": self.country_code,
+            "wikidata_qid": self.wikidata_qid,
+            "osm_type": self.osm_type,
+            "osm_id": self.osm_id,
+            "is_physical_venue": bool(self.is_physical_venue),
+            "resolution_eligible": bool(self.resolution_eligible),
+            "has_child_venues": bool(self.has_child_venues),
+            "parent_wikidata_qid": self.parent_wikidata_qid,
+            "validation_source": self.validation_source,
+            "validated_at": self.validated_at.isoformat() if self.validated_at else None,
+            "has_footprint": self.footprint_geojson is not None,
+            "footprint_source": self.footprint_source,
+            "footprint_license": self.footprint_license,
+            "footprint_updated_at": (
+                self.footprint_updated_at.isoformat() if self.footprint_updated_at else None
+            ),
+            "thumbnail_file_name": self.thumbnail_file_name,
+            "thumbnail_url": self.thumbnail_url,
+            "thumbnail_source": self.thumbnail_source,
+            "thumbnail_source_url": self.thumbnail_source_url,
+            "thumbnail_attribution": self.thumbnail_attribution,
+            "thumbnail_license": self.thumbnail_license,
+            "thumbnail_updated_at": (
+                self.thumbnail_updated_at.isoformat() if self.thumbnail_updated_at else None
+            ),
+            "status": self.status or "active",
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class SavedArtwork(Base):
     """Database model for saved artworks"""
 
@@ -83,6 +172,14 @@ class SavedArtwork(Base):
     reference_urls = Column(JSON, nullable=True)  # Top reference URLs from Vision web detection
     artwork_entity_id = Column(String, ForeignKey('artwork_entities.id', ondelete='SET NULL'), nullable=True, index=True)
     artist_entity_id = Column(String, ForeignKey('artist_entities.id', ondelete='SET NULL'), nullable=True, index=True)
+    # Physical museum inferred from this user's capture location. This is not
+    # artwork ownership, provenance, or current-collection information.
+    capture_museum_entity_id = Column(
+        String,
+        ForeignKey('museum_entities.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
     insights = Column(JSON, nullable=True)  # Cached "Behind the Frame" insights [{title, text}, ...]
     classification = Column(String(20), nullable=False, server_default='unsorted')
     classification_updated_at = Column(DateTime, nullable=True)
@@ -96,6 +193,7 @@ class SavedArtwork(Base):
     user = relationship("User", back_populates="artworks")
     artwork_entity = relationship("ArtworkEntity", back_populates="instances")
     artist_entity = relationship("ArtistEntity", back_populates="artworks")
+    capture_museum_entity = relationship("MuseumEntity", back_populates="captured_artworks")
     # conversations relationship removed — table deprecated, all chat is now session-level (see SessionEvent)
     collections = relationship("Collection", secondary="collection_artworks", back_populates="artworks")
     artwork_tags = relationship("Tag", secondary="artwork_tags", back_populates="artworks")
@@ -145,6 +243,12 @@ class SavedArtwork(Base):
             "reference_urls": self.reference_urls or [],
             "insights": self.insights or [],
             "artist_entity_id": self.artist_entity_id,
+            "capture_museum_entity_id": self.capture_museum_entity_id,
+            "capture_museum": (
+                self.capture_museum_entity.to_summary_dict()
+                if self.capture_museum_entity is not None
+                else None
+            ),
             "classification": self.classification or "unsorted",
             "analysis_status": self.analysis_status or "analyzed",
             "analysis_error": self.analysis_error,

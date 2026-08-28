@@ -58,6 +58,7 @@ from app.services.artwork_ingest_service import (
     resolve_location_payload,
     save_analyzed_artwork_record_sync,
 )
+from app.services.museum.resolver import resolve_artwork_capture_museum
 from app.services.session_service import (
     get_artwork_session_ids as _get_artwork_session_ids,
     get_primary_session_id as _get_primary_session_id,
@@ -421,6 +422,13 @@ async def analyze_artwork_unified(
             "artwork_id": str(existing_artwork.id),
             "reference_urls": vision_ref_urls,
             "artist_entity_id": linked_artist_entity_id,
+            "location": existing_artwork.location,
+            "photo_time": existing_artwork.photo_time,
+            "capture_museum": (
+                existing_artwork.capture_museum_entity.to_summary_dict()
+                if existing_artwork.capture_museum_entity is not None
+                else None
+            ),
             "model_used": ai_provider.value,
             "analysis_status": existing_artwork.analysis_status,
             "analysis_error": existing_artwork.analysis_error,
@@ -517,6 +525,7 @@ async def analyze_artwork_unified(
 
 @router.post("/artworks/upload")
 async def save_artwork_upload(
+    background_tasks: BackgroundTasks,
     image: UploadFile = File(...),
     user_id: Optional[str] = Form(None),
     client_type: Optional[str] = Form("web"),
@@ -526,6 +535,9 @@ async def save_artwork_upload(
     photo_time: Optional[str] = Form(None),
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
+    accuracy_meters: Optional[float] = Form(None),
+    position_timestamp: Optional[str] = Form(None),
+    location_source: Optional[str] = Form(None),
     source: Optional[str] = Form("upload"),
     sequence_number: Optional[int] = Form(None),
     request_id: Optional[str] = Form(None),
@@ -554,10 +566,12 @@ async def save_artwork_upload(
 
     image_bytes, image_metadata = await process_image(image)
 
+    resolved_location_source = location_source
     if location and not location_payload_needs_resolution(location):
         logger.info("Metadata Source [Upload Location]: FRONTEND (Value: %s)", location)
     elif image_metadata.get("location_data"):
         location = json.dumps(image_metadata["location_data"])
+        resolved_location_source = resolved_location_source or "image_exif"
         logger.info("Metadata Source [Upload Location]: PHOTO EXIF (Resolved: %s)", location)
     elif location or (latitude is not None and longitude is not None):
         location = await resolve_location_payload(location, latitude, longitude)
@@ -573,6 +587,15 @@ async def save_artwork_upload(
         generated_photo_uri = photo_uri or f"artwork_{uuid.uuid4().hex[:12]}"
 
     parsed_location = parse_location_value(location)
+    if latitude is not None and longitude is not None:
+        parsed_location = dict(parsed_location or {})
+        parsed_location.update({"latitude": latitude, "longitude": longitude})
+    if parsed_location and resolved_location_source:
+        parsed_location["source"] = resolved_location_source
+    if parsed_location and accuracy_meters is not None:
+        parsed_location["accuracy_meters"] = accuracy_meters
+    if parsed_location and position_timestamp:
+        parsed_location["position_timestamp"] = position_timestamp
 
     artwork_id = await anyio.to_thread.run_sync(
         create_saved_artwork_record_sync,
@@ -593,6 +616,7 @@ async def save_artwork_upload(
 
     response = saved_artwork.to_dict()
     response["photo_uri"] = generated_photo_uri
+    background_tasks.add_task(resolve_artwork_capture_museum, str(saved_artwork.id))
     return response
 
 

@@ -73,6 +73,7 @@ export function getCollectionSearchPlaceholder(
   if (collectTab === 'boards') {
     return selectedBoard ? `Search ${boardDetailName || 'board'}` : 'Search boards';
   }
+  if (collectTab === 'museums') return 'Search museums';
   return 'Search artists';
 }
 

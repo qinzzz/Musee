@@ -1,6 +1,6 @@
 export type AppTab = 'newSession' | 'collect' | 'profile' | 'learn';
 
-export type CollectTab = 'saved' | 'boards' | 'artists';
+export type CollectTab = 'saved' | 'museums' | 'boards' | 'artists';
 
 export type ArtistPageContext = {
   artistEntityId?: string;
@@ -60,6 +60,7 @@ export function getInitialNavigationState(pathname: string): InitialNavigationSt
     activeTab = 'learn';
   } else if (
     pathname === '/saved' ||
+    pathname === '/museums' ||
     pathname === '/boards' ||
     pathname === '/artists' ||
     pathname.startsWith('/artists/')
@@ -67,7 +68,9 @@ export function getInitialNavigationState(pathname: string): InitialNavigationSt
     activeTab = 'collect';
   }
 
-  if (pathname === '/boards') {
+  if (pathname === '/museums') {
+    collectTab = 'museums';
+  } else if (pathname === '/boards') {
     collectTab = 'boards';
   } else if (pathname === '/artists' || pathname.startsWith('/artists/')) {
     collectTab = 'artists';
@@ -94,6 +97,7 @@ export function stateToPath(tab: AppTab, collectTab: CollectTab): string {
   if (tab === 'profile') return '/profile';
   if (tab === 'learn') return '/learning';
   if (tab === 'collect') {
+    if (collectTab === 'museums') return '/museums';
     if (collectTab === 'boards') return '/boards';
     if (collectTab === 'artists') return '/artists';
     return '/saved';

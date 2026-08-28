@@ -22,6 +22,10 @@ type ArtworkBootstrapCacheItem = {
   }>;
   location?: string;
   photoTime?: string;
+  captureMuseum?: {
+    id: string;
+    canonicalName: string;
+  };
   movement?: string;
   periodBucket?: string;
   referenceUrls?: Array<{ page_url: string; thumbnail?: string; title?: string }>;

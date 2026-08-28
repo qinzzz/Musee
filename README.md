@@ -78,6 +78,13 @@ graph LR
 - **Renewable Web Sessions**: The web client keeps 15-minute access tokens in memory and renews them through rotating, HttpOnly refresh cookies backed by revocable database sessions.
 - **Credential-bound Guest Conversion**: Guest workspaces and preview quotas are proven by an HttpOnly cookie; successful authentication promotes that workspace transactionally and can resume the blocked guest action without trusting client-supplied user IDs.
 - **Domain-first Web Client**: The web app is being reorganized around layers and feature domains such as `app-shell/`, `artist/`, `artwork/`, `boards/`, `session/`, `artwork-ingest/`, and `capture/`, so navigation, artist state, artwork state, board logic, session logic, ingest orchestration, and camera UX each live behind clearer boundaries instead of being scattered across flat folders.
+- **Unified Museum Intake**: OSM discovery and regional Wikidata imports submit normalized candidates to one idempotent catalogue service for identity deduplication, source-aware updates, transactional persistence, and automatic post-commit thumbnail enrichment.
+
+## Data Sources and Attribution
+
+Museum venue footprints sourced from OpenStreetMap are stored with their source identity and license metadata. OpenStreetMap data is © OpenStreetMap contributors and available under the [Open Database License](https://www.openstreetmap.org/copyright).
+
+Museum venue thumbnails are enriched from Wikidata `P18` and Wikimedia Commons; Musee stores the Commons source page, attribution, and license metadata alongside the cached thumbnail reference.
 
 ## Detailed Documentation
 

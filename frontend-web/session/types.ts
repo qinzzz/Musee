@@ -116,7 +116,13 @@ export type PendingSessionArtwork =
       labelFile?: File | null;
       timestamp: number;
       photoTime: string;
-      coords?: { latitude?: number; longitude?: number };
+      coords?: {
+        latitude?: number;
+        longitude?: number;
+        accuracyMeters?: number;
+        positionTimestamp?: number;
+        source?: 'device_live' | 'image_exif';
+      };
       location?: string;
       label: string;
       sublabel: string;

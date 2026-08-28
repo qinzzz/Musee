@@ -55,6 +55,7 @@ describe('organizeView helpers', () => {
   it('derives search placeholders and saved labels from active view state', () => {
     expect(getCollectionSearchPlaceholder('saved', null, '')).toBe('Search artworks');
     expect(getCollectionSearchPlaceholder('boards', 'board-1', 'Favorites')).toBe('Search Favorites');
+    expect(getCollectionSearchPlaceholder('museums', null, '')).toBe('Search museums');
     expect(getSavedContextLabel('not_for_me')).toBe('Not for Me');
   });
 });

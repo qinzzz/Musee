@@ -3,10 +3,18 @@ import type { ArtworkUploadFailureCode } from '../lib/uploadValidation';
 
 export type IngestMode = 'gallery' | 'camera';
 
+export type CaptureCoordinates = {
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number;
+  positionTimestamp?: number;
+  source?: 'device_live' | 'image_exif';
+};
+
 export type CaptureSubmission = {
   artwork: File;
   label: File | null;
-  coords?: { latitude: number; longitude: number };
+  coords?: CaptureCoordinates;
 };
 
 export type ExifMetadata = {
@@ -29,7 +37,7 @@ export type PreparedUploadCandidate = {
   mode: IngestMode;
   timestamp: number;
   photoTime: string;
-  coords?: { latitude?: number; longitude?: number };
+  coords?: Partial<CaptureCoordinates>;
   location?: string;
 };
 
