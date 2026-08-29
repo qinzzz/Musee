@@ -3,8 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
-import { AuthDiagnosticError, consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
-import { DEV_FIXED_USER_ID, DEV_FREE_TIER_USER_ID, USER_ID_KEY } from './api/core';
+import { consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
 import { useAuth } from './auth/AuthProvider';
 import {
   batchDeleteArtworks,
@@ -19,7 +18,9 @@ import AppSidebar from './app-shell/components/AppSidebar';
 import GuestSidebar from './guest/GuestSidebar';
 import { deriveGuestExperience } from './guest/guestExperience';
 import AccountUsageMeter from './app-shell/components/AccountUsageMeter';
+import DevProfileSwitcher from './app-shell/components/DevProfileSwitcher';
 import { useAccountUsageQuery } from './app-shell/hooks/useAccountUsageQuery';
+import { useAppAuthFlow } from './app-shell/hooks/useAppAuthFlow';
 import AppConfirmationLayer, { type DeleteConfirmationState } from './app-shell/components/AppConfirmationLayer';
 import AppViewport from './app-shell/components/AppViewport';
 import LoginModal from './app-shell/components/LoginModal';
@@ -34,7 +35,6 @@ import { useArtworkLibrary } from './artwork/hooks/useArtworkLibrary';
 import { useArtworkAnalysis } from './artwork/hooks/useArtworkAnalysis';
 import { useBoards } from './boards/hooks/useBoards';
 import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
-import type { SessionAuthenticationRetry } from './session/hooks/useSessionMessaging';
 import { useSessionArtworkInputPipeline } from './session/hooks/useSessionArtworkInputPipeline';
 import { MAX_SESSION_ARTWORK_BATCH_SIZE } from './session/constants';
 import { useArtworkUploadOperations } from './artwork-ingest/hooks/useArtworkUploadOperations';
@@ -46,7 +46,7 @@ import {
   type CollectTab,
 } from './lib/appNavigation';
 import { parseAnalysis } from './artwork/lib/analysisText';
-import { queryKeys, transitionUserQueryCache } from './lib/queryClient';
+import { queryKeys } from './lib/queryClient';
 
 const UnsortedClassificationModal = lazy(() => import('./components/UnsortedClassificationModal'));
 
@@ -54,11 +54,6 @@ type ToastAction = {
   label: string;
   onClick: () => void;
 };
-
-const DEV_PROFILE_OPTIONS = [
-  { id: DEV_FIXED_USER_ID, label: 'Unlimited' },
-  { id: DEV_FREE_TIER_USER_ID, label: 'Free' },
-];
 
 // Helper to format date strings to (Month Day, Year) without time
 export const formatDisplayDate = (dateStr: string | null | undefined): string | null => {
@@ -108,27 +103,6 @@ export const formatDisplayDate = (dateStr: string | null | undefined): string | 
 // Persistent user ID for the current browser session
 const USER_ID = getOrCreateUserId();
 const DEFAULT_VISIT_TITLE = 'Untitled Session';
-const PENDING_AUTH_RETRY_KEY = 'musee_pending_auth_retry';
-
-const readPendingAuthenticationRetry = (): SessionAuthenticationRetry | null => {
-  try {
-    const raw = sessionStorage.getItem(PENDING_AUTH_RETRY_KEY);
-    if (!raw) return null;
-    const value = JSON.parse(raw) as Partial<SessionAuthenticationRetry>;
-    if (
-      typeof value.sessionId !== 'string'
-      || typeof value.responseId !== 'string'
-      || typeof value.message !== 'string'
-    ) {
-      sessionStorage.removeItem(PENDING_AUTH_RETRY_KEY);
-      return null;
-    }
-    return value as SessionAuthenticationRetry;
-  } catch {
-    sessionStorage.removeItem(PENDING_AUTH_RETRY_KEY);
-    return null;
-  }
-};
 
 const App: React.FC = () => {
   const queryClient = useQueryClient();
@@ -188,7 +162,7 @@ const App: React.FC = () => {
     window.history.replaceState(buildRootHistoryState('newSession', 'saved'), '', '/');
   }, [activeTab, canSearchCollection, canViewProfile]);
 
-  const showToast = (message: string, type: 'info' | 'success' = 'info', action?: ToastAction) => {
+  const showToast = React.useCallback((message: string, type: 'info' | 'success' = 'info', action?: ToastAction) => {
     const options = action
       ? {
           action: {
@@ -204,7 +178,7 @@ const App: React.FC = () => {
     }
 
     sonnerToast.info(message, options);
-  };
+  }, []);
 
   useEffect(() => {
     const welcome = consumePostAuthWelcome();
@@ -309,10 +283,6 @@ const App: React.FC = () => {
     onClearArtworkDetailSelection: () => setArtworkDetailSelection(null),
   });
 
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [pendingAuthenticationRetry, setPendingAuthenticationRetry] = useState<SessionAuthenticationRetry | null>(
-    readPendingAuthenticationRetry,
-  );
   const [showAccountModal, setShowAccountModal] = useState<'account' | 'personalization' | null>(null);
   const [language, setLanguage] = useState(localStorage.getItem('musee_language') || 'en');
 
@@ -320,61 +290,6 @@ const App: React.FC = () => {
     try { return new Set(JSON.parse(localStorage.getItem('musee_liked_ids') || '[]')); }
     catch { return new Set(); }
   });
-
-  useEffect(() => {
-    if (authStatus === 'reauth_required') {
-      setShowLoginModal(true);
-    }
-  }, [authStatus]);
-
-  useEffect(() => {
-    if (authStatus === 'guest' && pendingAuthenticationRetry) {
-      setShowLoginModal(true);
-    }
-  }, [authStatus, pendingAuthenticationRetry]);
-
-  const handleLogout = async () => {
-    await logoutCurrentSession();
-    queryClient.clear();
-    window.location.reload();
-  };
-
-  const handleSwitchDevProfile = async (nextUserId: string) => {
-    await logoutCurrentSession();
-    localStorage.setItem(USER_ID_KEY, nextUserId);
-    window.location.reload();
-  };
-
-  const devProfileSwitcherSlot = import.meta.env.DEV ? (
-    <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50/70 p-3">
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-700">Dev profile</p>
-        <p className="mt-0.5 truncate text-[11px] text-amber-900/70">{sessionUserId}</p>
-      </div>
-      <div className="grid grid-cols-2 gap-1.5">
-        {DEV_PROFILE_OPTIONS.map((profile) => {
-          const isActive = sessionUserId === profile.id;
-          return (
-            <button
-              key={profile.id}
-              type="button"
-              onClick={() => {
-                if (isActive) return;
-                void handleSwitchDevProfile(profile.id);
-              }}
-              className={`rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-colors ${
-                isActive
-                  ? 'bg-amber-900 text-white shadow-sm'
-                  : 'bg-white text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100'
-              }`}
-            >
-              {profile.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  ) : null;
 
   const handleToggleLike = (id: string) => {
     setLikedIds(prev => {
@@ -511,25 +426,6 @@ const App: React.FC = () => {
     hasArtwork: items.length > 0 || pendingSessionArtworks.length > 0,
   }), [guestUserMessageCount, items.length, pendingSessionArtworks.length, quotas, sessionSummaries.length]);
 
-  const handleLoginSuccess = async (user: any) => {
-    const previousUserId = sessionUserId;
-    try {
-      await completeLogin(user);
-      await transitionUserQueryCache(queryClient, previousUserId, user.user_id);
-      setShowLoginModal(false);
-      showToast(user?.is_new_user ? 'Welcome to Musee.' : 'Welcome back.', 'success');
-    } catch (error) {
-      console.error('Failed to complete sign-in:', error);
-      setShowLoginModal(true);
-      showToast(
-        error instanceof AuthDiagnosticError
-          ? error.message
-          : 'Musee couldn’t verify your sign-in. Please try again.',
-        'info',
-      );
-    }
-  };
-
   useEffect(() => {
     if (
       authStatus !== 'guest'
@@ -548,16 +444,24 @@ const App: React.FC = () => {
     persistedSessionsHydrated,
   ]);
 
-  useEffect(() => {
-    if (!currentUser || !pendingAuthenticationRetry) return;
-    const retry = pendingAuthenticationRetry;
-    sessionStorage.removeItem(PENDING_AUTH_RETRY_KEY);
-    setPendingAuthenticationRetry(null);
-    void retryAuthenticationRequiredResponse(retry).catch((error) => {
-      console.error('Failed to resume the guest action after sign-in:', error);
-      showToast('Signed in, but couldn’t resume that message. Try sending it again.', 'info');
-    });
-  }, [currentUser, pendingAuthenticationRetry, retryAuthenticationRequiredResponse]);
+  const authFlow = useAppAuthFlow({
+    authStatus,
+    currentUser,
+    sessionUserId,
+    queryClient,
+    completeLogin,
+    continueAsGuest,
+    logoutCurrentSession,
+    retryAuthenticationRequiredResponse,
+    showToast,
+  });
+
+  const devProfileSwitcherSlot = import.meta.env.DEV ? (
+    <DevProfileSwitcher
+      currentUserId={sessionUserId}
+      onSwitchProfile={authFlow.handleSwitchDevProfile}
+    />
+  ) : null;
 
   // When set, the library picker filters out artworks already in this ongoing
   // session; picks stage into the shared tray either way.
@@ -570,7 +474,7 @@ const App: React.FC = () => {
   const openSessionLibraryPicker = React.useCallback(() => {
     if (!activeSessionSummary) return;
     if (!canSearchCollection) {
-      setShowLoginModal(true);
+      authFlow.requestLogin();
       return;
     }
     setLibraryPickerSessionId(activeSessionSummary.id);
@@ -579,7 +483,7 @@ const App: React.FC = () => {
 
   const setAuthorizedLibraryPickerOpen: React.Dispatch<React.SetStateAction<boolean>> = (nextOpen) => {
     if (nextOpen === true && !canSearchCollection) {
-      setShowLoginModal(true);
+      authFlow.requestLogin();
       return;
     }
     setIsLibraryPickerOpen(nextOpen);
@@ -665,7 +569,7 @@ const App: React.FC = () => {
     ingestPreparedUploads,
     setVisit: setArtworkWorkspace,
     showToast,
-    onAuthenticationRequired: () => setShowLoginModal(true),
+    onAuthenticationRequired: authFlow.requestLogin,
   });
 
   const handleSessionCaptureSubmit = React.useCallback(async (payload: {
@@ -821,7 +725,7 @@ const App: React.FC = () => {
       (tab !== 'collect' || canSearchCollection)
       && (tab !== 'profile' || canViewProfile)
     ),
-    onRestrictedTab: () => setShowLoginModal(true),
+    onRestrictedTab: authFlow.requestLogin,
   });
   const artworkHeaderActions = artworkDetailItem?.artworkId ? (
     <ArtworkActionsMenu
@@ -886,7 +790,7 @@ const App: React.FC = () => {
     profileRefreshKey,
     interactionGate: authStatus === 'guest' ? guestExperience.interactionGate : undefined,
     artworkInputLimit: authStatus === 'guest' ? guestExperience.artworkRemaining : undefined,
-    onSignIn: () => setShowLoginModal(true),
+    onSignIn: authFlow.requestLogin,
   };
 
   const viewportState = {
@@ -980,11 +884,7 @@ const App: React.FC = () => {
     setIsUnsortedFlowOpen,
     handleToggleLike,
     handleSessionInquiry,
-    onSessionAuthenticationRequired: (retry: SessionAuthenticationRetry) => {
-      sessionStorage.setItem(PENDING_AUTH_RETRY_KEY, JSON.stringify(retry));
-      setPendingAuthenticationRetry(retry);
-      setShowLoginModal(true);
-    },
+    onSessionAuthenticationRequired: authFlow.handleAuthenticationRequired,
   };
 
   return (
@@ -1029,19 +929,10 @@ const App: React.FC = () => {
         />
 
         <LoginModal
-          open={showLoginModal && (
-            !currentUser
-            || authStatus === 'reauth_required'
-            || Boolean(pendingAuthenticationRetry)
-          )}
-          onClose={() => {
-            setShowLoginModal(false);
-            if (authStatus === 'reauth_required') {
-              void continueAsGuest();
-            }
-          }}
+          open={authFlow.loginModalOpen}
+          onClose={authFlow.closeLogin}
           onLoginSuccess={(user) => {
-            void handleLoginSuccess(user);
+            void authFlow.handleLoginSuccess(user);
           }}
           onLoginError={(error) => {
             console.error('Google sign-in diagnostic:', {
@@ -1064,7 +955,7 @@ const App: React.FC = () => {
             setLanguage(nextLanguage);
             localStorage.setItem('musee_language', nextLanguage);
           }}
-          onLogout={handleLogout}
+          onLogout={authFlow.handleLogout}
         />
 
         {!sessionCaptureState && (
@@ -1076,7 +967,7 @@ const App: React.FC = () => {
               currentSession={sessionSummaries[0] ?? null}
               sessionsLoading={sessionsLoading}
               onSelectCurrentSession={handleSelectSessionSummary}
-              onSignIn={() => setShowLoginModal(true)}
+              onSignIn={authFlow.requestLogin}
               onExpandSidebar={expandSidebar}
               onCollapseSidebar={collapseSidebar}
               onCloseMobileSidebar={closeMobileSidebar}
@@ -1123,8 +1014,8 @@ const App: React.FC = () => {
               localStorage.setItem('musee_language', nextLanguage);
             }}
             onOpenSettings={() => setShowAccountModal('account')}
-            onSignIn={() => setShowLoginModal(true)}
-            onSignOut={handleLogout}
+            onSignIn={authFlow.requestLogin}
+            onSignOut={authFlow.handleLogout}
             onExpandSidebar={expandSidebar}
             onCollapseSidebar={collapseSidebar}
             onCloseMobileSidebar={closeMobileSidebar}
