@@ -1,15 +1,11 @@
 import React, { Suspense, lazy, useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArtworkWorkspace, GalleryItem, TagCoordinate } from './types';
+import { ArtworkWorkspace, TagCoordinate } from './types';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
 import { consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
 import { useAuth } from './auth/AuthProvider';
-import {
-  batchDeleteArtworks,
-  deleteArtwork,
-  type SmartCollection,
-} from './api/artworks';
+import { type SmartCollection } from './api/artworks';
 import { setSessionGoal as patchSessionGoal } from './session/api/sessions';
 import IdentifyAgainModal from './components/IdentifyAgainModal';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
@@ -33,6 +29,7 @@ import { useArtworkDetailPager } from './app-shell/hooks/useArtworkDetailPager';
 import { useDetailNavigation } from './app-shell/hooks/useDetailNavigation';
 import { useArtworkLibrary } from './artwork/hooks/useArtworkLibrary';
 import { useArtworkAnalysis } from './artwork/hooks/useArtworkAnalysis';
+import { useArtworkDeletion } from './artwork/hooks/useArtworkDeletion';
 import { useBoards } from './boards/hooks/useBoards';
 import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
 import { useSessionArtworkInputPipeline } from './session/hooks/useSessionArtworkInputPipeline';
@@ -46,7 +43,6 @@ import {
   type CollectTab,
 } from './lib/appNavigation';
 import { parseAnalysis } from './artwork/lib/analysisText';
-import { queryKeys } from './lib/queryClient';
 
 const UnsortedClassificationModal = lazy(() => import('./components/UnsortedClassificationModal'));
 
@@ -506,6 +502,28 @@ const App: React.FC = () => {
     setArtworkDetailSelection((prev) => (prev?.artworkClientId === itemId ? null : prev));
   }, [removeArtwork, setArtworkDetailSelection, setArtworkWorkspace]);
 
+  const clearArtworkDetailSelection = React.useCallback((itemId: string) => {
+    setArtworkDetailSelection((prev) => (prev?.artworkClientId === itemId ? null : prev));
+  }, [setArtworkDetailSelection]);
+
+  const dismissDeleteConfirmation = React.useCallback(() => {
+    setDeleteConfirmation(null);
+  }, []);
+
+  const artworkDeletion = useArtworkDeletion({
+    userId: sessionUserId,
+    items,
+    queryClient,
+    patchArtwork,
+    removeArtworkLocally,
+    clearArtworkDetailSelection,
+    refreshArtworks,
+    refreshProfileDerivedData,
+    requestConfirmation: setDeleteConfirmation,
+    dismissConfirmation: dismissDeleteConfirmation,
+    showToast,
+  });
+
   const {
     updateSavedArtworkInState,
     applyArtworkAnalysisResult,
@@ -617,86 +635,6 @@ const App: React.FC = () => {
     setArtworkDetailRightMode('metadata');
   }, [artworkDetailItem?.id]);
 
-  const handleDeleteItem = (id: string) => {
-    setDeleteConfirmation({ id, type: 'item' });
-  };
-
-  const handleDeleteItems = (itemIds: string[]) => {
-    if (itemIds.length === 0) return;
-    setDeleteConfirmation({
-      type: 'items',
-      ids: itemIds,
-      count: itemIds.length,
-    });
-  };
-
-  const performDeleteItems = async (itemIds: string[]) => {
-    const targetItems = itemIds
-      .map((itemId) => items.find((item) => item.id === itemId))
-      .filter((item): item is GalleryItem => Boolean(item));
-
-    if (targetItems.length === 0) {
-      setDeleteConfirmation(null);
-      return;
-    }
-
-    targetItems.forEach((item) => {
-      updateSavedArtworkInState(item.id, {
-        clientState: {
-          deleteStatus: 'pending',
-        },
-      });
-    });
-
-    try {
-      if (targetItems.length === 1) {
-        const targetItem = targetItems[0];
-        setArtworkDetailSelection((prev) => (prev?.artworkClientId === targetItem.id ? null : prev));
-        await deleteArtwork(targetItem.artworkId || targetItem.id, sessionUserId);
-      } else {
-        await batchDeleteArtworks(
-          targetItems.map((item) => item.artworkId || item.id),
-          sessionUserId,
-        );
-      }
-
-      targetItems.forEach((item) => {
-        removeArtworkLocally(item.id);
-      });
-      refreshArtworks();
-      refreshProfileDerivedData();
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sessionEventsRoot() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.artists(sessionUserId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.accountUsage(sessionUserId) });
-      showToast(
-        targetItems.length === 1 ? 'Removed from collection' : `Removed ${targetItems.length} artworks from collection`,
-        'success',
-      );
-      console.log(`Successfully removed artworks from collection: ${targetItems.map((item) => item.id).join(', ')}`);
-    } catch (error) {
-      console.error('Failed to delete artworks:', error);
-      targetItems.forEach((item) => {
-        updateSavedArtworkInState(item.id, {
-          clientState: {
-            deleteStatus: undefined,
-          },
-        });
-      });
-      showToast(targetItems.length === 1 ? 'Could not remove artwork' : 'Could not remove artworks', 'info');
-      throw error;
-    }
-  };
-
-  const confirmDeleteItem = async (id: string) => {
-    setDeleteConfirmation(null);
-    await performDeleteItems([id]);
-  };
-
-  const confirmDeleteItems = async (ids: string[]) => {
-    setDeleteConfirmation(null);
-    await performDeleteItems(ids);
-  };
-
   const {
     isDesktopViewport,
     sidebarOpen,
@@ -732,7 +670,7 @@ const App: React.FC = () => {
       disabled={Boolean(artworkDetailItem.isAnalyzing || artworkDetailItem.deleteStatus === 'pending')}
       onEdit={!artworkDetailItem.isAnalyzing && artworkDetailItem.deleteStatus !== 'pending' ? () => setArtworkHeaderEditToken(token => token + 1) : undefined}
       onIdentifyAgain={!artworkDetailItem.isAnalyzing && artworkDetailItem.deleteStatus !== 'pending' ? openHeaderIdentifyAgainModal : undefined}
-      onDelete={artworkDetailItem.deleteStatus !== 'pending' ? () => setDeleteConfirmation({ type: 'item', id: artworkDetailItem.id }) : undefined}
+      onDelete={artworkDetailItem.deleteStatus !== 'pending' ? () => artworkDeletion.requestDeleteItem(artworkDetailItem.id) : undefined}
       buttonClassName="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-200/50 hover:text-neutral-900 active:text-neutral-900"
       iconClassName="h-[18px] w-[18px]"
     />
@@ -879,8 +817,8 @@ const App: React.FC = () => {
     renameBoard,
     deleteBoard,
     addItemsToBoard,
-    handleDeleteItem,
-    handleDeleteItems,
+    handleDeleteItem: artworkDeletion.requestDeleteItem,
+    handleDeleteItems: artworkDeletion.requestDeleteItems,
     setIsUnsortedFlowOpen,
     handleToggleLike,
     handleSessionInquiry,
@@ -1046,9 +984,9 @@ const App: React.FC = () => {
           deleteConfirmation={deleteConfirmation}
           pendingDeleteSessionSummary={pendingDeleteSessionSummary}
           showCaptureExitModal={showCaptureExitModal}
-          onCloseDeleteConfirmation={() => setDeleteConfirmation(null)}
-          onConfirmDeleteItem={confirmDeleteItem}
-          onConfirmDeleteItems={confirmDeleteItems}
+          onCloseDeleteConfirmation={dismissDeleteConfirmation}
+          onConfirmDeleteItem={artworkDeletion.confirmDeleteItem}
+          onConfirmDeleteItems={artworkDeletion.confirmDeleteItems}
           onConfirmDeleteSession={confirmDeleteSession}
           onCancelCaptureExit={handleCancelCaptureExit}
           onConfirmCaptureExit={handleConfirmCaptureExit}
