@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import date, datetime, timezone
 
 import pytest
 from fastapi import Request
 
 from app.database.models import MuseumEntity, SavedArtwork, User
 from app.main import app
+from app.routers.museums import _parse_recorded_date
 from app.services.authorization_service import RequestPrincipal, get_request_principal
 
 
@@ -81,6 +82,25 @@ def test_user_museums_aggregates_canonical_associations(client, db):
     assert by_id["getty"]["cover_artwork_ids"] == ["getty-2", "getty-1"]
     assert by_id["met"]["artwork_count"] == 1
     assert "umbrella" not in by_id
+
+
+@pytest.mark.parametrize(
+    "value, fallback, expected",
+    [
+        ("Sep 05, 2025", None, date(2025, 9, 5)),          # normal string
+        ("2024-05-10T12:00:00Z", None, date(2024, 5, 10)),  # iso with Z
+        ("garbage", datetime(2026, 2, 1), date(2026, 2, 1)),  # unparsable -> created_at
+        (None, datetime(2026, 2, 1), date(2026, 2, 1)),     # no photo_time -> created_at
+        # Regression: off-type values that used to raise and 500 the whole page.
+        (1724914747, datetime(2026, 2, 1), date(2026, 2, 1)),  # non-str photo_time
+        ({"t": 1}, datetime(2026, 2, 1), date(2026, 2, 1)),    # non-str photo_time
+        ("Sep 05, 2025", "2026-02-01", date(2025, 9, 5)),   # off-type fallback, value wins
+        (None, date(2026, 2, 1), None),                     # off-type fallback -> None, no raise
+        (12345, "also-not-a-datetime", None),               # both off-type -> None, no raise
+    ],
+)
+def test_parse_recorded_date_never_raises_on_offtype_values(value, fallback, expected):
+    assert _parse_recorded_date(value, fallback) == expected
 
 
 def test_user_museums_rejects_cross_user_read(client, db):
