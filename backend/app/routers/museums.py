@@ -22,8 +22,13 @@ router = APIRouter()
 MAX_COVER_ARTWORKS = 3
 
 
-def _parse_recorded_date(value: str | None, fallback: datetime | None) -> date | None:
-    if value:
+def _parse_recorded_date(value: object, fallback: object) -> date | None:
+    # `value` is photo_time and `fallback` is created_at. Both are typed
+    # str|None / datetime|None, but real rows carry off-type values (a non-string
+    # photo_time, a stray date/str where a datetime is expected). This function
+    # must degrade to a fallback and never raise: one malformed row must not 500
+    # the entire museums page.
+    if isinstance(value, str) and value.strip():
         normalized = value.strip()
         try:
             parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
@@ -40,9 +45,9 @@ def _parse_recorded_date(value: str | None, fallback: datetime | None) -> date |
                 return datetime.strptime(normalized, date_format).date()
             except ValueError:
                 continue
-    if fallback is None:
-        return None
-    return fallback.astimezone(UTC).date() if fallback.tzinfo is not None else fallback.date()
+    if isinstance(fallback, datetime):
+        return fallback.astimezone(UTC).date() if fallback.tzinfo is not None else fallback.date()
+    return None
 
 
 def _created_at_sort_value(artwork: SavedArtwork) -> datetime:
