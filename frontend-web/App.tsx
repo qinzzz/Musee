@@ -32,7 +32,7 @@ import { useArtworkAnalysis } from './artwork/hooks/useArtworkAnalysis';
 import { useArtworkDeletion } from './artwork/hooks/useArtworkDeletion';
 import { useBoards } from './boards/hooks/useBoards';
 import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
-import { useSessionArtworkInputPipeline } from './session/hooks/useSessionArtworkInputPipeline';
+import { useSessionComposerController } from './session/hooks/useSessionComposerController';
 import { MAX_SESSION_ARTWORK_BATCH_SIZE } from './session/constants';
 import { useArtworkUploadOperations } from './artwork-ingest/hooks/useArtworkUploadOperations';
 import {
@@ -342,18 +342,14 @@ const App: React.FC = () => {
       sessionSearch,
       setSessionSearch,
       filteredSessionId,
-      setFilteredSessionId,
       isComposingNewSession,
-      setIsComposingNewSession,
       openSessionMenuId,
       setOpenSessionMenuId,
       editingSessionId,
       setEditingSessionId,
       editingSessionTitle,
       setEditingSessionTitle,
-      setSessionDrafts,
       sessionStreams,
-      setSessionStreams,
       sessionGoalDismissed,
       sessionGoalInput,
       setSessionGoalInput,
@@ -369,27 +365,7 @@ const App: React.FC = () => {
       refreshPersistedSessions,
       streamingSessionResponses,
     },
-    prepared: {
-      pendingSessionArtworks,
-      setPendingSessionArtworks,
-      newSessionDraftMessage,
-      setNewSessionDraftMessage,
-      isLibraryPickerOpen,
-      setIsLibraryPickerOpen,
-      libraryPickerSearch,
-      setLibraryPickerSearch,
-      isSubmittingPreparedSession,
-      setIsSubmittingPreparedSession,
-      pendingLibraryArtworkIds,
-      availableLibraryArtworks,
-      commitLibrarySelection,
-      removePendingSessionArtwork,
-      resetPreparedSessionState,
-    },
     messaging: {
-      appendSessionEvents,
-      persistSessionArtworkInput,
-      sendSessionInquiryToSession,
       retryAuthenticationRequiredResponse,
       handleSessionInquiry,
     },
@@ -419,8 +395,14 @@ const App: React.FC = () => {
     quotas,
     hasSession: sessionSummaries.length > 0,
     userMessageCount: guestUserMessageCount,
-    hasArtwork: items.length > 0 || pendingSessionArtworks.length > 0,
-  }), [guestUserMessageCount, items.length, pendingSessionArtworks.length, quotas, sessionSummaries.length]);
+    hasArtwork: items.length > 0 || sessionWorkspace.prepared.pendingSessionArtworks.length > 0,
+  }), [
+    guestUserMessageCount,
+    items.length,
+    quotas,
+    sessionSummaries.length,
+    sessionWorkspace.prepared.pendingSessionArtworks.length,
+  ]);
 
   useEffect(() => {
     if (
@@ -459,40 +441,6 @@ const App: React.FC = () => {
     />
   ) : null;
 
-  // When set, the library picker filters out artworks already in this ongoing
-  // session; picks stage into the shared tray either way.
-  const [libraryPickerSessionId, setLibraryPickerSessionId] = React.useState<string | null>(null);
-
-  // Staged artworks go to the tray in the composer (new session) and the action
-  // bar (ongoing session), so both surfaces can add a message before sending.
-  const canStageSessionArtworks = isComposingNewSession || Boolean(activeSessionSummary);
-
-  const openSessionLibraryPicker = React.useCallback(() => {
-    if (!activeSessionSummary) return;
-    if (!canSearchCollection) {
-      authFlow.requestLogin();
-      return;
-    }
-    setLibraryPickerSessionId(activeSessionSummary.id);
-    setIsLibraryPickerOpen(true);
-  }, [activeSessionSummary, canSearchCollection, setIsLibraryPickerOpen]);
-
-  const setAuthorizedLibraryPickerOpen: React.Dispatch<React.SetStateAction<boolean>> = (nextOpen) => {
-    if (nextOpen === true && !canSearchCollection) {
-      authFlow.requestLogin();
-      return;
-    }
-    setIsLibraryPickerOpen(nextOpen);
-  };
-
-  // A staged batch belongs to the surface it was composed on; switching
-  // sessions (or entering/leaving the composer) discards it.
-  const activeSessionIdForStaging = activeSessionSummary?.id ?? null;
-  React.useEffect(() => {
-    resetPreparedSessionState();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSessionIdForStaging]);
-
   const removeArtworkLocally = React.useCallback((itemId: string) => {
     removeArtwork(itemId);
     setArtworkWorkspace((prev) => ({
@@ -528,15 +476,15 @@ const App: React.FC = () => {
     updateSavedArtworkInState,
     applyArtworkAnalysisResult,
     markArtworkAnalysisFailed,
-    handleFileUpload,
+    handleFileUpload: uploadHandleFileUpload,
     prepareCaptureSubmission,
     ingestPreparedUploads,
   } = useArtworkUploadOperations({
     userId: sessionUserId,
     activeTab,
-    canStageSessionArtworks,
-    pendingSessionArtworks,
-    setPendingSessionArtworks,
+    canStageSessionArtworks: isComposingNewSession || Boolean(activeSessionSummary),
+    pendingSessionArtworks: sessionWorkspace.prepared.pendingSessionArtworks,
+    setPendingSessionArtworks: sessionWorkspace.prepared.setPendingSessionArtworks,
     patchArtwork,
     addLocalArtworks,
     replaceArtwork,
@@ -548,69 +496,45 @@ const App: React.FC = () => {
     showToast,
     parseAnalysis,
   });
-  const persistedSessionIds = React.useMemo(
-    () => persistedSessions.map((session) => session.id),
-    [persistedSessions],
-  );
-  const sessionTitleById = React.useMemo(
-    () => Object.fromEntries(sessionSummaries.map((session) => [session.id, session.title])),
-    [sessionSummaries],
-  );
   const {
+    pendingSessionArtworks,
+    newSessionDraftMessage,
+    setNewSessionDraftMessage,
+    isLibraryPickerOpen,
+    setIsLibraryPickerOpen,
+    libraryPickerSearch,
+    setLibraryPickerSearch,
+    isSubmittingPreparedSession,
+    pendingLibraryArtworkIds,
+    availableLibraryArtworks,
+    removePendingSessionArtwork,
     isSubmittingStagedBatch,
     activeInputPipelineSessionId,
     submitPreparedSession,
     submitStagedBatch,
-    submitImmediateArtwork,
-  } = useSessionArtworkInputPipeline({
+    sessionTitleById,
+    libraryPickerSessionId,
+    openSessionLibraryPicker,
+    closeSessionLibraryPicker,
+    confirmLibrarySelection,
+    handleSessionCaptureSubmit,
+    handleFileUpload,
+  } = useSessionComposerController({
     userId: sessionUserId,
     defaultSessionTitle: DEFAULT_VISIT_TITLE,
     items,
-    persistedSessionIds,
-    sessionTitleById,
-    sessionStreams,
-    pendingSessionArtworks,
-    newSessionDraftMessage,
-    isSubmittingPreparedSession,
-    setIsSubmittingPreparedSession,
-    refreshPersistedSessions,
-    setSessionDrafts,
-    resetPreparedSessionState,
+    canSearchCollection,
+    workspace: sessionWorkspace,
+    ingestPreparedUploads,
+    prepareCaptureSubmission,
+    handleFileUpload: uploadHandleFileUpload,
     updateArtworkSessionLinks,
     setActiveTab,
-    setFilteredSessionId,
-    setIsComposingNewSession,
-    setSessionStreams,
-    appendSessionEvents,
-    persistSessionArtworkInput,
-    sendSessionInquiryToSession,
-    ingestPreparedUploads,
     setVisit: setArtworkWorkspace,
+    exitCaptureAfterSubmit,
     showToast,
     onAuthenticationRequired: authFlow.requestLogin,
   });
-
-  const handleSessionCaptureSubmit = React.useCallback(async (payload: {
-    artwork: File;
-    label: File | null;
-    coords?: {
-      latitude: number;
-      longitude: number;
-      accuracyMeters?: number;
-      positionTimestamp?: number;
-      source?: 'device_live' | 'image_exif';
-    };
-  }) => {
-    const preparedCapture = await prepareCaptureSubmission(payload);
-    if (!preparedCapture) return;
-    exitCaptureAfterSubmit();
-    await submitImmediateArtwork(preparedCapture, activeSessionSummary?.id);
-  }, [
-    activeSessionSummary?.id,
-    exitCaptureAfterSubmit,
-    prepareCaptureSubmission,
-    submitImmediateArtwork,
-  ]);
 
   const {
     showHeaderIdentifyAgainModal,
@@ -806,7 +730,7 @@ const App: React.FC = () => {
     setSessionGoalInput,
     onSaveSessionGoal: patchSessionGoal,
     setNewSessionDraftMessage,
-    setIsLibraryPickerOpen: setAuthorizedLibraryPickerOpen,
+    setIsLibraryPickerOpen,
     openSessionLibraryPicker,
     removePendingSessionArtwork,
     submitPreparedSession,
@@ -852,18 +776,9 @@ const App: React.FC = () => {
           currentSessionId={libraryPickerSessionId}
           searchValue={libraryPickerSearch}
           onRefresh={refreshArtworksIfStale}
-          onClose={() => {
-            setIsLibraryPickerOpen(false);
-            setLibraryPickerSearch('');
-            setLibraryPickerSessionId(null);
-          }}
+          onClose={closeSessionLibraryPicker}
           onSearchChange={setLibraryPickerSearch}
-          onConfirm={(selectedItems) => {
-            commitLibrarySelection(selectedItems);
-            setIsLibraryPickerOpen(false);
-            setLibraryPickerSearch('');
-            setLibraryPickerSessionId(null);
-          }}
+          onConfirm={confirmLibrarySelection}
         />
 
         <LoginModal
