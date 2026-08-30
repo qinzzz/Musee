@@ -4,7 +4,6 @@ import { ArtworkWorkspace, TagCoordinate } from './types';
 import { toast as sonnerToast } from 'sonner';
 import { consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
 import { useAuth } from './auth/AuthProvider';
-import { type SmartCollection } from './api/artworks';
 import { setSessionGoal as patchSessionGoal } from './session/api/sessions';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
 import { deriveGuestExperience } from './guest/guestExperience';
@@ -15,6 +14,7 @@ import { type DeleteConfirmationState } from './app-shell/components/AppConfirma
 import AppShell from './app-shell/components/AppShell';
 import AppSidebarContainer from './app-shell/components/AppSidebarContainer';
 import { useAppNavigationSync } from './app-shell/hooks/useAppNavigationSync';
+import { useAppRouteState } from './app-shell/hooks/useAppRouteState';
 import { useAppShellNavigation } from './app-shell/hooks/useAppShellNavigation';
 import { useCaptureNavigation } from './app-shell/hooks/useCaptureNavigation';
 import { useArtworkDetailPager } from './app-shell/hooks/useArtworkDetailPager';
@@ -27,13 +27,6 @@ import { useSessionWorkspace } from './session/hooks/useSessionWorkspace';
 import { useSessionComposerController } from './session/hooks/useSessionComposerController';
 import { MAX_SESSION_ARTWORK_BATCH_SIZE } from './session/constants';
 import { useArtworkUploadOperations } from './artwork-ingest/hooks/useArtworkUploadOperations';
-import {
-  buildRootHistoryState,
-  getInitialNavigationState,
-  type ArtistPageContext,
-  type ArtworkDetailContext,
-  type CollectTab,
-} from './lib/appNavigation';
 import { parseAnalysis } from './artwork/lib/analysisText';
 
 type ToastAction = {
@@ -102,51 +95,38 @@ const App: React.FC = () => {
     continueAsGuest,
     logout: logoutCurrentSession,
   } = useAuth();
-  const requestedNavigationState = getInitialNavigationState(window.location.pathname);
   const canSearchCollection = capabilities.search_collection === true;
   const canViewProfile = capabilities.view_profile === true;
-  const initialNavigationState = (
-    (requestedNavigationState.activeTab === 'collect' && !canSearchCollection)
-    || (requestedNavigationState.activeTab === 'profile' && !canViewProfile)
-  )
-    ? {
-        ...requestedNavigationState,
-        activeTab: 'newSession' as const,
-        artistPageContext: null,
-      }
-    : requestedNavigationState;
+  const {
+    activeTab,
+    setActiveTab,
+    collectTab,
+    setCollectTab,
+    learningInitialGuide,
+    artistPageContext,
+    setArtistPageContext,
+    movementPageContext,
+    setMovementPageContext,
+    artworkDetailContext,
+    setArtworkDetailContext,
+    canAccessTab,
+  } = useAppRouteState({
+    canSearchCollection,
+    canViewProfile,
+  });
   const goalGalleryInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const sessionStreamScrollRef = useRef<HTMLDivElement>(null);
   const sessionStreamEndRef = useRef<HTMLDivElement>(null);
   const [isUnsortedFlowOpen, setIsUnsortedFlowOpen] = useState(false);
   const [tagPositions, setTagPositions] = useState<Record<string, TagCoordinate>>({});
-  const [activeTab, setActiveTab] = useState<'newSession' | 'collect' | 'profile' | 'learn'>(initialNavigationState.activeTab);
-  const [learningInitialGuide] = useState<string | null>(initialNavigationState.learningInitialGuide);
-  const [collectTab, setCollectTab] = useState<CollectTab>(initialNavigationState.collectTab);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const sessionUserId = currentUser?.user_id || guestUserId || USER_ID;
   // Single cached account-usage fetch, shared with the user-menu meter via
   // the query layer; the meter's mount-on-open refetch keeps both current.
   const { usage: accountUsage } = useAccountUsageQuery(sessionUserId);
   const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState>(null);
-  const [artistPageContext, setArtistPageContext] = useState<ArtistPageContext | null>(initialNavigationState.artistPageContext);
-  const [movementPageContext, setMovementPageContext] = useState<SmartCollection | null>(null);
-  const [artworkDetailContext, setArtworkDetailContext] = useState<ArtworkDetailContext | null>(null);
   const [artworkHeaderEditToken, setArtworkHeaderEditToken] = useState(0);
-
-  useEffect(() => {
-    const isRestricted = (
-      (activeTab === 'collect' && !canSearchCollection)
-      || (activeTab === 'profile' && !canViewProfile)
-    );
-    if (!isRestricted) return;
-    setActiveTab('newSession');
-    setArtistPageContext(null);
-    setMovementPageContext(null);
-    setArtworkDetailContext(null);
-    window.history.replaceState(buildRootHistoryState('newSession', 'saved'), '', '/');
-  }, [activeTab, canSearchCollection, canViewProfile]);
 
   const showToast = React.useCallback((message: string, type: 'info' | 'success' = 'info', action?: ToastAction) => {
     const options = action
@@ -313,7 +293,7 @@ const App: React.FC = () => {
     artworksAuthoritative,
     deleteConfirmation,
     defaultSessionTitle: DEFAULT_VISIT_TITLE,
-    initialIsComposingNewSession: initialNavigationState.activeTab === 'newSession',
+    initialIsComposingNewSession: activeTab === 'newSession',
     activeTab,
     artworkDetailItem,
     renameInputRef,
@@ -546,10 +526,7 @@ const App: React.FC = () => {
     onEnterBlankSession: enterBlankSession,
     onOpenSessionSummary: openSessionSummary,
     onCloseSessionMenu: () => setOpenSessionMenuId(null),
-    canAccessTab: (tab) => (
-      (tab !== 'collect' || canSearchCollection)
-      && (tab !== 'profile' || canViewProfile)
-    ),
+    canAccessTab,
     onRestrictedTab: authFlow.requestLogin,
   });
   const {
