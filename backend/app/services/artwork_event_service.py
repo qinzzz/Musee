@@ -18,6 +18,9 @@ ARTWORK_EVENT_CREATED = "artwork_created"
 ARTWORK_EVENT_METADATA_UPDATED = "artwork_metadata_updated"
 ARTWORK_EVENT_ADDED_TO_SESSION = "artwork_added_to_session"
 ARTWORK_EVENT_IDENTIFICATION_REQUESTED = "artwork_identification_requested"
+# One row per museum-resolution attempt (a durable breadcrumb of the outcome).
+# Lets us see the bucket distribution over time and target stale rows on re-resolve.
+ARTWORK_EVENT_MUSEUM_RESOLUTION = "museum_resolution"
 ARTWORK_EVENT_IDENTIFICATION_COMPLETED = "artwork_identification_completed"
 ARTWORK_EVENT_IDENTIFICATION_FAILED = "artwork_identification_failed"
 ARTWORK_EVENT_REIDENTIFICATION_REQUESTED = "artwork_reidentification_requested"

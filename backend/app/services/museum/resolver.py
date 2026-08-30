@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import SessionLocal
 from app.database.models import SavedArtwork
+from app.services.artwork_event_service import (
+    ARTWORK_EVENT_MUSEUM_RESOLUTION,
+    log_artwork_event,
+)
 from app.services.museum.contracts import MuseumResolutionEvidence, MuseumResolutionResult
 from app.services.museum.catalogue import intake_discovered_museum
 from app.services.museum.evidence import museum_evidence_from_location
@@ -102,6 +106,48 @@ def resolve_museum(db: Session, evidence: MuseumResolutionEvidence) -> MuseumRes
     )
 
 
+def resolution_bucket(status: str, reason: str | None) -> str:
+    """Coarse outcome label for observability (see ARTWORK_EVENT_MUSEUM_RESOLUTION)."""
+    if status == "resolved":
+        if reason in ("inside_museum_footprint", "near_museum_footprint"):
+            return "footprint"
+        return "distance"
+    if status in ("ambiguous", "unresolved", "rejected", "invalid_evidence", "error"):
+        return status
+    return "other"
+
+
+def _record_resolution_event(
+    db: Session,
+    *,
+    artwork_id: str,
+    bucket: str,
+    status: str,
+    reason: str | None,
+    museum_entity_id: str | None,
+    distance_m: float | None,
+    evidence: MuseumResolutionEvidence,
+    resolution_source: str,
+) -> None:
+    """Leave a durable breadcrumb of the resolution outcome. Best-effort."""
+    log_artwork_event(
+        db,
+        artwork_id=artwork_id,
+        event_type=ARTWORK_EVENT_MUSEUM_RESOLUTION,
+        payload={
+            "bucket": bucket,
+            "status": status,
+            "reason": reason,
+            "museum_entity_id": museum_entity_id,
+            "distance_m": distance_m,
+            "evidence_source": evidence.source,
+            "accuracy_m": evidence.accuracy_meters,
+            "associated": museum_entity_id is not None,
+            "resolution_source": resolution_source,
+        },
+    )
+
+
 def resolve_artwork_capture_museum(artwork_id: str) -> None:
     """Best-effort background association; artwork persistence never depends on it."""
     try:
@@ -120,6 +166,14 @@ def resolve_artwork_capture_museum(artwork_id: str) -> None:
             result = resolve_museum(db, evidence)
             if result.status == "resolved" and result.museum_entity_id:
                 artwork.capture_museum_entity_id = result.museum_entity_id
+                _record_resolution_event(
+                    db, artwork_id=str(artwork.id),
+                    bucket=resolution_bucket(result.status, result.reason),
+                    status=result.status, reason=result.reason,
+                    museum_entity_id=result.museum_entity_id,
+                    distance_m=result.distance_meters, evidence=evidence,
+                    resolution_source="catalogue",
+                )
                 db.commit()
                 logger.info(
                     "Museum resolution artwork=%s museum=%s distance_m=%.1f source=local",
@@ -149,6 +203,12 @@ def resolve_artwork_capture_museum(artwork_id: str) -> None:
                     intake_result = intake_discovered_museum(db, discovery)
                     museum = intake_result.museum
                     artwork.capture_museum_entity_id = museum.id
+                    _record_resolution_event(
+                        db, artwork_id=str(artwork.id), bucket="discovery",
+                        status="resolved", reason=discovery.reason,
+                        museum_entity_id=str(museum.id), distance_m=None,
+                        evidence=evidence, resolution_source="osm_wikidata",
+                    )
                     complete_museum_intake(db, [intake_result])
                     logger.info(
                         "Museum resolution artwork=%s museum=%s source=osm_wikidata",
@@ -156,6 +216,13 @@ def resolve_artwork_capture_museum(artwork_id: str) -> None:
                         museum.id,
                     )
                     return
+                _record_resolution_event(
+                    db, artwork_id=str(artwork.id), bucket=discovery.status,
+                    status=discovery.status, reason=discovery.reason,
+                    museum_entity_id=None, distance_m=None,
+                    evidence=evidence, resolution_source="osm_wikidata",
+                )
+                db.commit()
                 logger.info(
                     "Museum discovery artwork=%s outcome=%s reason=%s",
                     artwork_id,
@@ -164,6 +231,14 @@ def resolve_artwork_capture_museum(artwork_id: str) -> None:
                 )
                 return
 
+            _record_resolution_event(
+                db, artwork_id=str(artwork.id),
+                bucket=resolution_bucket(result.status, result.reason),
+                status=result.status, reason=result.reason,
+                museum_entity_id=None, distance_m=None,
+                evidence=evidence, resolution_source="catalogue",
+            )
+            db.commit()
             logger.info(
                 "Museum resolution artwork=%s outcome=%s reason=%s",
                 artwork_id,

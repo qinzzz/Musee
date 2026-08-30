@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 
 from app.database.models import MuseumEntity
+from app.services.museum import osm_discovery as osm_discovery_module
 from app.services.museum.catalogue import match_or_create_discovered_museum
 from app.services.museum.contracts import MuseumResolutionEvidence
 from app.services.museum.osm_discovery import (
@@ -333,3 +335,51 @@ def test_catalogue_uses_resolved_child_qid_and_name_for_parent_osm_candidate(db)
     assert museum.canonical_name == "Getty Center"
     assert museum.parent_wikidata_qid == "QGETTY"
     assert museum.osm_id == parent_candidate.osm_id
+
+
+@pytest.mark.asyncio
+async def test_find_museums_falls_over_to_mirror_on_connection_error(monkeypatch):
+    # Primary endpoint refuses; provider should fall over to the mirror and succeed.
+    monkeypatch.setattr(osm_discovery_module, "OVERPASS_MAX_ATTEMPTS", 1)
+    monkeypatch.setattr(
+        osm_discovery_module, "OVERPASS_API_URLS",
+        ["https://primary.example/api", "https://mirror.example/api"],
+    )
+    good = {"elements": [{
+        "type": "way", "id": "1",
+        "tags": {"tourism": "museum", "name": "Test Museum", "wikidata": "Q1"},
+        "center": {"lat": 37.0, "lon": -122.0},
+    }]}
+    calls = []
+
+    async def fake_post(self, url, **kwargs):
+        calls.append(url)
+        if url == "https://primary.example/api":
+            raise httpx.ConnectError("all connection attempts failed")
+        return httpx.Response(200, json=good, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    provider = osm_discovery_module.OverpassMuseumProvider()
+    result = await provider.find_museums(37.0, -122.0, 150)
+
+    assert calls == ["https://primary.example/api", "https://mirror.example/api"]
+    assert len(result) == 1 and result[0].wikidata_qid == "Q1"
+
+
+@pytest.mark.asyncio
+async def test_find_museums_raises_when_all_endpoints_fail(monkeypatch):
+    monkeypatch.setattr(osm_discovery_module, "OVERPASS_MAX_ATTEMPTS", 1)
+    monkeypatch.setattr(
+        osm_discovery_module, "OVERPASS_API_URLS",
+        ["https://a.example/api", "https://b.example/api"],
+    )
+
+    async def always_fail(self, url, **kwargs):
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", always_fail)
+
+    provider = osm_discovery_module.OverpassMuseumProvider()
+    with pytest.raises(httpx.ConnectError):
+        await provider.find_museums(37.0, -122.0, 150)

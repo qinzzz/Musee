@@ -143,6 +143,23 @@ def _convert_to_degrees(value):
     s = float(value[2])
     return d + (m / 60.0) + (s / 3600.0)
 
+
+def _gps_accuracy_meters(gps_data):
+    """EXIF GPSHPositioningError = horizontal accuracy in metres, when present.
+
+    Only some cameras write it (iPhone does; many don't). Returned so the venue
+    resolver can trust a tight-accuracy capture and stay conservative on a loose
+    or missing one, instead of throwing the signal away.
+    """
+    raw = gps_data.get("GPSHPositioningError")
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
 def _format_exif_date(date_str):
     """Convert EXIF date string (YYYY:MM:DD HH:MM:SS) to (Month Day, Year)"""
     try:
@@ -292,11 +309,20 @@ async def extract_image_metadata(image: Image.Image, filename: str, file_size: i
                             lon = 0 - lon
                         
                         metadata["exif_location"] = {"latitude": lat, "longitude": lon}
-                        
+
                         # Trigger reverse geocoding if we have coordinates
                         # Note: This is an async call but extract_image_metadata is now async
                         metadata["location_data"] = await reverse_geocode(lat, lon)
-                        
+
+                        # Tag the source so the venue resolver treats this as an
+                        # EXIF capture, and carry the horizontal accuracy through
+                        # (both live in the location JSON the resolver reads).
+                        metadata["location_data"]["source"] = "image_exif"
+                        accuracy_m = _gps_accuracy_meters(gps_data)
+                        if accuracy_m is not None:
+                            metadata["location_data"]["accuracy_meters"] = accuracy_m
+                            metadata["exif_location"]["accuracy_meters"] = accuracy_m
+
                 except Exception as e:
                     logger.warning(f"Failed to parse GPS data: {e}")
     
