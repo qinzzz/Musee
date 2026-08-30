@@ -1,27 +1,19 @@
-import React, { Suspense, lazy, useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArtworkWorkspace, TagCoordinate } from './types';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { toast as sonnerToast } from 'sonner';
 import { consumePostAuthWelcome, getOrCreateUserId } from './api/auth';
 import { useAuth } from './auth/AuthProvider';
 import { type SmartCollection } from './api/artworks';
 import { setSessionGoal as patchSessionGoal } from './session/api/sessions';
-import IdentifyAgainModal from './components/IdentifyAgainModal';
 import ArtworkActionsMenu from './components/ArtworkActionsMenu';
-import AddFromLibraryModal from './components/AddFromLibraryModal';
-import AppSidebar from './app-shell/components/AppSidebar';
-import GuestSidebar from './guest/GuestSidebar';
 import { deriveGuestExperience } from './guest/guestExperience';
-import AccountUsageMeter from './app-shell/components/AccountUsageMeter';
 import DevProfileSwitcher from './app-shell/components/DevProfileSwitcher';
 import { useAccountUsageQuery } from './app-shell/hooks/useAccountUsageQuery';
 import { useAppAuthFlow } from './app-shell/hooks/useAppAuthFlow';
-import AppConfirmationLayer, { type DeleteConfirmationState } from './app-shell/components/AppConfirmationLayer';
-import AppViewport from './app-shell/components/AppViewport';
-import LoginModal from './app-shell/components/LoginModal';
-import UserSettingsModal from './app-shell/components/UserSettingsModal';
-import { Toaster } from './components/ui/sonner';
+import { type DeleteConfirmationState } from './app-shell/components/AppConfirmationLayer';
+import AppShell from './app-shell/components/AppShell';
+import AppSidebarContainer from './app-shell/components/AppSidebarContainer';
 import { useAppNavigationSync } from './app-shell/hooks/useAppNavigationSync';
 import { useAppShellNavigation } from './app-shell/hooks/useAppShellNavigation';
 import { useCaptureNavigation } from './app-shell/hooks/useCaptureNavigation';
@@ -43,8 +35,6 @@ import {
   type CollectTab,
 } from './lib/appNavigation';
 import { parseAnalysis } from './artwork/lib/analysisText';
-
-const UnsortedClassificationModal = lazy(() => import('./components/UnsortedClassificationModal'));
 
 type ToastAction = {
   label: string;
@@ -339,16 +329,10 @@ const App: React.FC = () => {
 
   const {
     sessionState: {
-      sessionSearch,
-      setSessionSearch,
       filteredSessionId,
       isComposingNewSession,
-      openSessionMenuId,
       setOpenSessionMenuId,
       editingSessionId,
-      setEditingSessionId,
-      editingSessionTitle,
-      setEditingSessionTitle,
       sessionStreams,
       sessionGoalDismissed,
       sessionGoalInput,
@@ -370,15 +354,9 @@ const App: React.FC = () => {
       handleSessionInquiry,
     },
     sessionActions: {
-      handleDeleteSession,
-      handleStartRenameSession,
       saveSessionTitle,
-      commitSessionRename,
       confirmDeleteSession,
     },
-    pendingDeletedSessionIds,
-    recentSessionSummaries,
-    sessionsLoading,
     sessionHistoryStatus,
     retrySessionHistory,
     enterBlankSession,
@@ -559,22 +537,7 @@ const App: React.FC = () => {
     setArtworkDetailRightMode('metadata');
   }, [artworkDetailItem?.id]);
 
-  const {
-    isDesktopViewport,
-    sidebarOpen,
-    sidebarCollapsed,
-    recentsOpen,
-    setRecentsOpen,
-    userMenuOpen,
-    setUserMenuOpen,
-    isNewSessionEntryActive,
-    navigationItems: sidebarNavigationItems,
-    handleSelectSessionSummary,
-    openSidebar,
-    closeMobileSidebar,
-    expandSidebar,
-    collapseSidebar,
-  } = useAppShellNavigation({
+  const shellNavigation = useAppShellNavigation({
     activeTab,
     isComposingNewSession,
     editingSessionId,
@@ -589,6 +552,12 @@ const App: React.FC = () => {
     ),
     onRestrictedTab: authFlow.requestLogin,
   });
+  const {
+    isDesktopViewport,
+    sidebarOpen,
+    handleSelectSessionSummary,
+    openSidebar,
+  } = shellNavigation;
   const artworkHeaderActions = artworkDetailItem?.artworkId ? (
     <ArtworkActionsMenu
       disabled={Boolean(artworkDetailItem.isAnalyzing || artworkDetailItem.deleteStatus === 'pending')}
@@ -600,7 +569,7 @@ const App: React.FC = () => {
     />
   ) : null;
 
-  const headerMenuButton = !isDesktopViewport && !sidebarOpen ? (
+  const mobileMenuButton = !isDesktopViewport && !sidebarOpen ? (
     <button
       onClick={openSidebar}
       className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 shadow-sm transition-colors hover:bg-neutral-50"
@@ -615,21 +584,11 @@ const App: React.FC = () => {
     </button>
   ) : null;
 
-  const collectionFloatingMenuButton = !isDesktopViewport && !sidebarOpen ? (
-    <button
-      onClick={openSidebar}
-      className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 shadow-sm transition-colors hover:bg-neutral-50"
-      title="Open menu"
-      aria-label="Open menu"
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-        <line x1="4" y1="7" x2="20" y2="7" />
-        <line x1="4" y1="12" x2="20" y2="12" />
-        <line x1="4" y1="17" x2="20" y2="17" />
-      </svg>
-    </button>
-  ) : null;
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
+  const handleLanguageChange = (nextLanguage: string) => {
+    setLanguage(nextLanguage);
+    localStorage.setItem('musee_language', nextLanguage);
+  };
   const userAvatar = currentUser?.profile_picture_url ? (
     <img
       src={currentUser.profile_picture_url}
@@ -647,8 +606,8 @@ const App: React.FC = () => {
     collectTab,
     learningInitialGuide,
     userId: sessionUserId,
-    headerMenuButton,
-    collectionFloatingMenuButton,
+    headerMenuButton: mobileMenuButton,
+    collectionFloatingMenuButton: mobileMenuButton,
     profileRefreshKey,
     interactionGate: authStatus === 'guest' ? guestExperience.interactionGate : undefined,
     artworkInputLimit: authStatus === 'guest' ? guestExperience.artworkRemaining : undefined,
@@ -750,169 +709,101 @@ const App: React.FC = () => {
   };
 
   return (
-    <GoogleOAuthProvider clientId={googleClientId}>
-      <div
-        className="relative flex h-dvh w-screen flex-row overflow-hidden bg-[var(--color-bg-primary)] text-neutral-900"
-      >
-        <Toaster />
-
-        <Suspense fallback={null}>
-          <UnsortedClassificationModal
-            open={isUnsortedFlowOpen}
-            items={items}
-            onClose={() => setIsUnsortedFlowOpen(false)}
-            onClassify={handleUpdateClassification}
-          />
-        </Suspense>
-
-        <AddFromLibraryModal
-          open={isLibraryPickerOpen}
-          items={availableLibraryArtworks}
-          initialSelectedIds={pendingLibraryArtworkIds}
-          maxSelection={Math.max(
-            1,
-            MAX_SESSION_ARTWORK_BATCH_SIZE - pendingSessionArtworks.filter((entry) => entry.kind !== 'library').length,
-          )}
-          currentSessionId={libraryPickerSessionId}
-          searchValue={libraryPickerSearch}
-          onRefresh={refreshArtworksIfStale}
-          onClose={closeSessionLibraryPicker}
-          onSearchChange={setLibraryPickerSearch}
-          onConfirm={confirmLibrarySelection}
-        />
-
-        <LoginModal
-          open={authFlow.loginModalOpen}
-          onClose={authFlow.closeLogin}
-          onLoginSuccess={(user) => {
-            void authFlow.handleLoginSuccess(user);
-          }}
-          onLoginError={(error) => {
-            console.error('Google sign-in diagnostic:', {
-              code: error.code,
-              status: error.status,
-              detail: error.detail,
-            });
-            showToast(error.message, 'info');
-          }}
-        />
-
-        <UserSettingsModal
-          open={Boolean(showAccountModal)}
-          mode={showAccountModal}
-          currentUser={currentUser}
-          usage={accountUsage ?? null}
+    <AppShell
+      googleClientId={googleClientId}
+      sessionCaptureActive={Boolean(sessionCaptureState)}
+      unsortedClassificationModal={{
+        open: isUnsortedFlowOpen,
+        items,
+        onClose: () => setIsUnsortedFlowOpen(false),
+        onClassify: handleUpdateClassification,
+      }}
+      libraryModal={{
+        open: isLibraryPickerOpen,
+        items: availableLibraryArtworks,
+        initialSelectedIds: pendingLibraryArtworkIds,
+        maxSelection: Math.max(
+          1,
+          MAX_SESSION_ARTWORK_BATCH_SIZE - pendingSessionArtworks.filter((entry) => entry.kind !== 'library').length,
+        ),
+        currentSessionId: libraryPickerSessionId,
+        searchValue: libraryPickerSearch,
+        onRefresh: refreshArtworksIfStale,
+        onClose: closeSessionLibraryPicker,
+        onSearchChange: setLibraryPickerSearch,
+        onConfirm: confirmLibrarySelection,
+      }}
+      loginModal={{
+        open: authFlow.loginModalOpen,
+        onClose: authFlow.closeLogin,
+        onLoginSuccess: (user) => {
+          void authFlow.handleLoginSuccess(user);
+        },
+        onLoginError: (error) => {
+          console.error('Google sign-in diagnostic:', {
+            code: error.code,
+            status: error.status,
+            detail: error.detail,
+          });
+          showToast(error.message, 'info');
+        },
+      }}
+      settingsModal={{
+        open: Boolean(showAccountModal),
+        mode: showAccountModal,
+        currentUser,
+        usage: accountUsage ?? null,
+        language,
+        onClose: () => setShowAccountModal(null),
+        onLanguageChange: handleLanguageChange,
+        onLogout: authFlow.handleLogout,
+      }}
+      sidebar={(
+        <AppSidebarContainer
+          isGuest={authStatus === 'guest'}
+          experience={guestExperience}
+          workspace={sessionWorkspace}
+          navigation={shellNavigation}
           language={language}
-          onClose={() => setShowAccountModal(null)}
-          onLanguageChange={(nextLanguage) => {
-            setLanguage(nextLanguage);
-            localStorage.setItem('musee_language', nextLanguage);
-          }}
-          onLogout={authFlow.handleLogout}
+          userId={sessionUserId}
+          currentUsername={currentUser?.username || currentUser?.full_name || currentUser?.email?.split('@')[0]}
+          isAuthenticated={Boolean(currentUser)}
+          userAvatar={userAvatar}
+          devProfileSwitcherSlot={devProfileSwitcherSlot}
+          renameInputRef={renameInputRef}
+          onLanguageChange={handleLanguageChange}
+          onOpenSettings={() => setShowAccountModal('account')}
+          onSignIn={authFlow.requestLogin}
+          onSignOut={authFlow.handleLogout}
         />
-
-        {!sessionCaptureState && (
-          authStatus === 'guest' ? (
-            <GuestSidebar
-              sidebarOpen={sidebarOpen}
-              sidebarCollapsed={sidebarCollapsed}
-              experience={guestExperience}
-              currentSession={sessionSummaries[0] ?? null}
-              sessionsLoading={sessionsLoading}
-              onSelectCurrentSession={handleSelectSessionSummary}
-              onSignIn={authFlow.requestLogin}
-              onExpandSidebar={expandSidebar}
-              onCollapseSidebar={collapseSidebar}
-              onCloseMobileSidebar={closeMobileSidebar}
-            />
-          ) : (
-            <AppSidebar
-            sidebarOpen={sidebarOpen}
-            sidebarCollapsed={sidebarCollapsed}
-            recentsOpen={recentsOpen}
-            userMenuOpen={userMenuOpen}
-            sessionSearch={sessionSearch}
-            language={language}
-            sessionsLoading={sessionsLoading}
-            recentSessionSummaries={recentSessionSummaries}
-            sessionSummaries={sessionSummaries}
-            activeSessionSummaryId={activeSessionSummary?.id}
-            isNewSessionEntryActive={isNewSessionEntryActive}
-            editingSessionId={editingSessionId}
-            editingSessionTitle={editingSessionTitle}
-            openSessionMenuId={openSessionMenuId}
-            pendingDeletedSessionIds={pendingDeletedSessionIds}
-            currentUsername={currentUser?.username || currentUser?.full_name || currentUser?.email?.split('@')[0]}
-            isAuthenticated={Boolean(currentUser)}
-            accountUsageSlot={<AccountUsageMeter userId={sessionUserId} />}
-            devProfileSwitcherSlot={devProfileSwitcherSlot}
-            userAvatar={userAvatar}
-            renameInputRef={renameInputRef}
-            navigationItems={sidebarNavigationItems}
-            onRecentsOpenChange={setRecentsOpen}
-            onUserMenuOpenChange={setUserMenuOpen}
-            onSessionSearchChange={setSessionSearch}
-            onEditingSessionTitleChange={setEditingSessionTitle}
-            onCommitSessionRename={commitSessionRename}
-            onCancelSessionRename={() => {
-              setEditingSessionId(null);
-              setEditingSessionTitle('');
-            }}
-            onOpenSessionMenuChange={(summaryId, open) => setOpenSessionMenuId(open ? summaryId : null)}
-            onSelectSessionSummary={handleSelectSessionSummary}
-            onStartRenameSession={handleStartRenameSession}
-            onDeleteSession={handleDeleteSession}
-            onLanguageChange={(nextLanguage) => {
-              setLanguage(nextLanguage);
-              localStorage.setItem('musee_language', nextLanguage);
-            }}
-            onOpenSettings={() => setShowAccountModal('account')}
-            onSignIn={authFlow.requestLogin}
-            onSignOut={authFlow.handleLogout}
-            onExpandSidebar={expandSidebar}
-            onCollapseSidebar={collapseSidebar}
-            onCloseMobileSidebar={closeMobileSidebar}
-            />
-          )
-        )}
-
-        {/* Right-hand Canvas main container */}
-        <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
-          
-          <AppViewport
-            shell={viewportShell}
-            state={viewportState}
-            navigation={viewportNavigation}
-            actions={viewportActions}
-          />
-
-        <IdentifyAgainModal
-          open={showHeaderIdentifyAgainModal}
-          values={headerIdentifyAgainValues}
-          error={headerIdentifyAgainError}
-          isSubmitting={isHeaderIdentifyingAgain}
-          onValuesChange={updateHeaderIdentifyAgainValues}
-          onClose={closeHeaderIdentifyAgainModal}
-          onSubmit={() => void submitHeaderIdentifyAgain()}
-        />
-        <AppConfirmationLayer
-          deleteConfirmation={deleteConfirmation}
-          pendingDeleteSessionSummary={pendingDeleteSessionSummary}
-          showCaptureExitModal={showCaptureExitModal}
-          onCloseDeleteConfirmation={dismissDeleteConfirmation}
-          onConfirmDeleteItem={artworkDeletion.confirmDeleteItem}
-          onConfirmDeleteItems={artworkDeletion.confirmDeleteItems}
-          onConfirmDeleteSession={confirmDeleteSession}
-          onCancelCaptureExit={handleCancelCaptureExit}
-          onConfirmCaptureExit={handleConfirmCaptureExit}
-        />
-
-      </main>
-
-
-
-      </div>
-    </GoogleOAuthProvider>
+      )}
+      viewport={{
+        shell: viewportShell,
+        state: viewportState,
+        navigation: viewportNavigation,
+        actions: viewportActions,
+      }}
+      identifyAgainModal={{
+        open: showHeaderIdentifyAgainModal,
+        values: headerIdentifyAgainValues,
+        error: headerIdentifyAgainError,
+        isSubmitting: isHeaderIdentifyingAgain,
+        onValuesChange: updateHeaderIdentifyAgainValues,
+        onClose: closeHeaderIdentifyAgainModal,
+        onSubmit: () => void submitHeaderIdentifyAgain(),
+      }}
+      confirmationLayer={{
+        deleteConfirmation,
+        pendingDeleteSessionSummary,
+        showCaptureExitModal,
+        onCloseDeleteConfirmation: dismissDeleteConfirmation,
+        onConfirmDeleteItem: artworkDeletion.confirmDeleteItem,
+        onConfirmDeleteItems: artworkDeletion.confirmDeleteItems,
+        onConfirmDeleteSession: confirmDeleteSession,
+        onCancelCaptureExit: handleCancelCaptureExit,
+        onConfirmCaptureExit: handleConfirmCaptureExit,
+      }}
+    />
   );
 };
 
