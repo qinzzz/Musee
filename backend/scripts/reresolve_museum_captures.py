@@ -42,24 +42,31 @@ from app.services.artwork_event_service import (
     ARTWORK_EVENT_MUSEUM_RESOLUTION,
     log_artwork_event,
 )
-from app.services.museum.evidence import museum_evidence_from_location
+from app.services.museum.evaluation import evidence_for_evaluation
 from app.services.museum.resolver import resolve_museum, resolution_bucket
 
 SCOPES = ("only-unresolved", "upgrade", "all")
 BATCH_WRITE_SIZE = 50
 
 
-def _should_write(scope: str, current_id, new_id, bucket: str) -> bool:
+def _should_write(scope: str, current_id, new_id, bucket: str, *, include_distance: bool) -> bool:
     if not new_id:
         return False
+    is_footprint = bucket == "footprint"
+    # Footprint-only by default: a footprint (point-in-polygon) match is reliable
+    # at any GPS accuracy, but a bare-distance match on a legacy coordinate (unknown
+    # accuracy) is exactly the street-capture false-positive risk. --include-distance
+    # opts into distance writes when the operator accepts that trade.
+    if not is_footprint and not include_distance:
+        return False
     if current_id is None:
-        return True  # fill a NULL — always allowed
+        return True  # fill a NULL
     if new_id == current_id:
         return False  # already there
     if scope == "only-unresolved":
         return False  # never touch an existing association
     if scope == "upgrade":
-        return bucket == "footprint"  # overwrite only for the strongest signal
+        return is_footprint  # overwrite only for the strongest signal
     return True  # scope == "all"
 
 
@@ -69,9 +76,10 @@ def reresolve_captures(
     scope: str,
     apply: bool,
     limit: int = 0,
+    include_distance: bool = False,
     batch_size: int = BATCH_WRITE_SIZE,
 ) -> dict:
-    stats = Counter()
+    stats: Counter = Counter({"scanned": 0, "updated": 0, "no_evidence": 0})
     with session_factory() as db:
         query = db.query(SavedArtwork).filter(SavedArtwork.active_filter())
         if scope == "only-unresolved":
@@ -83,7 +91,9 @@ def reresolve_captures(
         pending = 0
         for artwork in query.all():
             stats["scanned"] += 1
-            evidence = museum_evidence_from_location(artwork.location, artwork_id=str(artwork.id))
+            # allow_legacy_coordinates: treat coords with no source tag as legacy
+            # capture evidence (the bulk of the existing backlog), matching the eval.
+            evidence = evidence_for_evaluation(artwork, allow_legacy_coordinates=True)
             if evidence is None:
                 stats["no_evidence"] += 1
                 continue
@@ -93,7 +103,10 @@ def reresolve_captures(
             bucket = resolution_bucket(result.status, result.reason)
             stats[f"outcome_{bucket}"] += 1
 
-            if not _should_write(scope, artwork.capture_museum_entity_id, new_id, bucket):
+            if not _should_write(
+                scope, artwork.capture_museum_entity_id, new_id, bucket,
+                include_distance=include_distance,
+            ):
                 continue
 
             stats["updated"] += 1
@@ -130,6 +143,9 @@ def main() -> None:
                         help="Write changes. Without this the run is a dry run.")
     parser.add_argument("--allow-prod", action="store_true", help="Permit --apply when ENV=prod.")
     parser.add_argument("--limit", type=int, default=0, help="0 = all matching artworks.")
+    parser.add_argument("--include-distance", action="store_true",
+                        help="Also write bare-distance matches (risky on legacy coords; "
+                             "default writes only footprint matches).")
     args = parser.parse_args()
 
     if args.apply and settings.env.lower() == "prod" and not args.allow_prod:
@@ -138,6 +154,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     stats = reresolve_captures(
         SessionLocal, scope=args.scope, apply=args.apply, limit=args.limit,
+        include_distance=args.include_distance,
     )
     print(json.dumps({"mode": "APPLIED" if args.apply else "DRY RUN",
                       "scope": args.scope, **stats}, indent=2))

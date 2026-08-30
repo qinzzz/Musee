@@ -91,6 +91,31 @@ def test_upgrade_leaves_non_footprint_associations_alone(db):
     assert db.get(SavedArtwork, "x1").capture_museum_entity_id == wrong.id  # unchanged
 
 
+def test_sourceless_legacy_coords_resolve_via_footprint(db):
+    # The legacy backlog: coords present but NO source tag. Must still be
+    # re-resolved (treated as legacy capture evidence), not skipped.
+    m = _footprint_museum(db, "Louvre")
+    _artwork(db, "leg1", None, {"latitude": LAT, "longitude": LON})  # no "source"
+    stats = _run(db, scope="only-unresolved")
+    assert stats.get("no_evidence", 0) == 0
+    assert stats["updated"] == 1
+    db.expire_all()
+    assert db.get(SavedArtwork, "leg1").capture_museum_entity_id == m.id
+
+
+def test_distance_match_footprint_only_by_default(db):
+    # A bare-distance match on a legacy coord is the street-false-positive risk;
+    # default writes only footprint matches, --include-distance opts in.
+    near = _plain_museum(db, "NearNoFootprint", LAT, LON)  # no footprint -> distance
+    _artwork(db, "d1", None, {"latitude": LAT, "longitude": LON})
+    assert _run(db, scope="only-unresolved")["updated"] == 0  # skipped by default
+    db.expire_all()
+    assert db.get(SavedArtwork, "d1").capture_museum_entity_id is None
+    assert _run(db, scope="only-unresolved", include_distance=True)["updated"] == 1
+    db.expire_all()
+    assert db.get(SavedArtwork, "d1").capture_museum_entity_id == near.id
+
+
 def test_artwork_without_coords_is_skipped(db):
     _footprint_museum(db, "Louvre")
     _artwork(db, "n1", None, None)
