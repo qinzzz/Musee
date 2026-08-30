@@ -24,7 +24,10 @@ from app.services.museum.wikidata_validation import (
 )
 
 
-OVERPASS_API_URL = "https://overpass-api.de/api/interpreter"
+OVERPASS_API_URLS = [
+    url.strip() for url in settings.overpass_api_urls.split(",") if url.strip()
+] or ["https://overpass-api.de/api/interpreter"]
+OVERPASS_API_URL = OVERPASS_API_URLS[0]  # primary; kept for backward reference
 DISCOVERY_RADIUS_METERS = 250
 MAX_POINT_HIGH_CONFIDENCE_METERS = 60.0
 MAX_UNIQUE_POINT_FALLBACK_METERS = 120.0
@@ -96,21 +99,30 @@ class OverpassMuseumProvider:
             f");out center geom;"
         )
         headers = {"User-Agent": settings.wikidata_user_agent}
+        last_exc: Exception | None = None
         async with httpx.AsyncClient(headers=headers, timeout=httpx.Timeout(20.0, connect=10.0)) as client:
-            for attempt in range(OVERPASS_MAX_ATTEMPTS):
-                try:
-                    response = await client.post(OVERPASS_API_URL, data={"data": query})
-                    response.raise_for_status()
-                    payload = response.json()
-                    candidates = parse_overpass_candidates(payload, latitude, longitude)
-                    self._cache[cache_key] = (time.monotonic(), candidates)
-                    return candidates
-                except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-                    status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
-                    retryable = status is None or status in RETRYABLE_STATUS_CODES
-                    if attempt == OVERPASS_MAX_ATTEMPTS - 1 or not retryable:
-                        raise
-                    await asyncio.sleep(2**attempt)
+            # Try each endpoint in turn; a connection/5xx failure on one falls
+            # over to the next mirror rather than aborting the whole lookup.
+            for endpoint in OVERPASS_API_URLS:
+                for attempt in range(OVERPASS_MAX_ATTEMPTS):
+                    try:
+                        response = await client.post(endpoint, data={"data": query})
+                        response.raise_for_status()
+                        payload = response.json()
+                        candidates = parse_overpass_candidates(payload, latitude, longitude)
+                        self._cache[cache_key] = (time.monotonic(), candidates)
+                        return candidates
+                    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+                        status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+                        retryable = status is None or status in RETRYABLE_STATUS_CODES
+                        if not retryable:
+                            raise  # e.g. 400 malformed query — other mirrors won't help
+                        last_exc = exc
+                        if attempt < OVERPASS_MAX_ATTEMPTS - 1:
+                            await asyncio.sleep(2**attempt)
+                        # otherwise this endpoint is exhausted; fall over to the next
+        if last_exc is not None:
+            raise last_exc
         return []
 
 

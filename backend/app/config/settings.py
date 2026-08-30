@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     google_client_id: Optional[str] = None
     google_vision_api_key: Optional[str] = None
     wikidata_user_agent: str = "Musee/0.1 (https://museelab.com)"
+    # Overpass endpoints, comma-separated, tried in order on connection/5xx
+    # failures. The public overpass-api.de is flaky under load; the mirrors give
+    # the venue resolver and the footprint backfill somewhere to fall over to.
+    overpass_api_urls: str = (
+        "https://overpass-api.de/api/interpreter,"
+        "https://overpass.kumi.systems/api/interpreter,"
+        "https://overpass.openstreetmap.fr/api/interpreter"
+    )
 
     # Outbound email (email auth flows). Transport is chosen by config:
     # SMTP when fully configured (host+username+password), else Resend when
