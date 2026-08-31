@@ -1,13 +1,15 @@
 # Musee: The Future of Art Curation
 
-Musee is a web-based art exploration experience that uses advanced AI to identify, analyze, and discuss artwork in real-time.
+Musee is an art exploration experience that uses advanced AI to identify, analyze, and discuss artwork in real-time.
 
 ## Project Overview
 
-The project is divided into two main components:
+The project is divided into four main components:
 
 - **[Backend](https://github.com/qinzzz/Musee/tree/main/backend)**: A high-performance FastAPI server orchestrating AI models (Gemini, OpenAI, Claude) and managing persistent curation history with Neon PostgreSQL.
 - **[Web Client](https://github.com/qinzzz/Musee/tree/main/frontend-web)**: A stunning, glassmorphic React/Vite application featuring an infinite "Exhibition Corridor" and batch artwork curation.
+- **Mobile Client**: A new React Native + Expo iOS application under `frontend-mobile/`.
+- **Client Core**: Device-agnostic TypeScript shared by both clients under `packages/client-core/`; platform UI and device integrations remain inside each app.
 
 ## Quick Start
 
@@ -31,9 +33,14 @@ Journal execution is opt-in via `--execute`; use `--user-id` and
 
 ### 2. Web Client Setup
 ```bash
-cd frontend-web
 npm install
-npm run dev
+npm run web:dev
+```
+
+### 3. Mobile Client Setup
+```bash
+npm install
+npm run mobile:start
 ```
 
 ## Core Features
@@ -57,7 +64,9 @@ All LLM prompts are externalized for easy customization and can be found under `
 
 ```mermaid
 graph LR
-    B[Web Client] --> C[FastAPI Backend]
+    B[Web Client] --> F[Client Core]
+    A[iOS App] --> F
+    F --> C[FastAPI Backend]
     C --> D[AI Models: GPT-4/Claude/Gemini]
     C --> E[Persistent Store: Neon PostgreSQL]
 ```
