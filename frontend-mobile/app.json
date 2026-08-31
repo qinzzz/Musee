@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Musee",
+    "slug": "musee",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "scheme": "musee",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
