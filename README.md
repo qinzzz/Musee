@@ -1,14 +1,13 @@
 # Musee: The Future of Art Curation
 
-Musee is a multi-platform art exploration ecosystem that uses advanced AI to identify, analyze, and discuss artwork in real-time. Whether through a premium iOS app or an immersive web experience, Musee turns any device into a personal art curator.
+Musee is a web-based art exploration experience that uses advanced AI to identify, analyze, and discuss artwork in real-time.
 
 ## Project Overview
 
-The project is divided into three main components:
+The project is divided into two main components:
 
 - **[Backend](https://github.com/qinzzz/Musee/tree/main/backend)**: A high-performance FastAPI server orchestrating AI models (Gemini, OpenAI, Claude) and managing persistent curation history with Neon PostgreSQL.
 - **[Web Client](https://github.com/qinzzz/Musee/tree/main/frontend-web)**: A stunning, glassmorphic React/Vite application featuring an infinite "Exhibition Corridor" and batch artwork curation.
-- **[iOS App](https://github.com/qinzzz/Musee/tree/main/frontend)**: A React Native mobile app for on-the-go art discovery with native camera integration.
 
 ## Quick Start
 
@@ -37,14 +36,6 @@ npm install
 npm run dev
 ```
 
-### 3. iOS App Setup
-```bash
-cd frontend
-npm install
-cd ios && pod install && cd ..
-npm run ios
-```
-
 ## Core Features
 
 ### Real-time Identification
@@ -66,7 +57,6 @@ All LLM prompts are externalized for easy customization and can be found under `
 
 ```mermaid
 graph LR
-    A[iOS App] --> C[FastAPI Backend]
     B[Web Client] --> C[FastAPI Backend]
     C --> D[AI Models: GPT-4/Claude/Gemini]
     C --> E[Persistent Store: Neon PostgreSQL]
@@ -91,7 +81,6 @@ Museum venue thumbnails are enriched from Wikidata `P18` and Wikimedia Commons; 
 For specific setup guides and technical deep-dives:
 - **[Backend README](https://github.com/qinzzz/Musee/blob/main/backend/README.md)**
 - **[Web Client README](https://github.com/qinzzz/Musee/blob/main/frontend-web/README.md)**
-- **[iOS App README](https://github.com/qinzzz/Musee/blob/main/frontend/README.md)**
 
 ---
 *Built for the future of art curation.*
