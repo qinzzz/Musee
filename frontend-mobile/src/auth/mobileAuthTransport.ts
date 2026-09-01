@@ -2,6 +2,9 @@ import type { ApiFetch } from '@musee/client-core';
 
 export type MobileAuthUser = {
   user_id: string;
+  email?: string | null;
+  full_name?: string | null;
+  username?: string | null;
   [key: string]: unknown;
 };
 
