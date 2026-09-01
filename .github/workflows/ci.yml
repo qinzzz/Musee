@@ -109,6 +109,9 @@ jobs:
       - name: Run shared client core tests
         run: npm run test:run --workspace @musee/client-core
 
+      - name: Run mobile service tests
+        run: npm run test:run --workspace @musee/mobile
+
       - name: Build web client
         run: npm run web:build
 
