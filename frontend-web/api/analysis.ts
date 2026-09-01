@@ -1,4 +1,5 @@
 import type { ReferenceItem } from '../types';
+import { createSseParser, type SseMessage } from '@musee/client-core';
 import { API_BASE_URL, API_TIMEOUT, fetchWithTimeout, getLanguage } from './core';
 import { base64ToFile } from './misc';
 import { prefetchExploreDataWithContext } from './explore';
@@ -327,30 +328,10 @@ export async function analyzeArtworkStream(
     if (!reader) throw new Error('Response body is not readable');
 
     const decoder = new TextDecoder();
-    let buffer = '';
+    const parser = createSseParser();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n');
-      buffer = events.pop() || '';
-
-      for (const event of events) {
-        if (!event.trim()) continue;
-
-        const lines = event.split('\n');
-        let eventType = '';
-        let eventData = '';
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) eventType = line.slice(7);
-          else if (line.startsWith('data: ')) eventData = line.slice(6);
-        }
-
-        if (!eventData) continue;
-
+    const handleEvents = (events: SseMessage[]): boolean => {
+      for (const { event: eventType, data: eventData } of events) {
         try {
           const data = JSON.parse(eventData);
 
@@ -376,13 +357,22 @@ export async function analyzeArtworkStream(
             if (onMetrics) onMetrics(data as StreamingMetrics);
           } else if (eventType === 'error') {
             onError(new Error(data.message || 'Unknown streaming error'));
-            return;
+            return true;
           }
         } catch (parseError) {
           console.error('Failed to parse SSE event:', parseError, eventData);
         }
       }
+      return false;
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (handleEvents(parser.push(decoder.decode(value, { stream: true })))) return;
     }
+    if (handleEvents(parser.push(decoder.decode()))) return;
+    handleEvents(parser.finish());
   } catch (error) {
     onError(error instanceof Error ? error : new Error(String(error)));
   }

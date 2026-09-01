@@ -8,6 +8,7 @@ from app.database.models import ArtworkEvent, MuseumEntity, SavedArtwork, Sessio
 from app.main import app
 from app.models.artwork import AIProvider
 from app.routers import artwork_ingest
+from app.services.ai_client_interface import AIStreamChunk
 from app.services.authorization_service import RequestPrincipal, get_request_principal
 from tests.conftest import TestingSessionLocal
 
@@ -65,6 +66,31 @@ class _SuccessfulAIService:
         }
         ```
         """
+
+
+class _SuccessfulStreamingAIService:
+    async def identify_artist_stream_result(self, *_args, **_kwargs):
+        yield AIStreamChunk(
+            type="text",
+            text='{"artist":"Hilma af Klint","title":"The Swan",',
+        )
+        yield AIStreamChunk(
+            type="text",
+            text=(
+                '"description":"A symbolic abstract composition.",'
+                '"date":"1915","medium":"Oil on canvas",'
+                '"movement":"Abstract Art","period_bucket":"Modern",'
+                '"tags":["symbolism","abstract"]}'
+            ),
+        )
+        yield AIStreamChunk(type="usage", input_tokens=120, output_tokens=80)
+
+
+class _FailingStreamingAIService:
+    async def identify_artist_stream_result(self, *_args, **_kwargs):
+        if False:
+            yield AIStreamChunk(type="text", text="")
+        raise RuntimeError("stream identify failed")
 
 
 def test_artworks_upload_persists_pending_artwork(client, monkeypatch):
@@ -126,6 +152,162 @@ def test_mobile_upload_persists_backend_owned_image_uri(client, monkeypatch):
     with TestingSessionLocal() as db:
         saved = db.query(SavedArtwork).filter(SavedArtwork.user_id == "ios-upload-user").one()
         assert saved.photo_uri == "https://images.example.com/mobile-artwork.jpg"
+
+
+def test_saved_artwork_stream_updates_pending_record_in_place(client, monkeypatch):
+    async def fake_load_stored_image_bytes(*_args, **_kwargs):
+        return b"stored-image"
+
+    async def fake_vision_hint(_image_bytes):
+        return None, ["https://example.com/ref"]
+
+    async def noop(*_args, **_kwargs):
+        return None
+
+    with TestingSessionLocal() as db:
+        user = User(user_id="stream-user", device_id="stream-user")
+        artwork = SavedArtwork(
+            photo_uri="https://images.example.com/pending.jpg",
+            artist_name="Unknown Artist",
+            artwork_name="Untitled",
+            user_id="stream-user",
+            analysis_status="pending",
+            params={},
+            is_recognized=0,
+        )
+        db.add_all([user, artwork])
+        db.commit()
+        db.refresh(artwork)
+        artwork_id = str(artwork.id)
+
+    async def stream_principal(_request: Request):
+        with TestingSessionLocal() as db:
+            user = db.query(User).filter(User.user_id == "stream-user").one()
+            return RequestPrincipal(state="authenticated", user_id="stream-user", user=user)
+
+    app.dependency_overrides[get_request_principal] = stream_principal
+    monkeypatch.setattr(artwork_ingest, "load_stored_image_bytes", fake_load_stored_image_bytes)
+    monkeypatch.setattr(artwork_ingest, "get_vision_hint", fake_vision_hint)
+    monkeypatch.setattr(artwork_ingest, "determine_ai_provider", lambda _model=None: AIProvider.OPENAI)
+    monkeypatch.setattr(artwork_ingest, "start_ai_usage", lambda **_kwargs: "usage-1")
+    monkeypatch.setattr(artwork_ingest, "succeed_ai_usage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(artwork_ingest, "run_artwork_analysis", noop)
+    monkeypatch.setattr(artwork_ingest, "generate_fun_facts", noop)
+    monkeypatch.setattr(artwork_ingest, "do_artist_bio", noop)
+    monkeypatch.setattr(
+        artwork_ingest.AIServiceFactory,
+        "get_service",
+        lambda _provider: _SuccessfulStreamingAIService(),
+    )
+
+    response = client.post(f"/api/artworks/{artwork_id}/analyze-stream")
+
+    assert response.status_code == 200
+    assert "event: chunk" in response.text
+    assert "event: metrics" in response.text
+    assert "event: complete" in response.text
+    assert f'"artwork_id": "{artwork_id}"' in response.text
+
+    with TestingSessionLocal() as db:
+        assert db.query(SavedArtwork).filter(SavedArtwork.user_id == "stream-user").count() == 1
+        updated = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).one()
+        assert updated.analysis_status == "analyzed"
+        assert updated.artist_name == "Hilma af Klint"
+        assert updated.artwork_name == "The Swan"
+        assert updated.analysis == "A symbolic abstract composition."
+        events = (
+            db.query(ArtworkEvent)
+            .filter(ArtworkEvent.artwork_id == artwork_id)
+            .order_by(ArtworkEvent.created_at.asc())
+            .all()
+        )
+        assert [event.event_type for event in events] == [
+            "artwork_identification_requested",
+            "artwork_identification_completed",
+        ]
+
+
+def test_saved_artwork_stream_marks_record_failed(client, monkeypatch):
+    async def fake_load_stored_image_bytes(*_args, **_kwargs):
+        return b"stored-image"
+
+    async def fake_vision_hint(_image_bytes):
+        return None, []
+
+    with TestingSessionLocal() as db:
+        user = User(user_id="stream-fail-user", device_id="stream-fail-user")
+        artwork = SavedArtwork(
+            photo_uri="https://images.example.com/failing.jpg",
+            artist_name="Unknown Artist",
+            artwork_name="Untitled",
+            user_id="stream-fail-user",
+            analysis_status="pending",
+            params={},
+            is_recognized=0,
+        )
+        db.add_all([user, artwork])
+        db.commit()
+        db.refresh(artwork)
+        artwork_id = str(artwork.id)
+
+    async def stream_principal(_request: Request):
+        with TestingSessionLocal() as db:
+            user = db.query(User).filter(User.user_id == "stream-fail-user").one()
+            return RequestPrincipal(state="authenticated", user_id="stream-fail-user", user=user)
+
+    app.dependency_overrides[get_request_principal] = stream_principal
+    monkeypatch.setattr(artwork_ingest, "load_stored_image_bytes", fake_load_stored_image_bytes)
+    monkeypatch.setattr(artwork_ingest, "get_vision_hint", fake_vision_hint)
+    monkeypatch.setattr(artwork_ingest, "determine_ai_provider", lambda _model=None: AIProvider.OPENAI)
+    monkeypatch.setattr(artwork_ingest, "start_ai_usage", lambda **_kwargs: "usage-1")
+    monkeypatch.setattr(artwork_ingest, "fail_ai_usage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        artwork_ingest.AIServiceFactory,
+        "get_service",
+        lambda _provider: _FailingStreamingAIService(),
+    )
+
+    response = client.post(f"/api/artworks/{artwork_id}/analyze-stream")
+
+    assert response.status_code == 200
+    assert "event: error" in response.text
+    assert "stream identify failed" in response.text
+    with TestingSessionLocal() as db:
+        failed = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).one()
+        assert failed.analysis_status == "failed"
+        assert failed.analysis_error == "stream identify failed"
+
+
+def test_saved_artwork_stream_rejects_a_different_user(client, monkeypatch):
+    load_image = pytest.fail
+    with TestingSessionLocal() as db:
+        owner = User(user_id="stream-owner", device_id="stream-owner")
+        intruder = User(user_id="stream-intruder", device_id="stream-intruder")
+        artwork = SavedArtwork(
+            photo_uri="https://images.example.com/private.jpg",
+            artist_name="Unknown Artist",
+            artwork_name="Untitled",
+            user_id="stream-owner",
+            analysis_status="pending",
+            params={},
+            is_recognized=0,
+        )
+        db.add_all([owner, intruder, artwork])
+        db.commit()
+        db.refresh(artwork)
+        artwork_id = str(artwork.id)
+
+    async def intruder_principal(_request: Request):
+        with TestingSessionLocal() as db:
+            user = db.query(User).filter(User.user_id == "stream-intruder").one()
+            return RequestPrincipal(state="authenticated", user_id="stream-intruder", user=user)
+
+    app.dependency_overrides[get_request_principal] = intruder_principal
+    monkeypatch.setattr(artwork_ingest, "load_stored_image_bytes", load_image)
+
+    response = client.post(f"/api/artworks/{artwork_id}/analyze-stream")
+
+    assert response.status_code == 403
 
 
 def test_artworks_upload_resolves_capture_museum_in_background(client, db, monkeypatch):

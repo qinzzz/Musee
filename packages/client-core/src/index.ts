@@ -1,6 +1,14 @@
 export const CLIENT_CORE_VERSION = '0.0.0';
 
 export {
+  parseArtworkAnalysisStreamEvent,
+  type ArtworkAnalysisMetrics,
+  type ArtworkAnalysisResult,
+  type ArtworkAnalysisStatus,
+  type ArtworkAnalysisStreamEvent,
+} from './artworkAnalysis';
+
+export {
   createApiClient,
   type ApiClient,
   type ApiClientOptions,
@@ -13,3 +21,8 @@ export {
   resolveBackendOrigin,
   type BackendHealth,
 } from './health';
+export {
+  createSseParser,
+  type SseMessage,
+  type SseParser,
+} from './sse';

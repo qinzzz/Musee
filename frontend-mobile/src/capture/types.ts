@@ -19,3 +19,13 @@ export type PendingArtworkUpload = {
   artistName: string;
   artworkName: string;
 };
+
+export type AnalyzedArtwork = Omit<PendingArtworkUpload, 'analysisStatus' | 'artistName' | 'artworkName'> & {
+  analysisStatus: 'analyzed';
+  artistName: string;
+  artworkName: string;
+  analysis: string;
+  date?: string | null;
+  medium?: string | null;
+  tags: string[];
+};
