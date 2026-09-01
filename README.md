@@ -43,6 +43,14 @@ npm install
 npm run mobile:start
 ```
 
+The iOS Simulator connects to `http://127.0.0.1:8000/api` by default. For a
+physical device or another backend, set `EXPO_PUBLIC_API_URL` to a reachable
+API base URL before starting Expo:
+
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.1.10:8000/api npm run mobile:start
+```
+
 ## Core Features
 
 ### Real-time Identification
