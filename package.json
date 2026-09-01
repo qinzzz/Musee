@@ -20,6 +20,7 @@
     "web:test": "npm run test:run --workspace frontend-web",
     "web:build": "npm run build --workspace frontend-web",
     "mobile:start": "npm run start --workspace frontend-mobile",
+    "test": "npm run test:run --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }

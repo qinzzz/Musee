@@ -1,3 +1,8 @@
+import {
+  createApiClient,
+  resolveBackendOrigin,
+  type ApiRequestOptions,
+} from '@musee/client-core';
 import { getApiTimingHeaders, logApiTiming } from './performance';
 
 function resolveApiBaseUrl(): string {
@@ -18,17 +23,6 @@ const DEV_FIXED_USER_ID = import.meta.env.VITE_DEV_USER_ID || 'musee-dev-user';
 const DEV_FREE_TIER_USER_ID = import.meta.env.VITE_DEV_FREE_TIER_USER_ID || 'musee-dev-user-freetier';
 const REAUTH_REQUIRED_EVENT = 'musee:reauth-required';
 
-let accessToken: string | null = null;
-let refreshPromise: Promise<string | null> | null = null;
-
-function setAccessToken(token: string | null): void {
-  accessToken = token;
-}
-
-function getAccessToken(): string | null {
-  return accessToken;
-}
-
 async function requestAccessToken(allowSupersededRetry = true): Promise<string | null> {
   const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
     method: 'POST',
@@ -39,40 +33,33 @@ async function requestAccessToken(allowSupersededRetry = true): Promise<string |
     return requestAccessToken(false);
   }
   if (!response.ok) {
-    setAccessToken(null);
     return null;
   }
   const data = await response.json() as { access_token?: string };
-  const token = data.access_token || null;
-  setAccessToken(token);
-  return token;
+  return data.access_token || null;
 }
 
-function refreshAccessToken(): Promise<string | null> {
-  if (!refreshPromise) {
-    refreshPromise = requestAccessToken().finally(() => {
-      refreshPromise = null;
-    });
+function notifyAuthenticationRequired(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(REAUTH_REQUIRED_EVENT));
   }
-  return refreshPromise;
 }
+
+const apiClient = createApiClient({
+  fetch: (resource, options) => fetch(resource, options),
+  defaultTimeoutMs: API_TIMEOUT,
+  defaultCredentials: 'include',
+  refreshAccessToken: requestAccessToken,
+  onAuthenticationRequired: notifyAuthenticationRequired,
+});
+
+const { getAccessToken, refreshAccessToken, setAccessToken } = apiClient;
 
 function getLanguage(): string | null {
   return localStorage.getItem('musee_language');
 }
 
-async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit & { timeout?: number } = {}) {
-  const { timeout = API_TIMEOUT } = options;
-
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-
-  const headers = new Headers(options.headers || {});
-
-  if (accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
-  }
-
+async function fetchWithTimeout(resource: RequestInfo | URL, options: ApiRequestOptions = {}) {
   const method = (options.method || 'GET').toUpperCase();
   const resourceLabel = typeof resource === 'string'
     ? resource
@@ -82,31 +69,7 @@ async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestIni
   const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
   try {
-    let response = await fetch(resource, {
-      ...options,
-      headers,
-      credentials: options.credentials || 'include',
-      signal: controller.signal,
-    });
-
-    if (response.status === 401 && accessToken && !resourceLabel.includes('/auth/')) {
-      const renewedToken = await refreshAccessToken();
-      if (renewedToken) {
-        headers.set('Authorization', `Bearer ${renewedToken}`);
-        response = await fetch(resource, {
-          ...options,
-          headers,
-          credentials: options.credentials || 'include',
-          signal: controller.signal,
-        });
-      }
-      if (!renewedToken || response.status === 401) {
-        setAccessToken(null);
-      }
-      if ((!renewedToken || response.status === 401) && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent(REAUTH_REQUIRED_EVENT));
-      }
-    }
+    const response = await apiClient.fetchWithTimeout(resource, options);
 
     const durationMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - start;
     const { serverTiming, responseTime } = getApiTimingHeaders(response);
@@ -129,13 +92,11 @@ async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestIni
       errorName: error instanceof Error ? error.name : 'UnknownError',
     });
     throw error;
-  } finally {
-    clearTimeout(id);
   }
 }
 
 function getBaseDomain(): string {
-  return API_BASE_URL.replace(/\/api$/, '');
+  return resolveBackendOrigin(API_BASE_URL);
 }
 
 function resolveImageUrl(photoUri: string | undefined): string {

@@ -106,6 +106,9 @@ jobs:
       - name: Run web tests with coverage
         run: npm run test:coverage --workspace frontend-web
 
+      - name: Run shared client core tests
+        run: npm run test:run --workspace @musee/client-core
+
       - name: Build web client
         run: npm run web:build
 
