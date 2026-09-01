@@ -20,7 +20,11 @@ from app.config.settings import settings
 from app.database.connection import get_db
 from app.database.models import User, UserCredential
 from app.services.account_service import adopt_anonymous_account, promote_guest_workspace
-from app.services.auth_session_service import issue_login_session, validate_auth_origin
+from app.services.auth_session_service import (
+    is_mobile_client,
+    issue_login_session,
+    validate_auth_origin,
+)
 from app.services.authorization_service import clear_guest_cookie, resolve_guest_workspace
 from app.services.email_service import (
     build_password_reset_email,
@@ -179,7 +183,12 @@ async def login(
     guest_promoted = promote_guest_workspace(db, guest_token, user)
     if guest_token:
         clear_guest_cookie(response)
-    result = issue_login_session(db, response, user)
+    result = issue_login_session(
+        db,
+        response,
+        user,
+        include_refresh_token=is_mobile_client(http_request),
+    )
     result["guest_promoted"] = guest_promoted
     result["is_new_user"] = False
     return result
@@ -214,7 +223,12 @@ async def verify_email(
         guest_promoted = adopt_anonymous_account(db, token.anonymous_user_id, user)
     if guest_token:
         clear_guest_cookie(response)
-    result = issue_login_session(db, response, user)
+    result = issue_login_session(
+        db,
+        response,
+        user,
+        include_refresh_token=is_mobile_client(http_request),
+    )
     result["guest_promoted"] = guest_promoted
     result["is_new_user"] = True
     return result
@@ -272,7 +286,12 @@ async def reset_password(
     guest_promoted = promote_guest_workspace(db, guest_token, user)
     if guest_token:
         clear_guest_cookie(response)
-    result = issue_login_session(db, response, user)
+    result = issue_login_session(
+        db,
+        response,
+        user,
+        include_refresh_token=is_mobile_client(http_request),
+    )
     result["guest_promoted"] = guest_promoted
     result["is_new_user"] = False
     return result

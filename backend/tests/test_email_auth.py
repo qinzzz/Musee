@@ -13,6 +13,7 @@ from app.database.models import (
     User,
     UserCredential,
 )
+from app.services.auth_session_service import CLIENT_PLATFORM_HEADER
 
 
 @pytest.fixture
@@ -76,6 +77,40 @@ class TestSignupVerifyLogin:
         r = client.post("/api/auth/login", json={"email": "  ADA@Example.com ", "password": "correct-horse"})
         assert r.status_code == 200
         assert r.json()["is_new_user"] is False
+
+    def test_mobile_session_transport_covers_email_auth_entrypoints(self, client, sent_emails):
+        mobile_headers = {CLIENT_PLATFORM_HEADER: "ios"}
+        _signup(client)
+
+        verification_token = _extract_token(sent_emails[-1]["html"])
+        verified = client.post(
+            "/api/auth/verify-email",
+            json={"token": verification_token},
+            headers=mobile_headers,
+        )
+        assert verified.status_code == 200
+        assert verified.json()["refresh_token"]
+        assert settings.refresh_cookie_name not in client.cookies
+
+        logged_in = client.post(
+            "/api/auth/login",
+            json={"email": "ada@example.com", "password": "correct-horse"},
+            headers=mobile_headers,
+        )
+        assert logged_in.status_code == 200
+        assert logged_in.json()["refresh_token"]
+        assert settings.refresh_cookie_name not in client.cookies
+
+        client.post("/api/auth/request-password-reset", json={"email": "ada@example.com"})
+        reset_token = _extract_token(sent_emails[-1]["html"])
+        reset = client.post(
+            "/api/auth/reset-password",
+            json={"token": reset_token, "new_password": "mobile-new-password"},
+            headers=mobile_headers,
+        )
+        assert reset.status_code == 200
+        assert reset.json()["refresh_token"]
+        assert settings.refresh_cookie_name not in client.cookies
 
     def test_wrong_password_and_unknown_email_are_indistinguishable(self, client, sent_emails):
         _signup(client)

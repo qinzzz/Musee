@@ -18,7 +18,18 @@ from app.utils.auth_utils import create_access_token
 
 
 REFRESH_SUPERSEDED = "refresh_superseded"
+CLIENT_PLATFORM_HEADER = "x-client-platform"
+REFRESH_TOKEN_HEADER = "X-Refresh-Token"
+MOBILE_CLIENT_PLATFORMS = frozenset({"ios", "android"})
 logger = logging.getLogger(__name__)
+
+
+def is_mobile_client(request: Request | None) -> bool:
+    """Return whether the caller requested the native token transport."""
+    if request is None:
+        return False
+    platform = request.headers.get(CLIENT_PLATFORM_HEADER, "").strip().lower()
+    return platform in MOBILE_CLIENT_PLATFORMS
 
 
 def utc_now() -> datetime:
@@ -113,18 +124,30 @@ def create_refresh_session(db: Session, user_id: str) -> str:
     return raw_token
 
 
-def issue_login_session(db: Session, response: Response, user: User) -> dict:
+def issue_login_session(
+    db: Session,
+    response: Response,
+    user: User,
+    *,
+    include_refresh_token: bool = False,
+) -> dict:
     raw_token = create_refresh_session(db, user.user_id)
     db.commit()
     db.refresh(user)
-    set_refresh_cookie(response, raw_token)
     logger.info("Created authentication session for user_id=%s", user.user_id)
-    return {
+    payload = {
         "access_token": create_access_token(data={"sub": user.user_id}),
         "expires_in": settings.access_token_expire_minutes * 60,
         "token_type": "bearer",
         "user": user.to_dict(),
     }
+    # Login selects exactly one refresh-token transport: response body for a
+    # native client, or an HttpOnly cookie for the browser.
+    if include_refresh_token:
+        payload["refresh_token"] = raw_token
+    else:
+        set_refresh_cookie(response, raw_token)
+    return payload
 
 
 @dataclass(frozen=True)
