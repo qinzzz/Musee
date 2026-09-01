@@ -4,11 +4,13 @@ import asyncio
 from datetime import UTC, datetime
 import json
 import logging
+import time
 import uuid
 from typing import Optional
 
 import anyio
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.config.settings import settings
@@ -40,7 +42,10 @@ from app.services.artwork_background_service import (
     generate_fun_facts,
     track_artwork_task,
 )
-from app.services.artwork_enrichment_service import run_artist_bio_bg as _run_artist_bio_bg
+from app.services.artwork_enrichment_service import (
+    do_artist_bio,
+    run_artist_bio_bg as _run_artist_bio_bg,
+)
 from app.services.artwork_analysis_task_service import run_artwork_analysis
 from app.services.artwork_event_service import (
     ARTWORK_EVENT_IDENTIFICATION_COMPLETED,
@@ -124,6 +129,10 @@ def _resolve_artwork_trigger_source(*, session_id: Optional[str], artwork_id: Op
     if artwork_id:
         return "collection"
     return "upload"
+
+
+def _sse_event(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
 @router.post("/artworks/analyze")
@@ -521,6 +530,214 @@ async def analyze_artwork_unified(
         }
     )
     return response
+
+
+@router.post("/artworks/{artwork_id}/analyze-stream")
+async def analyze_saved_artwork_stream(
+    artwork_id: str,
+    language: Optional[str] = Form(None),
+    identity: Optional[str] = Form("default"),
+    model: Optional[AIProvider] = Form(None),
+    db: Session = Depends(get_db),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
+):
+    artwork = db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id,
+        SavedArtwork.active_filter(),
+    ).first()
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+    user_id = artwork.user_id or artwork.device_id
+    session_id = _get_primary_session_id(db, artwork_id)
+    _authorize_artwork_ingest(
+        db,
+        principal,
+        user_id,
+        session_id,
+        creates_saved_artwork=False,
+    )
+    image_bytes = await load_stored_image_bytes(
+        artwork.photo_uri,
+        failure_detail="Could not load stored image for analysis",
+    )
+
+    artwork.analysis_status = "analyzing"
+    artwork.analysis_error = None
+    artwork.analysis_attempted_at = datetime.now(UTC)
+    request_event = log_artwork_event(
+        db,
+        artwork_id=artwork_id,
+        event_type=ARTWORK_EVENT_IDENTIFICATION_REQUESTED,
+        actor_role="user",
+        trigger_source="session" if session_id else "collection",
+        trigger_session_id=session_id,
+        payload={"identity": identity, "transport": "sse"},
+    )
+    db.commit()
+
+    ai_provider = determine_ai_provider(model)
+    request_id = f"artwork_stream_{int(time.time() * 1000)}"
+    request_started_at = time.time()
+
+    async def event_generator():
+        ai_service = AIServiceFactory.get_service(ai_provider)
+        usage_id = start_ai_usage(
+            user_id=user_id,
+            job_type="artwork_identification",
+            model=get_ai_model_name(ai_service, ai_provider.value),
+            subject_type="artwork",
+            subject_id=artwork_id,
+        )
+        full_text = ""
+        first_chunk_at = None
+        stream_completed_at = None
+        input_tokens = None
+        output_tokens = None
+
+        try:
+            vision_hint, vision_ref_urls = await get_vision_hint(image_bytes)
+            session_context = await get_session_context(session_id) if session_id else None
+
+            async for chunk in ai_service.identify_artist_stream_result(
+                image_bytes,
+                identity=identity,
+                language=language,
+                session_context=session_context,
+                vision_hint=vision_hint,
+            ):
+                if chunk.type == "usage":
+                    input_tokens = chunk.input_tokens
+                    output_tokens = chunk.output_tokens
+                    continue
+                if first_chunk_at is None:
+                    first_chunk_at = time.time()
+                full_text += chunk.text
+                yield _sse_event("chunk", {"type": "text", "content": chunk.text})
+
+            stream_completed_at = time.time()
+            parsed_result = parse_identify_result(
+                full_text,
+                fallback_artist=artwork.artist_name or "Unknown Artist",
+                fallback_title=artwork.artwork_name or "Untitled",
+            )
+            bg_ids = apply_analysis_to_saved_artwork(db, artwork, parsed_result, vision_ref_urls)
+            log_artwork_event(
+                db,
+                artwork_id=artwork_id,
+                event_type=ARTWORK_EVENT_IDENTIFICATION_COMPLETED,
+                actor_role="system",
+                trigger_source="session" if session_id else "collection",
+                trigger_session_id=session_id,
+                parent_event_id=request_event.id,
+                payload={
+                    "artist_name": parsed_result["artist_name"],
+                    "artwork_name": parsed_result["artwork_name"],
+                    "reference_urls": vision_ref_urls or [],
+                    "transport": "sse",
+                },
+            )
+            for linked_session_id in _get_artwork_session_ids(db, artwork_id):
+                linked_session = db.query(SessionModel).filter(SessionModel.id == linked_session_id).first()
+                _refresh_session_title(db, linked_session)
+            db.commit()
+            db.refresh(artwork)
+            succeed_ai_usage(usage_id, input_tokens=input_tokens, output_tokens=output_tokens)
+
+            artist_entity_id = bg_ids["artist_entity_id_fast"]
+            if artist_entity_id:
+                track_artwork_task(asyncio.create_task(do_artist_bio(artist_entity_id)))
+            track_artwork_task(
+                asyncio.create_task(run_artwork_analysis(artwork_id, image_bytes=image_bytes, force=True))
+            )
+            if artwork.artist_name and artwork.artist_name != "Unknown Artist":
+                track_artwork_task(
+                    asyncio.create_task(
+                        generate_fun_facts(
+                            artwork_id,
+                            artwork.artist_name,
+                            artwork.artwork_name or "Untitled",
+                            language,
+                        )
+                    )
+                )
+
+            completed_at = time.time()
+            metrics = {
+                "type": "metrics",
+                "request_id": request_id,
+                "timings": {
+                    "time_to_first_chunk_ms": (
+                        round((first_chunk_at - request_started_at) * 1000)
+                        if first_chunk_at else None
+                    ),
+                    "streaming_duration_ms": (
+                        round((stream_completed_at - first_chunk_at) * 1000)
+                        if first_chunk_at and stream_completed_at else None
+                    ),
+                    "total_duration_ms": round((completed_at - request_started_at) * 1000),
+                },
+                "model": ai_provider.value,
+            }
+            result = {
+                "type": "result",
+                "artwork_id": artwork_id,
+                "artist_name": parsed_result["artist_name"],
+                "artwork_name": parsed_result["artwork_name"],
+                "date": parsed_result["date"],
+                "medium": parsed_result["medium"],
+                "movement": parsed_result["movement"],
+                "period_bucket": parsed_result["period_bucket"],
+                "analysis": parsed_result["analysis"],
+                "tags": parsed_result["tags"],
+                "model_used": ai_provider.value,
+                "reference_urls": vision_ref_urls or [],
+                "artist_entity_id": bg_ids["linked_artist_entity_id"],
+                "analysis_status": artwork.analysis_status,
+                "analysis_error": artwork.analysis_error,
+            }
+            yield _sse_event("metrics", metrics)
+            yield _sse_event("complete", result)
+        except asyncio.CancelledError:
+            db.rollback()
+            interrupted = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+            if interrupted:
+                interrupted.analysis_status = "failed"
+                interrupted.analysis_error = "Analysis interrupted"
+                db.commit()
+            fail_ai_usage(usage_id, RuntimeError("Analysis interrupted"))
+            raise
+        except Exception as exc:
+            fail_ai_usage(usage_id, exc)
+            db.rollback()
+            failed_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
+            if failed_artwork:
+                failed_artwork.analysis_status = "failed"
+                failed_artwork.analysis_error = str(exc)
+                failed_artwork.analysis_completed_at = None
+                log_artwork_event(
+                    db,
+                    artwork_id=artwork_id,
+                    event_type=ARTWORK_EVENT_IDENTIFICATION_FAILED,
+                    actor_role="system",
+                    trigger_source="session" if session_id else "collection",
+                    trigger_session_id=session_id,
+                    parent_event_id=request_event.id,
+                    payload={"error_message": str(exc), "transport": "sse"},
+                )
+                db.commit()
+            logger.error("[%s] Artwork stream failed: %s", request_id, exc, exc_info=True)
+            yield _sse_event("error", {"type": "error", "message": str(exc)})
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/artworks/upload")

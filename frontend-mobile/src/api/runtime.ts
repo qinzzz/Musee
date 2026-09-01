@@ -10,6 +10,8 @@ import { File } from 'expo-file-system';
 import { createMobileAuthService } from '../auth/mobileAuthService';
 import { createMobileAuthTransport } from '../auth/mobileAuthTransport';
 import { createSecureAuthCredentialStore } from '../auth/secureAuthCredentialStore';
+import { createMobileArtworkAnalysisService } from '../capture/mobileArtworkAnalysisService';
+import { createMobileArtworkAnalysisTransport } from '../capture/mobileArtworkAnalysisTransport';
 import { createMobileArtworkUploadService } from '../capture/mobileArtworkUploadService';
 import { createMobileArtworkUploadTransport } from '../capture/mobileArtworkUploadTransport';
 import { expoImageCache } from '../platform/images/imageCache';
@@ -60,6 +62,13 @@ export const mobileArtworkUploadService = createMobileArtworkUploadService({
   imageCache: expoImageCache,
   transport: mobileArtworkUploadTransport,
 });
+
+export const mobileArtworkAnalysisService = createMobileArtworkAnalysisService(
+  createMobileArtworkAnalysisTransport({
+    apiBaseUrl: MOBILE_API_BASE_URL,
+    apiClient: mobileApiClient,
+  }),
+);
 
 export function checkBackendHealth(): Promise<BackendHealth> {
   return fetchBackendHealth(mobileApiClient, MOBILE_API_BASE_URL);

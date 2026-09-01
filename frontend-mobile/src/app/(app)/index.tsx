@@ -2,10 +2,16 @@ import { Image } from 'expo-image';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { mobileArtworkUploadService } from '../../api/runtime';
+import { mobileArtworkAnalysisService, mobileArtworkUploadService } from '../../api/runtime';
 import { useAuth } from '../../auth/AuthProvider';
+import { ArtworkAnalysisCard } from '../../capture/components/ArtworkAnalysisCard';
+import { MobileArtworkAnalysisError } from '../../capture/mobileArtworkAnalysisTransport';
 import { MobileArtworkUploadHttpError } from '../../capture/mobileArtworkUploadTransport';
-import type { NativeImageAsset, PendingArtworkUpload } from '../../capture/types';
+import type {
+  AnalyzedArtwork,
+  NativeImageAsset,
+  PendingArtworkUpload,
+} from '../../capture/types';
 import { pickArtworkImage } from '../../platform/images/pickArtworkImage';
 import { MuseeButton } from '../../ui/components/MuseeButton';
 import { Screen } from '../../ui/components/Screen';
@@ -19,11 +25,14 @@ const COPY = {
   usePhoto: 'Upload to Musee',
   chooseDifferentPhoto: 'Choose a different photo',
   uploadAnother: 'Upload another artwork',
-  uploadedHeading: 'Saved to Musee',
-  uploadedMessage: 'The cloud copy is ready for the analysis step.',
-  pendingStatus: 'Pending analysis',
+  analyzingHeading: 'Analyzing artwork',
+  connectingMessage: 'Musee is preparing the artwork for analysis…',
+  receivingMessage: 'Identifying the artist and artwork…',
+  analyzedStatus: 'Analysis complete',
   genericError: 'Musee could not upload this artwork. Check your connection and try again.',
-  retry: 'Try upload again',
+  genericAnalysisError: 'Musee could not analyze this artwork. Try the analysis again.',
+  retryUpload: 'Try upload again',
+  retryAnalysis: 'Try analysis again',
   signOut: 'Sign out',
 } as const;
 
@@ -32,8 +41,10 @@ type CaptureState =
   | { status: 'picking' }
   | { status: 'preview'; asset: NativeImageAsset }
   | { status: 'uploading'; asset: NativeImageAsset }
-  | { status: 'uploaded'; artwork: PendingArtworkUpload }
-  | { status: 'error'; asset?: NativeImageAsset; message: string };
+  | { status: 'analyzing'; artwork: PendingArtworkUpload; receivedChunk: boolean }
+  | { status: 'analyzed'; artwork: AnalyzedArtwork }
+  | { status: 'analysis-error'; artwork: PendingArtworkUpload; message: string }
+  | { status: 'upload-error'; asset?: NativeImageAsset; message: string };
 
 function uploadErrorMessage(error: unknown): string {
   if (error instanceof MobileArtworkUploadHttpError) {
@@ -46,6 +57,11 @@ function uploadErrorMessage(error: unknown): string {
   return COPY.genericError;
 }
 
+function analysisErrorMessage(error: unknown): string {
+  if (error instanceof MobileArtworkAnalysisError) return error.message;
+  return COPY.genericAnalysisError;
+}
+
 export default function AuthenticatedHomeScreen() {
   const { logout, user } = useAuth();
   const [capture, setCapture] = useState<CaptureState>({ status: 'idle' });
@@ -56,7 +72,28 @@ export default function AuthenticatedHomeScreen() {
       const asset = await pickArtworkImage();
       setCapture(asset ? { status: 'preview', asset } : { status: 'idle' });
     } catch (error) {
-      setCapture({ status: 'error', message: uploadErrorMessage(error) });
+      setCapture({ status: 'upload-error', message: uploadErrorMessage(error) });
+    }
+  };
+
+  const analyzeArtwork = async (artwork: PendingArtworkUpload) => {
+    setCapture({ status: 'analyzing', artwork, receivedChunk: false });
+    try {
+      const analyzed = await mobileArtworkAnalysisService.analyzeArtwork(
+        artwork,
+        () => setCapture((current) => (
+          current.status === 'analyzing'
+            ? { ...current, receivedChunk: true }
+            : current
+        )),
+      );
+      setCapture({ status: 'analyzed', artwork: analyzed });
+    } catch (error) {
+      setCapture({
+        status: 'analysis-error',
+        artwork,
+        message: analysisErrorMessage(error),
+      });
     }
   };
 
@@ -65,14 +102,18 @@ export default function AuthenticatedHomeScreen() {
     setCapture({ status: 'uploading', asset });
     try {
       const artwork = await mobileArtworkUploadService.uploadArtwork(asset, user.user_id);
-      setCapture({ status: 'uploaded', artwork });
+      await analyzeArtwork(artwork);
     } catch (error) {
-      setCapture({ status: 'error', asset, message: uploadErrorMessage(error) });
+      setCapture({ status: 'upload-error', asset, message: uploadErrorMessage(error) });
     }
   };
 
-  const isBusy = capture.status === 'picking' || capture.status === 'uploading';
-  const retryAsset = capture.status === 'error' ? capture.asset : undefined;
+  const isBusy = (
+    capture.status === 'picking'
+    || capture.status === 'uploading'
+    || capture.status === 'analyzing'
+  );
+  const retryAsset = capture.status === 'upload-error' ? capture.asset : undefined;
 
   return (
     <Screen>
@@ -120,10 +161,10 @@ export default function AuthenticatedHomeScreen() {
           </View>
         ) : null}
 
-        {capture.status === 'uploaded' ? (
+        {capture.status === 'analyzing' ? (
           <View style={styles.captureCard}>
             <Image
-              accessibilityLabel="Uploaded artwork"
+              accessibilityLabel="Artwork being analyzed"
               cachePolicy="memory-disk"
               contentFit="contain"
               source={{
@@ -133,10 +174,28 @@ export default function AuthenticatedHomeScreen() {
               style={styles.previewImage}
             />
             <View style={styles.resultCard}>
-              <Text style={styles.resultHeading}>{COPY.uploadedHeading}</Text>
-              <Text style={styles.resultMessage}>{COPY.uploadedMessage}</Text>
-              <Text style={styles.pendingStatus}>{COPY.pendingStatus}</Text>
+              <Text style={styles.resultHeading}>{COPY.analyzingHeading}</Text>
+              <Text accessibilityLiveRegion="polite" style={styles.resultMessage}>
+                {capture.receivedChunk ? COPY.receivingMessage : COPY.connectingMessage}
+              </Text>
             </View>
+          </View>
+        ) : null}
+
+        {capture.status === 'analyzed' ? (
+          <View style={styles.captureCard}>
+            <Image
+              accessibilityLabel="Analyzed artwork"
+              cachePolicy="memory-disk"
+              contentFit="contain"
+              source={{
+                uri: capture.artwork.resolvedImageUri,
+                cacheKey: capture.artwork.cacheKey,
+              }}
+              style={styles.previewImage}
+            />
+            <Text style={styles.completedStatus}>{COPY.analyzedStatus}</Text>
+            <ArtworkAnalysisCard artwork={capture.artwork} />
             <MuseeButton
               label={COPY.uploadAnother}
               onPress={() => setCapture({ status: 'idle' })}
@@ -145,14 +204,38 @@ export default function AuthenticatedHomeScreen() {
           </View>
         ) : null}
 
-        {capture.status === 'error' ? (
+        {capture.status === 'analysis-error' ? (
+          <View style={styles.captureCard}>
+            <Image
+              accessibilityLabel="Artwork awaiting analysis retry"
+              cachePolicy="memory-disk"
+              contentFit="contain"
+              source={{
+                uri: capture.artwork.resolvedImageUri,
+                cacheKey: capture.artwork.cacheKey,
+              }}
+              style={styles.previewImage}
+            />
+            <View style={styles.errorCard}>
+              <Text accessibilityLiveRegion="polite" style={styles.errorMessage}>
+                {capture.message}
+              </Text>
+              <MuseeButton
+                label={COPY.retryAnalysis}
+                onPress={() => void analyzeArtwork(capture.artwork)}
+              />
+            </View>
+          </View>
+        ) : null}
+
+        {capture.status === 'upload-error' ? (
           <View style={styles.errorCard}>
             <Text accessibilityLiveRegion="polite" style={styles.errorMessage}>
               {capture.message}
             </Text>
             {retryAsset ? (
               <MuseeButton
-                label={COPY.retry}
+                label={COPY.retryUpload}
                 onPress={() => void uploadPhoto(retryAsset)}
               />
             ) : null}
@@ -234,7 +317,7 @@ const styles = StyleSheet.create({
     fontSize: typography.label,
     lineHeight: 20,
   },
-  pendingStatus: {
+  completedStatus: {
     color: colors.success,
     fontSize: typography.caption,
     fontWeight: '600',
