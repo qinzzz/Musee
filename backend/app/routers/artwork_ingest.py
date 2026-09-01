@@ -580,11 +580,12 @@ async def save_artwork_upload(
     if image_metadata.get("exif_timestamp"):
         photo_time = image_metadata["exif_timestamp"]
 
-    if client_type == "web" or not client_type:
-        storage = get_storage_service()
-        generated_photo_uri = await storage.save(image_bytes, image.filename or "artwork.jpg", user_id)
-    else:
-        generated_photo_uri = photo_uri or f"artwork_{uuid.uuid4().hex[:12]}"
+    # Uploaded file URIs belong to the client device and are not readable by
+    # the backend. Persist the processed bytes for every platform and store
+    # only the backend-owned URI in the artwork record. process_image always
+    # returns JPEG bytes, so the storage filename must use the same format.
+    storage = get_storage_service()
+    generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
 
     parsed_location = parse_location_value(location)
     if latitude is not None and longitude is not None:
