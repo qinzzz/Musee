@@ -5,10 +5,14 @@ import {
   type BackendHealth,
 } from '@musee/client-core';
 import { fetch as expoFetch } from 'expo/fetch';
+import { File } from 'expo-file-system';
 
 import { createMobileAuthService } from '../auth/mobileAuthService';
 import { createMobileAuthTransport } from '../auth/mobileAuthTransport';
 import { createSecureAuthCredentialStore } from '../auth/secureAuthCredentialStore';
+import { createMobileArtworkUploadService } from '../capture/mobileArtworkUploadService';
+import { createMobileArtworkUploadTransport } from '../capture/mobileArtworkUploadTransport';
+import { expoImageCache } from '../platform/images/imageCache';
 import { expoSecureStorage } from '../platform/storage/secureStorage';
 
 const DEFAULT_MOBILE_API_BASE_URL = 'http://127.0.0.1:8000/api';
@@ -44,6 +48,18 @@ export const mobileAuthService = createMobileAuthService({
 });
 
 refreshAccessTokenDelegate = () => mobileAuthService.refreshAccessToken();
+
+const mobileArtworkUploadTransport = createMobileArtworkUploadTransport({
+  apiBaseUrl: MOBILE_API_BASE_URL,
+  apiClient: mobileApiClient,
+  createUploadFile: (uri) => new File(uri),
+});
+
+export const mobileArtworkUploadService = createMobileArtworkUploadService({
+  apiBaseUrl: MOBILE_API_BASE_URL,
+  imageCache: expoImageCache,
+  transport: mobileArtworkUploadTransport,
+});
 
 export function checkBackendHealth(): Promise<BackendHealth> {
   return fetchBackendHealth(mobileApiClient, MOBILE_API_BASE_URL);

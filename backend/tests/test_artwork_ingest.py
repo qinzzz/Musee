@@ -35,6 +35,15 @@ class _FakeStorage:
         return "r2://saved-artwork.jpg"
 
 
+class _RecordingStorage:
+    def __init__(self):
+        self.calls = []
+
+    async def save(self, data, filename, user_id):
+        self.calls.append((data, filename, user_id))
+        return "https://images.example.com/mobile-artwork.jpg"
+
+
 class _FailingAIService:
     async def identify_artist(self, *_args, **_kwargs):
         raise RuntimeError("identify failed")
@@ -90,6 +99,33 @@ def test_artworks_upload_persists_pending_artwork(client, monkeypatch):
             .all()
         )
         assert [event.event_type for event in events] == ["artwork_created"]
+
+
+def test_mobile_upload_persists_backend_owned_image_uri(client, monkeypatch):
+    async def fake_process_image(_image):
+        return b"processed-jpeg", {}
+
+    storage = _RecordingStorage()
+    monkeypatch.setattr(artwork_ingest, "process_image", fake_process_image)
+    monkeypatch.setattr(artwork_ingest, "get_storage_service", lambda: storage)
+
+    response = client.post(
+        "/api/artworks/upload",
+        files={"image": ("ios-photo.jpg", io.BytesIO(b"original"), "image/jpeg")},
+        data={
+            "user_id": "ios-upload-user",
+            "client_type": "ios",
+            "photo_uri": "file:///private/var/mobile/app-cache/ios-photo.jpg",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["photo_uri"] == "https://images.example.com/mobile-artwork.jpg"
+    assert storage.calls == [(b"processed-jpeg", "artwork.jpg", "ios-upload-user")]
+
+    with TestingSessionLocal() as db:
+        saved = db.query(SavedArtwork).filter(SavedArtwork.user_id == "ios-upload-user").one()
+        assert saved.photo_uri == "https://images.example.com/mobile-artwork.jpg"
 
 
 def test_artworks_upload_resolves_capture_museum_in_background(client, db, monkeypatch):
