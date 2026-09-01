@@ -3,14 +3,21 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+import pytest
 from jose import jwt
+from starlette.requests import Request
 
 from app.config.settings import settings
 from app.database.models import AuthSession
-from app.services.auth_session_service import utc_now
+from app.services.auth_session_service import (
+    CLIENT_PLATFORM_HEADER,
+    REFRESH_TOKEN_HEADER,
+    is_mobile_client,
+    utc_now,
+)
 
 
-def _google_login(client, google_id="refresh-user"):
+def _google_login(client, google_id="refresh-user", headers=None):
     with patch("app.routers.auth.verify_google_token") as mock_verify:
         mock_verify.return_value = {
             "sub": google_id,
@@ -18,7 +25,7 @@ def _google_login(client, google_id="refresh-user"):
             "name": "Refresh User",
             "picture": None,
         }
-        return client.post("/api/auth/google", json={"id_token": "fake"})
+        return client.post("/api/auth/google", json={"id_token": "fake"}, headers=headers)
 
 
 def _refresh_cookie(client) -> str:
@@ -33,6 +40,7 @@ def test_login_creates_hashed_server_session_and_short_access_token(client, db):
     assert response.status_code == 200
     assert response.json()["is_new_user"] is True
     assert response.json()["expires_in"] == 15 * 60
+    assert "refresh_token" not in response.json()
     assert "httponly" in response.headers["set-cookie"].lower()
     assert "samesite=lax" in response.headers["set-cookie"].lower()
 
@@ -51,6 +59,99 @@ def test_login_creates_hashed_server_session_and_short_access_token(client, db):
     returning = _google_login(client)
     assert returning.status_code == 200
     assert returning.json()["is_new_user"] is False
+
+
+@pytest.mark.parametrize(
+    ("platform", "expected"),
+    [
+        ("ios", True),
+        ("IOS", True),
+        ("Android", True),
+        ("desktop", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_mobile_client_detection_is_case_insensitive(platform, expected):
+    headers = [] if platform is None else [
+        (CLIENT_PLATFORM_HEADER.encode(), platform.encode()),
+    ]
+    request = Request({"type": "http", "headers": headers})
+
+    assert is_mobile_client(request) is expected
+
+
+def test_mobile_auth_lifecycle_uses_body_and_header_without_cookies(client, db):
+    platform_headers = {CLIENT_PLATFORM_HEADER: "IOS"}
+    login = _google_login(client, headers=platform_headers)
+
+    assert login.status_code == 200
+    first_refresh = login.json()["refresh_token"]
+    assert first_refresh
+    assert settings.refresh_cookie_name not in client.cookies
+    assert settings.refresh_cookie_name not in login.headers.get("set-cookie", "")
+
+    refreshed = client.post(
+        "/api/auth/refresh",
+        headers={**platform_headers, REFRESH_TOKEN_HEADER: first_refresh},
+    )
+
+    assert refreshed.status_code == 200
+    rotated_refresh = refreshed.json()["refresh_token"]
+    assert rotated_refresh != first_refresh
+    assert settings.refresh_cookie_name not in client.cookies
+    assert settings.refresh_cookie_name not in refreshed.headers.get("set-cookie", "")
+    db.expire_all()
+    assert db.query(AuthSession).one().rotation_version == 1
+
+    session = client.get(
+        "/api/auth/session",
+        headers={"Authorization": f"Bearer {refreshed.json()['access_token']}"},
+    )
+    assert session.status_code == 200
+    assert session.json()["state"] == "authenticated"
+
+    logout = client.post(
+        "/api/auth/logout",
+        headers={**platform_headers, REFRESH_TOKEN_HEADER: rotated_refresh},
+    )
+    assert logout.status_code == 200
+    db.expire_all()
+    assert db.query(AuthSession).one().revocation_reason == "logout"
+
+    after_logout = client.post(
+        "/api/auth/refresh",
+        headers={**platform_headers, REFRESH_TOKEN_HEADER: rotated_refresh},
+    )
+    assert after_logout.status_code == 401
+    assert after_logout.json()["detail"]["error_code"] == "refresh_revoked"
+
+
+def test_refresh_cookie_takes_precedence_and_never_exposes_body_token(client):
+    _google_login(client)
+    original_cookie = _refresh_cookie(client)
+
+    response = client.post(
+        "/api/auth/refresh",
+        headers={
+            CLIENT_PLATFORM_HEADER: "ios",
+            REFRESH_TOKEN_HEADER: "not-the-cookie-token",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "refresh_token" not in response.json()
+    assert _refresh_cookie(client) != original_cookie
+
+
+def test_mobile_refresh_requires_a_presented_token(client):
+    response = client.post(
+        "/api/auth/refresh",
+        headers={CLIENT_PLATFORM_HEADER: "ios"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["error_code"] == "refresh_missing"
 
 
 def test_refresh_rotates_cookie_and_restores_authenticated_session(client, db):
@@ -154,7 +255,10 @@ def test_refresh_cookie_mutations_reject_untrusted_browser_origins(client, db):
 
     response = client.post(
         "/api/auth/refresh",
-        headers={"Origin": "https://attacker.example"},
+        headers={
+            "Origin": "https://attacker.example",
+            CLIENT_PLATFORM_HEADER: "ios",
+        },
     )
 
     assert response.status_code == 403

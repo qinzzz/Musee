@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -10,7 +10,9 @@ from app.database.connection import get_db
 from app.database.models import User, UserCredential
 from app.services.account_service import promote_guest_workspace
 from app.services.auth_session_service import (
+    REFRESH_TOKEN_HEADER,
     clear_refresh_cookie,
+    is_mobile_client,
     issue_login_session,
     revoke_refresh_session,
     rotate_refresh_session,
@@ -102,7 +104,12 @@ async def google_login(
     if guest_token:
         clear_guest_cookie(response)
 
-    result = issue_login_session(db, response, user)
+    result = issue_login_session(
+        db,
+        response,
+        user,
+        include_refresh_token=is_mobile_client(http_request),
+    )
     result["guest_promoted"] = guest_promoted
     result["is_new_user"] = is_new_user
     return result
@@ -114,20 +121,28 @@ async def refresh_session(
     response: Response,
     db: Session = Depends(get_db),
     refresh_token: Optional[str] = Cookie(default=None, alias=settings.refresh_cookie_name),
+    header_refresh_token: Optional[str] = Header(default=None, alias=REFRESH_TOKEN_HEADER),
 ):
     validate_auth_origin(request)
-    if not refresh_token:
+    presented_token = refresh_token or header_refresh_token
+    if not presented_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error_code": "refresh_missing", "message": "No active sign-in session."},
         )
-    result = rotate_refresh_session(db, refresh_token)
-    set_refresh_cookie(response, result.raw_token)
-    return {
+    result = rotate_refresh_session(db, presented_token)
+    payload = {
         "access_token": create_access_token(data={"sub": result.user.user_id}),
         "expires_in": settings.access_token_expire_minutes * 60,
         "token_type": "bearer",
     }
+    # Cookie precedence keeps browser sessions on the HttpOnly transport even
+    # if a caller also supplies the native header.
+    if refresh_token:
+        set_refresh_cookie(response, result.raw_token)
+    else:
+        payload["refresh_token"] = result.raw_token
+    return payload
 
 
 @router.post("/auth/logout")
@@ -136,9 +151,10 @@ async def logout_session(
     response: Response,
     db: Session = Depends(get_db),
     refresh_token: Optional[str] = Cookie(default=None, alias=settings.refresh_cookie_name),
+    header_refresh_token: Optional[str] = Header(default=None, alias=REFRESH_TOKEN_HEADER),
 ):
     validate_auth_origin(request)
-    revoke_refresh_session(db, refresh_token)
+    revoke_refresh_session(db, refresh_token or header_refresh_token)
     clear_refresh_cookie(response)
     return {"ok": True}
 
