@@ -51,6 +51,19 @@ API base URL before starting Expo:
 EXPO_PUBLIC_API_URL=http://192.168.1.10:8000/api npm run mobile:start
 ```
 
+For physical-device development, run the backend on `0.0.0.0`, use the Mac's
+LAN address in `EXPO_PUBLIC_API_URL`, and keep the phone and Mac on the same
+network. The mobile client intentionally rejects missing or loopback API
+addresses on a physical device. Expo reads public environment variables when
+Metro starts, so stop an older Metro process before changing the URL; use
+`npx expo start --dev-client --clear` from `frontend-mobile/` if its cached
+configuration is stale.
+
+Preview and production builds must set `EXPO_PUBLIC_API_URL` to an HTTPS URL.
+Use `EXPO_PUBLIC_APP_ENV=preview` or `production` to enable that validation;
+development is the default for local builds. The committed iOS bundle ID is
+`com.yujingtang.musee.dev` for reproducible development signing.
+
 ## Core Features
 
 ### Real-time Identification

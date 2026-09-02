@@ -30,6 +30,10 @@ export {
   type BackendHealth,
 } from './health';
 export {
+  classifyRequestFailure,
+  type RequestFailureKind,
+} from './requestFailure';
+export {
   createSseParser,
   type SseMessage,
   type SseParser,

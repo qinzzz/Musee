@@ -11,11 +11,16 @@ import {
 } from 'react-native';
 
 import {
+  MOBILE_API_BASE_URL,
   mobileArtworkAnalysisService,
   mobileArtworkLibraryService,
 } from '../../../api/runtime';
+import {
+  presentRequestError,
+  type RequestErrorPresentation,
+} from '../../../api/requestErrorPresentation';
 import { ArtworkAnalysisCard } from '../../../capture/components/ArtworkAnalysisCard';
-import { MobileArtworkAnalysisError } from '../../../capture/mobileArtworkAnalysisTransport';
+import { presentArtworkAnalysisError } from '../../../capture/captureErrorPresentation';
 import { toPendingArtworkUpload } from '../../../library/mobileArtworkLibraryService';
 import type { MobileArtworkRecord } from '../../../library/types';
 import { MuseeButton } from '../../../ui/components/MuseeButton';
@@ -36,6 +41,18 @@ const COPY = {
   analyzed: 'Analysis complete',
 } as const;
 
+const ERROR_PRESENTATION_OPTIONS = {
+  apiBaseUrl: MOBILE_API_BASE_URL,
+  showTechnicalDetails: __DEV__,
+};
+
+function presentArtworkLoadError(error: unknown): RequestErrorPresentation {
+  return presentRequestError(error, {
+    ...ERROR_PRESENTATION_OPTIONS,
+    fallbackMessage: COPY.loadError,
+  });
+}
+
 const STATUS_COPY = {
   pending: COPY.pending,
   analyzing: COPY.analyzing,
@@ -51,11 +68,11 @@ export default function ArtworkDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [receivedChunk, setReceivedChunk] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<RequestErrorPresentation | null>(null);
 
   const loadArtwork = useCallback(async (showRefresh = false) => {
     if (!artworkId) {
-      setError(COPY.loadError);
+      setError({ message: COPY.loadError });
       setLoading(false);
       return;
     }
@@ -64,8 +81,8 @@ export default function ArtworkDetailScreen() {
     setError(null);
     try {
       setArtwork(await mobileArtworkLibraryService.fetchArtwork(artworkId));
-    } catch {
-      setError(COPY.loadError);
+    } catch (loadError) {
+      setError(presentArtworkLoadError(loadError));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -89,11 +106,10 @@ export default function ArtworkDetailScreen() {
       await loadArtwork();
     } catch (analysisError) {
       await loadArtwork();
-      setError(
-        analysisError instanceof MobileArtworkAnalysisError
-          ? analysisError.message
-          : 'Musee could not analyze this artwork.',
-      );
+      setError(presentArtworkAnalysisError(
+        analysisError,
+        ERROR_PRESENTATION_OPTIONS,
+      ));
     } finally {
       setAnalyzing(false);
     }
@@ -110,7 +126,10 @@ export default function ArtworkDetailScreen() {
   if (!artwork) {
     return (
       <Screen contentStyle={styles.centered} edges={['left', 'right', 'bottom']}>
-        <Text style={styles.error}>{error || COPY.loadError}</Text>
+        <Text style={styles.error}>{error?.message || COPY.loadError}</Text>
+        {error?.technicalDetail ? (
+          <Text style={styles.errorDetail}>{error.technicalDetail}</Text>
+        ) : null}
         <MuseeButton label={COPY.retryLoad} onPress={() => void loadArtwork()} />
       </Screen>
     );
@@ -159,8 +178,11 @@ export default function ArtworkDetailScreen() {
           <View style={styles.stateCard}>
             <Text style={styles.stateTitle}>{artwork.artworkName}</Text>
             <Text style={styles.stateMessage}>
-              {error || artwork.analysisError || STATUS_COPY[artwork.analysisStatus]}
+              {error?.message || artwork.analysisError || STATUS_COPY[artwork.analysisStatus]}
             </Text>
+            {error?.technicalDetail ? (
+              <Text style={styles.errorDetail}>{error.technicalDetail}</Text>
+            ) : null}
             {canAnalyze ? (
               <MuseeButton
                 label={analysisButtonLabel}
@@ -229,6 +251,12 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: typography.body,
     lineHeight: 24,
+    textAlign: 'center',
+  },
+  errorDetail: {
+    color: colors.secondary,
+    fontSize: typography.caption,
+    lineHeight: 19,
     textAlign: 'center',
   },
 });

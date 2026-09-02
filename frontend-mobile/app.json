@@ -7,6 +7,7 @@
     "scheme": "musee",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.yujingtang.musee.dev",
       "supportsTablet": false
     },
     "plugins": [
