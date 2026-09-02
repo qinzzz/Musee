@@ -36,7 +36,7 @@ npm run dev                   # Vite dev server (port 3000)
 **Frontend-web** — the web client is organized into feature domains (each with its own `components/`, `hooks/`, `lib/`, and sometimes `api/`): `app-shell/`, `artist/`, `artwork/`, `artwork-ingest/`, `auth/`, `boards/`, `capture/`, `collection/`, `guest/`, `museum/`, `profile/`, `session/`. Shared code lives in `api/`, `components/`, `lib/`, `types.ts`.
 - `App.tsx` — root composition; top-level views wired via `app-shell/`
 - `api/*.ts` — HTTP + SSE client modules (`analysis`, `artworks`, `chat`, `collections`, `auth`, `museums`, `journals`, …); there is no single `apiService.ts`
-- `session/` — the "session/visit" domain: curator chat + session workspace (hooks, lib, api). See **Session subsystems** below.
+- `session/` — the "session/visit" domain: session chat + session workspace (hooks, lib, api). See **Session subsystems** below.
 - `artwork/components/ArtworkDetailModal.tsx` — full artwork interpretation + detail panels
 - `artwork/` — artwork cards, detail panels, and related hooks/lib (the live home of per-artwork UI)
 - `types.ts` — shared TypeScript interfaces
@@ -68,7 +68,7 @@ flowchart TD
     end
 
     subgraph VISIT["2 · SESSION / VISIT — core domain"]
-        Rsess["routers/sessions.py<br/>/sessions/* (/events = /messages alias)"]
+        Rsess["routers/sessions.py<br/>/sessions/* (events)"]
         Ssess["session_service.py"]
         Sevent["session_event_service.py<br/>legacy = canonical event maps"]
         Tsess[("sessions")]
@@ -94,7 +94,11 @@ flowchart TD
     Tauth -->|user_id| users
 ```
 
-**Two event tables:** `session_events` (visit timeline) and `artwork_events` (per-artwork history) are distinct. `session_event_service.py` carries `LEGACY_TO_CANONICAL_*` / `CANONICAL_TO_LEGACY_*` maps: the API still exposes both a canonical `event` vocabulary and a legacy `message` one (e.g. `/sessions/{id}/events` ≡ `/sessions/{id}/messages`, `start-with-event` ≡ `start-with-message`). Prefer the canonical `event` names in new code.
+**Two event tables:** `session_events` (visit timeline) and `artwork_events` (per-artwork history) are distinct.
+
+**Endpoint vocabulary:** session events are served only under `/sessions/{id}/events` (+ `start-with-event`) — the old `/messages` URL aliases have been removed. The chat endpoint keeps `/api/session/chat` canonical with `/api/visit/chat` as a **retained back-compat alias** (both web and installed mobile apps call `/visit/chat-stream`, so the alias must stay).
+
+**Event-type vocabulary (still dual):** `session_event_service.py`'s `LEGACY_TO_CANONICAL_*` / `CANONICAL_TO_LEGACY_*` maps mean each event is serialized with both a canonical `event_type` and a legacy `type` field, and the web/mobile clients still read the legacy `type` values. This split is live on the wire — prefer the canonical `event_type` in new code, but don't drop the legacy `type` without migrating both clients.
 
 ## Important Notes
 
