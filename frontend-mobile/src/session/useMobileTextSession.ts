@@ -1,0 +1,119 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import type { SessionEventRecord, SessionRecord } from '@musee/client-core';
+
+import { MOBILE_API_BASE_URL, mobileSessionService } from '../api/runtime';
+import { restoreTextSessionAttempt } from './mobileSessionService';
+import { markOrphanedResponses, ORPHANED_RESPONSE_MESSAGE } from './sessionEventState';
+import {
+  presentSessionError,
+  type SessionErrorPresentation,
+} from './sessionErrorPresentation';
+import {
+  useMobileSessionMessaging,
+  type MobileSessionMessagingController,
+} from './useMobileSessionMessaging';
+
+export type MobileTextSessionController = MobileSessionMessagingController & {
+  events: SessionEventRecord[];
+  isLoading: boolean;
+  loadError: SessionErrorPresentation | null;
+  reload: () => Promise<void>;
+  session: SessionRecord | null;
+};
+
+const ERROR_OPTIONS = {
+  apiBaseUrl: MOBILE_API_BASE_URL,
+  showTechnicalDetails: __DEV__,
+};
+
+export function useMobileTextSession(
+  routeSessionId: string,
+  userId: string,
+): MobileTextSessionController {
+  const [events, setEvents] = useState<SessionEventRecord[]>([]);
+  const [session, setSession] = useState<SessionRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(routeSessionId !== 'new');
+  const [loadError, setLoadError] = useState<SessionErrorPresentation | null>(null);
+  const requestVersion = useRef(0);
+  const messaging = useMobileSessionMessaging({
+    events,
+    session,
+    setEvents,
+    setSession,
+    userId,
+  });
+  const resetMessaging = messaging.reset;
+
+  const reload = useCallback(async () => {
+    const version = ++requestVersion.current;
+    setLoadError(null);
+    resetMessaging();
+
+    if (routeSessionId === 'new') {
+      setSession(null);
+      setEvents([]);
+      setIsLoading(false);
+      return;
+    }
+
+    if (!userId) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const [sessions, restoredEvents] = await Promise.all([
+        mobileSessionService.fetchSessions(userId),
+        mobileSessionService.fetchEvents(routeSessionId),
+      ]);
+      if (version !== requestVersion.current) return;
+      const restoredSession = sessions.find((entry) => entry.id === routeSessionId);
+      if (!restoredSession) throw new Error('Session not found.');
+
+      const restored = markOrphanedResponses(restoredEvents);
+      setSession(restoredSession);
+      setEvents(restored.events);
+
+      restored.orphaned.forEach((responseEvent) => {
+        const attempt = restoreTextSessionAttempt(
+          responseEvent,
+          restored.events,
+          restoredSession,
+          userId,
+        );
+        if (attempt) {
+          void mobileSessionService.persistResponse(
+            attempt,
+            'failed',
+            undefined,
+            ORPHANED_RESPONSE_MESSAGE,
+          ).catch(() => undefined);
+        }
+      });
+    } catch (error) {
+      if (version === requestVersion.current) {
+        setLoadError(presentSessionError(error, 'load', ERROR_OPTIONS));
+      }
+    } finally {
+      if (version === requestVersion.current) setIsLoading(false);
+    }
+  }, [resetMessaging, routeSessionId, userId]);
+
+  useEffect(() => {
+    void reload();
+    return () => {
+      requestVersion.current += 1;
+    };
+  }, [reload]);
+
+  return {
+    ...messaging,
+    events,
+    isLoading,
+    loadError,
+    reload,
+    session,
+  };
+}

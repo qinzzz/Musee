@@ -38,3 +38,16 @@ export {
   type SseMessage,
   type SseParser,
 } from './sse';
+export {
+  buildInitialSessionTitle,
+  parseSessionChatStreamEvent,
+  serializeTextSessionHistory,
+  type SessionChatHistoryEntry,
+  type SessionChatPhase,
+  type SessionChatStreamEvent,
+  type SessionEventRecord,
+  type SessionEventType,
+  type SessionRecord,
+  type SessionResponseStatus,
+  type SessionRole,
+} from './session';

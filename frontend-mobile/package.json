@@ -26,6 +26,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-enriched-markdown": "^1.0.2",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
@@ -37,6 +38,10 @@
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3",
     "vitest": "^2.1.9"
+  },
+  "enriched-markdown": {
+    "enableCodeHighlight": false,
+    "enableMath": false
   },
   "scripts": {
     "start": "expo start",
