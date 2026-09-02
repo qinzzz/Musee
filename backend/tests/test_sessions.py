@@ -93,7 +93,7 @@ def test_get_session_messages_rejects_authenticated_non_owner(client, db):
     db.add(SessionEvent(id="msg-1", session_id="visit-1", role="user", type="text", content="hello", sequence_number=1))
     db.commit()
 
-    response = client.get("/api/sessions/visit-1/messages", headers=_auth_headers("other"))
+    response = client.get("/api/sessions/visit-1/events", headers=_auth_headers("other"))
 
     assert response.status_code == 403
     assert response.json()["detail"]["error_code"] == "principal_mismatch"
@@ -146,7 +146,7 @@ def test_append_session_messages_rejects_authenticated_non_owner(client, db):
     db.commit()
 
     response = client.post(
-        "/api/sessions/visit-2/messages",
+        "/api/sessions/visit-2/events",
         headers=_auth_headers("other-2"),
         json=[{"role": "user", "type": "text", "content": "test"}],
     )
@@ -157,7 +157,7 @@ def test_append_session_messages_rejects_authenticated_non_owner(client, db):
 
 def test_start_session_with_message_creates_session_and_first_message(client, db):
     response = client.post(
-        "/api/sessions/start-with-message",
+        "/api/sessions/start-with-event",
         params={"user_id": "fresh-user"},
         json={
             "session_id": "visit-new",
@@ -188,7 +188,7 @@ def test_start_session_with_message_creates_session_and_first_message(client, db
 
 def test_start_session_with_message_accepts_canonical_user_input_event_type(client, db):
     response = client.post(
-        "/api/sessions/start-with-message",
+        "/api/sessions/start-with-event",
         params={"user_id": "canonical-user"},
         json={
             "session_id": "visit-canonical",
@@ -212,7 +212,7 @@ def test_start_session_with_message_accepts_canonical_user_input_event_type(clie
 
 def test_start_session_with_message_rejects_trigger_on_user_input(client, db):
     response = client.post(
-        "/api/sessions/start-with-message",
+        "/api/sessions/start-with-event",
         params={"user_id": "canonical-user"},
         json={
             "session_id": "visit-canonical-invalid",
@@ -272,7 +272,7 @@ def test_start_session_with_message_does_not_leave_shell_session_on_failure(monk
 
     with TestClient(app, raise_server_exceptions=False) as failing_client:
         response = failing_client.post(
-            "/api/sessions/start-with-message",
+            "/api/sessions/start-with-event",
             params={"user_id": "failed-user"},
             json={
                 "session_id": "visit-failed",
@@ -297,7 +297,7 @@ def test_append_session_messages_accepts_event_fields_and_keeps_legacy_response_
     db.commit()
 
     response = client.post(
-        "/api/sessions/visit-event/messages",
+        "/api/sessions/visit-event/events",
         json=[{
             "id": "event-msg-1",
             "role": "user",
@@ -318,7 +318,7 @@ def test_append_session_messages_accepts_event_fields_and_keeps_legacy_response_
         ]
     }
 
-    fetch_response = client.get("/api/sessions/visit-event/messages")
+    fetch_response = client.get("/api/sessions/visit-event/events")
     assert fetch_response.status_code == 200
     payload = fetch_response.json()
     assert payload == [{
@@ -350,7 +350,7 @@ def test_get_session_messages_normalizes_legacy_types(client, db):
     ))
     db.commit()
 
-    response = client.get("/api/sessions/visit-legacy/messages")
+    response = client.get("/api/sessions/visit-legacy/events")
 
     assert response.status_code == 200
     assert response.json() == [{
@@ -377,7 +377,7 @@ def test_append_session_messages_supports_multiple_artwork_ids(client, db):
     db.commit()
 
     response = client.post(
-        "/api/sessions/visit-multi-art/messages",
+        "/api/sessions/visit-multi-art/events",
         json=[{
             "id": "event-msg-multi",
             "role": "model",
@@ -395,7 +395,7 @@ def test_append_session_messages_supports_multiple_artwork_ids(client, db):
         "artwork_ids": ["artwork-a", "artwork-b"],
     }
 
-    fetch_response = client.get("/api/sessions/visit-multi-art/messages")
+    fetch_response = client.get("/api/sessions/visit-multi-art/events")
     assert fetch_response.status_code == 200
     assert fetch_response.json() == [{
         "id": "event-msg-multi",
@@ -456,7 +456,7 @@ def test_patch_session_message_updates_legacy_commentary_to_model_response(clien
     db.commit()
 
     response = client.patch(
-        "/api/sessions/visit-commentary/messages/msg-commentary",
+        "/api/sessions/visit-commentary/events/msg-commentary",
         json={
             "role": "model",
             "event_type": "model_response",
@@ -503,7 +503,7 @@ def test_patch_session_message_updates_commentary_to_failed(client, db):
     db.commit()
 
     response = client.patch(
-        "/api/sessions/visit-commentary-failed/messages/msg-commentary-failed",
+        "/api/sessions/visit-commentary-failed/events/msg-commentary-failed",
         json={
             "role": "model",
             "event_type": "model_response",

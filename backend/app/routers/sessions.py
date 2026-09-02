@@ -87,7 +87,6 @@ class SessionEventUpdateRequest(BaseModel):
 
 
 @router.get("/sessions/{session_id}/events")
-@router.get("/sessions/{session_id}/messages")
 async def get_session_events(
     session_id: str,
     db: Session = Depends(get_db),
@@ -139,7 +138,6 @@ async def get_session_events(
 
 
 @router.post("/sessions/{session_id}/events")
-@router.post("/sessions/{session_id}/messages")
 async def append_session_events(
     session_id: str,
     messages: List[SessionEventIn],
@@ -176,7 +174,6 @@ async def append_session_events(
 
 
 @router.patch("/sessions/{session_id}/events/{event_id}")
-@router.patch("/sessions/{session_id}/messages/{event_id}")
 async def patch_session_event(
     session_id: str,
     event_id: str,
@@ -199,7 +196,6 @@ async def patch_session_event(
 
 
 @router.post("/sessions/start-with-event")
-@router.post("/sessions/start-with-message")
 async def start_session_with_event(
     request: StartSessionWithEventRequest,
     user_id: str = Query(...),
