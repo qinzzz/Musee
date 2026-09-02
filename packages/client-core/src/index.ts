@@ -7,6 +7,14 @@ export {
   type ArtworkAnalysisStatus,
   type ArtworkAnalysisStreamEvent,
 } from './artworkAnalysis';
+export {
+  fetchArtworkById,
+  fetchArtworkPage,
+  type ArtworkPage,
+  type ArtworkPageRequest,
+  type ArtworkRecord,
+  type ArtworkTagRecord,
+} from './artworkLibrary';
 
 export {
   createApiClient,

@@ -1,17 +1,18 @@
 import type { PropsWithChildren } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { colors, spacing } from '../tokens/theme';
 
 type ScreenProps = PropsWithChildren<{
   contentStyle?: ViewStyle;
+  edges?: Edge[];
 }>;
 
-export function Screen({ children, contentStyle }: ScreenProps) {
+export function Screen({ children, contentStyle, edges }: ScreenProps) {
   return (
     <View style={styles.background}>
-      <SafeAreaView style={[styles.content, contentStyle]}>{children}</SafeAreaView>
+      <SafeAreaView edges={edges} style={[styles.content, contentStyle]}>{children}</SafeAreaView>
     </View>
   );
 }

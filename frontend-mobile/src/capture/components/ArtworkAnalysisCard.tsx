@@ -1,10 +1,16 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { AnalyzedArtwork } from '../types';
 import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
 
 type ArtworkAnalysisCardProps = {
-  artwork: AnalyzedArtwork;
+  artwork: {
+    artistName: string;
+    artworkName: string;
+    analysis: string;
+    date?: string | null;
+    medium?: string | null;
+    tags: string[];
+  };
 };
 
 export function ArtworkAnalysisCard({ artwork }: ArtworkAnalysisCardProps) {
