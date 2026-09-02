@@ -6,7 +6,7 @@ from app.models.artwork import AIProvider
 from app.database.models import User
 from app.routers import session_chat as session_chat_router
 from app.services.ai_client_interface import AIStreamChunk
-from app.services.session_chat_service import ExhibitionItem, build_session_chat_items_payload, load_bootstrap_image_bytes
+from app.services.session_chat_service import SessionChatItem, build_session_chat_items_payload, load_bootstrap_image_bytes
 from app.utils.auth_utils import create_access_token
 
 
@@ -72,8 +72,8 @@ async def test_load_bootstrap_image_bytes_only_for_new_conversation(monkeypatch)
     monkeypatch.setattr("app.services.session_chat_service.image_url_to_bytes", fake_image_loader)
 
     items = [
-        ExhibitionItem(id="1", url="https://a.example/img1.jpg", keywords=["one"]),
-        ExhibitionItem(id="2", url="https://a.example/img2.jpg", keywords=["two"]),
+        SessionChatItem(id="1", url="https://a.example/img1.jpg", keywords=["one"]),
+        SessionChatItem(id="2", url="https://a.example/img2.jpg", keywords=["two"]),
     ]
 
     bootstrap = await load_bootstrap_image_bytes(items, [])
@@ -264,8 +264,8 @@ def test_session_chat_stream_route_records_usage_tokens(client, monkeypatch, db)
 def test_build_session_chat_items_payload():
     payload = build_session_chat_items_payload(
         [
-            ExhibitionItem(id="1", url="u1", keywords=["a", "b"]),
-            ExhibitionItem(id="2", url="u2", keywords=["c"]),
+            SessionChatItem(id="1", url="u1", keywords=["a", "b"]),
+            SessionChatItem(id="2", url="u2", keywords=["c"]),
         ]
     )
     assert payload == [
