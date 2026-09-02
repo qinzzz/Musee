@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from app.services.artwork_analysis_service import image_url_to_bytes
 
 
-class ExhibitionItem(BaseModel):
+class SessionChatItem(BaseModel):
     id: str
     url: str
     keywords: List[str] = []
@@ -19,7 +19,7 @@ class ExhibitionItem(BaseModel):
 
 
 class SessionChatRequest(BaseModel):
-    items: List[ExhibitionItem]
+    items: List[SessionChatItem]
     conversation_history: List[Dict[str, Any]]
     new_message: str
     user_id: Optional[str] = None
@@ -27,7 +27,7 @@ class SessionChatRequest(BaseModel):
     trigger_event_id: Optional[str] = None
 
 
-def build_session_chat_items_payload(items: List[ExhibitionItem]) -> List[Dict[str, Any]]:
+def build_session_chat_items_payload(items: List[SessionChatItem]) -> List[Dict[str, Any]]:
     return [
         {
             "id": item.id,
@@ -43,7 +43,7 @@ def build_session_chat_items_payload(items: List[ExhibitionItem]) -> List[Dict[s
 
 
 async def load_bootstrap_image_bytes(
-    items: List[ExhibitionItem],
+    items: List[SessionChatItem],
     conversation_history: List[Dict[str, str]],
 ) -> List[bytes]:
     if conversation_history or not items:

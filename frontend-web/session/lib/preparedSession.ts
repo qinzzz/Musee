@@ -18,7 +18,7 @@ export function buildPreparedSessionFallbackPrompt(
 }
 
 // Fallback trigger when a staged batch is sent to an ONGOING session without
-// a message: the curator reacts in the context of what the session already holds.
+// a message: the companion reacts in the context of what the session already holds.
 export function buildStagedSessionAdditionPrompt(
   entries: PendingSessionArtwork[],
 ): string {

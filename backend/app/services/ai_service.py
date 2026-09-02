@@ -146,7 +146,7 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
 
         user_goal = session_context.get("user_goal")
 
-        context_block = "\n\n### SESSION CONTEXT (THE CURATOR'S MEMORY)\n"
+        context_block = "\n\n### SESSION CONTEXT (MEMORY OF THIS VISIT)\n"
 
         if user_goal:
             context_block += f"VISITOR'S GOAL FOR THIS SESSION: {user_goal}\n\n"
@@ -444,7 +444,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         """
         Stream identify the artist and artwork details.
         session_context param retained for signature compatibility but no longer injected —
-        contextual commentary belongs in the exhibition chat, not the artwork card.
+        contextual commentary belongs in the session chat, not the artwork card.
         """
         async for chunk in self.identify_artist_stream_result(
             image_bytes=image_bytes,
@@ -736,7 +736,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         retrieval_context: str = "",
     ) -> AITextResult:
         """
-        Exhibition curator chat: discuss a collection of works with the user.
+        Session chat: discuss a collection of works with the user.
         Implements provider-agnostic orchestration similar to other service methods.
         """
         prompt = self.build_session_chat_prompt(items, retrieval_context)
@@ -766,7 +766,7 @@ Return ONLY the updated narrative text.{language_instruction}"""
         retrieval_context: str = "",
     ) -> AsyncGenerator[str, None]:
         """
-        Stream exhibition curator response token by token.
+        Stream session chat response token by token.
         Mirrors the non-streaming version but yields incremental chunks.
         """
         async for chunk in self.stream_session_chat_result(
