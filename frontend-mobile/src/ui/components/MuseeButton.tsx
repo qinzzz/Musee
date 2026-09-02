@@ -11,6 +11,7 @@ import { colors, radii, spacing, typography } from '../tokens/theme';
 type MuseeButtonProps = Omit<PressableProps, 'children' | 'style'> & {
   label: string;
   loading?: boolean;
+  tone?: 'default' | 'inverse';
   variant?: 'primary' | 'secondary';
 };
 
@@ -18,6 +19,7 @@ export function MuseeButton({
   disabled,
   label,
   loading = false,
+  tone = 'default',
   variant = 'primary',
   ...pressableProps
 }: MuseeButtonProps) {
@@ -31,6 +33,9 @@ export function MuseeButton({
       style={({ pressed }) => [
         styles.button,
         variant === 'secondary' ? styles.secondary : styles.primary,
+        tone === 'inverse' && (
+          variant === 'secondary' ? styles.inverseSecondary : styles.inversePrimary
+        ),
         pressed && styles.pressed,
         isDisabled && styles.disabled,
       ]}
@@ -38,13 +43,20 @@ export function MuseeButton({
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === 'primary' ? colors.onPrimary : colors.foreground}
+          color={tone === 'inverse'
+            ? (variant === 'primary' ? colors.foreground : colors.onPrimary)
+            : (variant === 'primary' ? colors.onPrimary : colors.foreground)}
         />
       ) : (
         <Text
           style={[
             styles.label,
             variant === 'secondary' ? styles.secondaryLabel : styles.primaryLabel,
+            tone === 'inverse' && (
+              variant === 'secondary'
+                ? styles.inverseSecondaryLabel
+                : styles.inversePrimaryLabel
+            ),
           ]}
         >
           {label}
@@ -70,6 +82,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  inversePrimary: {
+    backgroundColor: colors.onPrimary,
+  },
+  inverseSecondary: {
+    borderColor: 'rgba(255, 255, 255, 0.56)',
+  },
   pressed: {
     opacity: 0.82,
   },
@@ -85,5 +103,11 @@ const styles = StyleSheet.create({
   },
   secondaryLabel: {
     color: colors.foreground,
+  },
+  inversePrimaryLabel: {
+    color: colors.foreground,
+  },
+  inverseSecondaryLabel: {
+    color: colors.onPrimary,
   },
 });

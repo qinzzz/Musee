@@ -32,6 +32,7 @@ import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
 
 const COPY = {
   close: 'Close',
+  closeSymbol: '×',
   permissionHeading: 'Camera access is off',
   permissionMessage: 'Allow Musee to use the camera so you can capture an artwork.',
   enableCamera: 'Enable Camera',
@@ -166,11 +167,12 @@ export default function CameraScreen() {
       <SafeAreaView style={styles.permissionScreen}>
         <StatusBar style="light" />
         <Pressable
+          accessibilityLabel={COPY.close}
           accessibilityRole="button"
           onPress={() => router.back()}
           style={styles.closeButton}
         >
-          <Text style={styles.closeLabel}>{COPY.close}</Text>
+          <Text style={styles.closeLabel}>{COPY.closeSymbol}</Text>
         </Pressable>
         <View style={styles.permissionContent}>
           <Text style={styles.permissionHeading}>
@@ -185,11 +187,13 @@ export default function CameraScreen() {
               onPress={() => void (
                 permissionBlocked ? Linking.openSettings() : requestPermission()
               )}
+              tone="inverse"
             />
           ) : null}
           <MuseeButton
             label={COPY.choosePhoto}
             onPress={() => void choosePhoto()}
+            tone="inverse"
             variant="secondary"
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -222,11 +226,12 @@ export default function CameraScreen() {
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
         <View style={styles.topBar}>
           <Pressable
+            accessibilityLabel={COPY.close}
             accessibilityRole="button"
             onPress={() => router.back()}
             style={styles.closeButton}
           >
-            <Text style={styles.closeLabel}>{COPY.close}</Text>
+            <Text style={styles.closeLabel}>{COPY.closeSymbol}</Text>
           </Pressable>
         </View>
 
@@ -245,6 +250,7 @@ export default function CameraScreen() {
                 <MuseeButton
                   label={COPY.openSettings}
                   onPress={() => void Linking.openSettings()}
+                  tone="inverse"
                   variant="secondary"
                 />
               ) : null}
@@ -252,11 +258,13 @@ export default function CameraScreen() {
                 label={allowUnsavedPhoto ? COPY.retrySave : COPY.usePhoto}
                 loading={saving}
                 onPress={() => void usePhoto()}
+                tone="inverse"
               />
               {allowUnsavedPhoto ? (
                 <MuseeButton
                   label={COPY.continueWithoutSaving}
                   onPress={() => finishWithAsset(capturedAsset)}
+                  tone="inverse"
                   variant="secondary"
                 />
               ) : null}
@@ -264,6 +272,7 @@ export default function CameraScreen() {
                 disabled={saving}
                 label={COPY.retake}
                 onPress={retake}
+                tone="inverse"
                 variant="secondary"
               />
             </View>
@@ -314,17 +323,21 @@ const styles = StyleSheet.create({
   topBar: {
     alignItems: 'flex-start',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
   },
   closeButton: {
-    minHeight: 44,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.48)',
   },
   closeLabel: {
     color: colors.onPrimary,
-    fontSize: typography.label,
-    fontWeight: '600',
+    fontSize: 30,
+    fontWeight: '300',
+    lineHeight: 32,
   },
   guideArea: {
     flex: 1,
@@ -404,6 +417,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
     paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
   },
   permissionContent: {
     flex: 1,
