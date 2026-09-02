@@ -39,6 +39,44 @@ def test_get_artworks_returns_user_items(client, db):
     assert {item["id"] for item in payload["items"]} == {"art-1", "art-2"}
 
 
+def test_get_artwork_detail_requires_the_owner(client, db):
+    db.add_all([
+        User(user_id="art-user", device_id="art-user"),
+        User(user_id="detail-owner", device_id="detail-owner"),
+        SavedArtwork(
+            id="private-art",
+            user_id="detail-owner",
+            photo_uri="r2://private",
+            artist_name="A",
+            artwork_name="Private work",
+        ),
+    ])
+    db.commit()
+
+    response = client.get("/api/artworks/private-art")
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["error_code"] == "principal_mismatch"
+
+
+def test_get_artwork_detail_returns_the_owned_record(client, db):
+    db.add(User(user_id="art-user", device_id="art-user"))
+    db.add(SavedArtwork(
+        id="owned-art",
+        user_id="art-user",
+        photo_uri="r2://owned",
+        artist_name="Hilma af Klint",
+        artwork_name="The Swan",
+        analysis_status="analyzed",
+    ))
+    db.commit()
+
+    response = client.get("/api/artworks/owned-art")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "owned-art"
+
+
 def test_remove_artwork_soft_deletes_it_and_keeps_session_membership(client, db):
     db.add(User(user_id="delete-user", device_id="delete-user"))
     db.add(SessionModel(id="sess-delete", user_id="delete-user", title="Visit"))

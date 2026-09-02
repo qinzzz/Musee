@@ -1,21 +1,22 @@
 import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { mobileArtworkAnalysisService, mobileArtworkUploadService } from '../../api/runtime';
-import { useAuth } from '../../auth/AuthProvider';
-import { ArtworkAnalysisCard } from '../../capture/components/ArtworkAnalysisCard';
-import { MobileArtworkAnalysisError } from '../../capture/mobileArtworkAnalysisTransport';
-import { MobileArtworkUploadHttpError } from '../../capture/mobileArtworkUploadTransport';
+import { mobileArtworkAnalysisService, mobileArtworkUploadService } from '../../../api/runtime';
+import { useAuth } from '../../../auth/AuthProvider';
+import { ArtworkAnalysisCard } from '../../../capture/components/ArtworkAnalysisCard';
+import { MobileArtworkAnalysisError } from '../../../capture/mobileArtworkAnalysisTransport';
+import { MobileArtworkUploadHttpError } from '../../../capture/mobileArtworkUploadTransport';
 import type {
   AnalyzedArtwork,
   NativeImageAsset,
   PendingArtworkUpload,
-} from '../../capture/types';
-import { pickArtworkImage } from '../../platform/images/pickArtworkImage';
-import { MuseeButton } from '../../ui/components/MuseeButton';
-import { Screen } from '../../ui/components/Screen';
-import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
+} from '../../../capture/types';
+import { pickArtworkImage } from '../../../platform/images/pickArtworkImage';
+import { MuseeButton } from '../../../ui/components/MuseeButton';
+import { Screen } from '../../../ui/components/Screen';
+import { colors, radii, spacing, typography } from '../../../ui/tokens/theme';
 
 const COPY = {
   brand: 'Musee',
@@ -25,6 +26,7 @@ const COPY = {
   usePhoto: 'Upload to Musee',
   chooseDifferentPhoto: 'Choose a different photo',
   uploadAnother: 'Upload another artwork',
+  openLibrary: 'Open Library',
   analyzingHeading: 'Analyzing artwork',
   connectingMessage: 'Musee is preparing the artwork for analysis…',
   receivingMessage: 'Identifying the artist and artwork…',
@@ -64,6 +66,7 @@ function analysisErrorMessage(error: unknown): string {
 
 export default function AuthenticatedHomeScreen() {
   const { logout, user } = useAuth();
+  const router = useRouter();
   const [capture, setCapture] = useState<CaptureState>({ status: 'idle' });
 
   const choosePhoto = async () => {
@@ -199,6 +202,11 @@ export default function AuthenticatedHomeScreen() {
             <MuseeButton
               label={COPY.uploadAnother}
               onPress={() => setCapture({ status: 'idle' })}
+              variant="secondary"
+            />
+            <MuseeButton
+              label={COPY.openLibrary}
+              onPress={() => router.navigate('/library')}
               variant="secondary"
             />
           </View>

@@ -279,7 +279,11 @@ async def backfill_artwork_artist(
 
 
 @router.get("/artworks/{artwork_id}")
-async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
+async def get_artwork(
+    artwork_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
+):
     artwork = (
         db.query(SavedArtwork)
         .options(selectinload(SavedArtwork.capture_museum_entity))
@@ -291,6 +295,10 @@ async def get_artwork(artwork_id: str, db: Session = Depends(get_db)):
     )
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
+    owner_id = artwork.user_id or artwork.device_id
+    if not owner_id:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+    _require_collection_search(principal, owner_id)
     return artwork.to_dict()
 
 

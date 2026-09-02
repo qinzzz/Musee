@@ -16,6 +16,7 @@ import { createMobileArtworkUploadService } from '../capture/mobileArtworkUpload
 import { createMobileArtworkUploadTransport } from '../capture/mobileArtworkUploadTransport';
 import { expoImageCache } from '../platform/images/imageCache';
 import { expoSecureStorage } from '../platform/storage/secureStorage';
+import { createMobileArtworkLibraryService } from '../library/mobileArtworkLibraryService';
 
 const DEFAULT_MOBILE_API_BASE_URL = 'http://127.0.0.1:8000/api';
 const MOBILE_API_TIMEOUT_MS = 10_000;
@@ -69,6 +70,11 @@ export const mobileArtworkAnalysisService = createMobileArtworkAnalysisService(
     apiClient: mobileApiClient,
   }),
 );
+
+export const mobileArtworkLibraryService = createMobileArtworkLibraryService({
+  apiBaseUrl: MOBILE_API_BASE_URL,
+  apiClient: mobileApiClient,
+});
 
 export function checkBackendHealth(): Promise<BackendHealth> {
   return fetchBackendHealth(mobileApiClient, MOBILE_API_BASE_URL);

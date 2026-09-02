@@ -1,6 +1,5 @@
-import { resolveBackendOrigin } from '@musee/client-core';
-
 import type { ImageCache } from '../platform/images/imageCache';
+import { resolveRemoteImageUrl } from '../platform/images/resolveRemoteImageUrl';
 import type { MobileArtworkUploadTransport } from './mobileArtworkUploadTransport';
 import type { NativeImageAsset, PendingArtworkUpload } from './types';
 
@@ -19,13 +18,6 @@ function defaultRequestId(): string {
   return `mobile-upload-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function resolveMobileImageUrl(photoUri: string, apiBaseUrl: string): string {
-  if (/^https?:\/\//.test(photoUri)) return photoUri;
-  const backendOrigin = resolveBackendOrigin(apiBaseUrl).replace(/\/$/, '');
-  const cleanPath = photoUri.replace(/^\//, '');
-  return `${backendOrigin}/${cleanPath}`;
-}
-
 export function createMobileArtworkUploadService({
   apiBaseUrl,
   imageCache,
@@ -41,7 +33,7 @@ export function createMobileArtworkUploadService({
       return {
         id: saved.id,
         photoUri: saved.photo_uri,
-        resolvedImageUri: resolveMobileImageUrl(saved.photo_uri, apiBaseUrl),
+        resolvedImageUri: resolveRemoteImageUrl(saved.photo_uri, apiBaseUrl),
         cacheKey,
         analysisStatus: saved.analysis_status,
         artistName: saved.artist_name,
