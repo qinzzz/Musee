@@ -1,11 +1,12 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { mobileArtworkAnalysisService, mobileArtworkUploadService } from '../../../api/runtime';
 import { useAuth } from '../../../auth/AuthProvider';
 import { ArtworkAnalysisCard } from '../../../capture/components/ArtworkAnalysisCard';
+import { useCaptureDraft } from '../../../capture/CaptureDraftProvider';
 import { MobileArtworkAnalysisError } from '../../../capture/mobileArtworkAnalysisTransport';
 import { MobileArtworkUploadHttpError } from '../../../capture/mobileArtworkUploadTransport';
 import type {
@@ -21,7 +22,8 @@ import { colors, radii, spacing, typography } from '../../../ui/tokens/theme';
 const COPY = {
   brand: 'Musee',
   heading: 'Add an artwork',
-  message: 'Choose a photo to create a pending artwork in your Musee library.',
+  message: 'Photograph an artwork or choose one from Photos to add it to your Musee library.',
+  takePhoto: 'Take a Photo',
   choosePhoto: 'Choose from Photos',
   usePhoto: 'Upload to Musee',
   chooseDifferentPhoto: 'Choose a different photo',
@@ -66,8 +68,15 @@ function analysisErrorMessage(error: unknown): string {
 
 export default function AuthenticatedHomeScreen() {
   const { logout, user } = useAuth();
+  const { clearDraft, draft } = useCaptureDraft();
   const router = useRouter();
   const [capture, setCapture] = useState<CaptureState>({ status: 'idle' });
+
+  useEffect(() => {
+    if (!draft) return;
+    setCapture({ status: 'preview', asset: draft });
+    clearDraft();
+  }, [clearDraft, draft]);
 
   const choosePhoto = async () => {
     setCapture({ status: 'picking' });
@@ -133,9 +142,15 @@ export default function AuthenticatedHomeScreen() {
         {capture.status === 'idle' || capture.status === 'picking' ? (
           <View style={styles.actionGroup}>
             <MuseeButton
+              disabled={capture.status === 'picking'}
+              label={COPY.takePhoto}
+              onPress={() => router.push('/camera')}
+            />
+            <MuseeButton
               label={COPY.choosePhoto}
               loading={capture.status === 'picking'}
               onPress={() => void choosePhoto()}
+              variant="secondary"
             />
           </View>
         ) : null}

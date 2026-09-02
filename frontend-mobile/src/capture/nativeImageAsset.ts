@@ -25,6 +25,14 @@ export type PickedImage = {
   mimeType?: string | null;
 };
 
+export type CapturedImage = {
+  uri: string;
+  fileSize?: number;
+  width: number;
+  height: number;
+  format: 'jpg' | 'png';
+};
+
 export class NativeImageValidationError extends Error {
   readonly code: 'unsupported_type' | 'file_too_large';
 
@@ -70,4 +78,14 @@ export function createLibraryImageAsset(image: PickedImage): NativeImageAsset {
     height: image.height,
     source: 'library',
   };
+}
+
+export function createCameraImageAsset(image: CapturedImage): NativeImageAsset {
+  const mimeType = image.format === 'png' ? 'image/png' : 'image/jpeg';
+  const asset = createLibraryImageAsset({
+    ...image,
+    fileName: `musee-${Date.now()}.${image.format}`,
+    mimeType,
+  });
+  return { ...asset, source: 'camera' };
 }

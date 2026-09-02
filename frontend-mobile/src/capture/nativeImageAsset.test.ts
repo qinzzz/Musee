@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createCameraImageAsset,
   createLibraryImageAsset,
   MAX_ARTWORK_UPLOAD_SIZE_BYTES,
 } from './nativeImageAsset';
@@ -44,5 +45,25 @@ describe('native image asset', () => {
       height: 400,
       mimeType: 'image/gif',
     })).toThrow('JPEG, PNG, or WebP');
+  });
+
+  it('normalizes a camera capture for the existing upload pipeline', () => {
+    const asset = createCameraImageAsset({
+      uri: 'file:///cache/capture.jpg',
+      fileSize: 2_048,
+      width: 3024,
+      height: 4032,
+      format: 'jpg',
+    });
+
+    expect(asset).toMatchObject({
+      uri: 'file:///cache/capture.jpg',
+      fileSize: 2_048,
+      width: 3024,
+      height: 4032,
+      mimeType: 'image/jpeg',
+      source: 'camera',
+    });
+    expect(asset.fileName).toMatch(/^musee-\d+\.jpg$/);
   });
 });

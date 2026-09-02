@@ -18,6 +18,25 @@
           "photosPermission": "Allow Musee to select artwork photos from your library.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Musee to photograph artworks.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Musee to select artwork photos from your library.",
+          "savePhotosPermission": "Allow Musee to save captured artwork photos to your library.",
+          "granularPermissions": [
+            "photo"
+          ]
+        }
       ]
     ],
     "experiments": {
