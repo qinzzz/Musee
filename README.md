@@ -40,8 +40,13 @@ npm run web:dev
 ### 3. Mobile Client Setup
 ```bash
 npm install
-npm run mobile:start
+cd frontend-mobile
+npx expo run:ios
 ```
+
+After the native development client is installed, use `npm run mobile:start`
+from the repository root for normal TypeScript/React Native iteration. Re-run
+`npx expo run:ios` whenever native dependencies change.
 
 The iOS Simulator connects to `http://127.0.0.1:8000/api` by default. For a
 physical device or another backend, set `EXPO_PUBLIC_API_URL` to a reachable
@@ -97,6 +102,7 @@ graph LR
 - **Structured History**: Every conversation and analysis is stored and indexed via AI-generated tags for easy discovery.
 - **Renewable Web Sessions**: The web client keeps 15-minute access tokens in memory and renews them through rotating, HttpOnly refresh cookies backed by revocable database sessions.
 - **Native Session Transport**: Native clients receive rotating refresh tokens in authentication response bodies, store them in secure device storage, and present them through `X-Refresh-Token`; browser sessions remain cookie-only.
+- **Persistent Native Sessions**: The iOS client writes user and model events through the shared Session contract, renders SSE responses as they arrive, and restores completed or interrupted conversations from the backend after a cold start.
 - **Purpose-specific Mobile Storage**: The iOS client keeps rotating refresh credentials behind an Auth-specific SecureStore adapter; access tokens remain in memory, and UI code does not call Keychain APIs directly.
 - **Credential-bound Guest Conversion**: Guest workspaces and preview quotas are proven by an HttpOnly cookie; successful authentication promotes that workspace transactionally and can resume the blocked guest action without trusting client-supplied user IDs.
 - **Domain-first Web Client**: The web app is being reorganized around layers and feature domains such as `app-shell/`, `artist/`, `artwork/`, `boards/`, `session/`, `artwork-ingest/`, and `capture/`, so navigation, artist state, artwork state, board logic, session logic, ingest orchestration, and camera UX each live behind clearer boundaries instead of being scattered across flat folders.

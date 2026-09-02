@@ -22,6 +22,7 @@ import type {
   PendingArtworkUpload,
 } from '../../../capture/types';
 import { pickArtworkImage } from '../../../platform/images/pickArtworkImage';
+import { HomeSessionPanel } from '../../../session/components/HomeSessionPanel';
 import { MuseeButton } from '../../../ui/components/MuseeButton';
 import { Screen } from '../../../ui/components/Screen';
 import { colors, radii, spacing, typography } from '../../../ui/tokens/theme';
@@ -144,6 +145,11 @@ export default function AuthenticatedHomeScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.brand}>{COPY.brand}</Text>
+        </View>
+
+        <HomeSessionPanel />
+
+        <View style={styles.header}>
           <Text style={styles.heading}>{COPY.heading}</Text>
           <Text style={styles.message}>{COPY.message}</Text>
         </View>

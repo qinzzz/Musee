@@ -21,7 +21,7 @@ export default function AppTabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Capture' }}
+        options={{ title: 'Home' }}
       />
       <Tabs.Screen
         name="library"

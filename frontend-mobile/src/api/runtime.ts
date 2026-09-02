@@ -19,6 +19,8 @@ import { createMobileArtworkUploadTransport } from '../capture/mobileArtworkUplo
 import { expoImageCache } from '../platform/images/imageCache';
 import { expoSecureStorage } from '../platform/storage/secureStorage';
 import { createMobileArtworkLibraryService } from '../library/mobileArtworkLibraryService';
+import { createMobileSessionService } from '../session/mobileSessionService';
+import { createMobileSessionTransport } from '../session/mobileSessionTransport';
 
 const MOBILE_API_TIMEOUT_MS = 10_000;
 const authenticationRequiredListeners = new Set<() => void>();
@@ -89,6 +91,13 @@ export const mobileArtworkAnalysisService = createMobileArtworkAnalysisService(
 export const mobileArtworkLibraryService = createMobileArtworkLibraryService({
   apiBaseUrl: MOBILE_API_BASE_URL,
   apiClient: mobileApiClient,
+});
+
+export const mobileSessionService = createMobileSessionService({
+  transport: createMobileSessionTransport({
+    apiBaseUrl: MOBILE_API_BASE_URL,
+    apiClient: mobileApiClient,
+  }),
 });
 
 export function checkBackendHealth(): Promise<BackendHealth> {
