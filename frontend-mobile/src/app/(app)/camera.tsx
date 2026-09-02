@@ -1,4 +1,5 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Device from 'expo-device';
 import { File } from 'expo-file-system';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -64,6 +65,11 @@ export default function CameraScreen() {
   const [allowUnsavedPhoto, setAllowUnsavedPhoto] = useState(false);
 
   useEffect(() => {
+    if (Device.isDevice) {
+      setAvailable(true);
+      return undefined;
+    }
+
     let active = true;
     void CameraView.isAvailableAsync()
       .then((isAvailable) => {
