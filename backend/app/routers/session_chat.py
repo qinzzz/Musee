@@ -115,7 +115,7 @@ async def session_chat(
         return {"response": response.text}
     except Exception as exc:
         fail_ai_usage(locals().get("usage_id"), exc)
-        logger.exception("Exhibition chat failed")
+        logger.exception("Session chat failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
@@ -230,7 +230,7 @@ async def stream_session_chat(
             yield f"event: complete\ndata: {json.dumps({'type': 'result', 'response': full_text, 'retrieval': retrieval_outcome.trace.model_dump()})}\n\n"
         except Exception as exc:
             fail_ai_usage(usage_id, exc)
-            logger.exception("Exhibition chat stream failed")
+            logger.exception("Session chat stream failed")
             yield f"event: error\ndata: {json.dumps({'message': str(exc)})}\n\n"
 
     return StreamingResponse(

@@ -256,8 +256,6 @@ def get_journal_generation_prompt(evidence_package: str) -> str:
 # Backward-compat aliases
 load_visit_chat_prompt = load_session_chat_prompt
 get_visit_chat_prompt = get_session_chat_prompt
-load_exhibition_chat_prompt = load_session_chat_prompt
-get_exhibition_chat_prompt = get_session_chat_prompt
 
 
 def get_artist_identification_prompt_v2(identity: str = "default", language: str = None) -> str:

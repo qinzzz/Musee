@@ -353,7 +353,7 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
             </div>
           </div>
 
-          {/* ── RIGHT PANEL: Analysis Metadata OR Curator Dialogue ── */}
+          {/* ── RIGHT PANEL: Analysis Metadata OR Session Chat ── */}
           <div className="flex flex-col sm:flex-1 sm:min-h-0 min-w-0 bg-white">
 
             {/* Right panel header — hidden on mobile when not editing (toolbar merged into metadata strip) */}
