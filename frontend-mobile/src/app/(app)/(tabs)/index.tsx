@@ -3,12 +3,19 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { mobileArtworkAnalysisService, mobileArtworkUploadService } from '../../../api/runtime';
+import {
+  MOBILE_API_BASE_URL,
+  mobileArtworkAnalysisService,
+  mobileArtworkUploadService,
+} from '../../../api/runtime';
+import type { RequestErrorPresentation } from '../../../api/requestErrorPresentation';
 import { useAuth } from '../../../auth/AuthProvider';
 import { ArtworkAnalysisCard } from '../../../capture/components/ArtworkAnalysisCard';
 import { useCaptureDraft } from '../../../capture/CaptureDraftProvider';
-import { MobileArtworkAnalysisError } from '../../../capture/mobileArtworkAnalysisTransport';
-import { MobileArtworkUploadHttpError } from '../../../capture/mobileArtworkUploadTransport';
+import {
+  presentArtworkAnalysisError,
+  presentArtworkUploadError,
+} from '../../../capture/captureErrorPresentation';
 import type {
   AnalyzedArtwork,
   NativeImageAsset,
@@ -33,8 +40,6 @@ const COPY = {
   connectingMessage: 'Musee is preparing the artwork for analysis…',
   receivingMessage: 'Identifying the artist and artwork…',
   analyzedStatus: 'Analysis complete',
-  genericError: 'Musee could not upload this artwork. Check your connection and try again.',
-  genericAnalysisError: 'Musee could not analyze this artwork. Try the analysis again.',
   retryUpload: 'Try upload again',
   retryAnalysis: 'Try analysis again',
   signOut: 'Sign out',
@@ -47,24 +52,21 @@ type CaptureState =
   | { status: 'uploading'; asset: NativeImageAsset }
   | { status: 'analyzing'; artwork: PendingArtworkUpload; receivedChunk: boolean }
   | { status: 'analyzed'; artwork: AnalyzedArtwork }
-  | { status: 'analysis-error'; artwork: PendingArtworkUpload; message: string }
-  | { status: 'upload-error'; asset?: NativeImageAsset; message: string };
-
-function uploadErrorMessage(error: unknown): string {
-  if (error instanceof MobileArtworkUploadHttpError) {
-    if (error.status === 413 || /too large/i.test(error.detail ?? '')) {
-      return 'This photo is too large. Choose an image smaller than 10 MB.';
-    }
-    return error.detail || COPY.genericError;
+  | {
+    status: 'analysis-error';
+    artwork: PendingArtworkUpload;
+    error: RequestErrorPresentation;
   }
-  if (error instanceof Error && error.message) return error.message;
-  return COPY.genericError;
-}
+  | {
+    status: 'upload-error';
+    asset?: NativeImageAsset;
+    error: RequestErrorPresentation;
+  };
 
-function analysisErrorMessage(error: unknown): string {
-  if (error instanceof MobileArtworkAnalysisError) return error.message;
-  return COPY.genericAnalysisError;
-}
+const ERROR_PRESENTATION_OPTIONS = {
+  apiBaseUrl: MOBILE_API_BASE_URL,
+  showTechnicalDetails: __DEV__,
+};
 
 export default function AuthenticatedHomeScreen() {
   const { logout, user } = useAuth();
@@ -84,7 +86,10 @@ export default function AuthenticatedHomeScreen() {
       const asset = await pickArtworkImage();
       setCapture(asset ? { status: 'preview', asset } : { status: 'idle' });
     } catch (error) {
-      setCapture({ status: 'upload-error', message: uploadErrorMessage(error) });
+      setCapture({
+        status: 'upload-error',
+        error: presentArtworkUploadError(error, ERROR_PRESENTATION_OPTIONS),
+      });
     }
   };
 
@@ -104,7 +109,7 @@ export default function AuthenticatedHomeScreen() {
       setCapture({
         status: 'analysis-error',
         artwork,
-        message: analysisErrorMessage(error),
+        error: presentArtworkAnalysisError(error, ERROR_PRESENTATION_OPTIONS),
       });
     }
   };
@@ -116,7 +121,11 @@ export default function AuthenticatedHomeScreen() {
       const artwork = await mobileArtworkUploadService.uploadArtwork(asset, user.user_id);
       await analyzeArtwork(artwork);
     } catch (error) {
-      setCapture({ status: 'upload-error', asset, message: uploadErrorMessage(error) });
+      setCapture({
+        status: 'upload-error',
+        asset,
+        error: presentArtworkUploadError(error, ERROR_PRESENTATION_OPTIONS),
+      });
     }
   };
 
@@ -241,8 +250,11 @@ export default function AuthenticatedHomeScreen() {
             />
             <View style={styles.errorCard}>
               <Text accessibilityLiveRegion="polite" style={styles.errorMessage}>
-                {capture.message}
+                {capture.error.message}
               </Text>
+              {capture.error.technicalDetail ? (
+                <Text style={styles.errorDetail}>{capture.error.technicalDetail}</Text>
+              ) : null}
               <MuseeButton
                 label={COPY.retryAnalysis}
                 onPress={() => void analyzeArtwork(capture.artwork)}
@@ -254,8 +266,11 @@ export default function AuthenticatedHomeScreen() {
         {capture.status === 'upload-error' ? (
           <View style={styles.errorCard}>
             <Text accessibilityLiveRegion="polite" style={styles.errorMessage}>
-              {capture.message}
+              {capture.error.message}
             </Text>
+            {capture.error.technicalDetail ? (
+              <Text style={styles.errorDetail}>{capture.error.technicalDetail}</Text>
+            ) : null}
             {retryAsset ? (
               <MuseeButton
                 label={COPY.retryUpload}
@@ -357,6 +372,11 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: typography.label,
     lineHeight: 20,
+  },
+  errorDetail: {
+    color: colors.secondary,
+    fontSize: typography.caption,
+    lineHeight: 19,
   },
   footer: {
     marginTop: 'auto',

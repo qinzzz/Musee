@@ -10,8 +10,12 @@ import {
   View,
 } from 'react-native';
 
+import { MOBILE_API_BASE_URL } from '../api/runtime';
 import { useAuth } from '../auth/AuthProvider';
-import { MobileAuthHttpError } from '../auth/mobileAuthTransport';
+import {
+  presentAuthError,
+  type AuthErrorPresentation,
+} from '../auth/authErrorPresentation';
 import { MuseeButton } from '../ui/components/MuseeButton';
 import { MuseeTextField } from '../ui/components/MuseeTextField';
 import { Screen } from '../ui/components/Screen';
@@ -27,34 +31,19 @@ const COPY = {
   passwordPlaceholder: 'Enter your password',
   submit: 'Sign in',
   missingFields: 'Enter both your email and password.',
-  genericError: 'Something went wrong. Please try again.',
 } as const;
-
-const ERROR_MESSAGES: Record<string, string> = {
-  invalid_credentials: 'Incorrect email or password.',
-  email_unverified: 'Check your inbox and verify your email before signing in.',
-  password_not_set: 'This account uses Google sign-in and does not have a password yet.',
-  rate_limited: 'Too many attempts. Wait a minute and try again.',
-};
-
-function messageForError(error: unknown): string {
-  if (error instanceof MobileAuthHttpError && error.code) {
-    return ERROR_MESSAGES[error.code] ?? COPY.genericError;
-  }
-  return COPY.genericError;
-}
 
 export default function SignInScreen() {
   const { loginWithEmail, status } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AuthErrorPresentation | null>(null);
   const isSigningIn = status === 'signingIn';
 
   const handleSubmit = async () => {
     const normalizedEmail = email.trim();
     if (!normalizedEmail || !password) {
-      setError(COPY.missingFields);
+      setError({ message: COPY.missingFields });
       return;
     }
 
@@ -63,7 +52,10 @@ export default function SignInScreen() {
     try {
       await loginWithEmail(normalizedEmail, password);
     } catch (loginError) {
-      setError(messageForError(loginError));
+      setError(presentAuthError(loginError, {
+        apiBaseUrl: MOBILE_API_BASE_URL,
+        showTechnicalDetails: __DEV__,
+      }));
     }
   };
 
@@ -107,9 +99,12 @@ export default function SignInScreen() {
                 value={password}
               />
               {error ? (
-                <Text accessibilityLiveRegion="polite" style={styles.error}>
-                  {error}
-                </Text>
+                <View accessibilityLiveRegion="polite" style={styles.errorGroup}>
+                  <Text style={styles.error}>{error.message}</Text>
+                  {error.technicalDetail ? (
+                    <Text style={styles.errorDetail}>{error.technicalDetail}</Text>
+                  ) : null}
+                </View>
               ) : null}
               <MuseeButton
                 label={COPY.submit}
@@ -161,5 +156,13 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: typography.caption,
     lineHeight: 19,
+  },
+  errorDetail: {
+    color: colors.secondary,
+    fontSize: typography.caption,
+    lineHeight: 19,
+  },
+  errorGroup: {
+    gap: spacing.xs,
   },
 });

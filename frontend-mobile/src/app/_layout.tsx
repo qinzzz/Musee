@@ -2,17 +2,17 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
+import { MOBILE_API_BASE_URL } from '../api/runtime';
 import { AuthProvider, useAuth } from '../auth/AuthProvider';
+import { presentAuthError } from '../auth/authErrorPresentation';
 import { MuseeButton } from '../ui/components/MuseeButton';
 import { colors, spacing, typography } from '../ui/tokens/theme';
 
 const RESTORE_ERROR_TITLE = 'Musee could not start your session';
-const RESTORE_ERROR_MESSAGE =
-  'Check your connection and try again. Your saved sign-in has not been removed.';
 const RETRY_LABEL = 'Try again';
 
 function AuthenticatedStack() {
-  const { retryRestore, status } = useAuth();
+  const { restoreError, retryRestore, status } = useAuth();
 
   if (status === 'restoring') {
     return (
@@ -23,10 +23,20 @@ function AuthenticatedStack() {
   }
 
   if (status === 'error') {
+    const error = presentAuthError(restoreError, {
+      apiBaseUrl: MOBILE_API_BASE_URL,
+      showTechnicalDetails: __DEV__,
+    });
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>{RESTORE_ERROR_TITLE}</Text>
-        <Text style={styles.errorMessage}>{RESTORE_ERROR_MESSAGE}</Text>
+        <Text style={styles.errorMessage}>{error.message}</Text>
+        <Text style={styles.errorReassurance}>
+          Your saved sign-in has not been removed.
+        </Text>
+        {error.technicalDetail ? (
+          <Text style={styles.errorDetail}>{error.technicalDetail}</Text>
+        ) : null}
         <MuseeButton label={RETRY_LABEL} onPress={() => void retryRestore()} />
       </View>
     );
@@ -78,5 +88,15 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     fontSize: typography.body,
     lineHeight: 24,
+  },
+  errorReassurance: {
+    color: colors.secondary,
+    fontSize: typography.caption,
+    lineHeight: 19,
+  },
+  errorDetail: {
+    color: colors.secondary,
+    fontSize: typography.caption,
+    lineHeight: 19,
   },
 });

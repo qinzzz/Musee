@@ -12,7 +12,9 @@ import {
   MOBILE_API_BASE_URL,
   mobileApiClient,
   mobileAuthService,
+  subscribeToMobileAuthenticationRequired,
 } from '../api/runtime';
+import { MobileAuthContractError } from './mobileAuthService';
 import { fetchAuthenticatedUser } from './mobileAuthSession';
 import type { MobileAuthUser } from './mobileAuthTransport';
 
@@ -24,6 +26,7 @@ export type AuthStatus =
   | 'error';
 
 type AuthContextValue = {
+  restoreError: Error | null;
   status: AuthStatus;
   user: MobileAuthUser | null;
   loginWithEmail: (email: string, password: string) => Promise<void>;
@@ -33,11 +36,17 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function normalizeError(error: unknown): Error {
+  return error instanceof Error ? error : new Error('Unknown authentication error.');
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
+  const [restoreError, setRestoreError] = useState<Error | null>(null);
   const [status, setStatus] = useState<AuthStatus>('restoring');
   const [user, setUser] = useState<MobileAuthUser | null>(null);
 
   const restore = useCallback(async () => {
+    setRestoreError(null);
     setStatus('restoring');
     setUser(null);
     try {
@@ -52,7 +61,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       );
       setUser(restoredUser);
       setStatus('authenticated');
-    } catch {
+    } catch (error) {
+      setRestoreError(normalizeError(error));
       setStatus('error');
     }
   }, []);
@@ -61,13 +71,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void restore();
   }, [restore]);
 
+  useEffect(() => subscribeToMobileAuthenticationRequired(() => {
+    setRestoreError(null);
+    setUser(null);
+    setStatus('signedOut');
+  }), []);
+
   const loginWithEmail = useCallback(async (email: string, password: string) => {
     setStatus('signingIn');
     try {
       const response = await mobileAuthService.loginWithEmail(email, password);
       if (!response.user) {
         await mobileAuthService.logout();
-        throw new Error('The login response did not include a user.');
+        throw new MobileAuthContractError();
       }
       setUser(response.user);
       setStatus('authenticated');
@@ -80,17 +96,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const logout = useCallback(async () => {
     await mobileAuthService.logout();
+    setRestoreError(null);
     setUser(null);
     setStatus('signedOut');
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
+    restoreError,
     status,
     user,
     loginWithEmail,
     logout,
     retryRestore: restore,
-  }), [loginWithEmail, logout, restore, status, user]);
+  }), [loginWithEmail, logout, restore, restoreError, status, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

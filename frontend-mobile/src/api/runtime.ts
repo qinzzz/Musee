@@ -4,12 +4,14 @@ import {
   type ApiFetch,
   type BackendHealth,
 } from '@musee/client-core';
+import * as Device from 'expo-device';
 import { fetch as expoFetch } from 'expo/fetch';
 import { File } from 'expo-file-system';
 
 import { createMobileAuthService } from '../auth/mobileAuthService';
 import { createMobileAuthTransport } from '../auth/mobileAuthTransport';
 import { createSecureAuthCredentialStore } from '../auth/secureAuthCredentialStore';
+import { createMobileRuntimeConfiguration } from '../config/mobileRuntimeConfig';
 import { createMobileArtworkAnalysisService } from '../capture/mobileArtworkAnalysisService';
 import { createMobileArtworkAnalysisTransport } from '../capture/mobileArtworkAnalysisTransport';
 import { createMobileArtworkUploadService } from '../capture/mobileArtworkUploadService';
@@ -18,13 +20,23 @@ import { expoImageCache } from '../platform/images/imageCache';
 import { expoSecureStorage } from '../platform/storage/secureStorage';
 import { createMobileArtworkLibraryService } from '../library/mobileArtworkLibraryService';
 
-const DEFAULT_MOBILE_API_BASE_URL = 'http://127.0.0.1:8000/api';
 const MOBILE_API_TIMEOUT_MS = 10_000;
+const authenticationRequiredListeners = new Set<() => void>();
 
-export const MOBILE_API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || DEFAULT_MOBILE_API_BASE_URL;
+export const MOBILE_RUNTIME_CONFIGURATION = createMobileRuntimeConfiguration({
+  configuredApiBaseUrl: process.env.EXPO_PUBLIC_API_URL,
+  configuredEnvironment: process.env.EXPO_PUBLIC_APP_ENV,
+  isDevelopmentBuild: __DEV__,
+  isPhysicalDevice: Device.isDevice,
+});
+export const MOBILE_API_BASE_URL = MOBILE_RUNTIME_CONFIGURATION.apiBaseUrl;
 
-const mobileFetch: ApiFetch = (resource, options) => expoFetch(resource, options);
+const mobileFetch: ApiFetch = (resource, options) => {
+  if (MOBILE_RUNTIME_CONFIGURATION.error) {
+    return Promise.reject(MOBILE_RUNTIME_CONFIGURATION.error);
+  }
+  return expoFetch(resource, options);
+};
 const authCredentialStore = createSecureAuthCredentialStore(expoSecureStorage);
 const mobileAuthHttpClient = createApiClient({
   fetch: mobileFetch,
@@ -42,6 +54,9 @@ export const mobileApiClient = createApiClient({
   defaultTimeoutMs: MOBILE_API_TIMEOUT_MS,
   defaultCredentials: 'omit',
   refreshAccessToken: () => refreshAccessTokenDelegate(),
+  onAuthenticationRequired: () => {
+    authenticationRequiredListeners.forEach((listener) => listener());
+  },
 });
 
 export const mobileAuthService = createMobileAuthService({
@@ -78,4 +93,11 @@ export const mobileArtworkLibraryService = createMobileArtworkLibraryService({
 
 export function checkBackendHealth(): Promise<BackendHealth> {
   return fetchBackendHealth(mobileApiClient, MOBILE_API_BASE_URL);
+}
+
+export function subscribeToMobileAuthenticationRequired(
+  listener: () => void,
+): () => void {
+  authenticationRequiredListeners.add(listener);
+  return () => authenticationRequiredListeners.delete(listener);
 }

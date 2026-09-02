@@ -9,7 +9,14 @@ import {
   View,
 } from 'react-native';
 
-import { mobileArtworkLibraryService } from '../../../api/runtime';
+import {
+  MOBILE_API_BASE_URL,
+  mobileArtworkLibraryService,
+} from '../../../api/runtime';
+import {
+  presentRequestError,
+  type RequestErrorPresentation,
+} from '../../../api/requestErrorPresentation';
 import { useAuth } from '../../../auth/AuthProvider';
 import { ArtworkLibraryCard } from '../../../library/components/ArtworkLibraryCard';
 import type { MobileArtworkRecord } from '../../../library/types';
@@ -28,6 +35,14 @@ const COPY = {
   retry: 'Try again',
 } as const;
 
+function presentLibraryError(error: unknown): RequestErrorPresentation {
+  return presentRequestError(error, {
+    apiBaseUrl: MOBILE_API_BASE_URL,
+    fallbackMessage: COPY.error,
+    showTechnicalDetails: __DEV__,
+  });
+}
+
 export default function LibraryScreen() {
   const { user } = useAuth();
   const router = useRouter();
@@ -37,7 +52,7 @@ export default function LibraryScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<RequestErrorPresentation | null>(null);
 
   const loadFirstPage = useCallback(async (showRefresh = false) => {
     if (!user) return;
@@ -50,8 +65,8 @@ export default function LibraryScreen() {
       if (version !== requestVersion.current) return;
       setItems(page.items);
       setTotal(page.total);
-    } catch {
-      if (version === requestVersion.current) setError(COPY.error);
+    } catch (loadError) {
+      if (version === requestVersion.current) setError(presentLibraryError(loadError));
     } finally {
       if (version === requestVersion.current) {
         setInitialLoading(false);
@@ -81,8 +96,8 @@ export default function LibraryScreen() {
         return [...current, ...page.items.filter((item) => !knownIds.has(item.id))];
       });
       setTotal(page.total);
-    } catch {
-      setError(COPY.error);
+    } catch (loadError) {
+      setError(presentLibraryError(loadError));
     } finally {
       setLoadingMore(false);
     }
@@ -99,7 +114,10 @@ export default function LibraryScreen() {
           <ActivityIndicator color={colors.foreground} style={styles.loading} />
         ) : error ? (
           <View style={styles.messageBlock}>
-            <Text style={styles.emptyHeading}>{error}</Text>
+            <Text style={styles.emptyHeading}>{error.message}</Text>
+            {error.technicalDetail ? (
+              <Text style={styles.errorDetail}>{error.technicalDetail}</Text>
+            ) : null}
             <MuseeButton label={COPY.retry} onPress={() => void loadFirstPage()} />
           </View>
         ) : (
@@ -110,6 +128,11 @@ export default function LibraryScreen() {
         )}
         ListFooterComponent={loadingMore ? (
           <ActivityIndicator color={colors.foreground} style={styles.footerLoading} />
+        ) : error && items.length > 0 ? (
+          <View style={styles.footerError}>
+            <Text style={styles.errorDetail}>{error.message}</Text>
+            <MuseeButton label={COPY.retry} onPress={() => void loadFirstPage(true)} />
+          </View>
         ) : null}
         ListHeaderComponent={(
           <View style={styles.header}>
@@ -199,7 +222,17 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlign: 'center',
   },
+  errorDetail: {
+    color: colors.secondary,
+    fontSize: typography.caption,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
   footerLoading: {
+    paddingVertical: spacing.lg,
+  },
+  footerError: {
+    gap: spacing.sm,
     paddingVertical: spacing.lg,
   },
 });
