@@ -119,6 +119,7 @@ Museum venue thumbnails are enriched from Wikidata `P18` and Wikimedia Commons; 
 For specific setup guides and technical deep-dives:
 - **[Backend README](https://github.com/qinzzz/Musee/blob/main/backend/README.md)**
 - **[Web Client README](https://github.com/qinzzz/Musee/blob/main/frontend-web/README.md)**
+- **[iOS Migration Plan](IOS_MIGRATION.md)**
 - **[iOS Client Engineering Guide](frontend-mobile/README.md)**
 
 ---

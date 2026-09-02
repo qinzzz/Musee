@@ -141,6 +141,8 @@ Prompts loaded from files via `utils/prompt_loader.py` with caching.
 ## Further Documentation
 
 - [README.md](README.md) — full architecture and setup
+- [IOS_MIGRATION.md](IOS_MIGRATION.md) — long-term iOS goal, parity status, and delivery sequence
+- [frontend-mobile/README.md](frontend-mobile/README.md) — implemented iOS architecture and development rules
 - [DEPLOYMENT.md](DEPLOYMENT.md) — Vercel / Railway / Neon deploy topology and env vars
 - [backend/API.md](backend/API.md) — backend API reference
 - [BACKLOG.md](BACKLOG.md) — planned work
