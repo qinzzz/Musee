@@ -17,6 +17,18 @@ cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Frontend-web  (React + TypeScript + Vite)
 cd frontend-web && npm run dev
+
+# Mobile  (React Native + Expo development client)
+npm run mobile:start
 ```
 
 AI providers are OpenAI (default), Claude, and Gemini, all behind `AIClientInterface`. For everything else, see [CLAUDE.md](CLAUDE.md).
+
+For iOS work, read [frontend-mobile/README.md](frontend-mobile/README.md) before
+changing mobile architecture, storage, networking, image handling, or native
+dependencies. It is the canonical guide to the implemented mobile client; keep
+work-in-progress notes and speculative roadmap items out of it.
+
+## Development preference
+
+- For browser sessions likely to consume substantial tokens through repeated visual inspection or interaction, finish automated checks first and give the user a concise manual test checklist. Let the user operate the browser and report results by default. Take over browser testing only when the user explicitly asks, when reproducing a UI issue requires agent control, or when automated/manual evidence is insufficient.
