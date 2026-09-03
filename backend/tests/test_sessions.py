@@ -325,7 +325,6 @@ def test_append_session_messages_accepts_event_fields_and_keeps_legacy_response_
         "id": "event-msg-1",
         "session_id": "visit-event",
         "role": "user",
-        "type": "artwork_capture",
         "event_type": "user_input",
         "content": None,
         "artwork_id": "artwork-123",
@@ -357,7 +356,6 @@ def test_get_session_messages_normalizes_legacy_types(client, db):
         "id": "legacy-art-card",
         "session_id": "visit-legacy",
         "role": "model",
-        "type": "artwork_card",
         "event_type": "artwork_result",
         "content": None,
         "artwork_id": "legacy-artwork",
@@ -401,7 +399,6 @@ def test_append_session_messages_supports_multiple_artwork_ids(client, db):
         "id": "event-msg-multi",
         "session_id": "visit-multi-art",
         "role": "model",
-        "type": "artwork_card",
         "event_type": "artwork_result",
         "content": None,
         "artwork_id": "artwork-a",
@@ -608,7 +605,6 @@ def test_canonical_artwork_input_batch_persists_payload_links_and_legacy_shape(c
 
     fetched = client.get("/api/sessions/visit-batch/events").json()
     assert len(fetched) == 1
-    assert fetched[0]["type"] == "artwork_capture"
     assert fetched[0]["event_type"] == "user_input"
     assert fetched[0]["artwork_ids"] == ["batch-art-1", "batch-art-2"]
     assert fetched[0]["trigger_event_id"] is None

@@ -4,7 +4,6 @@ from sqlalchemy.sql import func
 from app.database.connection import Base
 from app.services.session_event_service import (
     derive_session_event_artwork_ids,
-    legacy_session_transport_type,
     normalize_session_event_payload,
     normalize_session_event_type,
 )
@@ -481,7 +480,6 @@ class SessionEvent(Base):
             "id": self.id,
             "session_id": self.session_id,
             "role": self.role,
-            "type": legacy_session_transport_type(self.type, role=self.role, artwork_ids=payload_artwork_ids),
             "event_type": canonical_type,
             "content": self.content,
             "artwork_id": primary_artwork_id,

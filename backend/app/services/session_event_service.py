@@ -17,13 +17,6 @@ LEGACY_TO_CANONICAL_EVENT_TYPE = {
     "model_response": "model_response",
 }
 
-CANONICAL_TO_LEGACY_EVENT_TYPE = {
-    "user_input": "text",
-    "message": "text",
-    "artwork_result": "artwork_card",
-    "model_response": "text",
-}
-
 VALID_ARTWORK_INPUT_SOURCES = {"upload", "capture", "library"}
 VALID_ARTWORK_RESULT_OUTCOMES = {"succeeded", "failed"}
 VALID_MODEL_RESPONSE_STATUSES = {"pending", "completed", "failed", "auth_required"}
@@ -39,19 +32,6 @@ def normalize_session_event_type(raw_type: Optional[str], *, role: Optional[str]
     if mapped == "message" and role == "user":
         return "user_input"
     return mapped
-
-
-def legacy_session_transport_type(
-    raw_type: Optional[str],
-    *,
-    role: Optional[str] = None,
-    artwork_ids: Optional[Iterable[str]] = None,
-) -> str:
-    canonical_type = normalize_session_event_type(raw_type, role=role)
-    normalized_artwork_ids = normalize_session_event_artwork_ids(artwork_ids)
-    if canonical_type == "user_input":
-        return "artwork_capture" if normalized_artwork_ids else "text"
-    return CANONICAL_TO_LEGACY_EVENT_TYPE.get(canonical_type, canonical_type or "text")
 
 
 def normalize_session_trigger_event_id(trigger_event_id: Optional[str]) -> Optional[str]:
