@@ -61,7 +61,7 @@ become mobile commitments.
 
 ## Current position
 
-Last reviewed: 2026-09-02.
+Last reviewed: 2026-09-03.
 
 The native app now has a functioning foundation and three usable product
 slices:
@@ -74,8 +74,9 @@ slices:
 - text-only Sessions with persisted user/model events, streamed Markdown
   responses, retry behavior, and cold-start restoration.
 
-The next dependency is the artwork thumbnail contract. Once that is in place,
-the active product slice is full artwork intake and rendering inside Sessions.
+The cloud thumbnail contract is complete. The active product slice is artwork
+participation inside native Sessions, beginning with durable timeline rendering
+and followed by artwork input.
 
 ## Capability map
 
@@ -94,11 +95,11 @@ Status meanings:
 | Camera and single-photo intake | Baseline complete | Add production capture UX and preserve reliable permission fallbacks |
 | Batch and multi-select intake | Not started | Match the intentional web batch workflow where it fits native UX |
 | Upload and streamed artwork analysis | Baseline complete | Preserve retry, status, and persisted-result behavior |
-| Artwork thumbnails and image variants | Not started — current focus | Add a durable cloud thumbnail contract with legacy fallback |
+| Artwork thumbnails and image variants | Baseline complete | Preserve cloud derivatives, legacy fallback, and full-resolution detail/AI use |
 | Artwork library and basic detail | Partial | Add complete metadata, actions, pagination, loading, and error states |
 | Artwork editing, deletion, and re-identification | Not started | Provide safe native actions with consistent persistence |
 | Text-only Sessions | Baseline complete | Continue hardening long histories, interruption, and recovery |
-| Artwork inputs and cards inside Sessions | Not started — next | Support capture, Photos, and library artworks in persistent mixed turns |
+| Artwork inputs and cards inside Sessions | Partial — current focus | Support capture, Photos, and library artworks in persistent mixed turns |
 | Session management | Partial | Complete history, titles, delete/archive behavior, and long-list UX |
 | Artwork conversation / Ask Musee | Not started | Define whether it is a detail thread, Session entry, or both |
 | Boards and collection organization | Not started | Bring over the active organization model with native interactions |
@@ -206,25 +207,9 @@ Status: development-device builds work; production pipeline not complete.
 
 ## Active milestone
 
-### Now: cloud thumbnail foundation
+### Now: artwork-aware native Sessions
 
-The first implementation after this plan should establish one durable thumbnail
-contract rather than adding client-only image shortcuts.
-
-Expected outcome:
-
-- artwork storage and API records expose a nullable `thumbnail_uri`;
-- new uploads create a smaller cloud derivative suitable for list and timeline
-  presentation;
-- library and Session cards prefer the thumbnail and fall back to `photo_uri`;
-- detail, zoom, and AI analysis continue using the primary artwork image;
-- deletion/replacement lifecycle covers both image variants;
-- existing artwork rows remain valid, with backfill handled separately if useful.
-
-### Next: artwork-aware native Sessions
-
-After the thumbnail contract is proven by the library, build one complete
-Session intake slice:
+Build one complete Session artwork slice:
 
 1. start or open a Session;
 2. add an artwork from camera, Photos, or the existing library;

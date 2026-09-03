@@ -20,6 +20,7 @@ const SESSION: SessionRecord = {
 function createTransport(): MobileSessionTransport {
   return {
     appendEvents: vi.fn().mockResolvedValue(undefined),
+    fetchArtworks: vi.fn().mockResolvedValue([]),
     fetchEvents: vi.fn().mockResolvedValue([]),
     fetchSessions: vi.fn().mockResolvedValue([SESSION]),
     startTextSession: vi.fn().mockResolvedValue(SESSION),

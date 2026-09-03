@@ -32,6 +32,27 @@ function streamResponse(parts: string[]): Response {
 }
 
 describe('mobile session transport', () => {
+  it('fetches the artworks linked to a session', async () => {
+    const client = createClient([Response.json({
+      items: [{
+        id: 'artwork-1',
+        photo_uri: 'https://images.example/artwork-1.jpg',
+        thumbnail_uri: 'https://images.example/artwork-1-thumb.jpg',
+        artwork_tags: [],
+        analysis_status: 'analyzed',
+      }],
+    })]);
+    const transport = createMobileSessionTransport({ apiBaseUrl: '/api', apiClient: client });
+
+    await expect(transport.fetchArtworks('session 1', 'user 1')).resolves.toEqual([
+      expect.objectContaining({ id: 'artwork-1' }),
+    ]);
+    expect(client.fetchWithTimeout).toHaveBeenCalledWith(
+      '/api/sessions/session%201/artworks?user_id=user%201',
+      { timeout: 10_000 },
+    );
+  });
+
   it('starts a session with the first user event', async () => {
     const client = createClient([Response.json({
       inserted: 1,

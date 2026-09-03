@@ -2,6 +2,7 @@ import {
   createSseParser,
   parseSessionChatStreamEvent,
   type ApiClient,
+  type ArtworkRecord,
   type SessionChatHistoryEntry,
   type SessionChatPhase,
   type SessionEventRecord,
@@ -41,6 +42,7 @@ export type StreamTextSessionResult = {
 
 export type MobileSessionTransport = {
   appendEvents: (sessionId: string, events: SessionEventWrite[]) => Promise<void>;
+  fetchArtworks: (sessionId: string, userId: string) => Promise<ArtworkRecord[]>;
   fetchEvents: (sessionId: string) => Promise<SessionEventRecord[]>;
   fetchSessions: (userId: string) => Promise<SessionRecord[]>;
   startTextSession: (input: StartTextSessionInput) => Promise<SessionRecord>;
@@ -137,6 +139,15 @@ export function createMobileSessionTransport({
   const jsonHeaders = { [CONTENT_TYPE_HEADER]: JSON_CONTENT_TYPE };
 
   return {
+    async fetchArtworks(sessionId, userId) {
+      const response = await apiClient.fetchWithTimeout(
+        `${apiBaseUrl}/sessions/${encodeURIComponent(sessionId)}/artworks?user_id=${encodeURIComponent(userId)}`,
+        { timeout: SESSION_REQUEST_TIMEOUT_MS },
+      );
+      const body = await (await requireSuccess(response)).json() as { items: ArtworkRecord[] };
+      return body.items;
+    },
+
     async fetchSessions(userId) {
       const response = await apiClient.fetchWithTimeout(
         `${apiBaseUrl}/sessions?user_id=${encodeURIComponent(userId)}`,

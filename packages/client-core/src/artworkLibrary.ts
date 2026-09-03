@@ -21,6 +21,8 @@ export type ArtworkRecord = {
   movement: string | null;
   period_bucket: string | null;
   artwork_tags: ArtworkTagRecord[];
+  deleted_at?: string | null;
+  is_deleted?: boolean;
   created_at: string | null;
   updated_at: string | null;
 };

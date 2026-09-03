@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SessionEventRecord, SessionRecord } from '@musee/client-core';
 
 import { MOBILE_API_BASE_URL, mobileSessionService } from '../api/runtime';
+import { mapMobileArtwork } from '../library/mobileArtworkLibraryService';
+import type { MobileArtworkRecord } from '../library/types';
 import { restoreTextSessionAttempt } from './mobileSessionService';
 import { markOrphanedResponses, ORPHANED_RESPONSE_MESSAGE } from './sessionEventState';
 import {
@@ -15,6 +17,7 @@ import {
 } from './useMobileSessionMessaging';
 
 export type MobileTextSessionController = MobileSessionMessagingController & {
+  artworks: MobileArtworkRecord[];
   events: SessionEventRecord[];
   isLoading: boolean;
   loadError: SessionErrorPresentation | null;
@@ -32,6 +35,7 @@ export function useMobileTextSession(
   userId: string,
 ): MobileTextSessionController {
   const [events, setEvents] = useState<SessionEventRecord[]>([]);
+  const [artworks, setArtworks] = useState<MobileArtworkRecord[]>([]);
   const [session, setSession] = useState<SessionRecord | null>(null);
   const [isLoading, setIsLoading] = useState(routeSessionId !== 'new');
   const [loadError, setLoadError] = useState<SessionErrorPresentation | null>(null);
@@ -53,6 +57,7 @@ export function useMobileTextSession(
     if (routeSessionId === 'new') {
       setSession(null);
       setEvents([]);
+      setArtworks([]);
       setIsLoading(false);
       return;
     }
@@ -64,9 +69,10 @@ export function useMobileTextSession(
 
     setIsLoading(true);
     try {
-      const [sessions, restoredEvents] = await Promise.all([
+      const [sessions, restoredEvents, restoredArtworks] = await Promise.all([
         mobileSessionService.fetchSessions(userId),
         mobileSessionService.fetchEvents(routeSessionId),
+        mobileSessionService.fetchArtworks(routeSessionId, userId),
       ]);
       if (version !== requestVersion.current) return;
       const restoredSession = sessions.find((entry) => entry.id === routeSessionId);
@@ -75,6 +81,9 @@ export function useMobileTextSession(
       const restored = markOrphanedResponses(restoredEvents);
       setSession(restoredSession);
       setEvents(restored.events);
+      setArtworks(restoredArtworks.map((artwork) => (
+        mapMobileArtwork(artwork, MOBILE_API_BASE_URL)
+      )));
 
       restored.orphaned.forEach((responseEvent) => {
         const attempt = restoreTextSessionAttempt(
@@ -110,6 +119,7 @@ export function useMobileTextSession(
 
   return {
     ...messaging,
+    artworks,
     events,
     isLoading,
     loadError,

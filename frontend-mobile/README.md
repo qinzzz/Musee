@@ -104,14 +104,20 @@ The app must remain correct when its local cache is empty. It should render the
 local input immediately during intake, then use the server-backed artwork URI
 for durable library and detail views.
 
-Artwork records currently expose `photo_uri`; there is no separate cloud
-thumbnail field yet. Do not treat the local cache key as a persisted thumbnail
+Artwork records expose an authoritative `photo_uri` and a nullable cloud
+`thumbnail_uri`. Library and Session cards prefer the thumbnail and fall back
+to the primary image for legacy records. Detail views and AI analysis continue
+to use the primary image. Do not treat an Expo cache key as a persisted image
 or database reference.
 
-## Persistent text sessions
+## Persistent sessions
 
-The native text-session flow uses the shared Session contracts and preserves
-events on the backend. For a new message, the ordering is intentional:
+The native Session flow uses the shared contracts and preserves events on the
+backend. Text and artwork events use the canonical `event_type` field. Session
+open fetches both the event timeline and linked artwork records so artwork cards
+can be reconstructed with cloud thumbnails after a cold start.
+
+For a new text message, the ordering is intentional:
 
 1. Create or update the Session and persist the user event.
 2. Persist a pending model-response event.
