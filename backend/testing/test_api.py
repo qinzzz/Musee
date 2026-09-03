@@ -6,9 +6,8 @@ Tests all API endpoints with support for both development and production environ
 Randomly selects images from ~/Pictures/museum images for testing.
 
 Usage:
-    python test_api.py --mode dev      # Test localhost:8000
-    python test_api.py --mode prod     # Test Vercel production API
-    python test_api.py --mode prod --url https://your-custom-url.vercel.app
+    python testing/test_api.py --mode dev      # Test localhost:8000
+    python testing/test_api.py --mode prod --url https://your-service.up.railway.app
 """
 
 import argparse
@@ -846,25 +845,25 @@ def parse_args():
         epilog="""
 Examples:
   # Test development server
-  python test_api.py --mode dev
+  python testing/test_api.py --mode dev
 
   # Test production server
-  python test_api.py --mode prod
+  python testing/test_api.py --mode prod --url https://your-service.up.railway.app
 
   # Test custom URL with verbose output
-  python test_api.py --mode prod --url https://my-api.vercel.app --verbose
+  python testing/test_api.py --mode prod --url https://your-service.up.railway.app --verbose
 
   # Only test LLM endpoints (faster, avoids rate limits)
-  python test_api.py --mode dev --llm --verbose
+  python testing/test_api.py --mode dev --llm --verbose
 
   # Run grid tests (LLM endpoints with language variations)
-  python test_api.py --mode dev --grid --verbose
+  python testing/test_api.py --mode dev --grid --verbose
 
   # Combine grid testing with LLM-only mode
-  python test_api.py --mode dev --llm --grid --verbose
+  python testing/test_api.py --mode dev --llm --grid --verbose
 
   # Use custom image directory
-  python test_api.py --mode dev --images ~/Desktop/art_photos
+  python testing/test_api.py --mode dev --images ~/Desktop/art_photos
         """
     )
 
@@ -872,7 +871,7 @@ Examples:
         '--mode',
         choices=['dev', 'prod'],
         required=True,
-        help='Test mode: dev (localhost) or prod (Vercel)'
+        help='Test mode: dev (localhost) or prod (deployed backend)'
     )
 
     parser.add_argument(
@@ -920,9 +919,11 @@ async def main():
     elif args.mode == 'dev':
         base_url = 'http://localhost:8000'
     else:  # prod
-        # Default Vercel URL - user should override with --url
-        base_url = 'https://your-app.vercel.app'
-        print(f"{Colors.YELLOW}Warning: Using default Vercel URL. Use --url to specify your actual deployment URL.{Colors.RESET}\n")
+        print(
+            f"{Colors.RED}Error: Production mode requires --url with the deployed Railway backend URL."
+            f"{Colors.RESET}\n"
+        )
+        return 1
 
     # Expand image directory path
     image_dir = Path(args.images).expanduser()

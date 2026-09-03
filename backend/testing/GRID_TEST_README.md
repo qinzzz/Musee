@@ -37,7 +37,7 @@ python testing/test_api.py --mode dev --llm --grid --verbose
 Test production API with grid mode:
 
 ```bash
-python testing/test_api.py --mode prod --url https://your-api.vercel.app --grid --verbose
+python testing/test_api.py --mode prod --url https://your-service.up.railway.app --grid --verbose
 ```
 
 ## How It Works

@@ -95,8 +95,8 @@ frontend-web/
 
 ## Deployment
 
-Optimized for **Vercel**.
-- **Edge Compatibility**: Designed to work with Vercel's edge network.
+Deployed on **Cloudflare Workers** at https://www.museelab.com.
+- **Edge Compatibility**: Built with the Cloudflare Vite plugin and deployed through Wrangler.
 - **Image Optimization**: Leverages browser-native lazy loading and CSS blurs for smooth gallery experiences.
 
 ---
