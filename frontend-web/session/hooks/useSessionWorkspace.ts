@@ -185,12 +185,7 @@ export function useSessionWorkspace({
     const dbMessages = canonicalSessionEvents;
     if (!dbMessages?.length) return;
     if (dbMessages.some((message) => (
-      (
-        message.event_type === 'model_response'
-        || message.event_type === 'artwork_commentary'
-        || message.type === 'model_response'
-        || message.type === 'artwork_commentary'
-      )
+      message.event_type === 'model_response'
       && (message.payload as Record<string, unknown> | undefined)?.status !== 'pending'
     ))) {
       sessionState.setStreamingSessionResponses((prev) => {
@@ -206,13 +201,16 @@ export function useSessionWorkspace({
       const existing = prev[sessionId] || [];
       const normalizedDbMessages: SessionStreamMessage[] = dbMessages.map(m => {
         const artworkIds = getSessionEventArtworkIds(m);
-        const canonicalEventType = m.event_type || m.type;
+        // Synthesize the web-internal message type from the canonical
+        // event_type (the backend always emits it). Web no longer reads the
+        // legacy `type` transport field, so the backend can stop sending it.
+        const canonicalEventType = m.event_type;
         const frontendMessageType: SessionStreamMessage['type'] =
-          canonicalEventType === 'model_response' || canonicalEventType === 'artwork_commentary'
+          canonicalEventType === 'model_response'
             ? 'model_response'
-            : canonicalEventType === 'user_input'
-              ? 'text'
-              : (m.type || 'text') as SessionStreamMessage['type'];
+            : canonicalEventType === 'artwork_result'
+              ? 'artwork_card'
+              : 'text';
         return {
           id: m.id || `db-${Date.now()}-${Math.random()}`,
           role: m.role as 'user' | 'model',
