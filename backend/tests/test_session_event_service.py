@@ -1,5 +1,4 @@
 from app.services.session_event_service import (
-    legacy_session_transport_type,
     normalize_session_event_artwork_ids,
     normalize_session_event_payload,
     normalize_session_event_type,
@@ -15,13 +14,6 @@ def test_normalize_session_event_type_maps_legacy_values():
     assert normalize_session_event_type("artwork_card") == "artwork_result"
     assert normalize_session_event_type("artwork_commentary", role="model") == "model_response"
     assert normalize_session_event_type("model_response", role="model") == "model_response"
-
-
-def test_legacy_session_transport_type_maps_canonical_values():
-    assert legacy_session_transport_type("user_input", role="user", artwork_ids=[]) == "text"
-    assert legacy_session_transport_type("user_input", role="user", artwork_ids=["art-1"]) == "artwork_capture"
-    assert legacy_session_transport_type("artwork_result") == "artwork_card"
-    assert legacy_session_transport_type("model_response", role="model") == "text"
 
 
 def test_normalize_session_trigger_event_id_strips_empty_values():
