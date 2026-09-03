@@ -76,7 +76,7 @@ export default function SessionArtworkCards({ items, onOpenArtwork }: SessionArt
                 </div>
               ) : (
                 <img
-                  src={item.url}
+                  src={item.thumbnailUrl || item.url}
                   alt={title}
                   className={`h-full w-full object-cover ${item.deleteStatus === 'pending' ? 'saturate-[0.7]' : ''}`}
                 />

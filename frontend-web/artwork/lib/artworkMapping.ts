@@ -12,6 +12,9 @@ import { buildSessionLink } from '../../session/lib/sessionLinks';
 export function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
   const isDeleted = Boolean(item.is_deleted || item.deleted_at);
   const imageUrl = isDeleted ? '' : resolveImageUrl(item.photo_uri);
+  const thumbnailUrl = isDeleted || !item.thumbnail_uri
+    ? undefined
+    : resolveImageUrl(item.thumbnail_uri);
   const keywords = (item.artwork_tags || []).map((tag: any) =>
     tag.name.startsWith('#') ? tag.name.toLowerCase() : `#${tag.name.toLowerCase()}`,
   );
@@ -36,6 +39,7 @@ export function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
       clientId: item.id,
       artworkId: item.id,
       url: imageUrl,
+      thumbnailUrl,
       artistName: item.artist_name,
       artworkName: item.artwork_name,
       description: parseAnalysis(item.analysis),
@@ -94,6 +98,7 @@ export function mapCachedArtworkToGalleryItem(item: ArtworkBootstrapCacheItem): 
       clientId: item.clientId,
       artworkId: item.artworkId,
       url: item.url,
+      thumbnailUrl: item.thumbnailUrl,
       artistName: item.artistName,
       artworkName: item.artworkName,
       description: item.description,

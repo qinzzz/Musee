@@ -155,6 +155,7 @@ class SavedArtwork(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     photo_uri = Column(String, nullable=False)  # Local file path or URI
+    thumbnail_uri = Column(String, nullable=True)  # Smaller cloud derivative for cards and lists
     artist_name = Column(String, nullable=False)
     artwork_name = Column(String, nullable=False)
     location = Column(JSON, nullable=True)  # Geographic location where photo was taken (JSON struct)
@@ -222,6 +223,7 @@ class SavedArtwork(Base):
         result = {
             "id": self.id,
             "photo_uri": self.photo_uri,
+            "thumbnail_uri": self.thumbnail_uri,
             "artist_name": self.artist_name,
             "artwork_name": self.artwork_name,
             "location": self.location,

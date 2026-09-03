@@ -97,8 +97,11 @@ def test_artworks_upload_persists_pending_artwork(client, monkeypatch):
     async def fake_process_image(_image):
         return b"image-bytes", {}
 
+    async def fake_save_variants(*_args, **_kwargs):
+        return "r2://saved-artwork.jpg", "r2://saved-artwork-thumbnail.jpg"
+
     monkeypatch.setattr(artwork_ingest, "process_image", fake_process_image)
-    monkeypatch.setattr(artwork_ingest, "get_storage_service", lambda: _FakeStorage())
+    monkeypatch.setattr(artwork_ingest, "save_artwork_image_variants", fake_save_variants)
 
     response = client.post(
         "/api/artworks/upload",
@@ -109,6 +112,7 @@ def test_artworks_upload_persists_pending_artwork(client, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["photo_uri"] == "r2://saved-artwork.jpg"
+    assert body["thumbnail_uri"] == "r2://saved-artwork-thumbnail.jpg"
     assert body["analysis_status"] == "pending"
     assert body["artist_name"] == "Unknown Artist"
     assert body["artwork_name"] == "Untitled"
@@ -117,6 +121,7 @@ def test_artworks_upload_persists_pending_artwork(client, monkeypatch):
         saved = db.query(SavedArtwork).filter(SavedArtwork.user_id == "upload-user").all()
         assert len(saved) == 1
         assert saved[0].photo_uri == "r2://saved-artwork.jpg"
+        assert saved[0].thumbnail_uri == "r2://saved-artwork-thumbnail.jpg"
         assert saved[0].analysis_status == "pending"
         events = (
             db.query(ArtworkEvent)

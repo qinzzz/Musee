@@ -79,7 +79,7 @@ const GridView: React.FC<Props> = ({
                 </div>
               )}
               <img
-                src={item.url}
+                src={item.thumbnailUrl || item.url}
                 alt={item.artworkName || ''}
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                 className={`relative w-full h-full object-cover transition-all duration-300 ${isPendingDelete ? 'saturate-[0.7]' : 'group-hover:scale-105'} ${item.isAnalyzing ? 'blur-sm opacity-50' : ''} ${isSelected ? 'ring-2 ring-offset-[-2px] ring-neutral-900' : ''}`}

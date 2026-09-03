@@ -48,17 +48,17 @@ const MuseumArtworkCluster: React.FC<{ works: GalleryItem[]; venueImage?: string
     );
   }
   if (visibleWorks.length === 1) {
-    return <img src={visibleWorks[0].url} alt={visibleWorks[0].artworkName || name} className="block h-full w-full object-cover" />;
+    return <img src={visibleWorks[0].thumbnailUrl || visibleWorks[0].url} alt={visibleWorks[0].artworkName || name} className="block h-full w-full object-cover" />;
   }
   return (
     <div className="grid h-full grid-cols-2 gap-1.5">
       <div className="h-full min-h-0 overflow-hidden">
-        <img src={visibleWorks[0].url} alt={visibleWorks[0].artworkName || name} className="block h-full w-full object-cover" />
+        <img src={visibleWorks[0].thumbnailUrl || visibleWorks[0].url} alt={visibleWorks[0].artworkName || name} className="block h-full w-full object-cover" />
       </div>
       <div className="grid min-h-0 grid-rows-2 gap-1.5">
         {visibleWorks.slice(1).map((work) => (
           <div key={work.id} className="min-h-0 overflow-hidden bg-[var(--color-bg-tertiary)]">
-            <img src={work.url} alt={work.artworkName || name} className="block h-full w-full object-cover" />
+            <img src={work.thumbnailUrl || work.url} alt={work.artworkName || name} className="block h-full w-full object-cover" />
           </div>
         ))}
       </div>
@@ -113,7 +113,7 @@ export default function MuseumsSection({
               className="group overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)] text-left"
             >
               <div className="aspect-square overflow-hidden">
-                <img src={work.url} alt={work.artworkName || 'Artwork'} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                <img src={work.thumbnailUrl || work.url} alt={work.artworkName || 'Artwork'} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
               </div>
               <div className="bg-white px-1 py-2">
                 <p className="truncate text-[12px] font-medium text-neutral-800">{work.artworkName || 'Untitled'}</p>

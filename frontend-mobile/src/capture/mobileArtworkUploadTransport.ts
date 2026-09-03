@@ -5,6 +5,7 @@ import type { NativeImageAsset } from './types';
 export type SavedArtworkUploadResponse = {
   id: string;
   photo_uri: string;
+  thumbnail_uri?: string | null;
   artist_name: string;
   artwork_name: string;
   analysis_status: 'pending';

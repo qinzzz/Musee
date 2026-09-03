@@ -52,6 +52,7 @@ export interface ArtworkRecord {
   id: string;
   clientId?: string;
   url: string;
+  thumbnailUrl?: string;
   keywords: string[];
   vibe: AestheticVibe;
   timestamp: number;
