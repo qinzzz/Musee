@@ -1,13 +1,19 @@
+import { Fragment, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { SessionEventRecord } from '@musee/client-core';
 
+import type { MobileArtworkRecord } from '../../library/types';
 import { MuseeButton } from '../../ui/components/MuseeButton';
 import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
+import { buildSessionArtworkPresentation } from '../sessionArtworkPresentation';
+import { SessionArtworkCards } from './SessionArtworkCards';
 import { SessionMessageMarkdown } from './SessionMessageMarkdown';
 
 type SessionEventListProps = {
+  artworks: MobileArtworkRecord[];
   events: SessionEventRecord[];
+  onOpenArtwork: (artworkId: string) => void;
   onRetryResponse: (responseEventId: string) => void;
 };
 
@@ -21,42 +27,97 @@ function responseError(event: SessionEventRecord): string {
     : 'This response was interrupted. Please try again.';
 }
 
-export function SessionEventList({ events, onRetryResponse }: SessionEventListProps) {
+export function SessionEventList({
+  artworks,
+  events,
+  onOpenArtwork,
+  onRetryResponse,
+}: SessionEventListProps) {
+  const artworkPresentation = useMemo(
+    () => buildSessionArtworkPresentation(events, artworks),
+    [artworks, events],
+  );
   return (
     <View style={styles.list}>
+      {artworkPresentation.orphanGroup ? (
+        <SessionArtworkCards
+          group={artworkPresentation.orphanGroup}
+          onOpenArtwork={onOpenArtwork}
+        />
+      ) : null}
       {events.map((event) => {
+        const artworkGroup = artworkPresentation.eventGroups[event.id];
         if (event.event_type === 'user_input' && event.content) {
           return (
-            <View key={event.id} style={styles.userRow}>
-              <View style={styles.userBubble}>
-                <Text style={styles.userText}>{event.content}</Text>
+            <Fragment key={event.id}>
+              {artworkGroup ? (
+                <SessionArtworkCards group={artworkGroup} onOpenArtwork={onOpenArtwork} />
+              ) : null}
+              <View style={styles.userRow}>
+                <View style={styles.userBubble}>
+                  <Text style={styles.userText}>{event.content}</Text>
+                </View>
               </View>
-            </View>
+            </Fragment>
           );
         }
 
-        if (event.event_type !== 'model_response') return null;
+        if (event.event_type !== 'model_response') {
+          return artworkGroup ? (
+            <SessionArtworkCards
+              group={artworkGroup}
+              key={event.id}
+              onOpenArtwork={onOpenArtwork}
+            />
+          ) : null;
+        }
         const status = responseStatus(event);
-        if (status === 'pending' && !event.content) return null;
+        if (status === 'pending' && !event.content) {
+          return artworkGroup ? (
+            <SessionArtworkCards
+              group={artworkGroup}
+              key={event.id}
+              onOpenArtwork={onOpenArtwork}
+            />
+          ) : null;
+        }
         if (status === 'failed') {
           return (
-            <View key={event.id} style={styles.failedCard}>
-              <Text style={styles.failedText}>{responseError(event)}</Text>
-              <MuseeButton
-                label="Try response again"
-                onPress={() => onRetryResponse(event.id)}
-                variant="secondary"
-              />
-            </View>
+            <Fragment key={event.id}>
+              {artworkGroup ? (
+                <SessionArtworkCards group={artworkGroup} onOpenArtwork={onOpenArtwork} />
+              ) : null}
+              <View style={styles.failedCard}>
+                <Text style={styles.failedText}>{responseError(event)}</Text>
+                <MuseeButton
+                  label="Try response again"
+                  onPress={() => onRetryResponse(event.id)}
+                  variant="secondary"
+                />
+              </View>
+            </Fragment>
           );
         }
-        if (!event.content) return null;
+        if (!event.content) {
+          return artworkGroup ? (
+            <SessionArtworkCards
+              group={artworkGroup}
+              key={event.id}
+              onOpenArtwork={onOpenArtwork}
+            />
+          ) : null;
+        }
         return (
-          <View key={event.id} style={styles.modelRow}>
-            <SessionMessageMarkdown streaming={status === 'pending'}>
-              {event.content}
-            </SessionMessageMarkdown>
-          </View>
+          <Fragment key={event.id}>
+            {artworkGroup ? (
+              <SessionArtworkCards group={artworkGroup} onOpenArtwork={onOpenArtwork} />
+            ) : null}
+            <View style={styles.modelRow}>
+              <SessionMessageMarkdown streaming={status === 'pending'}>
+                {event.content}
+              </SessionMessageMarkdown>
+            </View>
+          </Fragment>
         );
       })}
     </View>

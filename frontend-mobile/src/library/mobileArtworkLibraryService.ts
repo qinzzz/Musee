@@ -47,6 +47,7 @@ export function mapMobileArtwork(
     movement: record.movement,
     periodBucket: record.period_bucket,
     tags: record.artwork_tags.map((tag) => tag.name),
+    isDeleted: Boolean(record.is_deleted || record.deleted_at),
     createdAt: record.created_at,
   };
 }

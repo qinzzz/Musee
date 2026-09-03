@@ -1,6 +1,7 @@
 import {
   buildInitialSessionTitle,
   serializeTextSessionHistory,
+  type ArtworkRecord,
   type SessionChatPhase,
   type SessionEventRecord,
   type SessionRecord,
@@ -28,6 +29,7 @@ export type MobileSessionService = {
     text: string,
     sessionId?: string,
   ) => MobileTextSessionAttempt;
+  fetchArtworks: (sessionId: string, userId: string) => Promise<ArtworkRecord[]>;
   fetchEvents: (sessionId: string) => Promise<SessionEventRecord[]>;
   fetchSessions: (userId: string) => Promise<SessionRecord[]>;
   persistPendingResponse: (
@@ -106,6 +108,7 @@ export function createMobileSessionService({
   transport,
 }: MobileSessionServiceOptions): MobileSessionService {
   return {
+    fetchArtworks: transport.fetchArtworks,
     fetchEvents: transport.fetchEvents,
     fetchSessions: transport.fetchSessions,
 

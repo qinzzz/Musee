@@ -18,6 +18,7 @@ export type MobileArtworkRecord = {
   movement: string | null;
   periodBucket: string | null;
   tags: string[];
+  isDeleted: boolean;
   createdAt: string | null;
 };
 

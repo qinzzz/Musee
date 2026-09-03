@@ -112,7 +112,14 @@ export default function MobileSessionScreen() {
                 </View>
               ) : (
                 <SessionEventList
+                  artworks={controller.artworks}
                   events={controller.events}
+                  onOpenArtwork={(artworkId) => {
+                    router.push({
+                      pathname: '/artwork/[id]',
+                      params: { id: artworkId },
+                    });
+                  }}
                   onRetryResponse={(eventId) => {
                     void controller.retryFailedResponse(eventId);
                   }}
