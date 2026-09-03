@@ -90,7 +90,7 @@ const UnsortedClassificationModal: React.FC<Props> = ({
         {current && (
           <div className="grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
             <div className="max-h-[46dvh] overflow-hidden rounded-[26px] bg-neutral-100 md:max-h-none">
-              <img src={current.url} alt={current.artworkName || 'Artwork'} className="h-full w-full object-cover" />
+              <img src={current.thumbnailUrl || current.url} alt={current.artworkName || 'Artwork'} className="h-full w-full object-cover" />
             </div>
             <div className="flex flex-col justify-between">
               <div className="space-y-1">

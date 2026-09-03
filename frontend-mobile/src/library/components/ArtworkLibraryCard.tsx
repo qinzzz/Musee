@@ -27,7 +27,10 @@ export function ArtworkLibraryCard({ artwork, onPress }: ArtworkLibraryCardProps
       <Image
         cachePolicy="memory-disk"
         contentFit="cover"
-        source={{ uri: artwork.resolvedImageUri, cacheKey: artwork.cacheKey }}
+        source={{
+          uri: artwork.resolvedThumbnailUri,
+          cacheKey: artwork.thumbnailCacheKey,
+        }}
         style={styles.image}
       />
       <View style={styles.copy}>

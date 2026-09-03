@@ -28,6 +28,10 @@ from app.services.artwork_background_service import (
 from app.services.artwork_enrichment_service import do_artist_bio, run_artist_bio_bg
 from app.services.artwork_analysis_task_service import run_artwork_analysis
 from app.services.artwork_ingest_service import parse_location_value, resolve_location_payload, save_analyzed_artwork_record_sync
+from app.services.artwork_image_service import (
+    delete_artwork_image_variants,
+    save_artwork_image_variants,
+)
 from app.services.artwork_utilities_service import initialize_ai_services
 from app.services.session_service import get_session_context, update_session_narrative_task
 from app.services.storage import get_storage_service
@@ -45,20 +49,24 @@ initialize_ai_services(
     settings.ai_model_power,
     settings.ai_model_fast,
 )
-async def _save_generated_photo_uri(
+async def _save_generated_image_uris(
     *,
     photo_uri: Optional[str],
     client_type: Optional[str],
     user_id: Optional[str],
     image_bytes: bytes,
-) -> str:
+) -> tuple[str, Optional[str]]:
     if photo_uri:
-        return photo_uri
+        return photo_uri, None
     if client_type == "web" or not photo_uri:
         if not user_id:
             raise HTTPException(status_code=400, detail="user_id is required to persist uploaded artwork")
-        return await get_storage_service().save(image_bytes, "artwork.jpg", user_id)
-    return f"artwork_{uuid.uuid4().hex[:12]}"
+        return await save_artwork_image_variants(
+            image_bytes,
+            user_id,
+            storage=get_storage_service(),
+        )
+    return f"artwork_{uuid.uuid4().hex[:12]}", None
 
 
 async def _resolve_uploaded_image_context(
@@ -166,7 +174,7 @@ async def analyze_artist(
             response["analysis"] = parsed_result["analysis"] or analysis_text
             return response
 
-        generated_photo_uri = await _save_generated_photo_uri(
+        generated_photo_uri, generated_thumbnail_uri = await _save_generated_image_uris(
             photo_uri=photo_uri,
             client_type=client_type,
             user_id=user_id,
@@ -188,6 +196,7 @@ async def analyze_artist(
             photo_time,
             vision_ref_urls,
             "upload",
+            generated_thumbnail_uri,
         )
 
         if artist_entity_id_fast and background_tasks:
@@ -229,6 +238,7 @@ async def analyze_artist(
                 "artist_name": parsed_result["artist_name"],
                 "artwork_name": parsed_result["artwork_name"],
                 "photo_uri": generated_photo_uri,
+                "thumbnail_uri": generated_thumbnail_uri,
                 "date": parsed_result["date"],
                 "medium": parsed_result["medium"],
                 "location": location,
@@ -317,6 +327,7 @@ async def analyze_artist_stream(
         t_ai_call = t_first_chunk = t_streaming_done = None
         first_chunk_received = False
         generated_photo_uri: Optional[str] = None
+        generated_thumbnail_uri: Optional[str] = None
         input_tokens = None
         output_tokens = None
 
@@ -364,7 +375,7 @@ async def analyze_artist_stream(
             }
 
             if user_id:
-                generated_photo_uri = await _save_generated_photo_uri(
+                generated_photo_uri, generated_thumbnail_uri = await _save_generated_image_uris(
                     photo_uri=photo_uri,
                     client_type=client_type,
                     user_id=user_id,
@@ -387,13 +398,15 @@ async def analyze_artist_stream(
                         photo_time,
                         vision_ref_urls,
                         "upload",
+                        generated_thumbnail_uri,
                     )
                 except Exception as db_error:
                     if generated_photo_uri and client_type == "web" and not photo_uri:
-                        try:
-                            await get_storage_service().delete(generated_photo_uri)
-                        except Exception:
-                            pass
+                        await delete_artwork_image_variants(
+                            generated_photo_uri,
+                            generated_thumbnail_uri,
+                            storage=get_storage_service(),
+                        )
                     raise db_error
 
                 if artist_entity_id:
@@ -431,6 +444,7 @@ async def analyze_artist_stream(
 
                 result["artwork_id"] = artwork_id
                 result["photo_uri"] = generated_photo_uri
+                result["thumbnail_uri"] = generated_thumbnail_uri
                 result["reference_urls"] = vision_ref_urls
                 result["artist_entity_id"] = linked_artist_entity_id
 

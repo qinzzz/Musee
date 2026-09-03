@@ -4,6 +4,7 @@ type ArtworkBootstrapCacheItem = {
   artworkId?: string;
   sessionId?: string;
   url: string;
+  thumbnailUrl?: string;
   artistName?: string;
   artworkName?: string;
   description?: string;

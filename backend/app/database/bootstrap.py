@@ -27,6 +27,7 @@ SCHEMA_BOOTSTRAP_STATEMENTS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS skill_stats JSONB",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'free'",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS reference_urls JSONB",
+    "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS thumbnail_uri VARCHAR",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS artwork_entity_id VARCHAR",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS artist_entity_id VARCHAR",
     """

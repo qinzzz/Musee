@@ -23,11 +23,20 @@ export function mapMobileArtwork(
   record: ArtworkRecord,
   apiBaseUrl: string,
 ): MobileArtworkRecord {
+  const thumbnailUri = record.thumbnail_uri || null;
   return {
     id: record.id,
     photoUri: record.photo_uri,
+    thumbnailUri,
     resolvedImageUri: resolveRemoteImageUrl(record.photo_uri, apiBaseUrl),
+    resolvedThumbnailUri: resolveRemoteImageUrl(
+      thumbnailUri || record.photo_uri,
+      apiBaseUrl,
+    ),
     cacheKey: `artwork:${record.id}`,
+    thumbnailCacheKey: thumbnailUri
+      ? `artwork-thumbnail:${record.id}`
+      : `artwork:${record.id}`,
     artistName: record.artist_name || 'Unknown Artist',
     artworkName: record.artwork_name || 'Untitled',
     analysis: record.analysis,

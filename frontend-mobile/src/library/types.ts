@@ -3,8 +3,11 @@ import type { ArtworkAnalysisStatus } from '@musee/client-core';
 export type MobileArtworkRecord = {
   id: string;
   photoUri: string;
+  thumbnailUri: string | null;
   resolvedImageUri: string;
+  resolvedThumbnailUri: string;
   cacheKey: string;
+  thumbnailCacheKey: string;
   artistName: string;
   artworkName: string;
   analysis: string | null;

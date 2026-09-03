@@ -165,7 +165,7 @@ async def get_smart_collections(
             "description": description,
             "artwork_count": count,
             "artwork_ids": [artwork.id for artwork in group],
-            "cover_uris": [artwork.photo_uri for artwork in group[:4]],
+            "cover_uris": [artwork.thumbnail_uri or artwork.photo_uri for artwork in group[:4]],
             "hook": movement_hook(movement_name, count),
         })
 

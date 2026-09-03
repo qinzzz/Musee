@@ -11,6 +11,7 @@ import {
 const RECORD: ArtworkRecord = {
   id: 'artwork-1',
   photo_uri: 'uploads/user/artwork.jpg',
+  thumbnail_uri: 'uploads/user/artwork_thumbnail.jpg',
   artist_name: 'Hilma af Klint',
   artwork_name: 'The Swan',
   analysis: 'A symbolic abstract composition.',
@@ -54,7 +55,9 @@ describe('mobile artwork library service', () => {
       items: [{
         id: 'artwork-1',
         resolvedImageUri: 'http://127.0.0.1:8000/uploads/user/artwork.jpg',
+        resolvedThumbnailUri: 'http://127.0.0.1:8000/uploads/user/artwork_thumbnail.jpg',
         cacheKey: 'artwork:artwork-1',
+        thumbnailCacheKey: 'artwork-thumbnail:artwork-1',
         tags: ['#abstract'],
       }],
     });
@@ -62,6 +65,18 @@ describe('mobile artwork library service', () => {
       artistName: 'Hilma af Klint',
       artworkName: 'The Swan',
     });
+  });
+
+  it('falls back to the primary image for legacy records', () => {
+    const artwork = mapMobileArtwork(
+      { ...RECORD, thumbnail_uri: null },
+      'https://api.example.com/api',
+    );
+
+    expect(artwork.resolvedThumbnailUri).toBe(
+      'https://api.example.com/uploads/user/artwork.jpg',
+    );
+    expect(artwork.thumbnailCacheKey).toBe('artwork:artwork-1');
   });
 
   it('converts any persisted status into an analysis retry input', () => {

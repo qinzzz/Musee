@@ -326,7 +326,7 @@ const SessionDetailsModal: React.FC<{
                       </div>
                     ) : (
                       <img
-                        src={item.url}
+                        src={item.thumbnailUrl || item.url}
                         alt={item.artworkName || 'Artwork'}
                         className="h-full w-full object-cover"
                       />

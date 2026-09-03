@@ -232,7 +232,7 @@ export default function AddFromLibraryModal({
                       } ${isUnavailable || limitReached ? 'cursor-not-allowed opacity-55' : ''}`}
                     >
                       <div className="relative flex h-32 items-center justify-center overflow-hidden bg-neutral-100 p-2">
-                        <img src={item.url} alt={item.artworkName || 'Artwork'} className="h-full w-full object-contain" />
+                        <img src={item.thumbnailUrl || item.url} alt={item.artworkName || 'Artwork'} className="h-full w-full object-contain" />
                         {isSelected && (
                           <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-950 text-white shadow-sm">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -270,7 +270,7 @@ export default function AddFromLibraryModal({
                     } ${isUnavailable || limitReached ? 'cursor-not-allowed opacity-55' : ''}`}
                   >
                     <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
-                      <img src={item.url} alt={item.artworkName || 'Artwork'} className="h-full w-full object-contain" />
+                      <img src={item.thumbnailUrl || item.url} alt={item.artworkName || 'Artwork'} className="h-full w-full object-contain" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[16px] font-medium text-neutral-900">{item.artworkName || 'Untitled'}</p>

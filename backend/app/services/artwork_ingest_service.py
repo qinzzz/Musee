@@ -88,6 +88,7 @@ def create_saved_artwork_record_sync(
     photo_time: Optional[str],
     source: str = "upload",
     sequence_number: Optional[int] = None,
+    thumbnail_uri: Optional[str] = None,
 ) -> str:
     with SessionLocal() as local_db:
         session = _get_or_create_owned_session(
@@ -98,6 +99,7 @@ def create_saved_artwork_record_sync(
         )
         artwork = SavedArtwork(
             photo_uri=photo_uri,
+            thumbnail_uri=thumbnail_uri,
             artist_name="Unknown Artist",
             artwork_name="Untitled",
             user_id=user_id,
@@ -165,6 +167,7 @@ def save_analyzed_artwork_record_sync(
     photo_time: Optional[str],
     vision_ref_urls: Optional[list[str]],
     source: str = "upload",
+    thumbnail_uri: Optional[str] = None,
 ) -> tuple[str, Optional[str], Optional[str], Optional[str]]:
     with SessionLocal() as local_db:
         user = local_db.query(User).filter(User.user_id == user_id).first()
@@ -181,6 +184,7 @@ def save_analyzed_artwork_record_sync(
         )
         artwork = SavedArtwork(
             photo_uri=photo_uri,
+            thumbnail_uri=thumbnail_uri,
             artist_name=parsed_result["artist_name"],
             artwork_name=parsed_result["artwork_name"],
             user_id=user_id,

@@ -63,6 +63,10 @@ from app.services.artwork_ingest_service import (
     resolve_location_payload,
     save_analyzed_artwork_record_sync,
 )
+from app.services.artwork_image_service import (
+    delete_artwork_image_variants,
+    save_artwork_image_variants,
+)
 from app.services.museum.resolver import resolve_artwork_capture_museum
 from app.services.session_service import (
     get_artwork_session_ids as _get_artwork_session_ids,
@@ -234,10 +238,14 @@ async def analyze_artwork_unified(
 
     if not existing_artwork and user_id:
         generated_photo_uri = photo_uri
+        generated_thumbnail_uri = None
         if not generated_photo_uri:
             if client_type == "web" or image is not None:
-                storage = get_storage_service()
-                generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
+                generated_photo_uri, generated_thumbnail_uri = await save_artwork_image_variants(
+                    image_bytes,
+                    user_id,
+                    storage=get_storage_service(),
+                )
             else:
                 generated_photo_uri = f"artwork_{uuid.uuid4().hex[:12]}"
 
@@ -250,6 +258,7 @@ async def analyze_artwork_unified(
             photo_time,
             "upload",
             None,
+            generated_thumbnail_uri,
         )
         existing_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == existing_artwork_id).first()
 
@@ -446,10 +455,14 @@ async def analyze_artwork_unified(
     response = {"analysis": parsed_result["analysis"], "model_used": ai_provider.value}
     if user_id:
         generated_photo_uri = photo_uri
+        generated_thumbnail_uri = None
         if not generated_photo_uri:
             if client_type == "web" or image is not None:
-                storage = get_storage_service()
-                generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
+                generated_photo_uri, generated_thumbnail_uri = await save_artwork_image_variants(
+                    image_bytes,
+                    user_id,
+                    storage=get_storage_service(),
+                )
             else:
                 generated_photo_uri = f"artwork_{uuid.uuid4().hex[:12]}"
 
@@ -467,6 +480,8 @@ async def analyze_artwork_unified(
             parsed_location,
             photo_time,
             vision_ref_urls,
+            "upload",
+            generated_thumbnail_uri,
         )
 
         if artist_entity_id_fast and background_tasks:
@@ -508,6 +523,7 @@ async def analyze_artwork_unified(
                 "artist_name": parsed_result["artist_name"],
                 "artwork_name": parsed_result["artwork_name"],
                 "photo_uri": generated_photo_uri,
+                "thumbnail_uri": generated_thumbnail_uri,
                 "date": parsed_result["date"],
                 "medium": parsed_result["medium"],
                 "location": location,
@@ -802,7 +818,11 @@ async def save_artwork_upload(
     # only the backend-owned URI in the artwork record. process_image always
     # returns JPEG bytes, so the storage filename must use the same format.
     storage = get_storage_service()
-    generated_photo_uri = await storage.save(image_bytes, "artwork.jpg", user_id)
+    generated_photo_uri, generated_thumbnail_uri = await save_artwork_image_variants(
+        image_bytes,
+        user_id,
+        storage=storage,
+    )
 
     parsed_location = parse_location_value(location)
     if latitude is not None and longitude is not None:
@@ -815,16 +835,25 @@ async def save_artwork_upload(
     if parsed_location and position_timestamp:
         parsed_location["position_timestamp"] = position_timestamp
 
-    artwork_id = await anyio.to_thread.run_sync(
-        create_saved_artwork_record_sync,
-        user_id,
-        session_id,
-        generated_photo_uri,
-        parsed_location,
-        photo_time,
-        source or "upload",
-        sequence_number,
-    )
+    try:
+        artwork_id = await anyio.to_thread.run_sync(
+            create_saved_artwork_record_sync,
+            user_id,
+            session_id,
+            generated_photo_uri,
+            parsed_location,
+            photo_time,
+            source or "upload",
+            sequence_number,
+            generated_thumbnail_uri,
+        )
+    except Exception:
+        await delete_artwork_image_variants(
+            generated_photo_uri,
+            generated_thumbnail_uri,
+            storage=storage,
+        )
+        raise
 
     saved_artwork = db.query(SavedArtwork).filter(SavedArtwork.id == artwork_id).first()
     if not saved_artwork:

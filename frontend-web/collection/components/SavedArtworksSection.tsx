@@ -189,7 +189,7 @@ export default function SavedArtworksSection({
                           }}
                         >
                           <img
-                            src={item.url}
+                            src={item.thumbnailUrl || item.url}
                             alt=""
                             className={`h-full w-full object-cover ${item.deleteStatus === 'pending' ? 'saturate-[0.7]' : ''}`}
                           />

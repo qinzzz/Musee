@@ -97,7 +97,7 @@ export default function ArtMovementPage({ collection, items, leftSlot, onClose, 
                   className="relative aspect-square rounded-xl overflow-hidden bg-[var(--color-surface-muted)] group focus:outline-none border border-neutral-200/60"
                 >
                   <img
-                    src={item.url}
+                    src={item.thumbnailUrl || item.url}
                     alt={item.artworkName || item.artistName || ''}
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     loading="lazy"

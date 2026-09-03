@@ -51,6 +51,18 @@ describe('SessionArtworkCards', () => {
     expect(onOpenArtwork).toHaveBeenCalledWith(item);
   });
 
+  it('prefers the thumbnail for a session card', () => {
+    const item = makeArtwork(1, {
+      thumbnailUrl: 'https://example.com/art-1-thumbnail.jpg',
+    });
+
+    render(<SessionArtworkCards items={[item]} onOpenArtwork={vi.fn()} />);
+
+    expect(screen.getByRole('img', { name: 'Artwork 1' }).getAttribute('src')).toBe(
+      'https://example.com/art-1-thumbnail.jpg',
+    );
+  });
+
   it('renders preserved metadata on a disabled deleted card', () => {
     const onOpenArtwork = vi.fn();
     const item = makeArtwork(1, {

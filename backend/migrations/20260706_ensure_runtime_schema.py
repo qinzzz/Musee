@@ -108,6 +108,7 @@ STATEMENTS = (
     CREATE TABLE IF NOT EXISTS saved_artworks (
         id VARCHAR PRIMARY KEY,
         photo_uri VARCHAR NOT NULL,
+        thumbnail_uri VARCHAR,
         artist_name VARCHAR NOT NULL,
         artwork_name VARCHAR NOT NULL,
         location JSONB,
@@ -138,6 +139,7 @@ STATEMENTS = (
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS movement VARCHAR",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS period_bucket VARCHAR",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS reference_urls JSONB",
+    "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS thumbnail_uri VARCHAR",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS artwork_entity_id VARCHAR",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS artist_entity_id VARCHAR",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS insights JSONB",

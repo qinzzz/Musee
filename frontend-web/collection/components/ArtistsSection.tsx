@@ -25,7 +25,7 @@ const ArtistArtworkCluster: React.FC<{ works: GalleryItem[] }> = ({ works }) => 
     const [work] = visibleWorks;
     return (
       <div className="h-full min-h-0 overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)]">
-        <img src={work.url} alt={work.artworkName || work.artistName || ''} className="block h-full w-full object-cover" />
+        <img src={work.thumbnailUrl || work.url} alt={work.artworkName || work.artistName || ''} className="block h-full w-full object-cover" />
       </div>
     );
   }
@@ -35,7 +35,7 @@ const ArtistArtworkCluster: React.FC<{ works: GalleryItem[] }> = ({ works }) => 
       <div className="grid h-full min-h-0 grid-rows-2 gap-1.5">
         {visibleWorks.map((work) => (
           <div key={work.id} className="min-h-0 overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)]">
-            <img src={work.url} alt={work.artworkName || work.artistName || ''} className="block h-full w-full object-cover" />
+            <img src={work.thumbnailUrl || work.url} alt={work.artworkName || work.artistName || ''} className="block h-full w-full object-cover" />
           </div>
         ))}
       </div>
@@ -46,13 +46,13 @@ const ArtistArtworkCluster: React.FC<{ works: GalleryItem[] }> = ({ works }) => 
   return (
     <div className="grid h-full min-h-0 grid-cols-2 grid-rows-[1.2fr_0.9fr] gap-1.5">
       <div className="col-span-2 min-h-0 overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)]">
-        <img src={first.url} alt={first.artworkName || first.artistName || ''} className="block h-full w-full object-cover" />
+        <img src={first.thumbnailUrl || first.url} alt={first.artworkName || first.artistName || ''} className="block h-full w-full object-cover" />
       </div>
       <div className="min-h-0 overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)]">
-        <img src={second.url} alt={second.artworkName || second.artistName || ''} className="block h-full w-full object-cover" />
+        <img src={second.thumbnailUrl || second.url} alt={second.artworkName || second.artistName || ''} className="block h-full w-full object-cover" />
       </div>
       <div className="min-h-0 overflow-hidden rounded-[18px] bg-[var(--color-bg-tertiary)]">
-        <img src={third.url} alt={third.artworkName || third.artistName || ''} className="block h-full w-full object-cover" />
+        <img src={third.thumbnailUrl || third.url} alt={third.artworkName || third.artistName || ''} className="block h-full w-full object-cover" />
       </div>
     </div>
   );

@@ -124,7 +124,7 @@ export default function BoardsSection({
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 md:grid-cols-4">
               {likedItems.length > 0 && (
                 <button onClick={() => onSelectedBoardChange('liked')} className="group text-left">
-                  <BoardCoverMosaic covers={likedItems.slice(0, 3).map((item) => item.url)} />
+                  <BoardCoverMosaic covers={likedItems.slice(0, 3).map((item) => item.thumbnailUrl || item.url)} />
                   <p className="truncate text-[12px] font-semibold leading-tight text-neutral-900">Liked</p>
                   <p className="mt-0.5 text-[11px] text-neutral-400">
                     {likedItems.length} {likedItems.length === 1 ? 'artwork' : 'artworks'}
@@ -218,7 +218,7 @@ export default function BoardsSection({
                     }}
                   >
                     <img
-                      src={item.url}
+                      src={item.thumbnailUrl || item.url}
                       alt=""
                       className={`h-full w-full object-cover ${item.deleteStatus === 'pending' ? 'saturate-[0.7]' : ''}`}
                     />

@@ -8,6 +8,7 @@ const item: GalleryItem = {
   id: 'art-1',
   artworkId: 'art-1',
   url: 'https://example.com/art.jpg',
+  thumbnailUrl: 'https://example.com/art-thumbnail.jpg',
   artistName: 'Artist',
   artworkName: 'Artwork',
   description: 'Description',
@@ -49,6 +50,9 @@ describe('GridView touch selection controls', () => {
 
     expect(screen.getByRole('button', { name: 'Artwork actions' }).className).toContain('h-11');
     expect(screen.getByRole('checkbox', { name: 'Select artwork' }).className).toContain('hidden');
+    expect(screen.getByRole('img', { name: 'Artwork' }).getAttribute('src')).toBe(
+      'https://example.com/art-thumbnail.jpg',
+    );
 
     rerender(
       <GridView
