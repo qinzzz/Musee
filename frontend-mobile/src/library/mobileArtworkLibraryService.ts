@@ -58,11 +58,40 @@ export function toPendingArtworkUpload(
   return {
     id: artwork.id,
     photoUri: artwork.photoUri,
+    thumbnailUri: artwork.thumbnailUri,
     resolvedImageUri: artwork.resolvedImageUri,
+    resolvedThumbnailUri: artwork.resolvedThumbnailUri,
     cacheKey: artwork.cacheKey,
+    thumbnailCacheKey: artwork.thumbnailCacheKey,
     analysisStatus: 'pending',
     artistName: artwork.artistName,
     artworkName: artwork.artworkName,
+  };
+}
+
+export function mapPendingMobileArtwork(
+  artwork: PendingArtworkUpload,
+): MobileArtworkRecord {
+  return {
+    id: artwork.id,
+    photoUri: artwork.photoUri,
+    thumbnailUri: artwork.thumbnailUri,
+    resolvedImageUri: artwork.resolvedImageUri,
+    resolvedThumbnailUri: artwork.resolvedThumbnailUri,
+    cacheKey: artwork.cacheKey,
+    thumbnailCacheKey: artwork.thumbnailCacheKey,
+    artistName: artwork.artistName,
+    artworkName: artwork.artworkName,
+    analysis: null,
+    analysisStatus: artwork.analysisStatus,
+    analysisError: null,
+    date: null,
+    medium: null,
+    movement: null,
+    periodBucket: null,
+    tags: [],
+    isDeleted: false,
+    createdAt: null,
   };
 }
 

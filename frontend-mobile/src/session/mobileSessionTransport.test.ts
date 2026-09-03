@@ -77,6 +77,33 @@ describe('mobile session transport', () => {
     );
   });
 
+  it('starts a session around an uploaded artwork', async () => {
+    const client = createClient([Response.json({
+      inserted: 1,
+      session: { id: 'session-1', user_id: 'user-1', title: 'New Session' },
+      artworks: [],
+    })]);
+    const transport = createMobileSessionTransport({ apiBaseUrl: '/api', apiClient: client });
+
+    await expect(transport.startArtworkSession({
+      artworkId: 'artwork-1',
+      sessionId: 'session-1',
+      title: 'New Session',
+      userId: 'user-1',
+    })).resolves.toMatchObject({ id: 'session-1' });
+    expect(client.fetchWithTimeout).toHaveBeenCalledWith(
+      '/api/sessions/start-with-artworks?user_id=user-1',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          artwork_ids: ['artwork-1'],
+          session_id: 'session-1',
+          title: 'New Session',
+        }),
+      }),
+    );
+  });
+
   it('streams phases and chunks through a terminal result', async () => {
     const client = createClient([streamResponse([
       'event: phase\ndata: {"phase":"planning"}\n\n',
@@ -90,6 +117,7 @@ describe('mobile session transport', () => {
 
     await expect(transport.streamTextResponse({
       history: [],
+      items: [],
       message: 'Hello',
       sessionId: 'session-1',
       triggerEventId: 'event-1',
@@ -115,6 +143,38 @@ describe('mobile session transport', () => {
     );
   });
 
+  it('sends Session artwork context using the backend field names', async () => {
+    const client = createClient([streamResponse([
+      'event: complete\ndata: {"type":"result","response":"Seen"}\n\n',
+    ])]);
+    const transport = createMobileSessionTransport({ apiBaseUrl: '/api', apiClient: client });
+
+    await transport.streamTextResponse({
+      history: [],
+      items: [{
+        id: 'artwork-1',
+        url: 'https://images.example/artwork.jpg',
+        keywords: ['abstract'],
+        artistName: 'Hilma af Klint',
+        artworkName: 'The Swan',
+        description: 'A symbolic composition.',
+        date: '1915',
+        medium: 'Oil on canvas',
+      }],
+      message: 'Tell me about this artwork.',
+      sessionId: 'session-1',
+      triggerEventId: 'event-1',
+      userId: 'user-1',
+    });
+
+    expect(client.fetchWithTimeout).toHaveBeenCalledWith(
+      '/api/visit/chat-stream',
+      expect.objectContaining({
+        body: expect.stringContaining('"artist_name":"Hilma af Klint"'),
+      }),
+    );
+  });
+
   it('rejects a terminal event with no model response', async () => {
     const client = createClient([streamResponse([
       'event: complete\ndata: {"type":"result","response":""}\n\n',
@@ -123,6 +183,7 @@ describe('mobile session transport', () => {
 
     await expect(transport.streamTextResponse({
       history: [],
+      items: [],
       message: 'Hello',
       sessionId: 'session-1',
       triggerEventId: 'event-1',

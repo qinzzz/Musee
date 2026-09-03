@@ -3,9 +3,12 @@ import { classifyRequestFailure } from '@musee/client-core';
 import { MobileSessionHttpError, MobileSessionStreamError } from './mobileSessionTransport';
 
 export type SessionFailureStage =
+  | 'analysis'
   | 'load'
   | 'response_save'
+  | 'session_save'
   | 'stream'
+  | 'upload'
   | 'user_save';
 
 export type SessionErrorPresentation = {
@@ -14,9 +17,12 @@ export type SessionErrorPresentation = {
 };
 
 const STAGE_FALLBACKS: Record<SessionFailureStage, string> = {
+  analysis: 'The artwork was saved, but analysis failed. Try again to continue.',
   load: 'Musee could not load this session.',
   response_save: 'The response appeared, but Musee could not save it. Try saving again.',
+  session_save: 'The artwork was saved, but Musee could not add it to this Session.',
   stream: 'The response was interrupted. Please try again.',
+  upload: 'Musee could not upload this artwork. Please try again.',
   user_save: 'Musee could not save your message. Please try again.',
 };
 

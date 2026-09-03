@@ -23,6 +23,7 @@ function createTransport(): MobileSessionTransport {
     fetchArtworks: vi.fn().mockResolvedValue([]),
     fetchEvents: vi.fn().mockResolvedValue([]),
     fetchSessions: vi.fn().mockResolvedValue([SESSION]),
+    startArtworkSession: vi.fn().mockResolvedValue(SESSION),
     startTextSession: vi.fn().mockResolvedValue(SESSION),
     streamTextResponse: vi.fn().mockResolvedValue({ response: 'Color shapes perception.' }),
     updateEvent: vi.fn().mockImplementation(async (_sessionId, _eventId, event) => event),
@@ -67,6 +68,57 @@ describe('mobile session service', () => {
     expect(transport.appendEvents).not.toHaveBeenCalled();
   });
 
+  it('creates an artwork-bearing input with a default prompt when no note is supplied', () => {
+    const ids = ['user-event', 'model-event'];
+    const service = createMobileSessionService({
+      createId: () => ids.shift()!,
+      now: () => new Date('2026-09-02T10:00:00Z'),
+      transport: createTransport(),
+    });
+
+    const attempt = service.createArtworkAttempt(
+      'user-1',
+      'artwork-1',
+      'capture',
+      '   ',
+      'session-1',
+      'new_session',
+    );
+
+    expect(attempt).toMatchObject({
+      text: 'I just started a session with a new upload. Help me understand what stands out in this work and where I should look first.',
+      userEvent: {
+        id: 'user-event',
+        content: null,
+        artwork_ids: ['artwork-1'],
+        payload: { artworks: [{ artwork_id: 'artwork-1', source: 'capture' }] },
+      },
+      responseEvent: {
+        id: 'model-event',
+        artwork_ids: ['artwork-1'],
+        trigger_event_id: 'user-event',
+      },
+    });
+  });
+
+  it('starts a new session around an uploaded artwork', async () => {
+    const transport = createTransport();
+    const service = createMobileSessionService({ transport });
+
+    await expect(service.startArtworkSession(
+      'user-1',
+      'artwork-1',
+      'session-1',
+      'New Session',
+    )).resolves.toBe(SESSION);
+    expect(transport.startArtworkSession).toHaveBeenCalledWith({
+      artworkId: 'artwork-1',
+      sessionId: 'session-1',
+      title: 'New Session',
+      userId: 'user-1',
+    });
+  });
+
   it('serializes prior completed turns without duplicating the current user message', async () => {
     const transport = createTransport();
     const service = createMobileSessionService({ transport });
@@ -88,7 +140,7 @@ describe('mobile session service', () => {
       attempt.userEvent,
     ];
 
-    await service.streamResponse(attempt, history);
+    await service.streamResponse(attempt, history, []);
 
     expect(transport.streamTextResponse).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -97,6 +149,46 @@ describe('mobile session service', () => {
           { role: 'assistant', content: 'Earlier answer' },
         ],
         message: 'Current question',
+      }),
+      undefined,
+    );
+  });
+
+  it('puts the artwork referenced by the current input first in model context', async () => {
+    const transport = createTransport();
+    const service = createMobileSessionService({ transport });
+    const attempt = service.createArtworkAttempt(
+      'user-1',
+      'new-artwork',
+      'upload',
+      '',
+      'session-1',
+      'existing_session',
+    );
+    const item = (id: string) => ({
+      id,
+      url: `https://images.example/${id}.jpg`,
+      keywords: [],
+      artistName: 'Unknown Artist',
+      artworkName: 'Untitled',
+      description: null,
+      date: null,
+      medium: null,
+    });
+
+    await service.streamResponse(
+      attempt,
+      [attempt.userEvent],
+      [item('older-artwork'), item('new-artwork')],
+    );
+
+    expect(transport.streamTextResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({ id: 'new-artwork' }),
+          expect.objectContaining({ id: 'older-artwork' }),
+        ],
+        message: 'I just added a new upload to our session. In 3–4 sentences, react to what I added and how it relates to what we have been looking at.',
       }),
       undefined,
     );
@@ -158,6 +250,34 @@ describe('mobile session service', () => {
     )).toMatchObject({
       text: 'Original question',
       responseEvent: { id: 'response-event', payload: { status: 'pending' } },
+    });
+  });
+
+  it('reconstructs an artwork-only turn with the default prompt', () => {
+    const userEvent: SessionEventRecord = {
+      id: 'user-event',
+      role: 'user',
+      event_type: 'user_input',
+      content: null,
+      artwork_ids: ['artwork-1'],
+    };
+    const responseEvent: SessionEventRecord = {
+      id: 'response-event',
+      role: 'model',
+      event_type: 'model_response',
+      content: '',
+      artwork_ids: ['artwork-1'],
+      trigger_event_id: userEvent.id,
+      payload: { status: 'failed' },
+    };
+
+    expect(restoreTextSessionAttempt(
+      responseEvent,
+      [userEvent, responseEvent],
+      SESSION,
+      'user-1',
+    )).toMatchObject({
+      text: 'I just added a new upload to our session. In 3–4 sentences, react to what I added and how it relates to what we have been looking at.',
     });
   });
 });

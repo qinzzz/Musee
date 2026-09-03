@@ -63,6 +63,21 @@ describe('mobile artwork upload transport', () => {
     expect(body.get('client_type')).toBe('ios');
     expect(body.get('source')).toBe('upload');
     expect(body.get('request_id')).toBe('request-1');
+    expect(body.get('session_id')).toBeNull();
+  });
+
+  it('links the upload to an existing session', async () => {
+    const apiClient = createApiClient(Response.json(SAVED_ARTWORK));
+    const transport = createMobileArtworkUploadTransport({
+      apiBaseUrl: API_BASE_URL,
+      apiClient,
+      createUploadFile: () => new Blob(['image'], { type: 'image/jpeg' }),
+    });
+
+    await transport.uploadArtwork(ASSET, 'user-1', 'request-1', 'session-1');
+
+    const [, options] = vi.mocked(apiClient.fetchWithTimeout).mock.calls[0] ?? [];
+    expect((options?.body as FormData).get('session_id')).toBe('session-1');
   });
 
   it('preserves a backend upload error', async () => {

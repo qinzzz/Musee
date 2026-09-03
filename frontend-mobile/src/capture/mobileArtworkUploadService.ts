@@ -4,7 +4,11 @@ import type { MobileArtworkUploadTransport } from './mobileArtworkUploadTranspor
 import type { NativeImageAsset, PendingArtworkUpload } from './types';
 
 export type MobileArtworkUploadService = {
-  uploadArtwork: (asset: NativeImageAsset, userId: string) => Promise<PendingArtworkUpload>;
+  uploadArtwork: (
+    asset: NativeImageAsset,
+    userId: string,
+    sessionId?: string,
+  ) => Promise<PendingArtworkUpload>;
 };
 
 export type MobileArtworkUploadServiceOptions = {
@@ -25,16 +29,30 @@ export function createMobileArtworkUploadService({
   createRequestId = defaultRequestId,
 }: MobileArtworkUploadServiceOptions): MobileArtworkUploadService {
   return {
-    async uploadArtwork(asset, userId) {
-      const saved = await transport.uploadArtwork(asset, userId, createRequestId());
+    async uploadArtwork(asset, userId, sessionId) {
+      const saved = await transport.uploadArtwork(
+        asset,
+        userId,
+        createRequestId(),
+        sessionId,
+      );
       const cacheKey = `artwork:${saved.id}`;
+      const thumbnailUri = saved.thumbnail_uri || null;
       await imageCache.write(asset.uri, cacheKey).catch(() => undefined);
 
       return {
         id: saved.id,
         photoUri: saved.photo_uri,
+        thumbnailUri,
         resolvedImageUri: resolveRemoteImageUrl(saved.photo_uri, apiBaseUrl),
+        resolvedThumbnailUri: resolveRemoteImageUrl(
+          thumbnailUri || saved.photo_uri,
+          apiBaseUrl,
+        ),
         cacheKey,
+        thumbnailCacheKey: thumbnailUri
+          ? `artwork-thumbnail:${saved.id}`
+          : cacheKey,
         analysisStatus: saved.analysis_status,
         artistName: saved.artist_name,
         artworkName: saved.artwork_name,

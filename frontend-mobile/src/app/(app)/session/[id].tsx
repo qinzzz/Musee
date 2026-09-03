@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,8 +13,12 @@ import {
 import type { SessionChatPhase } from '@musee/client-core';
 
 import { useAuth } from '../../../auth/AuthProvider';
+import { useCaptureDraft } from '../../../capture/CaptureDraftProvider';
+import type { NativeImageAsset } from '../../../capture/types';
+import { pickArtworkImage } from '../../../platform/images/pickArtworkImage';
 import { SessionComposer } from '../../../session/components/SessionComposer';
 import { SessionEventList } from '../../../session/components/SessionEventList';
+import type { MobileSessionArtworkPhase } from '../../../session/useMobileSessionMessaging';
 import { useMobileTextSession } from '../../../session/useMobileTextSession';
 import { MuseeButton } from '../../../ui/components/MuseeButton';
 import { Screen } from '../../../ui/components/Screen';
@@ -26,11 +30,19 @@ const PHASE_LABELS: Record<SessionChatPhase, string> = {
   generating_response: 'Writing response…',
 };
 
+const ARTWORK_PHASE_LABELS: Record<MobileSessionArtworkPhase, string> = {
+  analyzing_artwork: 'Looking at the artwork…',
+  saving_artwork_input: 'Adding artwork to Session…',
+  starting_session: 'Starting Session…',
+  uploading_artwork: 'Uploading artwork…',
+};
+
 const COPY = {
   newTitle: 'New Session',
   emptyHeading: 'What are you thinking about?',
   emptyMessage: 'Ask Musee about art, an artist, or something in your collection.',
   retry: 'Try again',
+  photoError: 'Musee could not open that photo. Please try again.',
 } as const;
 
 export default function MobileSessionScreen() {
@@ -38,9 +50,20 @@ export default function MobileSessionScreen() {
   const routeSessionId = Array.isArray(params.id) ? params.id[0] : params.id;
   const resolvedSessionId = routeSessionId || 'new';
   const { user } = useAuth();
+  const { clearDraft, draft } = useCaptureDraft();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
+  const [attachment, setAttachment] = useState<NativeImageAsset | null>(null);
+  const [isPickingPhoto, setIsPickingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const controller = useMobileTextSession(resolvedSessionId, user?.user_id || '');
+
+  useEffect(() => {
+    if (!draft || draft.destination !== 'session') return;
+    setAttachment(draft.asset);
+    setPhotoError(null);
+    clearDraft();
+  }, [clearDraft, draft]);
 
   useEffect(() => {
     if (
@@ -65,11 +88,13 @@ export default function MobileSessionScreen() {
   if (!user) return null;
 
   const title = controller.session?.title || COPY.newTitle;
-  const processingLabel = controller.phase
-    ? PHASE_LABELS[controller.phase]
-    : controller.isSending
-      ? 'Saving your message…'
-      : null;
+  const processingLabel = controller.artworkPhase
+    ? ARTWORK_PHASE_LABELS[controller.artworkPhase]
+    : controller.phase
+      ? PHASE_LABELS[controller.phase]
+      : controller.isSending
+        ? 'Saving your message…'
+        : null;
   const showGlobalFailure = controller.failure
     && controller.failure.stage !== 'stream';
 
@@ -158,9 +183,39 @@ export default function MobileSessionScreen() {
               ) : null}
             </ScrollView>
             <View style={styles.composerContainer}>
+              {photoError ? (
+                <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+                  {photoError}
+                </Text>
+              ) : null}
               <SessionComposer
-                disabled={controller.isSending}
-                onSubmit={controller.sendText}
+                attachment={attachment}
+                disabled={controller.isSending || isPickingPhoto}
+                onChoosePhoto={() => {
+                  setIsPickingPhoto(true);
+                  setPhotoError(null);
+                  void pickArtworkImage()
+                    .then((asset) => {
+                      if (asset) setAttachment(asset);
+                    })
+                    .catch(() => setPhotoError(COPY.photoError))
+                    .finally(() => setIsPickingPhoto(false));
+                }}
+                onRemoveAttachment={() => setAttachment(null)}
+                onSubmit={async (text, selectedArtwork) => {
+                  const submitted = selectedArtwork
+                    ? await controller.sendArtwork(selectedArtwork, text)
+                    : await controller.sendText(text);
+                  if (submitted && selectedArtwork) setAttachment(null);
+                  return submitted;
+                }}
+                onTakePhoto={() => {
+                  setPhotoError(null);
+                  router.push({
+                    pathname: '/camera',
+                    params: { destination: 'session' },
+                  });
+                }}
               />
             </View>
           </>

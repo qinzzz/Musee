@@ -109,6 +109,15 @@ flowchart TD
 - **Clean separation**: AI services follow the `AIClientInterface` pattern
 - **Check existing code first**: Before adding params or features, verify they don't already exist
 
+### iOS Parity Work
+- **Verify behavior, not only contracts**: Before calling an iOS capability aligned
+  with web, inspect the complete web interaction and compare lifecycle semantics,
+  transient-state visibility and timing, persistence, retry, error recovery, and
+  cold-start restoration. A shared event or API field does not by itself establish
+  product parity.
+- **Keep the presentation native**: Match meaningful product behavior without
+  copying browser components or interaction mechanics that do not fit iOS.
+
 ### Streaming vs Non-Streaming
 - `*-stream` endpoints — **SSE streaming** (chunk → complete → metrics events)
 - Non-stream endpoints — **Complete JSON response**

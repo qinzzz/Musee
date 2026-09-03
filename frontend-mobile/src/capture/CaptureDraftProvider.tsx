@@ -9,18 +9,31 @@ import {
 
 import type { NativeImageAsset } from './types';
 
+export type CaptureDraftDestination = 'library' | 'session';
+
+export type CaptureDraft = {
+  asset: NativeImageAsset;
+  destination: CaptureDraftDestination;
+};
+
 type CaptureDraftContextValue = {
-  draft: NativeImageAsset | null;
+  draft: CaptureDraft | null;
   clearDraft: () => void;
-  setDraft: (asset: NativeImageAsset) => void;
+  setDraft: (
+    asset: NativeImageAsset,
+    destination?: CaptureDraftDestination,
+  ) => void;
 };
 
 const CaptureDraftContext = createContext<CaptureDraftContextValue | null>(null);
 
 export function CaptureDraftProvider({ children }: PropsWithChildren) {
-  const [draft, setDraftState] = useState<NativeImageAsset | null>(null);
+  const [draft, setDraftState] = useState<CaptureDraft | null>(null);
   const clearDraft = useCallback(() => setDraftState(null), []);
-  const setDraft = useCallback((asset: NativeImageAsset) => setDraftState(asset), []);
+  const setDraft = useCallback((
+    asset: NativeImageAsset,
+    destination: CaptureDraftDestination = 'library',
+  ) => setDraftState({ asset, destination }), []);
   const value = useMemo(
     () => ({ draft, clearDraft, setDraft }),
     [clearDraft, draft, setDraft],

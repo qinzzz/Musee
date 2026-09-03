@@ -76,8 +76,8 @@ export default function AuthenticatedHomeScreen() {
   const [capture, setCapture] = useState<CaptureState>({ status: 'idle' });
 
   useEffect(() => {
-    if (!draft) return;
-    setCapture({ status: 'preview', asset: draft });
+    if (!draft || draft.destination !== 'library') return;
+    setCapture({ status: 'preview', asset: draft.asset });
     clearDraft();
   }, [clearDraft, draft]);
 
