@@ -7,6 +7,10 @@ import type { MobileArtworkRecord } from '../../library/types';
 import { MuseeButton } from '../../ui/components/MuseeButton';
 import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
 import { buildSessionArtworkPresentation } from '../sessionArtworkPresentation';
+import {
+  getSessionEventTextPresentation,
+  type SessionEventTextPresentation,
+} from '../sessionEventState';
 import { SessionArtworkCards } from './SessionArtworkCards';
 import { SessionMessageMarkdown } from './SessionMessageMarkdown';
 
@@ -17,14 +21,54 @@ type SessionEventListProps = {
   onRetryResponse: (responseEventId: string) => void;
 };
 
-function responseStatus(event: SessionEventRecord): string | null {
-  return typeof event.payload?.status === 'string' ? event.payload.status : null;
-}
-
-function responseError(event: SessionEventRecord): string {
-  return typeof event.payload?.error_message === 'string'
-    ? event.payload.error_message
-    : 'This response was interrupted. Please try again.';
+function SessionEventText({
+  eventId,
+  onRetryResponse,
+  presentation,
+}: {
+  eventId: string;
+  onRetryResponse: (responseEventId: string) => void;
+  presentation: SessionEventTextPresentation;
+}) {
+  if (presentation.kind === 'user') {
+    return (
+      <View style={styles.userRow}>
+        <View style={styles.userBubble}>
+          <Text style={styles.userText}>{presentation.text}</Text>
+        </View>
+      </View>
+    );
+  }
+  if (presentation.kind === 'model') {
+    return (
+      <View style={styles.modelRow}>
+        <SessionMessageMarkdown streaming={presentation.streaming}>
+          {presentation.text}
+        </SessionMessageMarkdown>
+      </View>
+    );
+  }
+  if (presentation.kind === 'status') {
+    return (
+      <View style={styles.statusCard}>
+        <Text style={styles.statusText}>{presentation.text}</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.failedCard}>
+      <Text accessibilityLiveRegion="polite" style={styles.failedText}>
+        {presentation.text}
+      </Text>
+      {presentation.retryable ? (
+        <MuseeButton
+          label="Try response again"
+          onPress={() => onRetryResponse(eventId)}
+          variant="secondary"
+        />
+      ) : null}
+    </View>
+  );
 }
 
 export function SessionEventList({
@@ -47,76 +91,20 @@ export function SessionEventList({
       ) : null}
       {events.map((event) => {
         const artworkGroup = artworkPresentation.eventGroups[event.id];
-        if (event.event_type === 'user_input' && event.content) {
-          return (
-            <Fragment key={event.id}>
-              {artworkGroup ? (
-                <SessionArtworkCards group={artworkGroup} onOpenArtwork={onOpenArtwork} />
-              ) : null}
-              <View style={styles.userRow}>
-                <View style={styles.userBubble}>
-                  <Text style={styles.userText}>{event.content}</Text>
-                </View>
-              </View>
-            </Fragment>
-          );
-        }
-
-        if (event.event_type !== 'model_response') {
-          return artworkGroup ? (
-            <SessionArtworkCards
-              group={artworkGroup}
-              key={event.id}
-              onOpenArtwork={onOpenArtwork}
-            />
-          ) : null;
-        }
-        const status = responseStatus(event);
-        if (status === 'pending' && !event.content) {
-          return artworkGroup ? (
-            <SessionArtworkCards
-              group={artworkGroup}
-              key={event.id}
-              onOpenArtwork={onOpenArtwork}
-            />
-          ) : null;
-        }
-        if (status === 'failed') {
-          return (
-            <Fragment key={event.id}>
-              {artworkGroup ? (
-                <SessionArtworkCards group={artworkGroup} onOpenArtwork={onOpenArtwork} />
-              ) : null}
-              <View style={styles.failedCard}>
-                <Text style={styles.failedText}>{responseError(event)}</Text>
-                <MuseeButton
-                  label="Try response again"
-                  onPress={() => onRetryResponse(event.id)}
-                  variant="secondary"
-                />
-              </View>
-            </Fragment>
-          );
-        }
-        if (!event.content) {
-          return artworkGroup ? (
-            <SessionArtworkCards
-              group={artworkGroup}
-              key={event.id}
-              onOpenArtwork={onOpenArtwork}
-            />
-          ) : null;
-        }
+        const textPresentation = getSessionEventTextPresentation(event);
+        if (!artworkGroup && !textPresentation) return null;
         return (
           <Fragment key={event.id}>
             {artworkGroup ? (
               <SessionArtworkCards group={artworkGroup} onOpenArtwork={onOpenArtwork} />
             ) : null}
-            <View style={styles.modelRow}>
-              <SessionMessageMarkdown streaming={status === 'pending'}>
-                {event.content}
-              </SessionMessageMarkdown>
-            </View>
+            {textPresentation ? (
+              <SessionEventText
+                eventId={event.id}
+                onRetryResponse={onRetryResponse}
+                presentation={textPresentation}
+              />
+            ) : null}
           </Fragment>
         );
       })}
@@ -157,6 +145,18 @@ const styles = StyleSheet.create({
   },
   failedText: {
     color: colors.danger,
+    fontSize: typography.label,
+    lineHeight: 20,
+  },
+  statusCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing.md,
+  },
+  statusText: {
+    color: colors.secondary,
     fontSize: typography.label,
     lineHeight: 20,
   },
