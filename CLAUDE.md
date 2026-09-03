@@ -70,7 +70,7 @@ flowchart TD
     subgraph VISIT["2 · SESSION / VISIT — core domain"]
         Rsess["routers/sessions.py<br/>/sessions/* (events)"]
         Ssess["session_service.py"]
-        Sevent["session_event_service.py<br/>legacy = canonical event maps"]
+        Sevent["session_event_service.py<br/>legacy→canonical input normalization"]
         Tsess[("sessions")]
         Rsess --> Ssess --> Tsess
         Ssess --> Sevent --> Tsev[("session_events")]
@@ -98,7 +98,7 @@ flowchart TD
 
 **Endpoint vocabulary:** session events are served only under `/sessions/{id}/events` (+ `start-with-event`) — the old `/messages` URL aliases have been removed. The chat endpoint keeps `/api/session/chat` canonical with `/api/visit/chat` as a **retained back-compat alias** (both web and installed mobile apps call `/visit/chat-stream`, so the alias must stay).
 
-**Event-type vocabulary (still dual):** `session_event_service.py`'s `LEGACY_TO_CANONICAL_*` / `CANONICAL_TO_LEGACY_*` maps mean each event is serialized with both a canonical `event_type` and a legacy `type` field, and the web/mobile clients still read the legacy `type` values. This split is live on the wire — prefer the canonical `event_type` in new code, but don't drop the legacy `type` without migrating both clients.
+**Event-type vocabulary:** responses now serialize a **single canonical** `event_type` — one of `user_input` / `message` / `artwork_result` / `model_response` — and all clients (web, mobile, `client-core`) read it. The legacy dual `type` output field has been removed from responses. `session_event_service.py` still keeps `LEGACY_TO_CANONICAL_EVENT_TYPE` + `normalize_session_event_type` to (a) derive canonical from the stored `session_events.type` column and (b) tolerate a legacy `type` on **input** (the write path still accepts it; old rows may hold legacy values). Read and write `event_type` in new code. Note the stored column is named `type` while the API field is `event_type` — same concept, different name.
 
 ## Important Notes
 
