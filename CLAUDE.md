@@ -11,11 +11,11 @@ Only create new .md files when you are asked to.
 
 Musee is a web app (React + Vite) with Python FastAPI backend for AI-powered artwork analysis.
 
-**Frontend-web**: React + TypeScript + Vite (port 3000), hosted on Vercel
+**Frontend-web**: React + TypeScript + Vite (port 3000), hosted on Cloudflare Workers at https://www.museelab.com
 **Backend**: FastAPI + SQLAlchemy on Railway, Neon PostgreSQL (port 8000)
 **AI providers**: OpenAI (default), Claude, Gemini — all behind `AIClientInterface`
 
-Deployment topology (Vercel frontend → Railway backend → Neon DB) is documented in [DEPLOYMENT.md](DEPLOYMENT.md). See [README.md](README.md) for complete documentation.
+Deployment topology (Cloudflare Workers frontend → Railway backend → Neon DB) is documented in [DEPLOYMENT.md](DEPLOYMENT.md). See [README.md](README.md) for complete documentation.
 
 ## Quick Commands
 
@@ -152,6 +152,6 @@ Prompts loaded from files via `utils/prompt_loader.py` with caching.
 - [README.md](README.md) — full architecture and setup
 - [IOS_MIGRATION.md](IOS_MIGRATION.md) — long-term iOS goal, parity status, and delivery sequence
 - [frontend-mobile/README.md](frontend-mobile/README.md) — implemented iOS architecture and development rules
-- [DEPLOYMENT.md](DEPLOYMENT.md) — Vercel / Railway / Neon deploy topology and env vars
+- [DEPLOYMENT.md](DEPLOYMENT.md) — Cloudflare Workers / Railway / Neon deploy topology and env vars
 - [backend/API.md](backend/API.md) — backend API reference
 - [BACKLOG.md](BACKLOG.md) — planned work

@@ -16,7 +16,7 @@ graph TD
     E --> G[Claude Client]
     E --> H[Gemini Client]
     C --> I[Prompt Engine]
-    B --> J[Storage Service: Vercel/Local]
+    B --> J[Storage Service: R2/Vercel Blob/Local]
 ```
 
 ### Core Modules
@@ -87,7 +87,11 @@ The system supports multiple curator identities (e.g., `default`, `professional`
 
 ## Deployment
 
-The backend is configured for **Vercel** via `vercel.json` but can run on any ASGI-compliant platform.
+The production backend runs on **Railway** and serves the Cloudflare-hosted web
+client at [www.museelab.com](https://www.museelab.com). The canonical production
+browser origin is `https://www.museelab.com`; keep it in
+`AUTH_ALLOWED_ORIGINS`. The retained `vercel.json` is a legacy-compatible ASGI
+deployment option, not the active production topology.
 - **Streaming**: Uses `StreamingResponse` with SSE for real-time analysis.
 - **Pooling**: SQLAlchemy is configured with `pool_pre_ping=True` and `pool_recycle=300` for stable cloud connections.
 

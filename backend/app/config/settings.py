@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     gemini_api_key: Optional[str] = None
     google_client_id: Optional[str] = None
     google_vision_api_key: Optional[str] = None
-    wikidata_user_agent: str = "Musee/0.1 (https://museelab.com)"
+    wikidata_user_agent: str = "Musee/0.1 (https://www.museelab.com)"
     # Overpass endpoints, comma-separated, tried in order on connection/5xx
     # failures. The public overpass-api.de is flaky under load; the mirrors give
     # the venue resolver and the footprint backfill somewhere to fall over to.
@@ -121,7 +121,7 @@ class Settings(BaseSettings):
     guest_cookie_name: str = "musee_guest"
     auth_allowed_origins: str = (
         "https://museelab.com,https://www.museelab.com,"
-        "https://musee-web.vercel.app,https://musee-web.qinzzz.workers.dev,"
+        "https://musee-web.qinzzz.workers.dev,"
         "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:5173"
     )
 

@@ -3,29 +3,32 @@
 ## Architecture
 
 ```
-Frontend (Vercel)  →  Backend (Railway)  →  Database (Neon PostgreSQL)
-musee-web              musee-backend          holy-shape-61879548
+Frontend (Cloudflare Workers)  →  Backend (Railway)  →  Database (Neon PostgreSQL)
+musee-web                         musee-backend          holy-shape-61879548
 ```
 
 ## Services
 
 | Service | Platform | URL |
 |---------|----------|-----|
-| Frontend | Vercel (`musee-web`) | https://musee-web.vercel.app |
+| Frontend | Cloudflare Workers (`musee-web`) | https://www.museelab.com |
 | Backend | Railway (`musee-backend`) | Project: `55fc7d9e-bfa1-4f91-b384-480bceff6ac3` |
 | Database | Neon PostgreSQL | Project: `holy-shape-61879548`, dev/prod branch split |
 
-## Frontend — Vercel
+## Frontend — Cloudflare Workers
 
-**Project**: `musee-web` (https://vercel.com/qzone/musee-web/deployments)
+**Worker**: `musee-web`
+
+**Production URL**: https://www.museelab.com
 
 - Framework: Vite
 - Root directory: `frontend-web/`
 - Build command: `npm run build`
 - Output directory: `dist`
-- SPA rewrites configured in `frontend-web/vercel.json`
+- Cloudflare configuration: `frontend-web/wrangler.jsonc`
+- SPA fallback is configured with `assets.not_found_handling`
 
-**Environment Variables** (Vercel dashboard):
+**Build environment variables** (Cloudflare Workers build configuration):
 ```
 VITE_API_BASE_URL=<railway backend URL>
 ```
@@ -154,45 +157,24 @@ Frontend dev server runs on port 3000, proxied to backend at localhost:8000.
 
 ## Deploying from CLI
 
-### Vercel (Frontend)
+### Cloudflare Workers (Frontend)
 
 ```bash
-# First time: link to existing project
 cd frontend-web
-vercel link  # select "qzone" team → "musee-web" project
 
-# Deploy to preview
-vercel
+# First time: authenticate Wrangler
+npx wrangler login
 
 # Deploy to production
-vercel --prod
+npm run deploy
 
 # Check deployment status
-vercel ls
+npx wrangler deployments list
 ```
 
-### Vercel Environment Variables (CLI)
-
-```bash
-# List current env vars
-vercel env ls
-
-# Add/update a variable (will prompt for value)
-vercel env add VITE_API_BASE_URL production
-
-# Remove a variable
-vercel env rm VITE_API_BASE_URL production
-
-# Pull env vars to local .env file
-vercel env pull .env.local
-```
-
-Scopes: `production`, `preview`, `development` (or omit for all).
-
-After changing env vars, redeploy for changes to take effect:
-```bash
-vercel --prod
-```
+`VITE_API_BASE_URL` is compiled into the frontend bundle. Configure it in the
+Cloudflare production build environment, then rebuild and deploy for changes to
+take effect.
 
 ### Railway (Backend)
 

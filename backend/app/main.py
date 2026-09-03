@@ -85,7 +85,6 @@ def configure_cors(app: FastAPI) -> None:
     allowed_origins = [
         "https://museelab.com",
         "https://www.museelab.com",
-        "https://musee-web.vercel.app",
         "https://musee-web.qinzzz.workers.dev",
         "http://localhost:3000",
         "http://localhost:3001",

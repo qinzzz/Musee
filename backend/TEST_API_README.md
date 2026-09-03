@@ -5,7 +5,7 @@ Comprehensive test suite for all Musee backend API endpoints.
 ## Features
 
 ✅ Tests all 24 API endpoints
-✅ Supports dev (localhost) and prod (Vercel) modes
+✅ Supports dev (localhost) and deployed production modes
 ✅ Automatically selects random images from your museum photos
 ✅ Creates test data and cleans up after itself
 ✅ Color-coded output with detailed error messages
@@ -57,15 +57,15 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 # In another terminal, run the tests
 source venv/bin/activate
-python test_api.py --mode dev
+python testing/test_api.py --mode dev
 ```
 
-### Production Mode (Vercel)
+### Production Mode (Railway)
 
-Test your deployed Vercel API:
+Test the deployed Railway API by supplying its public backend URL:
 
 ```bash
-python test_api.py --mode prod --url https://your-app.vercel.app
+python testing/test_api.py --mode prod --url https://your-service.up.railway.app
 ```
 
 ### Verbose Mode
@@ -73,7 +73,7 @@ python test_api.py --mode prod --url https://your-app.vercel.app
 Get detailed information about each test, including **LLM response previews**:
 
 ```bash
-python test_api.py --mode dev --verbose
+python testing/test_api.py --mode dev --verbose
 ```
 
 **Verbose mode shows:**
@@ -103,7 +103,7 @@ python test_api.py --mode dev --verbose
 Use a different directory for test images:
 
 ```bash
-python test_api.py --mode dev --images ~/Desktop/art_photos
+python testing/test_api.py --mode dev --images ~/Desktop/art_photos
 ```
 
 ### LLM-Only Mode
@@ -111,7 +111,7 @@ python test_api.py --mode dev --images ~/Desktop/art_photos
 Test only the AI-powered endpoints (faster, avoids rate limits):
 
 ```bash
-python test_api.py --mode dev --llm --verbose
+python testing/test_api.py --mode dev --llm --verbose
 ```
 
 **LLM endpoints tested:**
@@ -286,15 +286,15 @@ Success Rate: 91.7%
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Wrong Vercel URL (Prod Mode)
+### Missing Production URL
 
 ```
-Warning: Using default Vercel URL. Use --url to specify your actual deployment URL.
+Error: Production mode requires --url with the deployed Railway backend URL.
 ```
 
-**Solution**: Provide your actual Vercel URL:
+**Solution**: Provide the public Railway backend URL, not the frontend URL:
 ```bash
-python test_api.py --mode prod --url https://your-actual-app.vercel.app
+python testing/test_api.py --mode prod --url https://your-service.up.railway.app
 ```
 
 ## CI/CD Integration
@@ -307,7 +307,7 @@ You can integrate this test suite into your CI/CD pipeline:
   run: |
     cd backend
     source venv/bin/activate
-    python test_api.py --mode dev
+    python testing/test_api.py --mode dev
 ```
 
 ## Advanced Usage
@@ -338,7 +338,7 @@ async def test_your_endpoint(self):
 Enable verbose mode to see detailed information:
 
 ```bash
-python test_api.py --mode dev --verbose
+python testing/test_api.py --mode dev --verbose
 ```
 
 This will show:
@@ -359,7 +359,7 @@ This will show:
 If you encounter issues:
 
 1. Check that your backend server is running (dev mode)
-2. Verify your Vercel URL is correct (prod mode)
+2. Verify your Railway backend URL is correct (prod mode); `www.museelab.com` is the frontend
 3. Ensure you have test images available
 4. Check that all dependencies are installed
 5. Run with `--verbose` for detailed error messages
