@@ -24,10 +24,10 @@ npm run mobile:start
 
 AI providers are OpenAI (default), Claude, and Gemini, all behind `AIClientInterface`. For everything else, see [CLAUDE.md](CLAUDE.md).
 
-For iOS work, read [frontend-mobile/README.md](frontend-mobile/README.md) before
-changing mobile architecture, storage, networking, image handling, or native
-dependencies. It is the canonical guide to the implemented mobile client; keep
-work-in-progress notes and speculative roadmap items out of it.
+For iOS work, read [IOS_MIGRATION.md](IOS_MIGRATION.md) for product direction and
+current sequencing, then [frontend-mobile/README.md](frontend-mobile/README.md)
+for implemented architecture and engineering rules. Keep work-in-progress notes
+out of both documents.
 
 ## Development preference
 

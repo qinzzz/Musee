@@ -5,8 +5,9 @@ documents the mobile architecture that is implemented today and the boundaries
 new code should follow.
 
 Its primary readers are mobile engineers, coding agents, and PR reviewers. It
-is not a feature roadmap, a branch handoff, or a chronological work log. Put
-planned work in the project backlog and keep temporary debugging notes in the
+is not a feature roadmap, a branch handoff, or a chronological work log. The
+long-term direction and current milestone live in
+[`IOS_MIGRATION.md`](../IOS_MIGRATION.md); keep temporary debugging notes in the
 relevant task or PR.
 
 ## Core rule: share logic, never UI
