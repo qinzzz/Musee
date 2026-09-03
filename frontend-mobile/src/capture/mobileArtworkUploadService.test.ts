@@ -20,6 +20,7 @@ function createDependencies() {
     uploadArtwork: vi.fn().mockResolvedValue({
       id: 'artwork-1',
       photo_uri: 'uploads/user/artwork.jpg',
+      thumbnail_uri: 'uploads/user/artwork_thumbnail.jpg',
       artist_name: 'Unknown Artist',
       artwork_name: 'Untitled',
       analysis_status: 'pending',
@@ -40,8 +41,11 @@ describe('mobile artwork upload service', () => {
     await expect(service.uploadArtwork(ASSET, 'user-1')).resolves.toEqual({
       id: 'artwork-1',
       photoUri: 'uploads/user/artwork.jpg',
+      thumbnailUri: 'uploads/user/artwork_thumbnail.jpg',
       resolvedImageUri: 'http://127.0.0.1:8000/uploads/user/artwork.jpg',
+      resolvedThumbnailUri: 'http://127.0.0.1:8000/uploads/user/artwork_thumbnail.jpg',
       cacheKey: 'artwork:artwork-1',
+      thumbnailCacheKey: 'artwork-thumbnail:artwork-1',
       analysisStatus: 'pending',
       artistName: 'Unknown Artist',
       artworkName: 'Untitled',
@@ -50,6 +54,7 @@ describe('mobile artwork upload service', () => {
       ASSET,
       'user-1',
       'request-1',
+      undefined,
     );
     expect(dependencies.imageCache.write).toHaveBeenCalledWith(
       ASSET.uri,
@@ -57,7 +62,7 @@ describe('mobile artwork upload service', () => {
     );
   });
 
-  it('does not fail a completed upload when cache prefill fails', async () => {
+  it('forwards Session linkage and does not fail when cache prefill fails', async () => {
     const dependencies = createDependencies();
     vi.mocked(dependencies.imageCache.write).mockRejectedValue(new Error('cache unavailable'));
     const service = createMobileArtworkUploadService({
@@ -65,8 +70,14 @@ describe('mobile artwork upload service', () => {
       ...dependencies,
     });
 
-    await expect(service.uploadArtwork(ASSET, 'user-1')).resolves.toMatchObject({
+    await expect(service.uploadArtwork(ASSET, 'user-1', 'session-1')).resolves.toMatchObject({
       id: 'artwork-1',
     });
+    expect(dependencies.transport.uploadArtwork).toHaveBeenCalledWith(
+      ASSET,
+      'user-1',
+      expect.any(String),
+      'session-1',
+    );
   });
 });

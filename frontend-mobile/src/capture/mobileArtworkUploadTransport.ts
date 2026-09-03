@@ -16,6 +16,7 @@ export type MobileArtworkUploadTransport = {
     asset: NativeImageAsset,
     userId: string,
     requestId: string,
+    sessionId?: string,
   ) => Promise<SavedArtworkUploadResponse>;
 };
 
@@ -58,13 +59,14 @@ export function createMobileArtworkUploadTransport({
   createUploadFile,
 }: MobileArtworkUploadTransportOptions): MobileArtworkUploadTransport {
   return {
-    async uploadArtwork(asset, userId, requestId) {
+    async uploadArtwork(asset, userId, requestId, sessionId) {
       const formData = new FormData();
       formData.append('image', createUploadFile(asset.uri), asset.fileName);
       formData.append('user_id', userId);
       formData.append('client_type', CLIENT_TYPE);
       formData.append('source', asset.source === 'camera' ? 'camera' : 'upload');
       formData.append('request_id', requestId);
+      if (sessionId) formData.append('session_id', sessionId);
 
       const response = await apiClient.fetchWithTimeout(
         `${apiBaseUrl}${ARTWORK_UPLOAD_PATH}`,

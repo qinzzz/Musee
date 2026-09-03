@@ -63,7 +63,7 @@ become mobile commitments.
 
 Last reviewed: 2026-09-03.
 
-The native app now has a functioning foundation and three usable product
+The native app now has a functioning foundation and four usable product
 slices:
 
 - renewable email authentication with refresh credentials in Keychain and
@@ -71,12 +71,12 @@ slices:
 - camera or Photos intake, cloud upload, streamed analysis, camera-roll saving,
   and retry behavior;
 - artwork library and basic artwork detail;
-- text-only Sessions with persisted user/model events, streamed Markdown
-  responses, retry behavior, and cold-start restoration.
+- Sessions with persisted user/model events, streamed Markdown responses,
+  retry behavior, cold-start restoration, and camera or Photos artwork input.
 
-The cloud thumbnail contract is complete. The active product slice is artwork
-participation inside native Sessions, beginning with durable timeline rendering
-and followed by artwork input.
+The cloud thumbnail contract is complete. Session timelines render artwork
+cards durably, and new uploads can participate in mixed artwork/text turns. The
+remaining active Session input gap is adding an existing library artwork.
 
 ## Capability map
 
@@ -99,7 +99,7 @@ Status meanings:
 | Artwork library and basic detail | Partial | Add complete metadata, actions, pagination, loading, and error states |
 | Artwork editing, deletion, and re-identification | Not started | Provide safe native actions with consistent persistence |
 | Text-only Sessions | Baseline complete | Continue hardening long histories, interruption, and recovery |
-| Artwork inputs and cards inside Sessions | Partial — current focus | Support capture, Photos, and library artworks in persistent mixed turns |
+| Artwork inputs and cards inside Sessions | Partial — current focus | Add existing library artworks; capture and Photos uploads already support persistent mixed turns |
 | Session management | Partial | Complete history, titles, delete/archive behavior, and long-list UX |
 | Artwork conversation / Ask Musee | Not started | Define whether it is a detail thread, Session entry, or both |
 | Boards and collection organization | Not started | Bring over the active organization model with native interactions |
@@ -212,7 +212,7 @@ Status: development-device builds work; production pipeline not complete.
 Build one complete Session artwork slice:
 
 1. start or open a Session;
-2. add an artwork from camera, Photos, or the existing library;
+2. add an artwork from camera or Photos, with existing-library selection next;
 3. optionally include text with the artwork input;
 4. persist Session membership and the user event;
 5. show upload/analysis/model phases and actionable errors;

@@ -22,8 +22,27 @@ export type StartTextSessionInput = {
   userId: string;
 };
 
+export type StartArtworkSessionInput = {
+  artworkId: string;
+  sessionId: string;
+  title: string;
+  userId: string;
+};
+
+export type SessionChatArtworkInput = {
+  artworkName: string;
+  artistName: string;
+  date: string | null;
+  description: string | null;
+  id: string;
+  keywords: string[];
+  medium: string | null;
+  url: string;
+};
+
 export type StreamTextSessionInput = {
   history: SessionChatHistoryEntry[];
+  items: SessionChatArtworkInput[];
   message: string;
   sessionId: string;
   triggerEventId: string;
@@ -45,6 +64,7 @@ export type MobileSessionTransport = {
   fetchArtworks: (sessionId: string, userId: string) => Promise<ArtworkRecord[]>;
   fetchEvents: (sessionId: string) => Promise<SessionEventRecord[]>;
   fetchSessions: (userId: string) => Promise<SessionRecord[]>;
+  startArtworkSession: (input: StartArtworkSessionInput) => Promise<SessionRecord>;
   startTextSession: (input: StartTextSessionInput) => Promise<SessionRecord>;
   streamTextResponse: (
     input: StreamTextSessionInput,
@@ -164,6 +184,24 @@ export function createMobileSessionTransport({
       return (await requireSuccess(response)).json() as Promise<SessionEventRecord[]>;
     },
 
+    async startArtworkSession({ artworkId, sessionId, title, userId }) {
+      const response = await apiClient.fetchWithTimeout(
+        `${apiBaseUrl}/sessions/start-with-artworks?user_id=${encodeURIComponent(userId)}`,
+        {
+          method: 'POST',
+          headers: jsonHeaders,
+          body: JSON.stringify({
+            artwork_ids: [artworkId],
+            session_id: sessionId,
+            title,
+          }),
+          timeout: SESSION_REQUEST_TIMEOUT_MS,
+        },
+      );
+      const body = await (await requireSuccess(response)).json() as { session: SessionRecord };
+      return body.session;
+    },
+
     async startTextSession({ event, sessionId, title, userId }) {
       const response = await apiClient.fetchWithTimeout(
         `${apiBaseUrl}/sessions/start-with-event?user_id=${encodeURIComponent(userId)}`,
@@ -214,7 +252,16 @@ export function createMobileSessionTransport({
         method: 'POST',
         headers: jsonHeaders,
         body: JSON.stringify({
-          items: [],
+          items: input.items.map((item) => ({
+            id: item.id,
+            url: item.url,
+            keywords: item.keywords,
+            artist_name: item.artistName,
+            artwork_name: item.artworkName,
+            description: item.description,
+            date: item.date,
+            medium: item.medium,
+          })),
           conversation_history: input.history,
           new_message: input.message,
           user_id: input.userId,

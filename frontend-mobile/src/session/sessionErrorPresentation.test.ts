@@ -16,6 +16,12 @@ describe('session error presentation', () => {
       .toContain('save your message');
     expect(presentSessionError(new MobileSessionStreamError(), 'stream', OPTIONS).message)
       .toContain('interrupted');
+    expect(presentSessionError(new Error('unknown'), 'upload', OPTIONS).message)
+      .toContain('upload this artwork');
+    expect(presentSessionError(new Error('unknown'), 'analysis', OPTIONS).message)
+      .toContain('analysis failed');
+    expect(presentSessionError(new Error('unknown'), 'session_save', OPTIONS).message)
+      .toContain('add it to this Session');
   });
 
   it('maps network and server failures without exposing backend text', () => {

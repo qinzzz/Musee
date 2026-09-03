@@ -124,6 +124,13 @@ For a new text message, the ordering is intentional:
 3. Stream the model response over SSE and update the in-memory UI.
 4. Replace the pending event with a completed or failed persisted event.
 
+For camera and Photos input, the client uploads the artwork first, links it to
+the open Session (or atomically starts a new Session around it), persists the
+artwork-bearing user event, completes analysis, and then follows the same
+pending/stream/completion sequence. Upload, Session persistence, analysis, and
+model generation expose separate retryable phases. A retry resumes from the
+last durable boundary instead of uploading the image again.
+
 On open or cold start, the client fetches the Session and its events from the
 backend. Interrupted pending/failed responses remain visible and retryable.
 Never make the streamed in-memory text the only copy of a completed response.

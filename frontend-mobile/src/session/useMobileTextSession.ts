@@ -41,8 +41,10 @@ export function useMobileTextSession(
   const [loadError, setLoadError] = useState<SessionErrorPresentation | null>(null);
   const requestVersion = useRef(0);
   const messaging = useMobileSessionMessaging({
+    artworks,
     events,
     session,
+    setArtworks,
     setEvents,
     setSession,
     userId,

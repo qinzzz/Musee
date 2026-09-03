@@ -1,64 +1,127 @@
+import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import type { NativeImageAsset } from '../../capture/types';
 import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
 
 type SessionComposerProps = {
+  attachment: NativeImageAsset | null;
   disabled: boolean;
-  onSubmit: (text: string) => Promise<boolean>;
+  onChoosePhoto: () => void;
+  onRemoveAttachment: () => void;
+  onTakePhoto: () => void;
+  onSubmit: (text: string, attachment: NativeImageAsset | null) => Promise<boolean>;
 };
 
 const PLACEHOLDER = 'Ask Musee';
 
-export function SessionComposer({ disabled, onSubmit }: SessionComposerProps) {
+export function SessionComposer({
+  attachment,
+  disabled,
+  onChoosePhoto,
+  onRemoveAttachment,
+  onSubmit,
+  onTakePhoto,
+}: SessionComposerProps) {
   const [text, setText] = useState('');
-  const canSubmit = !disabled && Boolean(text.trim());
+  const canSubmit = !disabled && Boolean(text.trim() || attachment);
 
   const submit = async () => {
     if (!canSubmit) return;
-    const submitted = await onSubmit(text);
+    const submitted = await onSubmit(text, attachment);
     if (submitted) setText('');
   };
 
   return (
     <View style={styles.container}>
-      <TextInput
-        accessibilityLabel={PLACEHOLDER}
-        editable={!disabled}
-        multiline
-        onChangeText={setText}
-        placeholder={PLACEHOLDER}
-        placeholderTextColor={colors.placeholder}
-        style={styles.input}
-        value={text}
-      />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !canSubmit }}
-        disabled={!canSubmit}
-        onPress={() => void submit()}
-        style={({ pressed }) => [
-          styles.sendButton,
-          !canSubmit && styles.sendButtonDisabled,
-          pressed && styles.pressed,
-        ]}
-      >
-        <Text style={styles.sendLabel}>Send</Text>
-      </Pressable>
+      {attachment ? (
+        <View style={styles.attachmentRow}>
+          <Image
+            accessibilityLabel="Artwork ready to upload"
+            contentFit="cover"
+            source={{ uri: attachment.uri }}
+            style={styles.attachmentImage}
+          />
+          <View style={styles.attachmentCopy}>
+            <Text style={styles.attachmentTitle}>Artwork ready</Text>
+            <Text style={styles.attachmentSource}>
+              {attachment.source === 'camera' ? 'Camera' : 'Photos'}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityLabel="Remove artwork"
+            accessibilityRole="button"
+            disabled={disabled}
+            onPress={onRemoveAttachment}
+            style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.removeLabel}>Remove</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      <View style={styles.inputRow}>
+        <TextInput
+          accessibilityLabel={PLACEHOLDER}
+          editable={!disabled}
+          multiline
+          onChangeText={setText}
+          placeholder={attachment ? 'Add a note (optional)' : PLACEHOLDER}
+          placeholderTextColor={colors.placeholder}
+          style={styles.input}
+          value={text}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canSubmit }}
+          disabled={!canSubmit}
+          onPress={() => void submit()}
+          style={({ pressed }) => [
+            styles.sendButton,
+            !canSubmit && styles.sendButtonDisabled,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.sendLabel}>Send</Text>
+        </Pressable>
+      </View>
+      {!attachment ? (
+        <View style={styles.attachmentActions}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={disabled}
+            onPress={onTakePhoto}
+            style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.attachmentButtonLabel}>Camera</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={disabled}
+            onPress={onChoosePhoto}
+            style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.attachmentButtonLabel}>Photos</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'flex-end',
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radii.card,
     borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
     gap: spacing.sm,
     padding: spacing.sm,
+  },
+  inputRow: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   input: {
     color: colors.foreground,
@@ -87,6 +150,54 @@ const styles = StyleSheet.create({
   sendLabel: {
     color: colors.onPrimary,
     fontSize: typography.label,
+    fontWeight: '600',
+  },
+  attachmentActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  attachmentButton: {
+    justifyContent: 'center',
+    minHeight: 36,
+  },
+  attachmentButtonLabel: {
+    color: colors.secondary,
+    fontSize: typography.label,
+    fontWeight: '600',
+  },
+  attachmentRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  attachmentImage: {
+    backgroundColor: colors.border,
+    borderRadius: radii.input,
+    height: 64,
+    width: 64,
+  },
+  attachmentCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  attachmentTitle: {
+    color: colors.foreground,
+    fontSize: typography.label,
+    fontWeight: '600',
+  },
+  attachmentSource: {
+    color: colors.secondary,
+    fontSize: typography.caption,
+  },
+  removeButton: {
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: spacing.sm,
+  },
+  removeLabel: {
+    color: colors.danger,
+    fontSize: typography.caption,
     fontWeight: '600',
   },
 });

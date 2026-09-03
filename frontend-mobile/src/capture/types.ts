@@ -13,8 +13,11 @@ export type NativeImageAsset = {
 export type PendingArtworkUpload = {
   id: string;
   photoUri: string;
+  thumbnailUri: string | null;
   resolvedImageUri: string;
+  resolvedThumbnailUri: string;
   cacheKey: string;
+  thumbnailCacheKey: string;
   analysisStatus: 'pending';
   artistName: string;
   artworkName: string;

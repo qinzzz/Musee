@@ -2,7 +2,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Device from 'expo-device';
 import { File } from 'expo-file-system';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -51,6 +51,11 @@ const COPY = {
 } as const;
 
 export default function CameraScreen() {
+  const params = useLocalSearchParams<{ destination?: string | string[] }>();
+  const destinationParam = Array.isArray(params.destination)
+    ? params.destination[0]
+    : params.destination;
+  const destination = destinationParam === 'session' ? 'session' : 'library';
   const router = useRouter();
   const { setDraft } = useCaptureDraft();
   const cameraRef = useRef<CameraView>(null);
@@ -91,7 +96,7 @@ export default function CameraScreen() {
   }, [refreshPermission]);
 
   const finishWithAsset = (asset: NativeImageAsset) => {
-    setDraft(asset);
+    setDraft(asset, destination);
     router.back();
   };
 
