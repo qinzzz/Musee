@@ -44,11 +44,11 @@ npm run dev                   # Vite dev server (port 3000)
 **Backend**:
 - `app/main.py` — FastAPI app entry + router registration
 - `app/routers/` — one router per concern: `artwork_identify`, `artwork_ingest`, `artwork_library`, `artwork_metadata`, `artwork_mutations`, `artwork_utilities`, `sessions`, `session_chat`, `auth`, `auth_email`, `collection`, `journals`, `museums`, `tag`, `taste_profile`, `users`, `admin_maintenance`. (There is no longer a single `artwork.py`.)
-- `app/services/` — one service per concern: `ai_service` (orchestration, prompt loading, language), `session_service`, `session_event_service`, `session_chat_service`, `auth_session_service`, the `artwork_*_service` family, plus `museum/`, `retrieval/`, `storage/` packages
+- `app/services/` — one service per concern: `ai_service` (provider-agnostic AI call orchestration), `session_service`, `session_event_service`, `session_chat_service`, `auth_session_service`, the `artwork_*_service` family, plus `museum/`, `retrieval/`, `storage/` packages
 - `app/services/ai_client_interface.py` — `AIClientInterface`; implementations `openai_api_client.py`, `claude_api_client.py`, `gemini_api_client.py`
 - `app/database/models.py` — SQLAlchemy models (~25 tables; see **Database** below)
 - `app/config/settings.py` — env-based config, API keys, DB URLs
-- `app/prompts/*.txt` — editable prompts (no code changes needed)
+- `app/prompts/registry.py` — typed prompt routing keyed by the existing `AIJobType`; `app/prompts/identities/` and `app/prompts/instructions/` contain editable prompt text
 - `app/database/bootstrap.py` + `backend/migrations/` — schema is applied on startup via bootstrap; migrations are one-off Python scripts, not a runner
 
 ## Session subsystems
@@ -146,7 +146,7 @@ class AIClientInterface(ABC):
 # Implementations: OpenAIClient, ClaudeClient, GeminiClient
 ```
 
-Prompts loaded from files via `utils/prompt_loader.py` with caching.
+Prompt files are loaded and composed via `utils/prompt_loader.py` with caching. Model-facing prompt selection and context rendering belong in `prompts/registry.py`, keyed by the existing `AIJobType` used for usage telemetry.
 
 ## Further Documentation
 

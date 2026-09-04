@@ -23,7 +23,6 @@ from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, star
 from app.services.artwork_analysis_service import determine_ai_provider, parse_identify_result, resolve_image_bytes
 from app.services.artwork_background_service import (
     check_artwork_quota,
-    generate_fun_facts,
     track_artwork_task,
 )
 from app.services.artwork_enrichment_service import do_artist_bio, run_artist_bio_bg
@@ -209,17 +208,6 @@ async def analyze_artist(
                 track_artwork_task(
                     asyncio.create_task(run_artwork_analysis(artwork_id, image_bytes=image_bytes))
                 )
-        if artwork_id and parsed_result["artist_name"] and parsed_result["artist_name"] != "Unknown Artist":
-            track_artwork_task(
-                asyncio.create_task(
-                    generate_fun_facts(
-                        artwork_id,
-                        parsed_result["artist_name"],
-                        parsed_result["artwork_name"],
-                        language,
-                    )
-                )
-            )
         if session_id and background_tasks:
             background_tasks.add_task(
                 update_session_narrative_task,
@@ -415,17 +403,6 @@ async def analyze_artist_stream(
                 if artwork_id:
                     track_artwork_task(
                         asyncio.create_task(run_artwork_analysis(artwork_id, image_bytes=image_bytes))
-                    )
-                if parsed_result["artist_name"] and parsed_result["artist_name"] != "Unknown Artist":
-                    track_artwork_task(
-                        asyncio.create_task(
-                            generate_fun_facts(
-                                artwork_id,
-                                parsed_result["artist_name"],
-                                parsed_result["artwork_name"],
-                                language,
-                            )
-                        )
                     )
                 if session_id:
                     track_artwork_task(

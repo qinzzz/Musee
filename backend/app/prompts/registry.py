@@ -3,7 +3,15 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Type
 
 from app.models.ai_job import AIJobType
-from app.utils.prompt_loader import get_session_chat_prompt
+from app.utils.prompt_loader import (
+    COMPANION_IDENTITY,
+    DEFAULT_IDENTITY,
+    build_language_instruction,
+    compose_prompt,
+    get_movement_names,
+    inject_identity,
+    load_instruction,
+)
 
 
 UNRESOLVED_TEMPLATE_VARIABLE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
@@ -21,6 +29,52 @@ class SessionChatTurnContext:
     artwork_labels: Sequence[str]
     artwork_sources: Sequence[str]
     is_first_turn: bool
+
+
+@dataclass(frozen=True)
+class ArtworkIdentificationPromptContext:
+    identity: str = "default"
+    language: Optional[str] = None
+    has_label_image: bool = False
+    session_context: Optional[Mapping[str, Any]] = None
+    vision_hint: Optional[str] = None
+    artist_name: Optional[str] = None
+    artwork_name: Optional[str] = None
+    additional_clue: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ArtworkAnalysisPromptContext:
+    metadata: Mapping[str, Optional[str]]
+
+
+@dataclass(frozen=True)
+class ArtworkSummaryPromptContext:
+    artist_name: str
+    artwork_name: str
+    conversation_history: Sequence[Any]
+    language: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class SuggestTopicsPromptContext:
+    artist_name: str
+    artwork_name: str
+    previous_insights: Sequence[str]
+    identity: str = "default"
+    language: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ArtworkFunFactsPromptContext:
+    artist_name: str
+    artwork_name: str
+    language: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class AestheticTermPromptContext:
+    term: str
 
 
 @dataclass(frozen=True)
@@ -53,7 +107,8 @@ def _render_session_chat_prompt(context: SessionChatPromptContext) -> str:
             + "\n".join(metadata_lines)
             + "\nUse this only as helpful context; prioritize what is visible in the image when image data is provided."
         )
-    return get_session_chat_prompt() + metadata_context + context.retrieval_context
+    base_prompt = inject_identity(load_instruction("session_chat"), COMPANION_IDENTITY)
+    return base_prompt + metadata_context + context.retrieval_context
 
 
 def _render_session_chat_turn(context: SessionChatTurnContext) -> str:
@@ -70,12 +125,163 @@ def _render_session_chat_turn(context: SessionChatTurnContext) -> str:
     return action + "In 3–4 sentences, respond to the addition and connect it to the session so far."
 
 
+def _render_artwork_identification_prompt(context: ArtworkIdentificationPromptContext) -> str:
+    identity = DEFAULT_IDENTITY if context.identity == "default" else context.identity
+    prompt = compose_prompt(
+        identity,
+        "artist_identification_with_analysis",
+        language=context.language,
+        movement_list=get_movement_names(),
+    )
+
+    hints = []
+    if context.artist_name and context.artist_name.strip():
+        hints.append(f"- Artist name hint: {context.artist_name.strip()}")
+    if context.artwork_name and context.artwork_name.strip():
+        hints.append(f"- Artwork title hint: {context.artwork_name.strip()}")
+    if context.additional_clue and context.additional_clue.strip():
+        hints.append(f"- Additional clue: {context.additional_clue.strip()}")
+    if hints:
+        prompt = (
+            "User-provided identification hints:\n"
+            + "\n".join(hints)
+            + "\n\nUse these hints as guidance only, not as ground truth. The image remains the primary evidence. "
+            "If the hints conflict with the visual evidence, prefer the visually supported answer. "
+            "Do not force a match only because a hint was provided.\n\n"
+            + prompt
+        )
+
+    if context.has_label_image:
+        prompt = (
+            "You will receive two images in this order:\n"
+            "1. The artwork itself.\n"
+            "2. A museum/gallery label for that artwork.\n\n"
+            "Use the artwork image as the primary source of truth. Use the label image only as supporting evidence "
+            "to refine the artist, title, date, medium, museum, and context. If the label is unreadable, partial, "
+            "or conflicts with the artwork image, say so through cautious field choices and do not invent details.\n\n"
+            + prompt
+        )
+
+    if context.session_context:
+        session = context.session_context
+        context_block = "\n\n### SESSION CONTEXT (MEMORY OF THIS VISIT)\n"
+        if session.get("user_goal"):
+            context_block += f"VISITOR'S GOAL FOR THIS SESSION: {session['user_goal']}\n\n"
+        if session.get("narrative_summary"):
+            context_block += f"ONGOING NARRATIVE: {session['narrative_summary']}\n\n"
+        previous_artworks = session.get("previous_artworks", [])
+        if previous_artworks:
+            context_block += "PREVIOUS ARTWORKS SEEN IN THIS SESSION:\n"
+            for index, artwork in enumerate(previous_artworks, start=1):
+                context_block += f"{index}. '{artwork.get('title')}' by {artwork.get('artist')}\n"
+                context_block += f"   ANALYSIS: {artwork.get('analysis')}\n"
+                if artwork.get("tags"):
+                    context_block += f"   TAGS: {', '.join(artwork['tags'])}\n"
+                context_block += "\n"
+        context_block += (
+            "Use this context ONLY to help identify the artist and artwork title — they may be from the same "
+            "exhibition or the same artist.\n"
+        )
+        prompt += context_block
+
+    if context.vision_hint:
+        prompt = (
+            f"HINT — web image search result:\n{context.vision_hint}\n\n"
+            "Use these as strong initial clues, but verify against the image.\n\n"
+            + prompt
+        )
+    return prompt
+
+
+def _render_artwork_analysis_prompt(context: ArtworkAnalysisPromptContext) -> str:
+    metadata = context.metadata
+    return load_instruction("artwork_analysis").format(
+        artist=metadata.get("artist") or "unknown",
+        title=metadata.get("title") or "unknown",
+        year=metadata.get("year") or "unknown",
+        medium=metadata.get("medium") or "unknown",
+        context=metadata.get("context") or "none",
+    )
+
+
+def _render_artwork_summary_prompt(context: ArtworkSummaryPromptContext) -> str:
+    language = build_language_instruction(context.language)
+    language_suffix = f"\n\n{language}" if language else ""
+    if context.conversation_history:
+        conversation_text = "\n".join(
+            f"{message.role}: {message.content}" for message in context.conversation_history
+        )
+        return f"""Based on this image and conversation about {context.artwork_name} by {context.artist_name}:
+
+{conversation_text}
+
+Generate ONE fun, engaging, memorable sentence that captures the essence of this artwork. Make it witty, intriguing, or surprising - something that would make someone want to learn more about this piece. Keep it under 20 words.
+
+Return ONLY the one sentence, no quotes, no extra text.{language_suffix}"""
+    return f"""Looking at this artwork {context.artwork_name} by {context.artist_name}, generate ONE fun, engaging, memorable sentence that captures its essence. Make it witty, intriguing, or surprising - something that would make someone want to learn more about this piece. Keep it under 20 words.
+
+Return ONLY the one sentence, no quotes, no extra text.{language_suffix}"""
+
+
+def _render_suggest_topics_prompt(context: SuggestTopicsPromptContext) -> str:
+    identity = DEFAULT_IDENTITY if context.identity == "default" else context.identity
+    return compose_prompt(
+        identity,
+        "suggest_topics",
+        language=context.language,
+        artist_name=context.artist_name,
+        artwork_name=context.artwork_name,
+        previous_insights="\n".join(f"- {insight}" for insight in context.previous_insights),
+    )
+
+
+def _render_artwork_fun_facts_prompt(context: ArtworkFunFactsPromptContext) -> str:
+    return (
+        inject_identity(load_instruction("fun_facts"), COMPANION_IDENTITY)
+        .replace("{artist_name}", context.artist_name)
+        .replace("{artwork_name}", context.artwork_name)
+        .replace("{language_instruction}", build_language_instruction(context.language))
+    )
+
+
+def _render_aesthetic_term_prompt(context: AestheticTermPromptContext) -> str:
+    return load_instruction("define_aesthetic_term") + f'\n\nTerm: "{context.term}"'
+
+
 PROMPT_REGISTRY: Dict[AIJobType, PromptDefinition] = {
+    AIJobType.AESTHETIC_TERM_DEFINITION: PromptDefinition(
+        context_type=AestheticTermPromptContext,
+        renderer=_render_aesthetic_term_prompt,
+    ),
+    AIJobType.ARTWORK_ANALYSIS: PromptDefinition(
+        context_type=ArtworkAnalysisPromptContext,
+        renderer=_render_artwork_analysis_prompt,
+    ),
+    AIJobType.ARTWORK_FUN_FACTS: PromptDefinition(
+        context_type=ArtworkFunFactsPromptContext,
+        renderer=_render_artwork_fun_facts_prompt,
+    ),
+    AIJobType.ARTWORK_IDENTIFICATION: PromptDefinition(
+        context_type=ArtworkIdentificationPromptContext,
+        renderer=_render_artwork_identification_prompt,
+    ),
+    AIJobType.ARTWORK_REIDENTIFICATION: PromptDefinition(
+        context_type=ArtworkIdentificationPromptContext,
+        renderer=_render_artwork_identification_prompt,
+    ),
+    AIJobType.ARTWORK_SUMMARY: PromptDefinition(
+        context_type=ArtworkSummaryPromptContext,
+        renderer=_render_artwork_summary_prompt,
+    ),
     AIJobType.SESSION_CHAT: PromptDefinition(
         context_type=SessionChatPromptContext,
         renderer=_render_session_chat_prompt,
         turn_context_type=SessionChatTurnContext,
         turn_renderer=_render_session_chat_turn,
+    ),
+    AIJobType.SUGGEST_TOPICS: PromptDefinition(
+        context_type=SuggestTopicsPromptContext,
+        renderer=_render_suggest_topics_prompt,
     ),
 }
 

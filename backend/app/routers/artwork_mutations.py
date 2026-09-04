@@ -46,13 +46,3 @@ async def get_or_create_artwork_fun_facts_route(
 ):
     fun_facts = await get_or_create_artwork_fun_facts(db, artwork_id, language)
     return {"fun_facts": fun_facts}
-
-
-@router.post("/artworks/{artwork_id}/insights")
-async def get_or_create_artwork_insights_compat(
-    artwork_id: str,
-    language: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    fun_facts = await get_or_create_artwork_fun_facts(db, artwork_id, language)
-    return {"insights": fun_facts}

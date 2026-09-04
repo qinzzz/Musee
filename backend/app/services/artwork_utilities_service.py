@@ -194,8 +194,7 @@ def get_available_identities_payload() -> dict:
         "available_instructions": get_available_instructions(),
         "default_identities": {
             "artist_identification": "museum_narrator",
-            "artwork_bite": "art_historian",
-            "suggest_topics": "art_historian",
+            "suggest_topics": "museum_narrator",
         },
     }
 

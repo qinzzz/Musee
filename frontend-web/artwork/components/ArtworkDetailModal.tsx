@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { ArtworkClassification } from '../../types';
-import { getArtworkFunFacts } from '../../api/artworks';
 import type { ArtworkDetailItem, ArtworkSessionMembership, IdentifyAgainHints } from '../types';
 import { getArtworkClientId } from '../../lib/artworkIdentity';
 import { useArtworkCommunity } from '../hooks/useArtworkCommunity';
@@ -140,29 +139,10 @@ const ArtworkDetailModal: React.FC<Props> = ({ item, onClose, onUpdateMetadata, 
     onRightModeChange('metadata'); // Reset to metadata view for the new piece
   }, [item.clientId, item.id]);
 
-  // Sync persisted fun facts from parent updates; backfill on first open if missing.
+  // Opening artwork details is read-only; generation happens once after analysis.
   useEffect(() => {
-    if ((item.insights ?? []).length > 0) {
-      setFunFacts(item.insights!);
-      return;
-    }
-    const normalizedArtistName = item.artistName?.trim().toLowerCase() ?? '';
-    if (
-      !(item.artworkId || item.id)
-      || !normalizedArtistName
-      || normalizedArtistName === 'unknown'
-      || normalizedArtistName === 'unknown artist'
-    ) return;
-    let isCurrent = true;
-    getArtworkFunFacts(item.artworkId || item.id)
-      .then((facts) => {
-        if (isCurrent) setFunFacts(facts);
-      })
-      .catch(() => {});
-    return () => {
-      isCurrent = false;
-    };
-  }, [item.clientId, item.id, item.artworkId, item.insights, item.artistName]);
+    setFunFacts(item.insights ?? []);
+  }, [item.clientId, item.id, item.insights]);
 
   const displayLocation = useMemo(
     () => getArtworkDisplayLocation(item.location, item.captureMuseum?.canonicalName),

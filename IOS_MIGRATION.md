@@ -155,6 +155,8 @@ Status: text baseline complete; artwork participation is active work.
 - accept artwork input from camera, Photos, and the existing library;
 - persist artwork membership and event references;
 - render artwork cards and mixed text/artwork turns after a cold start;
+- converge equivalent web and iOS Session lifecycle states on one shared
+  vocabulary while keeping displayed wording and platform-only details local;
 - preserve the web Session semantics while using native composition and input UI.
 
 ### Phase 4 — Complete the artwork library
@@ -181,6 +183,9 @@ Status: not started.
 Status: not started beyond Session conversation.
 
 - define and implement Ask Musee from artwork detail;
+- redesign the dormant web Explore angles as Session starters: selecting an
+  angle should create a Session with the artwork and selected angle as the
+  opening turn, rather than restoring the separate localStorage conversation;
 - port active journals, learning surfaces, and taste-profile experiences;
 - expose persona, language, usage, and account preferences;
 - preserve Markdown and structured content without inheriting browser rendering

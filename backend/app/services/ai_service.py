@@ -8,19 +8,22 @@ from typing import Dict, Any, Optional, AsyncGenerator, List
 import json
 from app.models.ai_job import AIJobType
 from app.models.artwork import AIProvider
-from app.prompts.registry import SessionChatPromptContext, render_prompt
-from app.utils.prompt_loader import (
-    get_artist_identification_prompt_v2,
-    get_artwork_bite_prompt_v2,
-    get_suggest_topics_prompt_v2,
-    get_explore_skill_select_prompt,
-    get_explore_observation_prompt,
-    get_explore_deepdive_prompt,
-    get_define_aesthetic_term_prompt,
-    get_fun_facts_prompt,
-    get_artist_bio_prompt,
+from app.prompts.registry import (
+    AestheticTermPromptContext,
+    ArtworkFunFactsPromptContext,
+    ArtworkIdentificationPromptContext,
+    ArtworkSummaryPromptContext,
+    SessionChatPromptContext,
+    SuggestTopicsPromptContext,
+    render_prompt,
 )
 from app.services.ai_client_interface import AIClientInterface, AIStreamChunk, AITextResult
+from app.utils.prompt_loader import (
+    build_language_instruction,
+    get_explore_deepdive_prompt,
+    get_explore_observation_prompt,
+    get_explore_skill_select_prompt,
+)
 import anyio
 from app.config.settings import settings
 from app.utils.conversation_storage import ConversationMessage
@@ -61,35 +64,6 @@ class AIService:
         """
         self.ai_client = ai_client
 
-    # Utility methods
-    @staticmethod
-    def get_language_map() -> Dict[str, str]:
-        """Get mapping of language codes to full names"""
-        return {
-            "en": "English",
-            "es": "Spanish",
-            "fr": "French",
-            "de": "German",
-            "it": "Italian",
-            "pt": "Portuguese",
-            "zh": "Chinese",
-            "ja": "Japanese",
-            "ko": "Korean",
-            "ru": "Russian",
-            "ar": "Arabic",
-            "hi": "Hindi"
-        }
-
-    @staticmethod
-    def build_language_instruction(language: Optional[str]) -> str:
-        """Build language instruction string for prompts"""
-        if not language:
-            return ""
-
-        language_map = AIService.get_language_map()
-        language_name = language_map.get(language.lower(), language)
-        return f"\n\nIMPORTANT: Respond in {language_name} ({language}). All your output should be in {language_name}."
-
     @staticmethod
     def parse_json_response(response_text: str) -> Any:
         """Parse JSON response, handling markdown code blocks"""
@@ -105,69 +79,11 @@ class AIService:
         return json.loads(response_text)
 
     @staticmethod
-    def build_summary_prompt(
-        artist_name: str,
-        artwork_name: str,
-        conversation_history: Optional[list],
-        language: Optional[str] = None
-    ) -> str:
-        """Build prompt for generating artwork summary"""
-        language_instruction = AIService.build_language_instruction(language)
-
-        if conversation_history:
-            conversation_text = "\n".join([
-                f"{msg.role}: {msg.content}"
-                for msg in conversation_history
-            ])
-
-            return f"""Based on this image and conversation about {artwork_name} by {artist_name}:
-
-{conversation_text}
-
-Generate ONE fun, engaging, memorable sentence that captures the essence of this artwork. Make it witty, intriguing, or surprising - something that would make someone want to learn more about this piece. Keep it under 20 words.
-
-Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
-        else:
-            return f"""Looking at this artwork {artwork_name} by {artist_name}, generate ONE fun, engaging, memorable sentence that captures its essence. Make it witty, intriguing, or surprising - something that would make someone want to learn more about this piece. Keep it under 20 words.
-
-Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
-
-    @staticmethod
     def clean_summary_response(summary: str) -> str:
         """Clean summary response by removing quotes"""
         summary = summary.strip()
         summary = summary.strip('"').strip("'")
         return summary
-
-    @staticmethod
-    def inject_session_context(prompt: str, session_context: Dict[str, Any]) -> str:
-        """Inject session context into the prompt"""
-        previous_artworks = session_context.get("previous_artworks", [])
-        narrative_summary = session_context.get("narrative_summary")
-
-        user_goal = session_context.get("user_goal")
-
-        context_block = "\n\n### SESSION CONTEXT (MEMORY OF THIS VISIT)\n"
-
-        if user_goal:
-            context_block += f"VISITOR'S GOAL FOR THIS SESSION: {user_goal}\n\n"
-
-        if narrative_summary:
-            context_block += f"ONGOING NARRATIVE: {narrative_summary}\n\n"
-
-        if previous_artworks:
-            context_block += "PREVIOUS ARTWORKS SEEN IN THIS SESSION:\n"
-            for i, art in enumerate(previous_artworks):
-                context_block += f"{i+1}. '{art.get('title')}' by {art.get('artist')}\n"
-                context_block += f"   ANALYSIS: {art.get('analysis')}\n"
-                if art.get("tags"):
-                    context_block += f"   TAGS: {', '.join(art.get('tags'))}\n"
-                context_block += "\n"
-        
-        context_block += "Use this context ONLY to help identify the artist and artwork title — they may be from the same exhibition or the same artist.\n"
-        
-        # Append context to the prompt
-        return prompt + context_block
 
     @staticmethod
     def build_session_chat_prompt(
@@ -211,51 +127,6 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
                 continue
         return prepared or None
 
-    @staticmethod
-    def inject_supporting_label_context(prompt: str, has_label_image: bool) -> str:
-        """Explain the multi-image contract when an artwork label is present."""
-        if not has_label_image:
-            return prompt
-
-        return (
-            "You will receive two images in this order:\n"
-            "1. The artwork itself.\n"
-            "2. A museum/gallery label for that artwork.\n\n"
-            "Use the artwork image as the primary source of truth. Use the label image only as supporting evidence "
-            "to refine the artist, title, date, medium, museum, and context. If the label is unreadable, partial, "
-            "or conflicts with the artwork image, say so through cautious field choices and do not invent details.\n\n"
-            f"{prompt}"
-        )
-
-    @staticmethod
-    def inject_identification_hints(
-        prompt: str,
-        artist_name: Optional[str] = None,
-        artwork_name: Optional[str] = None,
-        additional_clue: Optional[str] = None,
-    ) -> str:
-        """Append user-provided identify-again hints as advisory evidence, not overrides."""
-        hints = []
-        if artist_name and artist_name.strip():
-            hints.append(f"- Artist name hint: {artist_name.strip()}")
-        if artwork_name and artwork_name.strip():
-            hints.append(f"- Artwork title hint: {artwork_name.strip()}")
-        if additional_clue and additional_clue.strip():
-            hints.append(f"- Additional clue: {additional_clue.strip()}")
-
-        if not hints:
-            return prompt
-
-        hint_block = "\n".join(hints)
-        return (
-            "User-provided identification hints:\n"
-            f"{hint_block}\n\n"
-            "Use these hints as guidance only, not as ground truth. The image remains the primary evidence. "
-            "If the hints conflict with the visual evidence, prefer the visually supported answer. "
-            "Do not force a match only because a hint was provided.\n\n"
-            f"{prompt}"
-        )
-
     async def summarize_session_narrative(
         self,
         previous_narrative: Optional[str],
@@ -281,7 +152,8 @@ Return ONLY the one sentence, no quotes, no extra text.{language_instruction}"""
         """
         Update the session's thematic narrative summary based on a new artwork.
         """
-        language_instruction = self.build_language_instruction(language)
+        language_text = build_language_instruction(language)
+        language_instruction = f"\n\n{language_text}" if language_text else ""
         
         history_text = f"Previous Session Narrative: {previous_narrative if previous_narrative else 'Just started the tour.'}"
         current_art = f"Latest Artwork: '{new_artwork_data.get('title')}' by {new_artwork_data.get('artist')}. Description: {new_artwork_data.get('description')}"
@@ -371,23 +243,24 @@ Return ONLY the updated narrative text.{language_instruction}"""
         else:
             image_data = prepared_images
 
-        # Load prompt
-        prompt = get_artist_identification_prompt_v2(identity, language=language)
-        prompt = self.inject_identification_hints(
-            prompt,
-            artist_name=artist_name,
-            artwork_name=artwork_name,
-            additional_clue=additional_clue,
+        prompt_job_type = (
+            AIJobType.ARTWORK_REIDENTIFICATION
+            if artist_name or artwork_name or additional_clue
+            else AIJobType.ARTWORK_IDENTIFICATION
         )
-
-        prompt = self.inject_supporting_label_context(prompt, has_label_image=label_image_bytes is not None)
-
-        if session_context:
-            prompt = self.inject_session_context(prompt, session_context)
-
-        # Prepend Vision hint when available
-        if vision_hint:
-            prompt = f"HINT — web image search result:\n{vision_hint}\n\nUse these as strong initial clues, but verify against the image.\n\n{prompt}"
+        prompt = render_prompt(
+            prompt_job_type,
+            ArtworkIdentificationPromptContext(
+                identity=identity,
+                language=language,
+                has_label_image=label_image_bytes is not None,
+                session_context=session_context,
+                vision_hint=vision_hint,
+                artist_name=artist_name,
+                artwork_name=artwork_name,
+                additional_clue=additional_clue,
+            ),
+        )
 
         # Call API through client
         with anyio.fail_after(settings.ai_timeout):
@@ -460,20 +333,23 @@ Return ONLY the updated narrative text.{language_instruction}"""
         else:
             image_data = prepared_images
 
-        # Load prompt
-        prompt = get_artist_identification_prompt_v2(identity, language=language)
-        prompt = self.inject_identification_hints(
-            prompt,
-            artist_name=artist_name,
-            artwork_name=artwork_name,
-            additional_clue=additional_clue,
+        prompt_job_type = (
+            AIJobType.ARTWORK_REIDENTIFICATION
+            if artist_name or artwork_name or additional_clue
+            else AIJobType.ARTWORK_IDENTIFICATION
         )
-
-        prompt = self.inject_supporting_label_context(prompt, has_label_image=label_image_bytes is not None)
-
-        # Prepend Vision hint when available
-        if vision_hint:
-            prompt = f"HINT — web image search result:\n{vision_hint}\n\nUse these as strong initial clues, but verify against the image.\n\n{prompt}"
+        prompt = render_prompt(
+            prompt_job_type,
+            ArtworkIdentificationPromptContext(
+                identity=identity,
+                language=language,
+                has_label_image=label_image_bytes is not None,
+                vision_hint=vision_hint,
+                artist_name=artist_name,
+                artwork_name=artwork_name,
+                additional_clue=additional_clue,
+            ),
+        )
 
         # Stream API through client
         with anyio.fail_after(settings.ai_timeout):
@@ -484,122 +360,6 @@ Return ONLY the updated narrative text.{language_instruction}"""
                 temperature=0.1,
                 response_schema=ARTWORK_ANALYSIS_SCHEMA,
                 reasoning_effort=reasoning_effort
-            ):
-                yield chunk
-
-    async def get_artwork_bite(
-        self,
-        image_bytes: bytes,
-        artist_name: str,
-        artwork_name: str = "Unknown",
-        followup_question: str = None,
-        previous_messages: list = None,
-        identity: str = "default",
-        language: Optional[str] = None,
-        session_context: Optional[Dict[str, Any]] = None
-    ) -> str:
-        """
-        Get a concise, interesting bite of information about the artwork
-
-        Args:
-            image_bytes: Raw image data
-            artist_name: Name of the artist
-            artwork_name: Name of the artwork
-            followup_question: Optional followup question
-            previous_messages: List of previous ConversationMessage objects
-            identity: AI identity/persona to use
-            language: Language code for response
-            session_context: Optional context from previous session artworks
-
-        Returns:
-            str: Concise interesting fact about the artwork
-        """
-        # Prepare image in provider-specific format
-        image_data = self.ai_client.prepare_image(image_bytes)
-
-        # Load base prompt
-        prompt = get_artwork_bite_prompt_v2(artist_name, artwork_name, identity, language=language)
-
-        # Inject session context if provided
-        if session_context:
-            prompt = self.inject_session_context(prompt, session_context)
-
-        # Determine current question
-        current_question = "Tell me more about this artwork." if not followup_question else followup_question
-
-        # Build conversation messages in provider-specific format
-        messages = self.ai_client.build_conversation_messages(
-            initial_prompt=prompt,
-            image_data=image_data,
-            previous_messages=previous_messages,
-            current_question=current_question
-        )
-
-        # Call API through client
-        with anyio.fail_after(settings.ai_timeout):
-            response = await self.ai_client.call_with_conversation(
-                messages=messages,
-                max_tokens=200,
-                temperature=0.8
-            )
-
-        return response
-
-    async def get_artwork_bite_stream(
-        self,
-        image_bytes: bytes,
-        artist_name: str,
-        artwork_name: str = "Unknown",
-        followup_question: str = None,
-        previous_messages: list = None,
-        identity: str = "default",
-        language: Optional[str] = None,
-        session_context: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[str, None]:
-        """
-        Stream interesting information about the artwork
-
-        Args:
-            image_bytes: Raw image data
-            artist_name: Name of the artist
-            artwork_name: Name of the artwork
-            followup_question: Optional followup question
-            previous_messages: List of previous ConversationMessage objects
-            identity: AI identity/persona to use
-            language: Language code for response
-            session_context: Optional context from previous session artworks
-
-        Yields:
-            str: Text chunks as they arrive from the API
-        """
-        # Prepare image in provider-specific format
-        image_data = self.ai_client.prepare_image(image_bytes)
-
-        # Load base prompt
-        from app.utils.prompt_loader import get_artwork_bite_prompt_v2
-        prompt = get_artwork_bite_prompt_v2(artist_name, artwork_name, identity, language=language)
-
-        # Inject session context if provided
-        if session_context:
-            prompt = self.inject_session_context(prompt, session_context)
-
-        # Determine current question
-        current_question = "Tell me more about this artwork." if not followup_question else followup_question
-
-        # Build conversation messages in provider-specific format
-        messages = self.ai_client.build_conversation_messages(
-            initial_prompt=prompt,
-            image_data=image_data,
-            previous_messages=previous_messages,
-            current_question=current_question
-        )
-
-        # Stream API through client
-        with anyio.fail_after(settings.ai_timeout):
-            async for chunk in self.ai_client.stream_with_conversation(
-                messages=messages,
-                max_tokens=200,
-                temperature=0.8
             ):
                 yield chunk
 
@@ -624,13 +384,15 @@ Return ONLY the updated narrative text.{language_instruction}"""
         Returns:
             list: Array of suggested topic strings
         """
-        # Load prompt
-        prompt = get_suggest_topics_prompt_v2(
-            artist_name=artist_name,
-            artwork_name=artwork_name,
-            previous_insights=previous_insights,
-            identity=identity,
-            language=language
+        prompt = render_prompt(
+            AIJobType.SUGGEST_TOPICS,
+            SuggestTopicsPromptContext(
+                artist_name=artist_name,
+                artwork_name=artwork_name,
+                previous_insights=previous_insights,
+                identity=identity,
+                language=language,
+            ),
         )
 
         # Call API through client (text-only)
@@ -670,8 +432,15 @@ Return ONLY the updated narrative text.{language_instruction}"""
         # Prepare image in provider-specific format
         image_data = self.ai_client.prepare_image(image_bytes)
 
-        # Build summary prompt
-        prompt = self.build_summary_prompt(artist_name, artwork_name, conversation_history, language)
+        prompt = render_prompt(
+            AIJobType.ARTWORK_SUMMARY,
+            ArtworkSummaryPromptContext(
+                artist_name=artist_name,
+                artwork_name=artwork_name,
+                conversation_history=conversation_history,
+                language=language,
+            ),
+        )
 
         # Call API through client
         with anyio.fail_after(settings.ai_timeout):
@@ -780,11 +549,6 @@ Return ONLY the updated narrative text.{language_instruction}"""
             ):
                 yield chunk
 
-    # Backward-compat aliases for older call sites.
-    build_visit_prompt = build_session_chat_prompt
-    visit_chat = session_chat
-    visit_chat_stream = stream_session_chat
-
     # ── Interactive Explore mode ──────────────────────────────────────────────
 
     async def select_explore_skills(
@@ -796,7 +560,11 @@ Return ONLY the updated narrative text.{language_instruction}"""
     ) -> List[Dict[str, str]]:
         """Select 3 observation skills for the artwork from the fixed skill tree."""
         image_data = self.ai_client.prepare_image(image_bytes)
-        prompt = get_explore_skill_select_prompt(language=language, artist_name=artist_name, artwork_name=artwork_name)
+        prompt = get_explore_skill_select_prompt(
+            language=language,
+            artist_name=artist_name,
+            artwork_name=artwork_name,
+        )
         with anyio.fail_after(settings.ai_timeout):
             response = await self.ai_client.call_with_image_and_text(
                 prompt=prompt,
@@ -862,7 +630,14 @@ Return ONLY the updated narrative text.{language_instruction}"""
         language: Optional[str] = None,
     ) -> List[Dict[str, str]]:
         """Return 0-3 fun facts for the given artwork. Returns [] if AI has no reliable knowledge."""
-        prompt = get_fun_facts_prompt(artist_name=artist_name, artwork_name=artwork_name, language=language)
+        prompt = render_prompt(
+            AIJobType.ARTWORK_FUN_FACTS,
+            ArtworkFunFactsPromptContext(
+                artist_name=artist_name,
+                artwork_name=artwork_name,
+                language=language,
+            ),
+        )
         with anyio.fail_after(settings.ai_timeout):
             response = await self.ai_client.call_text_only(
                 prompt=prompt,
@@ -872,31 +647,12 @@ Return ONLY the updated narrative text.{language_instruction}"""
         parsed = self.parse_json_response(response)
         return parsed.get("points", [])
 
-    async def get_artist_bio(
-        self,
-        artist_name: str,
-        language: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Return biographical data for the given artist. Returns empty dict on failure."""
-        prompt = get_artist_bio_prompt(artist_name=artist_name, language=language)
-        with anyio.fail_after(settings.ai_timeout):
-            response = await self.ai_client.call_text_only(
-                prompt=prompt,
-                max_tokens=400,
-                temperature=0.2,
-            )
-        parsed = self.parse_json_response(response)
-        return {
-            "bio": parsed.get("bio"),
-            "nationality": parsed.get("nationality"),
-            "birth_year": parsed.get("birth_year"),
-            "death_year": parsed.get("death_year"),
-            "movements": parsed.get("movements") or [],
-        }
-
     async def define_aesthetic_term(self, tag: str) -> Dict[str, Any]:
         """Return a definition and external resonances for an aesthetic term."""
-        prompt = get_define_aesthetic_term_prompt(tag)
+        prompt = render_prompt(
+            AIJobType.AESTHETIC_TERM_DEFINITION,
+            AestheticTermPromptContext(term=tag),
+        )
         with anyio.fail_after(settings.ai_timeout):
             response = await self.ai_client.call_text_only(
                 prompt=prompt,
