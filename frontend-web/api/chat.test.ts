@@ -23,9 +23,8 @@ function startStream(
   onError = vi.fn(),
 ) {
   const promise = streamSessionChat(
-    [],
-    [],
-    'Tell me about this',
+    'session-1',
+    'event-1',
     onChunk,
     onComplete,
     onError,
@@ -62,22 +61,21 @@ describe('streamSessionChat', () => {
     ])));
     const onComplete = vi.fn();
 
-    await streamSessionChat([], [], 'Search mine', vi.fn(), onComplete, vi.fn(), { onPhase });
+    await streamSessionChat('session-1', 'event-1', vi.fn(), onComplete, vi.fn(), { onPhase });
 
     expect(onPhase).toHaveBeenCalledWith('retrieving_collection');
     expect(onComplete).toHaveBeenCalledWith('Found it', retrieval);
   });
 
-  it('forwards prior retrieval source IDs for follow-up reference resolution', async () => {
+  it('sends only the canonical persisted turn identifiers', async () => {
     const fetchMock = vi.fn().mockResolvedValue(createStreamResponse([
       'event: complete\ndata: {"type":"result","response":"Done"}\n\n',
     ]));
     vi.stubGlobal('fetch', fetchMock);
 
     await streamSessionChat(
-      [],
-      [{ role: 'model', text: 'You saved Woman with a Hat.', retrieval_source_ids: ['saved-art-1'] }],
-      'When and where did I find this?',
+      'session-1',
+      'event-1',
       vi.fn(),
       vi.fn(),
       vi.fn(),
@@ -85,11 +83,7 @@ describe('streamSessionChat', () => {
 
     const request = fetchMock.mock.calls[0][1] as RequestInit;
     const body = JSON.parse(String(request.body));
-    expect(body.conversation_history).toEqual([{
-      role: 'assistant',
-      content: 'You saved Woman with a Hat.',
-      retrieval_source_ids: ['saved-art-1'],
-    }]);
+    expect(body).toEqual({ session_id: 'session-1', trigger_event_id: 'event-1' });
   });
 
   it('fails when the body ends without a complete or error event', async () => {

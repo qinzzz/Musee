@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.models.ai_job import AIJobType
 from app.config.taste_taxonomy import (
     ANALYZABILITY_OK,
     ANALYZABILITY_STATUSES,
@@ -212,7 +213,7 @@ async def run_artwork_analysis(
             row.model = get_ai_model_name(ai_service, ai_provider.value)
             usage_id = start_ai_usage(
                 user_id=artwork.user_id,
-                job_type="artwork_analysis",
+                job_type=AIJobType.ARTWORK_ANALYSIS,
                 model=row.model,
                 subject_type="artwork",
                 subject_id=artwork_id,

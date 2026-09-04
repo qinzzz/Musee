@@ -9,7 +9,6 @@ import {
   updateSessionEvent,
 } from '../api/sessions';
 import { itemBelongsToSession, newSessionEventId } from '../lib/sessionLinks';
-import { getSessionHistoryBeforeTrigger, serializeSessionHistory } from '../lib/sessionHistory';
 import { buildInitialSessionTitle } from '../lib/sessionCreation';
 import { SESSION_FAILURE_MESSAGES } from '../lib/sessionFailureStatus';
 import { compareSessionEvents, nextLocalOrder } from '../lib/sessionOrdering';
@@ -57,17 +56,6 @@ type UseSessionMessagingOptions = {
   setStreamingSessionResponses: Dispatch<SetStateAction<Record<string, string>>>;
   showToast: ShowToast;
 };
-
-const toSessionChatArtwork = (item: GalleryItem) => ({
-  id: item.id,
-  url: item.url,
-  keywords: item.keywords,
-  artistName: item.artistName,
-  artworkName: item.artworkName,
-  description: item.description,
-  date: item.date,
-  medium: item.medium,
-});
 
 const getSessionArtworkIds = (sessionItems: GalleryItem[]) => (
   sessionItems
@@ -277,14 +265,16 @@ export function useSessionMessaging({
   ) => {
     appendLocalSessionEvents(sessionId, newEvents);
     if (options?.persist === false) {
-      return;
+      return Promise.resolve();
     }
-    void persistSessionEvents(sessionId, newEvents).catch((error) => {
+    const persistence = persistSessionEvents(sessionId, newEvents);
+    void persistence.catch((error) => {
       console.error('Failed to persist session events:', error);
       showToast(getErrorCode(error) === 'guest_quota_exhausted'
         ? GUEST_LIMIT_MESSAGE
         : SESSION_EVENT_SAVE_ERROR, 'info');
     });
+    return persistence;
   }, [
     appendLocalSessionEvents,
     persistSessionEvents,
@@ -401,7 +391,6 @@ export function useSessionMessaging({
     markSessionReplyPending(targetSessionId);
 
     const existingMessages = historyOverride || sessionStreams[targetSessionId] || [];
-    const historyForPrompt = getSessionHistoryBeforeTrigger(existingMessages, parentEventIdOverride);
     const sessionItems = sessionItemsOverride
       || (activeSessionSummary?.id === targetSessionId
         ? activeSessionSummary.items
@@ -460,10 +449,14 @@ export function useSessionMessaging({
       console.error('Failed to persist pending model response:', error);
     });
 
+    if (!parentEventId) {
+      clearSessionReplyPending(targetSessionId);
+      throw new Error('Session response requires a persisted trigger event.');
+    }
+
     streamSessionChat(
-      sessionItems.map(toSessionChatArtwork),
-      serializeSessionHistory(historyForPrompt, sessionItems),
-      text,
+      targetSessionId,
+      parentEventId,
       (chunk) => {
         clearPendingPhaseTimer();
         collectionSearchShownAt = null;
@@ -585,9 +578,6 @@ export function useSessionMessaging({
         clearSessionReplyPending(targetSessionId);
       },
       {
-        userId: sessionUserId,
-        sessionId: targetSessionId,
-        triggerEventId: parentEventId,
         onPhase: (phase) => {
           clearPendingPhaseTimer();
           if (phase === 'retrieving_collection') {
@@ -682,6 +672,7 @@ export function useSessionMessaging({
     const existingMessages = options?.historyOverride || sessionStreams[targetSessionId] || [];
     let nextHistory = existingMessages;
     const userEventId = options?.parentEventIdOverride || newSessionEventId();
+    let userInputPersistence = Promise.resolve();
 
     if (options?.persistUserMessage !== false) {
       const createdAt = Date.now();
@@ -693,22 +684,27 @@ export function useSessionMessaging({
         createdAt,
         localOrder: nextLocalOrder(),
       };
-      appendSessionEvents(targetSessionId, [userMsg]);
+      userInputPersistence = appendSessionEvents(targetSessionId, [userMsg]);
       nextHistory = [...existingMessages, userMsg];
     } else if (options?.localUserMessageOverride) {
       appendSessionEvents(targetSessionId, [options.localUserMessageOverride], { persist: false });
       nextHistory = [...existingMessages, options.localUserMessageOverride];
     }
 
-    streamSessionInquiryResponse(
-      targetSessionId,
-      text,
-      sessionItemsOverride,
-      nextHistory,
-      options?.parentEventIdOverride || (options?.persistUserMessage === false ? undefined : userEventId),
-    );
+    void userInputPersistence.then(() => {
+      streamSessionInquiryResponse(
+        targetSessionId,
+        text,
+        sessionItemsOverride,
+        nextHistory,
+        options?.parentEventIdOverride || (options?.persistUserMessage === false ? undefined : userEventId),
+      );
+    }).catch(() => {
+      clearSessionReplyPending(targetSessionId);
+    });
   }, [
     appendSessionEvents,
+    clearSessionReplyPending,
     streamSessionInquiryResponse,
     sessionStreams,
   ]);

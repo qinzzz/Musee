@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.config.settings import settings
 from app.database.connection import get_db
 from app.database.models import SavedArtwork, Session as SessionModel
+from app.models.ai_job import AIJobType
 from app.models.artwork import AIProvider
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
@@ -300,7 +301,7 @@ async def analyze_artwork_unified(
     ai_service = AIServiceFactory.get_service(ai_provider)
     usage_id = start_ai_usage(
         user_id=user_id,
-        job_type="artwork_reidentification" if artwork_id else "artwork_identification",
+        job_type=AIJobType.ARTWORK_REIDENTIFICATION if artwork_id else AIJobType.ARTWORK_IDENTIFICATION,
         model=get_ai_model_name(ai_service, ai_provider.value),
         subject_type="artwork" if existing_artwork else None,
         subject_id=str(existing_artwork.id) if existing_artwork else None,
@@ -600,7 +601,7 @@ async def analyze_saved_artwork_stream(
         ai_service = AIServiceFactory.get_service(ai_provider)
         usage_id = start_ai_usage(
             user_id=user_id,
-            job_type="artwork_identification",
+            job_type=AIJobType.ARTWORK_IDENTIFICATION,
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="artwork",
             subject_id=artwork_id,
@@ -899,7 +900,7 @@ async def reanalyze_artwork(artwork_id: str, db: Session = Depends(get_db)):
     ai_service = AIServiceFactory.get_service(ai_provider)
     usage_id = start_ai_usage(
         user_id=artwork.user_id or artwork.device_id,
-        job_type="artwork_reidentification",
+        job_type=AIJobType.ARTWORK_REIDENTIFICATION,
         model=get_ai_model_name(ai_service, ai_provider.value),
         subject_type="artwork",
         subject_id=str(artwork.id),

@@ -112,9 +112,8 @@ describe('useSessionMessaging', () => {
     mockStartSessionWithEvent.mockResolvedValue({ inserted: 1, session: { id: 'session-1', title: 'Untitled Session' } });
     mockUpdateSessionEvent.mockResolvedValue({});
     mockStreamSessionChat.mockImplementation((
-      _items: GalleryItem[],
-      _history: SessionStreamMessage[],
-      _text: string,
+      _sessionId: string,
+      _triggerEventId: string,
       _onChunk: (chunk: string) => void,
       onComplete: (fullResponse: string) => void,
     ) => {
@@ -273,12 +272,11 @@ describe('useSessionMessaging', () => {
     );
   });
 
-  it('keeps the collection-search phase visible before returning to writing', () => {
+  it('keeps the collection-search phase visible before returning to writing', async () => {
     vi.useFakeTimers();
     mockStreamSessionChat.mockImplementation((
-      _items: GalleryItem[],
-      _history: SessionStreamMessage[],
-      _text: string,
+      _sessionId: string,
+      _triggerEventId: string,
       _onChunk: (chunk: string) => void,
       _onComplete: (fullResponse: string) => void,
       _onError: () => void,
@@ -298,8 +296,9 @@ describe('useSessionMessaging', () => {
       sessionStreams: { 'visit-1': [] },
     });
 
-    act(() => {
+    await act(async () => {
       result.current.sendSessionInquiryToSession('visit-1', 'Search my collection');
+      await Promise.resolve();
     });
 
     const readLatestPhase = () => {
@@ -320,9 +319,8 @@ describe('useSessionMessaging', () => {
 
   it('persists failed commentary status when the stream errors', async () => {
     mockStreamSessionChat.mockImplementation((
-      _items: GalleryItem[],
-      _history: SessionStreamMessage[],
-      _text: string,
+      _sessionId: string,
+      _triggerEventId: string,
       _onChunk: (chunk: string) => void,
       _onComplete: (fullResponse: string) => void,
       onError: () => void,
@@ -455,9 +453,8 @@ describe('useSessionMessaging', () => {
 
   it('turns a guest limit into a resumable sign-in action', async () => {
     mockStreamSessionChat.mockImplementation((
-      _items: GalleryItem[],
-      _history: SessionStreamMessage[],
-      _text: string,
+      _sessionId: string,
+      _triggerEventId: string,
       _onChunk: (chunk: string) => void,
       _onComplete: (fullResponse: string) => void,
       onError: (error: Error) => void,

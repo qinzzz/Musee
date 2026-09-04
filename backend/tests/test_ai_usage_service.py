@@ -1,4 +1,5 @@
 from app.database.models import AIUsage
+from app.models.ai_job import AIJobType
 from app.services import ai_usage_service
 from app.services.ai_usage_service import fail_ai_usage, start_ai_usage, succeed_ai_usage
 
@@ -6,7 +7,7 @@ from app.services.ai_usage_service import fail_ai_usage, start_ai_usage, succeed
 def test_ai_usage_success_lifecycle(db):
     usage_id = start_ai_usage(
         user_id="user-1",
-        job_type="session_chat",
+        job_type=AIJobType.SESSION_CHAT,
         model="gemini-test",
         subject_type="session_event",
         subject_id="evt-1",
@@ -35,7 +36,7 @@ def test_ai_usage_success_lifecycle(db):
 def test_ai_usage_failure_lifecycle(db):
     usage_id = start_ai_usage(
         user_id="user-1",
-        job_type="artwork_identification",
+        job_type=AIJobType.ARTWORK_IDENTIFICATION,
         model="gemini-test",
         subject_type="artwork",
         subject_id="art-1",
@@ -60,7 +61,7 @@ def test_ai_usage_is_best_effort_when_session_factory_fails(monkeypatch):
     assert (
         start_ai_usage(
             user_id="user-1",
-            job_type="session_chat",
+            job_type=AIJobType.SESSION_CHAT,
             model="gemini-test",
         )
         is None

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.config.settings import settings
 from app.database.connection import SessionLocal
 from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
+from app.models.ai_job import AIJobType
 from app.models.artwork import AIProvider
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
@@ -606,7 +607,7 @@ async def update_session_narrative_task(
         ai_service = AIServiceFactory.get_service(ai_provider)
         usage_id = start_ai_usage(
             user_id=session_record.user_id,
-            job_type="session_narrative_summary",
+            job_type=AIJobType.SESSION_NARRATIVE_SUMMARY,
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="session",
             subject_id=session_id,

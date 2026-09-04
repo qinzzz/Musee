@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.models import SavedArtwork, Session as SessionModel
+from app.models.ai_job import AIJobType
 from app.models.artwork import UpdateArtworkClassificationRequest, UpdateArtworkRequest
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
@@ -149,7 +150,7 @@ async def get_or_create_artwork_fun_facts(
     ai_service = AIServiceFactory.get_service(ai_provider)
     usage_id = start_ai_usage(
         user_id=artwork.user_id,
-        job_type="artwork_fun_facts",
+        job_type=AIJobType.ARTWORK_FUN_FACTS,
         model=get_ai_model_name(ai_service, ai_provider.value),
         subject_type="artwork",
         subject_id=artwork_id,

@@ -57,7 +57,7 @@ npm run dev                   # Vite dev server (port 3000)
 
 1. **AuthSession** — `auth_sessions` table, `auth_session_service.py`. Login/refresh-token sessions only. Web clients use rotating HttpOnly refresh cookies; native clients present rotating refresh tokens via `X-Refresh-Token`. Unrelated to the museum-visit Session.
 2. **Session ("visit")** — `sessions` table, `session_service.py`, `routers/sessions.py`, frontend `session/`. The core domain object: a museum visit. Owns `SessionArtwork` (artworks in the visit) and `SessionEvent` (the visit timeline: user inputs, model responses, artwork results).
-3. **Session chat** — `session_chat_service.py`, `routers/session_chat.py`, frontend `api/chat.ts` (`streamSessionChat`). The multi-artwork conversation about the works in a visit, **formerly called "Exhibition Hall."** The assistant persona is the *companion* (`prompts/identities/companion.txt`) — not a "curator" despite some lingering older names. Streams over `/api/session/chat-stream` (alias `/api/visit/chat-stream`); its `session_id` is optional, so it runs either attached to a Session or standalone.
+3. **Session chat** — `session_chat_service.py`, `routers/session_chat.py`, frontend `api/chat.ts` (`streamSessionChat`). The multi-artwork conversation about the works in a visit, **formerly called "Exhibition Hall."** The assistant persona is the *companion* (`prompts/identities/companion.txt`) — not a "curator" despite some lingering older names. Streams over `/api/session/chat-stream`. The client sends a persisted `session_id` and `trigger_event_id`; the backend resolves history, artworks, and model-facing prompt text from that canonical Session state.
 
 ```mermaid
 flowchart TD
@@ -79,7 +79,7 @@ flowchart TD
     end
 
     subgraph CHAT["3 · SESSION CHAT — ex 'Exhibition Hall'"]
-        Rchat["routers/session_chat.py<br/>/session/chat · /visit/chat (+ -stream)"] --> Schat["session_chat_service.py<br/>persona: companion"]
+        Rchat["routers/session_chat.py<br/>/session/chat (+ -stream)"] --> Schat["session_chat_service.py<br/>persona: companion"]
     end
 
     saved[("saved_artworks")]
@@ -89,14 +89,14 @@ flowchart TD
     aev -->|artwork_id| saved
     aev -.->|"trigger_session_id (nullable)"| Tsess
     aev -->|"parent_event_id (self-thread)"| aev
-    Rchat -.->|"session_id OPTIONAL"| Tsess
+    Rchat -->|"session_id + trigger_event_id"| Tsess
     Tsess -->|user_id| users
     Tauth -->|user_id| users
 ```
 
 **Two event tables:** `session_events` (visit timeline) and `artwork_events` (per-artwork history) are distinct.
 
-**Endpoint vocabulary:** session events are served only under `/sessions/{id}/events` (+ `start-with-event`) — the old `/messages` URL aliases have been removed. The chat endpoint keeps `/api/session/chat` canonical with `/api/visit/chat` as a **retained back-compat alias** (both web and installed mobile apps call `/visit/chat-stream`, so the alias must stay).
+**Endpoint vocabulary:** session events are served only under `/sessions/{id}/events` (+ `start-with-event`) — the old `/messages` URL aliases have been removed. Session chat is served only under canonical `/api/session/chat` and `/api/session/chat-stream` routes.
 
 **Event-type vocabulary:** responses now serialize a **single canonical** `event_type` — one of `user_input` / `message` / `artwork_result` / `model_response` — and all clients (web, mobile, `client-core`) read it. The legacy dual `type` output field has been removed from responses. `session_event_service.py` still keeps `LEGACY_TO_CANONICAL_EVENT_TYPE` + `normalize_session_event_type` to (a) derive canonical from the stored `session_events.type` column and (b) tolerate a legacy `type` on **input** (the write path still accepts it; old rows may hold legacy values). Read and write `event_type` in new code. Note the stored column is named `type` while the API field is `event_type` — same concept, different name.
 
@@ -108,6 +108,7 @@ flowchart TD
 - **File-based prompts**: Edit `.txt` files in `backend/app/prompts/`
 - **Clean separation**: AI services follow the `AIClientInterface` pattern
 - **Check existing code first**: Before adding params or features, verify they don't already exist
+- **Prefer concept economy**: Before introducing an identifier, field, abstraction, model, or persistence layer, determine whether an existing concept can be clarified or extended. Reuse one canonical concept across routing, storage, telemetry, and tests when its meaning is the same; do not create parallel IDs or fields for the same concern. Add a new concept only when it has genuinely distinct semantics, ownership, or lifecycle, and remove the superseded path in the same rework unless backward compatibility is an explicit requirement.
 
 ### iOS Parity Work
 - **Verify behavior, not only contracts**: Before calling an iOS capability aligned

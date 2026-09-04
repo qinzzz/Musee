@@ -17,10 +17,6 @@ import {
 } from '../api/sessions';
 import { buildArtworkInputEntries } from '../lib/batchEvents';
 import {
-  buildPreparedSessionFallbackPrompt,
-  buildStagedSessionAdditionPrompt,
-} from '../lib/preparedSession';
-import {
   itemBelongsToSession,
   newSessionEventId,
   updateSessionLinkForItem,
@@ -511,14 +507,9 @@ export function useSessionArtworkInputPipeline({
           itemBelongsToSession(item, sessionId)
           && !resolvedItems.some((newItem) => newItem.id === item.id)
         ));
-      const inquiryText = message || (
-        isNewSession
-          ? buildPreparedSessionFallbackPrompt(inputArtworks)
-          : buildStagedSessionAdditionPrompt(inputArtworks)
-      );
       sendSessionInquiryToSession(
         sessionId,
-        inquiryText,
+        message,
         [...newlyResolvedItems, ...existingSessionItems],
         {
           persistUserMessage: false,

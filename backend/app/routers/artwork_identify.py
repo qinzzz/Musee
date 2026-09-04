@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.config.settings import settings
 from app.database.connection import get_db
 from app.database.models import User
+from app.models.ai_job import AIJobType
 from app.models.artwork import AIProvider
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
@@ -140,7 +141,7 @@ async def analyze_artist(
         ai_service = AIServiceFactory.get_service(ai_provider)
         usage_id = start_ai_usage(
             user_id=user_id,
-            job_type="artwork_identification",
+            job_type=AIJobType.ARTWORK_IDENTIFICATION,
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="session" if session_id else "user",
             subject_id=session_id or user_id,
@@ -319,7 +320,7 @@ async def analyze_artist_stream(
         ai_service = AIServiceFactory.get_service(ai_provider)
         usage_id = start_ai_usage(
             user_id=user_id,
-            job_type="artwork_identification",
+            job_type=AIJobType.ARTWORK_IDENTIFICATION,
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="session" if session_id else "user",
             subject_id=session_id or user_id,

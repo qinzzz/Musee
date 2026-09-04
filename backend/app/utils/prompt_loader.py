@@ -239,9 +239,8 @@ def load_session_chat_prompt() -> str:
     return _load_prompt_file(INSTRUCTIONS_DIR / "session_chat.txt")
 
 
-def get_session_chat_prompt(collection_summary: str) -> str:
-    template = _inject_identity(load_session_chat_prompt(), COMPANION_IDENTITY)
-    return template.replace("{collection_summary}", collection_summary)
+def get_session_chat_prompt() -> str:
+    return _inject_identity(load_session_chat_prompt(), COMPANION_IDENTITY)
 
 
 @lru_cache(maxsize=1)
@@ -251,11 +250,6 @@ def load_journal_generation_prompt() -> str:
 
 def get_journal_generation_prompt(evidence_package: str) -> str:
     return load_journal_generation_prompt().replace("{evidence_package}", evidence_package)
-
-
-# Backward-compat aliases
-load_visit_chat_prompt = load_session_chat_prompt
-get_visit_chat_prompt = get_session_chat_prompt
 
 
 def get_artist_identification_prompt_v2(identity: str = "default", language: str = None) -> str:

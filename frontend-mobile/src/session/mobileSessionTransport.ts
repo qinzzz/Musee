@@ -3,7 +3,6 @@ import {
   parseSessionChatStreamEvent,
   type ApiClient,
   type ArtworkRecord,
-  type SessionChatHistoryEntry,
   type SessionChatPhase,
   type SessionEventRecord,
   type SessionRecord,
@@ -29,24 +28,9 @@ export type StartArtworkSessionInput = {
   userId: string;
 };
 
-export type SessionChatArtworkInput = {
-  artworkName: string;
-  artistName: string;
-  date: string | null;
-  description: string | null;
-  id: string;
-  keywords: string[];
-  medium: string | null;
-  url: string;
-};
-
 export type StreamTextSessionInput = {
-  history: SessionChatHistoryEntry[];
-  items: SessionChatArtworkInput[];
-  message: string;
   sessionId: string;
   triggerEventId: string;
-  userId: string;
 };
 
 export type StreamTextSessionCallbacks = {
@@ -248,23 +232,10 @@ export function createMobileSessionTransport({
     },
 
     async streamTextResponse(input, callbacks = {}) {
-      const response = await apiClient.fetchWithTimeout(`${apiBaseUrl}/visit/chat-stream`, {
+      const response = await apiClient.fetchWithTimeout(`${apiBaseUrl}/session/chat-stream`, {
         method: 'POST',
         headers: jsonHeaders,
         body: JSON.stringify({
-          items: input.items.map((item) => ({
-            id: item.id,
-            url: item.url,
-            keywords: item.keywords,
-            artist_name: item.artistName,
-            artwork_name: item.artworkName,
-            description: item.description,
-            date: item.date,
-            medium: item.medium,
-          })),
-          conversation_history: input.history,
-          new_message: input.message,
-          user_id: input.userId,
           session_id: input.sessionId,
           trigger_event_id: input.triggerEventId,
         }),

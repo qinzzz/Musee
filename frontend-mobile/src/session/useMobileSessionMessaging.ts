@@ -218,17 +218,6 @@ export function useMobileSessionMessaging({
 
       const result = await mobileSessionService.streamResponse(
         attempt,
-        [...context.baseEvents, attempt.userEvent],
-        context.artworks.map((artwork) => ({
-          id: artwork.id,
-          url: artwork.resolvedImageUri,
-          keywords: artwork.tags,
-          artistName: artwork.artistName,
-          artworkName: artwork.artworkName,
-          description: artwork.analysis,
-          date: artwork.date,
-          medium: artwork.medium,
-        })),
         {
           onPhase: applyResponsePhase,
           onChunk: (chunk) => setEvents((current) => updateSessionEvent(
@@ -351,7 +340,6 @@ export function useMobileSessionMessaging({
           context.source,
           context.text,
           context.sessionRecord.id,
-          context.isNewSession ? 'new_session' : 'existing_session',
         );
         setEvents((current) => replaceSessionEvent(current, context.attempt!.userEvent));
       }

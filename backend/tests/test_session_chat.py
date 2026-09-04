@@ -3,20 +3,25 @@ from datetime import timedelta
 import pytest
 
 from app.models.artwork import AIProvider
-from app.database.models import User
+from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
 from app.routers import session_chat as session_chat_router
 from app.services.ai_client_interface import AIStreamChunk
-from app.services.session_chat_service import SessionChatItem, build_session_chat_items_payload, load_bootstrap_image_bytes
+from app.services.session_chat_service import (
+    SessionChatItem,
+    build_session_chat_items_payload,
+    load_bootstrap_image_bytes,
+    resolve_session_chat_request,
+)
 from app.utils.auth_utils import create_access_token
 
 
-def _expected_item(item_id: str, keywords: list[str]) -> dict:
+def _expected_item(item_id: str, keywords: list[str], *, with_metadata: bool = False) -> dict:
     """The full payload build_session_chat_items_payload sends to the AI."""
     return {
         "id": item_id,
         "keywords": keywords,
-        "artist_name": None,
-        "artwork_name": None,
+        "artist_name": "Test Artist" if with_metadata else None,
+        "artwork_name": "Test Work" if with_metadata else None,
         "description": None,
         "date": None,
         "medium": None,
@@ -31,16 +36,52 @@ def _chat_auth(db) -> tuple[dict[str, str], str]:
     return {"Authorization": f"Bearer {create_access_token({'sub': user_id})}"}, user_id
 
 
+def _persist_chat_turn(db, user_id: str, message: str, *, with_history: bool = False) -> tuple[str, str]:
+    session_id = "session-1"
+    trigger_event_id = "trigger-1"
+    db.add(SessionModel(id=session_id, user_id=user_id, title="Test Session"))
+    artwork = SavedArtwork(
+        id="a1",
+        user_id=user_id,
+        photo_uri="https://example.com/a.jpg",
+        artist_name="Test Artist",
+        artwork_name="Test Work",
+    )
+    db.add(artwork)
+    db.add(SessionArtwork(id="link-1", session_id=session_id, artwork_id="a1", sequence_number=0))
+    sequence_number = 1
+    if with_history:
+        db.add(SessionEvent(
+            id="history-1",
+            session_id=session_id,
+            role="user",
+            type="user_input",
+            content="hello",
+            sequence_number=sequence_number,
+        ))
+        sequence_number += 1
+    db.add(SessionEvent(
+        id=trigger_event_id,
+        session_id=session_id,
+        role="user",
+        type="user_input",
+        content=message,
+        sequence_number=sequence_number,
+    ))
+    db.commit()
+    return session_id, trigger_event_id
+
+
 class _SessionAIService:
     async def session_chat(self, items, history, new_message, image_bytes_list, retrieval_context=""):
-        assert items == [_expected_item("a1", ["red", "abstract"])]
+        assert items == [_expected_item("a1", [], with_metadata=True)]
         assert history == []
         assert new_message == "What do these have in common?"
         assert image_bytes_list == [b"image-a"]
         return "They share a rhythmic abstract language."
 
     async def stream_session_chat(self, items, history, new_message, image_bytes_list, retrieval_context=""):
-        assert items == [_expected_item("a1", ["red", "abstract"])]
+        assert items == [_expected_item("a1", [], with_metadata=True)]
         assert history == [{"role": "user", "content": "hello"}]
         assert new_message == "Continue."
         assert image_bytes_list == []
@@ -91,6 +132,7 @@ async def test_load_bootstrap_image_bytes_only_for_new_conversation(monkeypatch)
 
 def test_session_chat_route(client, monkeypatch, db):
     headers, user_id = _chat_auth(db)
+    session_id, trigger_event_id = _persist_chat_turn(db, user_id, "What do these have in common?")
     monkeypatch.setattr(session_chat_router, "determine_ai_provider", lambda _model=None: AIProvider.OPENAI)
     monkeypatch.setattr(
         session_chat_router.AIServiceFactory,
@@ -109,43 +151,17 @@ def test_session_chat_route(client, monkeypatch, db):
         "/api/session/chat",
         headers=headers,
         json={
-            "items": [
-                {
-                    "id": "a1",
-                    "url": "https://example.com/a.jpg",
-                    "keywords": ["red", "abstract"],
-                }
-            ],
-            "conversation_history": [],
-            "new_message": "What do these have in common?",
-            "user_id": user_id,
+            "session_id": session_id,
+            "trigger_event_id": trigger_event_id,
         },
     )
 
     assert response.status_code == 200
     assert response.json() == {"response": "They share a rhythmic abstract language."}
 
-    legacy_response = client.post(
-        "/api/visit/chat",
-        headers=headers,
-        json={
-            "items": [
-                {
-                    "id": "a1",
-                    "url": "https://example.com/a.jpg",
-                    "keywords": ["red", "abstract"],
-                }
-            ],
-            "conversation_history": [],
-            "new_message": "What do these have in common?",
-            "user_id": user_id,
-        },
-    )
-    assert legacy_response.status_code == 200
-
-
 def test_session_chat_stream_route(client, monkeypatch, db):
     headers, user_id = _chat_auth(db)
+    session_id, trigger_event_id = _persist_chat_turn(db, user_id, "Continue.", with_history=True)
     monkeypatch.setattr(session_chat_router, "determine_ai_provider", lambda _model=None: AIProvider.OPENAI)
     monkeypatch.setattr(
         session_chat_router.AIServiceFactory,
@@ -163,16 +179,8 @@ def test_session_chat_stream_route(client, monkeypatch, db):
         "/api/session/chat-stream",
         headers=headers,
         json={
-            "items": [
-                {
-                    "id": "a1",
-                    "url": "https://example.com/a.jpg",
-                    "keywords": ["red", "abstract"],
-                }
-            ],
-            "conversation_history": [{"role": "user", "content": "hello"}],
-            "new_message": "Continue.",
-            "user_id": user_id,
+            "session_id": session_id,
+            "trigger_event_id": trigger_event_id,
         },
     )
 
@@ -182,25 +190,6 @@ def test_session_chat_stream_route(client, monkeypatch, db):
     assert "Part two." in response.text
     assert 'event: complete' in response.text
     assert '"response": "Part one. Part two."' in response.text
-
-    legacy_response = client.post(
-        "/api/visit/chat-stream",
-        headers=headers,
-        json={
-            "items": [
-                {
-                    "id": "a1",
-                    "url": "https://example.com/a.jpg",
-                    "keywords": ["red", "abstract"],
-                }
-            ],
-            "conversation_history": [{"role": "user", "content": "hello"}],
-            "new_message": "Continue.",
-            "user_id": user_id,
-        },
-    )
-    assert legacy_response.status_code == 200
-
 
 def test_session_chat_stream_rejects_an_expired_presented_token(client):
     expired_token = create_access_token({"sub": "user-1"}, expires_delta=timedelta(minutes=-1))
@@ -222,6 +211,7 @@ def test_session_chat_stream_rejects_an_expired_presented_token(client):
 
 def test_session_chat_stream_route_records_usage_tokens(client, monkeypatch, db):
     headers, user_id = _chat_auth(db)
+    session_id, trigger_event_id = _persist_chat_turn(db, user_id, "Continue.", with_history=True)
     completed: dict[str, int | None] = {}
 
     monkeypatch.setattr(session_chat_router, "determine_ai_provider", lambda _model=None: AIProvider.OPENAI)
@@ -247,10 +237,8 @@ def test_session_chat_stream_route_records_usage_tokens(client, monkeypatch, db)
         "/api/session/chat-stream",
         headers=headers,
         json={
-            "items": [{"id": "a1", "url": "https://example.com/a.jpg", "keywords": ["red", "abstract"]}],
-            "conversation_history": [{"role": "user", "content": "hello"}],
-            "new_message": "Continue.",
-            "user_id": user_id,
+            "session_id": session_id,
+            "trigger_event_id": trigger_event_id,
         },
     )
 
@@ -272,3 +260,71 @@ def test_build_session_chat_items_payload():
         _expected_item("1", ["a", "b"]),
         _expected_item("2", ["c"]),
     ]
+
+
+def test_resolver_uses_persisted_event_and_prioritizes_current_artwork(db):
+    _, user_id = _chat_auth(db)
+    session = SessionModel(id="session-resolver", user_id=user_id, title="Resolver")
+    older = SavedArtwork(
+        id="older",
+        user_id=user_id,
+        photo_uri="https://example.com/older.jpg",
+        artist_name="Older Artist",
+        artwork_name="Older Work",
+    )
+    current = SavedArtwork(
+        id="current",
+        user_id=user_id,
+        photo_uri="https://example.com/current.jpg",
+        artist_name="Current Artist",
+        artwork_name="Current Work",
+    )
+    db.add_all([session, older, current])
+    db.add_all([
+        SessionArtwork(id="older-link", session_id=session.id, artwork_id=older.id, sequence_number=0),
+        SessionArtwork(id="current-link", session_id=session.id, artwork_id=current.id, sequence_number=1),
+        SessionEvent(
+            id="prior-user",
+            session_id=session.id,
+            role="user",
+            type="user_input",
+            content="Earlier question",
+            sequence_number=1,
+        ),
+        SessionEvent(
+            id="prior-model",
+            session_id=session.id,
+            role="model",
+            type="model_response",
+            content="Earlier answer",
+            payload={
+                "status": "completed",
+                "retrieval": {"selected_source_ids": ["saved-artwork"]},
+            },
+            sequence_number=2,
+        ),
+        SessionEvent(
+            id="current-turn",
+            session_id=session.id,
+            role="user",
+            type="user_input",
+            content=None,
+            payload={"artworks": [{"artwork_id": current.id, "source": "upload"}]},
+            sequence_number=3,
+        ),
+    ])
+    db.commit()
+
+    resolved = resolve_session_chat_request(db, session, "current-turn")
+
+    assert [item.id for item in resolved.items] == ["current", "older"]
+    assert resolved.conversation_history == [
+        {"role": "user", "content": "Earlier question"},
+        {
+            "role": "assistant",
+            "content": "Earlier answer",
+            "retrieval_source_ids": ["saved-artwork"],
+        },
+    ]
+    assert resolved.has_user_text is False
+    assert resolved.new_message.startswith('The user added "Current Work" by Current Artist')

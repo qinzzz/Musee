@@ -37,12 +37,6 @@ export type SessionEventRecord = {
   created_at?: string | null;
 };
 
-export type SessionChatHistoryEntry = {
-  role: 'assistant' | 'user';
-  content: string;
-  retrieval_source_ids?: string[];
-};
-
 export type SessionChatStreamEvent =
   | { type: 'chunk'; content: string }
   | { type: 'complete'; response: string; retrieval?: Record<string, unknown> }
@@ -64,65 +58,12 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-function responseStatus(event: SessionEventRecord): SessionResponseStatus | null {
-  const status = event.payload?.status;
-  return status === 'auth_required'
-    || status === 'completed'
-    || status === 'failed'
-    || status === 'pending'
-    ? status
-    : null;
-}
-
-function retrievalSourceIds(event: SessionEventRecord): string[] {
-  const retrieval = event.payload?.retrieval;
-  if (!isObject(retrieval) || !Array.isArray(retrieval.selected_source_ids)) return [];
-  return retrieval.selected_source_ids.filter(
-    (sourceId): sourceId is string => typeof sourceId === 'string',
-  );
-}
-
 export function buildInitialSessionTitle(message: string, fallback = 'New Session'): string {
   const normalized = message.replace(/\s+/g, ' ').trim();
   if (!normalized) return fallback;
   return normalized.length <= MAX_INITIAL_SESSION_TITLE_LENGTH
     ? normalized
     : normalized.slice(0, MAX_INITIAL_SESSION_TITLE_LENGTH).trimEnd();
-}
-
-export function serializeTextSessionHistory(
-  events: SessionEventRecord[],
-  beforeEventId?: string,
-): SessionChatHistoryEntry[] {
-  const boundary = beforeEventId
-    ? events.findIndex((event) => event.id === beforeEventId)
-    : -1;
-  const precedingEvents = boundary >= 0 ? events.slice(0, boundary) : events;
-
-  return precedingEvents.flatMap<SessionChatHistoryEntry>((event) => {
-    const content = event.content?.trim();
-    if (!content) return [];
-
-    if (event.event_type === 'user_input' && event.role === 'user') {
-      return [{ role: 'user', content }];
-    }
-
-    if (event.event_type === 'model_response' && event.role === 'model') {
-      const status = responseStatus(event);
-      if (status && status !== 'completed') return [];
-      const sourceIds = retrievalSourceIds(event);
-      return [{
-        role: 'assistant',
-        content,
-        ...(sourceIds.length > 0 ? { retrieval_source_ids: sourceIds } : {}),
-      }];
-    }
-
-    if (event.event_type === 'message' && (event.role === 'user' || event.role === 'model')) {
-      return [{ role: event.role === 'model' ? 'assistant' : 'user', content }];
-    }
-    return [];
-  });
 }
 
 export function parseSessionChatStreamEvent(
