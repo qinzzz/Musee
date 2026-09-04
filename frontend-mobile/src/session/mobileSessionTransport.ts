@@ -28,6 +28,12 @@ export type StartArtworkSessionInput = {
   userId: string;
 };
 
+export type AttachSessionArtworkInput = {
+  artworkId: string;
+  sessionId: string;
+  userId: string;
+};
+
 export type StreamTextSessionInput = {
   sessionId: string;
   triggerEventId: string;
@@ -44,6 +50,7 @@ export type StreamTextSessionResult = {
 };
 
 export type MobileSessionTransport = {
+  attachArtwork: (input: AttachSessionArtworkInput) => Promise<void>;
   appendEvents: (sessionId: string, events: SessionEventWrite[]) => Promise<void>;
   fetchArtworks: (sessionId: string, userId: string) => Promise<ArtworkRecord[]>;
   fetchEvents: (sessionId: string) => Promise<SessionEventRecord[]>;
@@ -143,6 +150,19 @@ export function createMobileSessionTransport({
   const jsonHeaders = { [CONTENT_TYPE_HEADER]: JSON_CONTENT_TYPE };
 
   return {
+    async attachArtwork({ artworkId, sessionId, userId }) {
+      const response = await apiClient.fetchWithTimeout(
+        `${apiBaseUrl}/sessions/${encodeURIComponent(sessionId)}/artworks?user_id=${encodeURIComponent(userId)}`,
+        {
+          method: 'POST',
+          headers: jsonHeaders,
+          body: JSON.stringify({ artwork_ids: [artworkId] }),
+          timeout: SESSION_REQUEST_TIMEOUT_MS,
+        },
+      );
+      await requireSuccess(response);
+    },
+
     async fetchArtworks(sessionId, userId) {
       const response = await apiClient.fetchWithTimeout(
         `${apiBaseUrl}/sessions/${encodeURIComponent(sessionId)}/artworks?user_id=${encodeURIComponent(userId)}`,

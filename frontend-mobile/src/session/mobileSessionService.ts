@@ -24,6 +24,7 @@ export type MobileTextSessionAttempt = {
 
 export type SessionArtworkInputSource = 'capture' | 'library' | 'upload';
 export type MobileSessionService = {
+  attachArtwork: (userId: string, sessionId: string, artworkId: string) => Promise<void>;
   createSessionId: () => string;
   createTextAttempt: (
     userId: string,
@@ -122,6 +123,9 @@ export function createMobileSessionService({
   transport,
 }: MobileSessionServiceOptions): MobileSessionService {
   return {
+    attachArtwork(userId, sessionId, artworkId) {
+      return transport.attachArtwork({ userId, sessionId, artworkId });
+    },
     createSessionId() {
       return createId('session');
     },

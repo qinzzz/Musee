@@ -72,14 +72,14 @@ slices:
   and retry behavior;
 - artwork library and basic artwork detail;
 - Sessions with persisted user/model events, streamed Markdown responses,
-  retry behavior, cold-start restoration, and camera or Photos artwork input.
+  retry behavior, cold-start restoration, and camera, Photos, or library
+  artwork input.
 
-The cloud thumbnail contract is complete. Session timelines render artwork
-cards durably, and new uploads can participate in mixed artwork/text turns. A
-shared prompt-management cleanup now comes before the remaining Session input
-gap: web and iOS must persist the same user event and let the backend resolve
-all model-facing Session context. Adding an existing library artwork resumes
-after that ownership boundary is stable.
+The cloud thumbnail contract and shared Session prompt ownership are complete.
+Session timelines render artwork cards durably, and camera, Photos, and existing
+library artworks can participate in mixed artwork/text turns. The remaining
+Phase 3 work is lifecycle-state vocabulary polish rather than a missing core
+input or persistence path.
 
 ## Capability map
 
@@ -146,7 +146,7 @@ Status: baseline complete, with later hardening expected.
 
 ### Phase 3 — Persistent Sessions
 
-Status: text baseline complete; artwork participation is active work.
+Status: text and single-artwork baselines complete; lifecycle polish remains.
 
 - start and reopen a text Session;
 - persist user input before generation;
@@ -215,29 +215,12 @@ Status: development-device builds work; production pipeline not complete.
 
 ## Active milestone
 
-### Now: shared Session prompt ownership
-
-Make Session AI behavior independent of the client that initiated it:
-
-1. use the existing AI `job_type` as the backend prompt-registry key;
-2. persist the canonical Session user event before response generation;
-3. send only `session_id` and `trigger_event_id` from web and iOS;
-4. resolve conversation history, current artworks, and model-facing turn text
-   from backend state;
-5. remove hidden fallback prompts from both clients;
-6. prove text-only, artwork-only, and mixed turns behave identically across
-   clients.
-
-Do not add parallel prompt identifiers, prompt-version fields, or compatibility
-request shapes. Git remains the change history, and `job_type` remains the
-shared routing and usage concept.
-
-### Next: complete artwork-aware native Sessions
+### Now: complete artwork-aware native Sessions
 
 Build one complete Session artwork slice:
 
 1. start or open a Session;
-2. add an artwork from camera or Photos, with existing-library selection next;
+2. add an artwork from camera, Photos, or the existing library;
 3. optionally include text with the artwork input;
 4. persist Session membership and the user event;
 5. show upload/analysis/model phases and actionable errors;
@@ -247,6 +230,13 @@ Build one complete Session artwork slice:
 Do not attempt every advanced Session behavior in this slice. Batch semantics,
 notifications, richer model-status UI, and offline queuing should follow only
 after the single-artwork persistent path is solid.
+
+### Next: complete the native artwork library
+
+Move into Phase 4 with pagination and cache behavior already established. Add
+the missing metadata, analysis, edit, delete, re-identify, and relevant artwork
+actions as small end-to-end slices rather than recreating the complete web
+surface at once.
 
 ## Quality gates
 

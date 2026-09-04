@@ -3,15 +3,21 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { NativeImageAsset } from '../../capture/types';
+import type { MobileArtworkRecord } from '../../library/types';
 import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
 
+export type SessionComposerAttachment =
+  | { asset: NativeImageAsset; kind: 'local' }
+  | { artwork: MobileArtworkRecord; kind: 'library' };
+
 type SessionComposerProps = {
-  attachment: NativeImageAsset | null;
+  attachment: SessionComposerAttachment | null;
   disabled: boolean;
+  onChooseLibraryArtwork: () => void;
   onChoosePhoto: () => void;
   onRemoveAttachment: () => void;
   onTakePhoto: () => void;
-  onSubmit: (text: string, attachment: NativeImageAsset | null) => Promise<boolean>;
+  onSubmit: (text: string, attachment: SessionComposerAttachment | null) => Promise<boolean>;
 };
 
 const PLACEHOLDER = 'Ask Musee';
@@ -19,6 +25,7 @@ const PLACEHOLDER = 'Ask Musee';
 export function SessionComposer({
   attachment,
   disabled,
+  onChooseLibraryArtwork,
   onChoosePhoto,
   onRemoveAttachment,
   onSubmit,
@@ -38,15 +45,27 @@ export function SessionComposer({
       {attachment ? (
         <View style={styles.attachmentRow}>
           <Image
-            accessibilityLabel="Artwork ready to upload"
+            accessibilityLabel={attachment.kind === 'library'
+              ? `${attachment.artwork.artworkName} by ${attachment.artwork.artistName}`
+              : 'Artwork ready to upload'}
             contentFit="cover"
-            source={{ uri: attachment.uri }}
+            source={{
+              uri: attachment.kind === 'library'
+                ? attachment.artwork.resolvedThumbnailUri
+                : attachment.asset.uri,
+            }}
             style={styles.attachmentImage}
           />
           <View style={styles.attachmentCopy}>
-            <Text style={styles.attachmentTitle}>Artwork ready</Text>
+            <Text numberOfLines={1} style={styles.attachmentTitle}>
+              {attachment.kind === 'library'
+                ? attachment.artwork.artworkName
+                : 'Artwork ready'}
+            </Text>
             <Text style={styles.attachmentSource}>
-              {attachment.source === 'camera' ? 'Camera' : 'Photos'}
+              {attachment.kind === 'library'
+                ? attachment.artwork.artistName
+                : attachment.asset.source === 'camera' ? 'Camera' : 'Photos'}
             </Text>
           </View>
           <Pressable
@@ -102,6 +121,14 @@ export function SessionComposer({
             style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressed]}
           >
             <Text style={styles.attachmentButtonLabel}>Photos</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={disabled}
+            onPress={onChooseLibraryArtwork}
+            style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.attachmentButtonLabel}>Library</Text>
           </Pressable>
         </View>
       ) : null}

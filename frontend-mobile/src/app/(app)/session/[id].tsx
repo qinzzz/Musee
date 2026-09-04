@@ -14,9 +14,12 @@ import type { SessionChatPhase } from '@musee/client-core';
 
 import { useAuth } from '../../../auth/AuthProvider';
 import { useCaptureDraft } from '../../../capture/CaptureDraftProvider';
-import type { NativeImageAsset } from '../../../capture/types';
 import { pickArtworkImage } from '../../../platform/images/pickArtworkImage';
-import { SessionComposer } from '../../../session/components/SessionComposer';
+import { SessionArtworkPicker } from '../../../session/components/SessionArtworkPicker';
+import {
+  SessionComposer,
+  type SessionComposerAttachment,
+} from '../../../session/components/SessionComposer';
 import { SessionEventList } from '../../../session/components/SessionEventList';
 import type { MobileSessionArtworkPhase } from '../../../session/useMobileSessionMessaging';
 import { useMobileTextSession } from '../../../session/useMobileTextSession';
@@ -53,14 +56,15 @@ export default function MobileSessionScreen() {
   const { clearDraft, draft } = useCaptureDraft();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const [attachment, setAttachment] = useState<NativeImageAsset | null>(null);
+  const [attachment, setAttachment] = useState<SessionComposerAttachment | null>(null);
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
+  const [isPickingLibraryArtwork, setIsPickingLibraryArtwork] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const controller = useMobileTextSession(resolvedSessionId, user?.user_id || '');
 
   useEffect(() => {
     if (!draft || draft.destination !== 'session') return;
-    setAttachment(draft.asset);
+    setAttachment({ asset: draft.asset, kind: 'local' });
     setPhotoError(null);
     clearDraft();
   }, [clearDraft, draft]);
@@ -191,21 +195,27 @@ export default function MobileSessionScreen() {
               <SessionComposer
                 attachment={attachment}
                 disabled={controller.isSending || isPickingPhoto}
+                onChooseLibraryArtwork={() => {
+                  setPhotoError(null);
+                  setIsPickingLibraryArtwork(true);
+                }}
                 onChoosePhoto={() => {
                   setIsPickingPhoto(true);
                   setPhotoError(null);
                   void pickArtworkImage()
                     .then((asset) => {
-                      if (asset) setAttachment(asset);
+                      if (asset) setAttachment({ asset, kind: 'local' });
                     })
                     .catch(() => setPhotoError(COPY.photoError))
                     .finally(() => setIsPickingPhoto(false));
                 }}
                 onRemoveAttachment={() => setAttachment(null)}
                 onSubmit={async (text, selectedArtwork) => {
-                  const submitted = selectedArtwork
-                    ? await controller.sendArtwork(selectedArtwork, text)
-                    : await controller.sendText(text);
+                  const submitted = selectedArtwork?.kind === 'local'
+                    ? await controller.sendArtwork(selectedArtwork.asset, text)
+                    : selectedArtwork?.kind === 'library'
+                      ? await controller.sendLibraryArtwork(selectedArtwork.artwork, text)
+                      : await controller.sendText(text);
                   if (submitted && selectedArtwork) setAttachment(null);
                   return submitted;
                 }}
@@ -218,6 +228,16 @@ export default function MobileSessionScreen() {
                 }}
               />
             </View>
+            <SessionArtworkPicker
+              excludedArtworkIds={controller.artworks.map((artwork) => artwork.id)}
+              onCancel={() => setIsPickingLibraryArtwork(false)}
+              onSelect={(artwork) => {
+                setAttachment({ artwork, kind: 'library' });
+                setIsPickingLibraryArtwork(false);
+              }}
+              userId={user.user_id}
+              visible={isPickingLibraryArtwork}
+            />
           </>
         )}
       </KeyboardAvoidingView>
