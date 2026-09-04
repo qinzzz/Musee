@@ -5,6 +5,7 @@ import logging
 import re
 from typing import Any
 
+from app.models.ai_job import AIJobType
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.retrieval.contracts import RetrievalPlan, parse_structured_json
@@ -118,7 +119,7 @@ async def plan_collection_retrieval(
 ) -> RetrievalPlan:
     usage_id = start_ai_usage(
         user_id=user_id,
-        job_type="retrieval_planner",
+        job_type=AIJobType.RETRIEVAL_PLANNER,
         model=get_ai_model_name(ai_service, "retrieval"),
         subject_type="user",
         subject_id=user_id,

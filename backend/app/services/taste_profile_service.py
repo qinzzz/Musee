@@ -11,6 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.database.models import SavedArtwork, TasteProfile
+from app.models.ai_job import AIJobType
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
@@ -148,7 +149,7 @@ Write 2 short paragraphs in a warm but analytical tone explaining the user's tas
         ai_service = AIServiceFactory.get_service(ai_provider)
         usage_id = start_ai_usage(
             user_id=user_id,
-            job_type="taste_profile_narrative",
+            job_type=AIJobType.TASTE_PROFILE_NARRATIVE,
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="user" if user_id else None,
             subject_id=user_id,

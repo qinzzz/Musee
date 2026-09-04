@@ -68,7 +68,7 @@ describe('mobile session service', () => {
     expect(transport.appendEvents).not.toHaveBeenCalled();
   });
 
-  it('creates an artwork-bearing input with a default prompt when no note is supplied', () => {
+  it('creates an artwork-bearing input without fabricating user text', () => {
     const ids = ['user-event', 'model-event'];
     const service = createMobileSessionService({
       createId: () => ids.shift()!,
@@ -82,11 +82,10 @@ describe('mobile session service', () => {
       'capture',
       '   ',
       'session-1',
-      'new_session',
     );
 
     expect(attempt).toMatchObject({
-      text: 'I just started a session with a new upload. Help me understand what stands out in this work and where I should look first.',
+      text: '',
       userEvent: {
         id: 'user-event',
         content: null,
@@ -119,42 +118,19 @@ describe('mobile session service', () => {
     });
   });
 
-  it('serializes prior completed turns without duplicating the current user message', async () => {
+  it('streams using the persisted turn identifiers', async () => {
     const transport = createTransport();
     const service = createMobileSessionService({ transport });
     const attempt = service.createTextAttempt('user-1', 'Current question', 'session-1');
-    const history: SessionEventRecord[] = [
-      {
-        id: 'old-user',
-        role: 'user',
-        event_type: 'user_input',
-        content: 'Earlier question',
-      },
-      {
-        id: 'old-model',
-        role: 'model',
-        event_type: 'model_response',
-        content: 'Earlier answer',
-        payload: { status: 'completed' },
-      },
-      attempt.userEvent,
-    ];
-
-    await service.streamResponse(attempt, history, []);
+    await service.streamResponse(attempt);
 
     expect(transport.streamTextResponse).toHaveBeenCalledWith(
-      expect.objectContaining({
-        history: [
-          { role: 'user', content: 'Earlier question' },
-          { role: 'assistant', content: 'Earlier answer' },
-        ],
-        message: 'Current question',
-      }),
+      { sessionId: 'session-1', triggerEventId: attempt.userEvent.id },
       undefined,
     );
   });
 
-  it('puts the artwork referenced by the current input first in model context', async () => {
+  it('does not send artwork context that the backend can resolve', async () => {
     const transport = createTransport();
     const service = createMobileSessionService({ transport });
     const attempt = service.createArtworkAttempt(
@@ -163,33 +139,11 @@ describe('mobile session service', () => {
       'upload',
       '',
       'session-1',
-      'existing_session',
     );
-    const item = (id: string) => ({
-      id,
-      url: `https://images.example/${id}.jpg`,
-      keywords: [],
-      artistName: 'Unknown Artist',
-      artworkName: 'Untitled',
-      description: null,
-      date: null,
-      medium: null,
-    });
-
-    await service.streamResponse(
-      attempt,
-      [attempt.userEvent],
-      [item('older-artwork'), item('new-artwork')],
-    );
+    await service.streamResponse(attempt);
 
     expect(transport.streamTextResponse).toHaveBeenCalledWith(
-      expect.objectContaining({
-        items: [
-          expect.objectContaining({ id: 'new-artwork' }),
-          expect.objectContaining({ id: 'older-artwork' }),
-        ],
-        message: 'I just added a new upload to our session. In 3–4 sentences, react to what I added and how it relates to what we have been looking at.',
-      }),
+      { sessionId: 'session-1', triggerEventId: attempt.userEvent.id },
       undefined,
     );
   });
@@ -253,7 +207,7 @@ describe('mobile session service', () => {
     });
   });
 
-  it('reconstructs an artwork-only turn with the default prompt', () => {
+  it('reconstructs an artwork-only turn without fabricated text', () => {
     const userEvent: SessionEventRecord = {
       id: 'user-event',
       role: 'user',
@@ -276,8 +230,6 @@ describe('mobile session service', () => {
       [userEvent, responseEvent],
       SESSION,
       'user-1',
-    )).toMatchObject({
-      text: 'I just added a new upload to our session. In 3–4 sentences, react to what I added and how it relates to what we have been looking at.',
-    });
+    )).toMatchObject({ text: '' });
   });
 });

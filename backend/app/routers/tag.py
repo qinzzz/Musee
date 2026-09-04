@@ -5,6 +5,7 @@ import logging
 
 from app.database.connection import get_db
 from app.database.models import Tag, SavedArtwork, ArtworkTag
+from app.models.ai_job import AIJobType
 from app.config.settings import settings
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
@@ -47,7 +48,7 @@ Example: For "impressionism" -> "A 19th-century art movement emphasizing light, 
     try:
         usage_id = start_ai_usage(
             user_id=None,
-            job_type="tag_explanation",
+            job_type=AIJobType.TAG_EXPLANATION,
             model=get_ai_model_name(ai_service, provider.value),
             subject_type="tag",
             subject_id=tag,

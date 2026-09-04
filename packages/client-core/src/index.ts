@@ -41,8 +41,6 @@ export {
 export {
   buildInitialSessionTitle,
   parseSessionChatStreamEvent,
-  serializeTextSessionHistory,
-  type SessionChatHistoryEntry,
   type SessionChatPhase,
   type SessionChatStreamEvent,
   type SessionEventRecord,

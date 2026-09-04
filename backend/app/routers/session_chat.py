@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.database.models import Session as SessionModel, User
+from app.models.ai_job import AIJobType
 from app.models.artwork import AIProvider
 from app.services.ai_client_interface import AIStreamChunk, AITextResult
 from app.services.ai_service import AIServiceFactory
@@ -27,9 +28,11 @@ from app.services.authorization_service import (
     require_session_principal,
 )
 from app.services.session_chat_service import (
+    ResolvedSessionChatRequest,
     SessionChatRequest,
     build_session_chat_items_payload,
     load_bootstrap_image_bytes,
+    resolve_session_chat_request,
 )
 from app.services.retrieval import execute_collection_retrieval, plan_collection_context, retrieve_collection_context
 from app.services.retrieval.contracts import RetrievalOutcome, RetrievalPlan, RetrievalTrace
@@ -43,41 +46,36 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/session/chat")
-@router.post("/visit/chat")
 async def session_chat(
     request: SessionChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
     db: Session = Depends(get_db),
     principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
-    claimed_user_id = request.user_id or (principal.user_id if principal else None)
-    resolved_principal = require_principal_for_user(principal, claimed_user_id)
+    resolved_principal = require_principal_for_user(
+        principal,
+        principal.user_id if principal else None,
+    )
     require_capability(resolved_principal, SEND_MESSAGE)
+    session_record = db.query(SessionModel).filter(SessionModel.id == request.session_id).first()
+    if session_record is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    require_session_principal(resolved_principal, session_record)
+    resolved_request = resolve_session_chat_request(db, session_record, request.trigger_event_id)
     if resolved_principal.state == "guest":
-        if not request.session_id:
-            require_guest_quota_reservation(db, resolved_principal, GUEST_MESSAGE_QUOTA, None)
-        session_record = db.query(SessionModel).filter(SessionModel.id == request.session_id).first()
-        if session_record is None:
-            raise HTTPException(status_code=404, detail="Session not found")
-        require_session_principal(resolved_principal, session_record)
         require_guest_quota_reservation(
             db,
             resolved_principal,
             GUEST_MESSAGE_QUOTA,
             request.trigger_event_id,
         )
-    elif request.session_id:
-        session_record = db.query(SessionModel).filter(SessionModel.id == request.session_id).first()
-        if session_record is None:
-            raise HTTPException(status_code=404, detail="Session not found")
-        require_session_principal(resolved_principal, session_record)
     current_user = resolved_principal.user if resolved_principal.state == "authenticated" else None
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
     retrieval_ai_service = AIServiceFactory.get_fast_service(ai_provider) if current_user else None
     image_bytes_list = await load_bootstrap_image_bytes(
-        request.items,
-        request.conversation_history,
+        resolved_request.items,
+        resolved_request.conversation_history,
     )
 
     try:
@@ -85,20 +83,20 @@ async def session_chat(
             ai_service=retrieval_ai_service,
             db=db,
             current_user=current_user,
-            request=request,
+            request=resolved_request,
         )
         usage_id = start_ai_usage(
             user_id=resolved_principal.user_id,
-            job_type="session_chat",
+            job_type=AIJobType.SESSION_CHAT,
             model=get_ai_model_name(ai_service, ai_provider.value),
-            subject_type="session_event" if request.trigger_event_id else "session",
-            subject_id=request.trigger_event_id or request.session_id,
+            subject_type="session_event",
+            subject_id=request.trigger_event_id,
         )
         session_chat_result = getattr(ai_service, "session_chat_result", None)
         chat_kwargs = {
-            "items": build_session_chat_items_payload(request.items),
-            "history": request.conversation_history,
-            "new_message": request.new_message,
+            "items": build_session_chat_items_payload(resolved_request.items),
+            "history": resolved_request.conversation_history,
+            "new_message": resolved_request.new_message,
             "image_bytes_list": image_bytes_list,
         }
         if retrieval_outcome.context:
@@ -120,34 +118,29 @@ async def session_chat(
 
 
 @router.post("/session/chat-stream")
-@router.post("/visit/chat-stream")
 async def stream_session_chat(
     request: SessionChatRequest = Body(...),
     model: Optional[AIProvider] = Query(None),
     db: Session = Depends(get_db),
     principal: Optional[RequestPrincipal] = Depends(get_request_principal),
 ):
-    claimed_user_id = request.user_id or (principal.user_id if principal else None)
-    resolved_principal = require_principal_for_user(principal, claimed_user_id)
+    resolved_principal = require_principal_for_user(
+        principal,
+        principal.user_id if principal else None,
+    )
     require_capability(resolved_principal, SEND_MESSAGE)
+    session_record = db.query(SessionModel).filter(SessionModel.id == request.session_id).first()
+    if session_record is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    require_session_principal(resolved_principal, session_record)
+    resolved_request = resolve_session_chat_request(db, session_record, request.trigger_event_id)
     if resolved_principal.state == "guest":
-        if not request.session_id:
-            require_guest_quota_reservation(db, resolved_principal, GUEST_MESSAGE_QUOTA, None)
-        session_record = db.query(SessionModel).filter(SessionModel.id == request.session_id).first()
-        if session_record is None:
-            raise HTTPException(status_code=404, detail="Session not found")
-        require_session_principal(resolved_principal, session_record)
         require_guest_quota_reservation(
             db,
             resolved_principal,
             GUEST_MESSAGE_QUOTA,
             request.trigger_event_id,
         )
-    elif request.session_id:
-        session_record = db.query(SessionModel).filter(SessionModel.id == request.session_id).first()
-        if session_record is None:
-            raise HTTPException(status_code=404, detail="Session not found")
-        require_session_principal(resolved_principal, session_record)
     current_user = resolved_principal.user if resolved_principal.state == "authenticated" else None
     ai_provider = determine_ai_provider(model)
     ai_service = AIServiceFactory.get_service(ai_provider)
@@ -159,22 +152,26 @@ async def stream_session_chat(
         output_tokens = None
         usage_id = start_ai_usage(
             user_id=resolved_principal.user_id,
-            job_type="session_chat",
+            job_type=AIJobType.SESSION_CHAT,
             model=get_ai_model_name(ai_service, ai_provider.value),
-            subject_type="session_event" if request.trigger_event_id else "session",
-            subject_id=request.trigger_event_id or request.session_id,
+            subject_type="session_event",
+            subject_id=request.trigger_event_id,
         )
         try:
             yield _phase_event("planning")
             if current_user is None:
                 retrieval_outcome = _skipped_retrieval_outcome()
+            elif not resolved_request.has_user_text:
+                retrieval_outcome = _planner_skipped_retrieval_outcome(
+                    RetrievalPlan(needs_retrieval=False, filters={})
+                )
             else:
                 try:
                     retrieval_plan = await plan_collection_context(
                         ai_service=retrieval_ai_service,
                         user_id=current_user.user_id,
-                        message=request.new_message,
-                        history=request.conversation_history,
+                        message=resolved_request.new_message,
+                        history=resolved_request.conversation_history,
                     )
                 except Exception as exc:
                     logger.warning("Personal collection retrieval planning failed: %s", exc)
@@ -198,14 +195,14 @@ async def stream_session_chat(
                     retrieval_outcome = _failed_retrieval_outcome("planning")
 
             image_bytes_list = await load_bootstrap_image_bytes(
-                request.items,
-                request.conversation_history,
+                resolved_request.items,
+                resolved_request.conversation_history,
             )
             stream_chat_result = getattr(ai_service, "stream_session_chat_result", None)
             stream_kwargs = {
-                "items": build_session_chat_items_payload(request.items),
-                "history": request.conversation_history,
-                "new_message": request.new_message,
+                "items": build_session_chat_items_payload(resolved_request.items),
+                "history": resolved_request.conversation_history,
+                "new_message": resolved_request.new_message,
                 "image_bytes_list": image_bytes_list,
             }
             if retrieval_outcome.context:
@@ -244,11 +241,6 @@ async def stream_session_chat(
     )
 
 
-# Backward-compat aliases for older imports/tests.
-visit_chat = session_chat
-visit_chat_stream = stream_session_chat
-
-
 def _phase_event(phase: str) -> str:
     return f"event: phase\ndata: {json.dumps({'phase': phase})}\n\n"
 
@@ -258,10 +250,14 @@ async def _retrieve_for_request(
     ai_service,
     db: Session,
     current_user: Optional[User],
-    request: SessionChatRequest,
+    request: ResolvedSessionChatRequest,
 ) -> RetrievalOutcome:
     if current_user is None:
         return _skipped_retrieval_outcome()
+    if not request.has_user_text:
+        return _planner_skipped_retrieval_outcome(
+            RetrievalPlan(needs_retrieval=False, filters={})
+        )
 
     try:
         return await retrieve_collection_context(

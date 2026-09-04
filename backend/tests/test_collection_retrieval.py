@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.database.models import Collection, SavedArtwork, Session as SessionModel, Tag, User
+from app.database.models import Collection, SavedArtwork, Session as SessionModel, SessionEvent, Tag, User
 from app.models.artwork import AIProvider
 from app.routers import session_chat as session_chat_router
 from app.services.ai_client_interface import AIStreamChunk, AITextResult
@@ -239,6 +239,14 @@ def test_authenticated_session_stream_emits_collection_phase_and_provenance(clie
     user = User(user_id="user-1", device_id="device-1")
     db.add(user)
     db.add(SessionModel(id="session-1", user_id="user-1", title="Turner"))
+    db.add(SessionEvent(
+        id="trigger-1",
+        session_id="session-1",
+        role="user",
+        type="user_input",
+        content="What Turner works did I love?",
+        sequence_number=1,
+    ))
     db.add(_artwork("user-1", "art-1", "Snow Storm", "J. M. W. Turner", "love", "Turbulent light"))
     db.commit()
 
@@ -262,11 +270,8 @@ def test_authenticated_session_stream_emits_collection_phase_and_provenance(clie
         "/api/session/chat-stream",
         headers={"Authorization": f"Bearer {create_access_token({'sub': 'user-1'})}"},
         json={
-            "items": [],
-            "conversation_history": [],
-            "new_message": "What Turner works did I love?",
-            "user_id": "user-1",
             "session_id": "session-1",
+            "trigger_event_id": "trigger-1",
         },
     )
 
@@ -278,21 +283,28 @@ def test_authenticated_session_stream_emits_collection_phase_and_provenance(clie
     assert "You saved Snow Storm." in response.text
 
 
-def test_collection_retrieval_rejects_client_identity_mismatch(client, db):
+def test_collection_retrieval_rejects_cross_account_session(client, db):
     db.add_all([
         User(user_id="user-1", device_id="device-1"),
         User(user_id="user-2", device_id="device-2"),
     ])
+    db.add(SessionModel(id="session-2", user_id="user-2", title="Private"))
+    db.add(SessionEvent(
+        id="trigger-2",
+        session_id="session-2",
+        role="user",
+        type="user_input",
+        content="Search my collection",
+        sequence_number=1,
+    ))
     db.commit()
 
     response = client.post(
         "/api/session/chat-stream",
         headers={"Authorization": f"Bearer {create_access_token({'sub': 'user-1'})}"},
         json={
-            "items": [],
-            "conversation_history": [],
-            "new_message": "Search my collection",
-            "user_id": "user-2",
+            "session_id": "session-2",
+            "trigger_event_id": "trigger-2",
         },
     )
 

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import settings
 from app.database.models import ArtworkAnalysis, Journal, SavedArtwork, Session as SessionModel, SessionEvent, User
+from app.models.ai_job import AIJobType
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
@@ -572,7 +573,7 @@ async def generate_daily_journal(
     )
     usage_id = start_ai_usage(
         user_id=user_id,
-        job_type="journal_generation",
+        job_type=AIJobType.JOURNAL_GENERATION,
         model=model_version,
         subject_type="journal_date",
         subject_id=f"{user_id}:{local_date.isoformat()}",

@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from app.database.connection import SessionLocal
 from app.database.models import SkillEvent, User
+from app.models.ai_job import AIJobType
 from app.models.artwork import AIProvider
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
@@ -108,7 +109,7 @@ async def suggest_topics(
         ai_service = AIServiceFactory.get_service(ai_provider)
         usage_id = start_ai_usage(
             user_id=None,
-            job_type="suggest_topics",
+            job_type=AIJobType.SUGGEST_TOPICS,
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="artwork_metadata",
             subject_id=f"{artist_name}:{artwork_name}",
@@ -156,7 +157,7 @@ async def generate_summary(
         ai_service = AIServiceFactory.get_service(ai_provider)
         usage_id = start_ai_usage(
             user_id=None,
-            job_type="artwork_summary",
+            job_type=AIJobType.ARTWORK_SUMMARY,
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="artwork_metadata",
             subject_id=f"{artist_name}:{artwork_name}",
@@ -223,7 +224,7 @@ async def select_explore_skills(
         ai_service = AIServiceFactory.get_fast_service(ai_provider)
         usage_id = start_ai_usage(
             user_id=None,
-            job_type="explore_skill_selection",
+            job_type=AIJobType.EXPLORE_SKILL_SELECTION,
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="artwork_metadata",
             subject_id=f"{artist_name or ''}:{artwork_name or ''}",
@@ -255,7 +256,7 @@ async def create_skill_observation(
         ai_service = AIServiceFactory.get_fast_service(ai_provider)
         usage_id = start_ai_usage(
             user_id=None,
-            job_type="explore_skill_observation",
+            job_type=AIJobType.EXPLORE_SKILL_OBSERVATION,
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="skill",
             subject_id=skill_name,
@@ -287,7 +288,7 @@ async def create_skill_deepdive(
         ai_service = AIServiceFactory.get_fast_service(ai_provider)
         usage_id = start_ai_usage(
             user_id=None,
-            job_type="explore_skill_deepdive",
+            job_type=AIJobType.EXPLORE_SKILL_DEEPDIVE,
             model=get_ai_model_name(ai_service, ai_provider.value),
             subject_type="skill",
             subject_id=skill_name,
@@ -310,7 +311,7 @@ async def define_aesthetic_term(*, tag: str, ai_provider: AIProvider) -> dict:
     ai_service = AIServiceFactory.get_service(ai_provider)
     usage_id = start_ai_usage(
         user_id=None,
-        job_type="aesthetic_term_definition",
+        job_type=AIJobType.AESTHETIC_TERM_DEFINITION,
         model=get_ai_model_name(ai_service, ai_provider.value),
         subject_type="tag",
         subject_id=tag,
@@ -335,7 +336,7 @@ async def generate_speech_audio(*, text: str, ai_provider: AIProvider) -> bytes:
     client = ai_service.ai_client
     usage_id = start_ai_usage(
         user_id=None,
-        job_type="speech_generation",
+        job_type=AIJobType.SPEECH_GENERATION,
         model=get_ai_model_name(ai_service, ai_provider.value),
         subject_type=None,
         subject_id=None,

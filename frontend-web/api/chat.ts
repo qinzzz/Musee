@@ -1,4 +1,3 @@
-import type { Message } from '../types';
 import { API_BASE_URL, API_TIMEOUT, fetchWithTimeout, getLanguage } from './core';
 
 export const SESSION_STREAM_IDLE_TIMEOUT_MS = 60_000;
@@ -17,10 +16,6 @@ export type SessionRetrievalTrace = {
   skip_reason?: 'planner_not_needed' | 'unauthenticated' | 'feature_disabled' | null;
   selected_source_ids?: string[];
   failure_stage?: string | null;
-};
-
-export type SessionChatHistoryMessage = Message & {
-  retrieval_source_ids?: string[];
 };
 
 export class SessionAuthenticationError extends Error {
@@ -102,50 +97,25 @@ export interface CommunityData {
 }
 
 export async function streamSessionChat(
-  items: { id: string; url: string; keywords: string[]; artistName?: string; artworkName?: string; description?: string; date?: string; medium?: string }[],
-  conversationHistory: SessionChatHistoryMessage[],
-  newMessage: string,
+  sessionId: string,
+  triggerEventId: string,
   onChunk: (text: string) => void,
   onComplete: (response: string, retrieval?: SessionRetrievalTrace) => void,
   onError: (error: Error) => void,
   context?: {
-    userId?: string;
-    sessionId?: string;
-    triggerEventId?: string;
     onPhase?: (phase: SessionChatPhase) => void;
   },
 ): Promise<void> {
-  const history = conversationHistory.map((message) => ({
-    role: message.role === 'model' ? 'assistant' : message.role,
-    content: message.text,
-    ...(message.retrieval_source_ids?.length
-      ? { retrieval_source_ids: message.retrieval_source_ids }
-      : {}),
-  }));
-
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let terminalEventReceived = false;
 
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/visit/chat-stream`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/session/chat-stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        items: items.map((item) => ({
-          id: item.id,
-          url: item.url,
-          keywords: item.keywords,
-          artist_name: item.artistName,
-          artwork_name: item.artworkName,
-          description: item.description,
-          date: item.date,
-          medium: item.medium,
-        })),
-        conversation_history: history,
-        new_message: newMessage,
-        user_id: context?.userId,
-        session_id: context?.sessionId,
-        trigger_event_id: context?.triggerEventId,
+        session_id: sessionId,
+        trigger_event_id: triggerEventId,
       }),
       timeout: API_TIMEOUT,
     });

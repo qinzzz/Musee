@@ -10,24 +10,15 @@ import { useSessionArtworkInputPipeline } from './useSessionArtworkInputPipeline
 const {
   mockAttachArtworksToSession,
   mockEnsureSession,
-  mockBuildPreparedSessionFallbackPrompt,
-  mockBuildStagedSessionAdditionPrompt,
 } = vi.hoisted(() => ({
   mockAttachArtworksToSession: vi.fn(),
   mockEnsureSession: vi.fn(),
-  mockBuildPreparedSessionFallbackPrompt: vi.fn(),
-  mockBuildStagedSessionAdditionPrompt: vi.fn(),
 }));
 
 vi.mock('../api/sessions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/sessions')>()),
   attachArtworksToSession: mockAttachArtworksToSession,
   ensureSession: mockEnsureSession,
-}));
-
-vi.mock('../lib/preparedSession', () => ({
-  buildPreparedSessionFallbackPrompt: mockBuildPreparedSessionFallbackPrompt,
-  buildStagedSessionAdditionPrompt: mockBuildStagedSessionAdditionPrompt,
 }));
 
 function createDeferred<T>() {
@@ -176,8 +167,6 @@ describe('useSessionArtworkInputPipeline', () => {
       created_at: 100,
       updated_at: 100,
     }));
-    mockBuildPreparedSessionFallbackPrompt.mockReturnValue('Discuss these artworks');
-    mockBuildStagedSessionAdditionPrompt.mockReturnValue('Discuss the additions');
   });
 
   it('binds upload placeholders to one stable optimistic event before they can render', async () => {
@@ -374,7 +363,7 @@ describe('useSessionArtworkInputPipeline', () => {
     );
     expect(spies.sendSessionInquiryToSession).toHaveBeenCalledWith(
       sessionId,
-      'Discuss these artworks',
+      '',
       expect.arrayContaining([
         expect.objectContaining({ artworkId: 'library-artwork' }),
         expect.objectContaining({ artworkId: 'uploaded-artwork' }),

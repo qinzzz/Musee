@@ -124,6 +124,11 @@ For a new text message, the ordering is intentional:
 3. Stream the model response over SSE and update the in-memory UI.
 4. Replace the pending event with a completed or failed persisted event.
 
+The response stream receives only the persisted `session_id` and
+`trigger_event_id`. The backend reconstructs conversation history, linked
+artworks, current-artwork priority, and any model-facing fallback instruction.
+Do not construct hidden AI prompts in the native client.
+
 For camera and Photos input, the client uploads the artwork first, links it to
 the open Session (or atomically starts a new Session around it), persists the
 artwork-bearing user event, completes analysis, and then follows the same

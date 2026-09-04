@@ -116,12 +116,8 @@ describe('mobile session transport', () => {
     const onPhase = vi.fn();
 
     await expect(transport.streamTextResponse({
-      history: [],
-      items: [],
-      message: 'Hello',
       sessionId: 'session-1',
       triggerEventId: 'event-1',
-      userId: 'user-1',
     }, { onChunk, onPhase })).resolves.toEqual({ response: 'Hello there' });
     expect(onPhase).toHaveBeenCalledWith('planning');
     expect(onChunk.mock.calls.flat()).toEqual(['Hello ', 'there']);
@@ -143,34 +139,24 @@ describe('mobile session transport', () => {
     );
   });
 
-  it('sends Session artwork context using the backend field names', async () => {
+  it('sends only canonical persisted turn identifiers', async () => {
     const client = createClient([streamResponse([
       'event: complete\ndata: {"type":"result","response":"Seen"}\n\n',
     ])]);
     const transport = createMobileSessionTransport({ apiBaseUrl: '/api', apiClient: client });
 
     await transport.streamTextResponse({
-      history: [],
-      items: [{
-        id: 'artwork-1',
-        url: 'https://images.example/artwork.jpg',
-        keywords: ['abstract'],
-        artistName: 'Hilma af Klint',
-        artworkName: 'The Swan',
-        description: 'A symbolic composition.',
-        date: '1915',
-        medium: 'Oil on canvas',
-      }],
-      message: 'Tell me about this artwork.',
       sessionId: 'session-1',
       triggerEventId: 'event-1',
-      userId: 'user-1',
     });
 
     expect(client.fetchWithTimeout).toHaveBeenCalledWith(
-      '/api/visit/chat-stream',
+      '/api/session/chat-stream',
       expect.objectContaining({
-        body: expect.stringContaining('"artist_name":"Hilma af Klint"'),
+        body: JSON.stringify({
+          session_id: 'session-1',
+          trigger_event_id: 'event-1',
+        }),
       }),
     );
   });
@@ -182,12 +168,8 @@ describe('mobile session transport', () => {
     const transport = createMobileSessionTransport({ apiBaseUrl: '/api', apiClient: client });
 
     await expect(transport.streamTextResponse({
-      history: [],
-      items: [],
-      message: 'Hello',
       sessionId: 'session-1',
       triggerEventId: 'event-1',
-      userId: 'user-1',
     })).rejects.toEqual(new MobileSessionStreamError('Musee returned an empty response.'));
   });
 });

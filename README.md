@@ -84,7 +84,7 @@ An immersive, horizontal browsing experience where your curated gallery comes to
 Switch between different curator identities—from academic and professional to sarcastic or poetic—to change the tone of your art exploration.
 
 ### Prompt Management
-All LLM prompts are externalized for easy customization and can be found under `backend/app/prompts/`. This allows for rapid iteration on curator behavior without modifying core code.
+Model-facing prompt policy belongs to the backend. Editable templates live under `backend/app/prompts/`, and registered prompt flows use the existing AI `job_type` as their canonical routing key. Clients persist structured domain events rather than fabricating hidden user messages.
 
 ## Technical Architecture
 

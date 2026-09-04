@@ -7,6 +7,7 @@ from typing import Optional
 
 from app.database.connection import SessionLocal
 from app.database.models import AIUsage
+from app.models.ai_job import AIJobType
 from app.observability.telemetry import record_ai_request_duration
 from app.services.quota_service import record_token_usage
 
@@ -31,12 +32,13 @@ def get_ai_model_name(ai_service, fallback: Optional[str] = None) -> Optional[st
 def start_ai_usage(
     *,
     user_id: Optional[str],
-    job_type: str,
+    job_type: AIJobType,
     model: Optional[str],
     subject_type: Optional[str] = None,
     subject_id: Optional[str] = None,
 ) -> Optional[str]:
     """Create an ai_usage row in a separate, best-effort DB session."""
+    canonical_job_type = job_type.value
     usage_id = f"aiu-{uuid.uuid4()}"
     db = None
     try:
@@ -45,7 +47,7 @@ def start_ai_usage(
             AIUsage(
                 id=usage_id,
                 user_id=user_id,
-                job_type=job_type,
+                job_type=canonical_job_type,
                 status=AI_USAGE_RUNNING,
                 model=model,
                 subject_type=subject_type,
@@ -58,7 +60,7 @@ def start_ai_usage(
     except Exception as exc:
         if db:
             db.rollback()
-        logger.warning("Failed to start AI usage log for %s: %s", job_type, exc)
+        logger.warning("Failed to start AI usage log for %s: %s", canonical_job_type, exc)
         return None
     finally:
         if db:

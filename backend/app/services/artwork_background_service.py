@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import SessionLocal
 from app.database.models import SavedArtwork, User as UserModel
+from app.models.ai_job import AIJobType
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import determine_ai_provider
@@ -83,7 +84,7 @@ async def generate_fun_facts(
         ai_service = AIServiceFactory.get_service(determine_ai_provider(None))
         usage_id = start_ai_usage(
             user_id=user_id,
-            job_type="artwork_fun_facts",
+            job_type=AIJobType.ARTWORK_FUN_FACTS,
             model=get_ai_model_name(ai_service),
             subject_type="artwork",
             subject_id=artwork_id,

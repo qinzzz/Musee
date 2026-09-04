@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Any
 
+from app.models.ai_job import AIJobType
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.retrieval.contracts import RerankResponse, RankedArtwork, SavedArtworkCandidate, parse_structured_json
@@ -68,7 +69,7 @@ Return exactly one JSON object shaped like:
 {{"ranked_results": [{{"source_id": "supplied-id", "relevance": 0.9, "reason": "Grounded reason"}}]}}"""
     usage_id = start_ai_usage(
         user_id=user_id,
-        job_type="saved_artwork_reranker",
+        job_type=AIJobType.SAVED_ARTWORK_RERANKER,
         model=get_ai_model_name(ai_service, "retrieval"),
         subject_type="user",
         subject_id=user_id,

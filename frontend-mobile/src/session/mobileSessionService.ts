@@ -1,6 +1,5 @@
 import {
   buildInitialSessionTitle,
-  serializeTextSessionHistory,
   type ArtworkRecord,
   type SessionChatPhase,
   type SessionEventRecord,
@@ -10,7 +9,6 @@ import {
 import {
   MobileSessionHttpError,
   type MobileSessionTransport,
-  type SessionChatArtworkInput,
   type StreamTextSessionResult,
 } from './mobileSessionTransport';
 import { toPendingSessionResponse } from './sessionEventState';
@@ -25,8 +23,6 @@ export type MobileTextSessionAttempt = {
 };
 
 export type SessionArtworkInputSource = 'capture' | 'library' | 'upload';
-export type SessionArtworkTurnContext = 'existing_session' | 'new_session';
-
 export type MobileSessionService = {
   createSessionId: () => string;
   createTextAttempt: (
@@ -40,7 +36,6 @@ export type MobileSessionService = {
     source: SessionArtworkInputSource,
     text: string,
     sessionId: string,
-    turnContext: SessionArtworkTurnContext,
   ) => MobileTextSessionAttempt;
   fetchArtworks: (sessionId: string, userId: string) => Promise<ArtworkRecord[]>;
   fetchEvents: (sessionId: string) => Promise<SessionEventRecord[]>;
@@ -67,8 +62,6 @@ export type MobileSessionService = {
   ) => Promise<SessionRecord>;
   streamResponse: (
     attempt: MobileTextSessionAttempt,
-    events: SessionEventRecord[],
-    items: SessionChatArtworkInput[],
     callbacks?: {
       onChunk?: (chunk: string) => void;
       onPhase?: (phase: SessionChatPhase) => void;
@@ -83,9 +76,6 @@ export type MobileSessionServiceOptions = {
 };
 
 const DEFAULT_SESSION_TITLE = 'New Session';
-const NEW_SESSION_ARTWORK_PROMPT = 'I just started a session with a new upload. Help me understand what stands out in this work and where I should look first.';
-const EXISTING_SESSION_ARTWORK_PROMPT = 'I just added a new upload to our session. In 3–4 sentences, react to what I added and how it relates to what we have been looking at.';
-
 function defaultCreateId(prefix: 'event' | 'response' | 'session'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -102,18 +92,6 @@ function toEventWrite(event: SessionEventRecord) {
   };
 }
 
-function prioritizeReferencedArtworks(
-  items: SessionChatArtworkInput[],
-  artworkIds: string[] = [],
-): SessionChatArtworkInput[] {
-  const referencedIds = new Set(artworkIds);
-  if (referencedIds.size === 0) return items;
-  return [
-    ...items.filter((item) => referencedIds.has(item.id)),
-    ...items.filter((item) => !referencedIds.has(item.id)),
-  ];
-}
-
 export function restoreTextSessionAttempt(
   responseEvent: SessionEventRecord,
   events: SessionEventRecord[],
@@ -126,8 +104,8 @@ export function restoreTextSessionAttempt(
     : null;
   const content = userEvent?.content?.trim();
   const hasArtwork = Boolean(userEvent?.artwork_ids?.length);
-  const text = content || (hasArtwork ? EXISTING_SESSION_ARTWORK_PROMPT : '');
-  if (!userEvent || userEvent.event_type !== 'user_input' || !text) return null;
+  const text = content || '';
+  if (!userEvent || userEvent.event_type !== 'user_input' || (!text && !hasArtwork)) return null;
   return {
     sessionId: session.id,
     userId,
@@ -195,21 +173,15 @@ export function createMobileSessionService({
       source,
       rawText,
       sessionId,
-      turnContext,
     ) {
       const content = rawText.trim();
-      const prompt = content || (
-        turnContext === 'new_session'
-          ? NEW_SESSION_ARTWORK_PROMPT
-          : EXISTING_SESSION_ARTWORK_PROMPT
-      );
       const userEventId = createId('event');
       const responseEventId = createId('response');
       const createdAt = now();
       return {
         sessionId,
         userId,
-        text: prompt,
+        text: content,
         title: buildInitialSessionTitle(content, DEFAULT_SESSION_TITLE),
         userEvent: {
           id: userEventId,
@@ -269,14 +241,10 @@ export function createMobileSessionService({
       }
     },
 
-    streamResponse(attempt, events, items, callbacks) {
+    streamResponse(attempt, callbacks) {
       return transport.streamTextResponse({
-        history: serializeTextSessionHistory(events, attempt.userEvent.id),
-        items: prioritizeReferencedArtworks(items, attempt.userEvent.artwork_ids),
-        message: attempt.text,
         sessionId: attempt.sessionId,
         triggerEventId: attempt.userEvent.id,
-        userId: attempt.userId,
       }, callbacks);
     },
 

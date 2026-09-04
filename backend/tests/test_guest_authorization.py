@@ -169,24 +169,20 @@ def test_fourth_message_in_guest_session_is_rejected(client, db):
     assert db.query(SessionEvent).filter(SessionEvent.id == "guest-event-4").first() is None
 
 
-def test_guest_chat_must_reference_the_reserved_message(client, db):
+def test_guest_chat_must_reference_a_persisted_message(client, db):
     user_id = _bootstrap_guest(client, db)
     assert _start_message(client, user_id, "guest-session-1", "guest-event-1").status_code == 200
 
     response = client.post(
         "/api/session/chat-stream",
         json={
-            "items": [],
-            "conversation_history": [],
-            "new_message": "A forged second turn",
-            "user_id": user_id,
             "session_id": "guest-session-1",
             "trigger_event_id": "guest-event-2",
         },
     )
 
-    assert response.status_code == 429
-    assert response.json()["detail"]["error_code"] == "guest_quota_exhausted"
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Trigger event not found"
 
 
 def test_guest_cookie_cannot_access_another_user_workspace(client, db):

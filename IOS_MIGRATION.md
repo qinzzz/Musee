@@ -75,8 +75,11 @@ slices:
   retry behavior, cold-start restoration, and camera or Photos artwork input.
 
 The cloud thumbnail contract is complete. Session timelines render artwork
-cards durably, and new uploads can participate in mixed artwork/text turns. The
-remaining active Session input gap is adding an existing library artwork.
+cards durably, and new uploads can participate in mixed artwork/text turns. A
+shared prompt-management cleanup now comes before the remaining Session input
+gap: web and iOS must persist the same user event and let the backend resolve
+all model-facing Session context. Adding an existing library artwork resumes
+after that ownership boundary is stable.
 
 ## Capability map
 
@@ -207,7 +210,24 @@ Status: development-device builds work; production pipeline not complete.
 
 ## Active milestone
 
-### Now: artwork-aware native Sessions
+### Now: shared Session prompt ownership
+
+Make Session AI behavior independent of the client that initiated it:
+
+1. use the existing AI `job_type` as the backend prompt-registry key;
+2. persist the canonical Session user event before response generation;
+3. send only `session_id` and `trigger_event_id` from web and iOS;
+4. resolve conversation history, current artworks, and model-facing turn text
+   from backend state;
+5. remove hidden fallback prompts from both clients;
+6. prove text-only, artwork-only, and mixed turns behave identically across
+   clients.
+
+Do not add parallel prompt identifiers, prompt-version fields, or compatibility
+request shapes. Git remains the change history, and `job_type` remains the
+shared routing and usage concept.
+
+### Next: complete artwork-aware native Sessions
 
 Build one complete Session artwork slice:
 
@@ -228,8 +248,8 @@ after the single-artwork persistent path is solid.
 Every product slice should satisfy the gates that apply to it before its
 milestone is considered complete:
 
-- **Contract:** backend and shared-core types have explicit compatibility and
-  legacy fallback behavior.
+- **Contract:** backend and shared-core types have one explicit canonical shape;
+  compatibility paths exist only when an active client requires them.
 - **Persistence:** authoritative user work survives termination and reopening.
 - **Failure:** network, auth, permission, timeout, and partial-save states are
   visible and recoverable.

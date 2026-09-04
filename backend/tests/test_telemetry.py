@@ -121,11 +121,12 @@ def test_ai_request_duration_defaults_missing_model_to_unknown(metric_reader):
 
 def test_ai_usage_lifecycle_emits_duration_metric(metric_reader, db):
     # Arrange
+    from app.models.ai_job import AIJobType
     from app.services.ai_usage_service import start_ai_usage, succeed_ai_usage
 
     usage_id = start_ai_usage(
         user_id="user-metrics",
-        job_type="session_chat",
+        job_type=AIJobType.SESSION_CHAT,
         model="gemini-test",
     )
     assert usage_id
