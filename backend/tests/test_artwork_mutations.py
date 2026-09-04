@@ -1,7 +1,4 @@
-import asyncio
-
 from app.database.models import ArtworkEvent, SavedArtwork, Session as SessionModel, SessionArtwork, User
-from app.services.artwork_background_service import generate_fun_facts
 from tests.conftest import TestingSessionLocal
 
 
@@ -166,40 +163,3 @@ def test_get_or_create_artwork_fun_facts_returns_existing_cache(client, monkeypa
 
     assert response.status_code == 200
     assert response.json() == {"fun_facts": cached}
-
-    compat_response = client.post("/api/artworks/art-insight-cached/insights", params={"language": "zh"})
-    assert compat_response.status_code == 200
-    assert compat_response.json() == {"insights": cached}
-
-
-def test_background_fun_facts_does_not_overwrite_existing_cache(monkeypatch):
-    def fail_get_service(_provider):
-        raise AssertionError("cached fun facts should not call AI")
-
-    monkeypatch.setattr(
-        "app.services.artwork_background_service.AIServiceFactory.get_service",
-        fail_get_service,
-    )
-
-    cached = [{"title": "Cached", "text": "Keep this"}]
-    with TestingSessionLocal() as db:
-        db.add(User(user_id="bg-insight-user", device_id="bg-insight-user"))
-        db.add(
-            SavedArtwork(
-                id="art-bg-insight-cached",
-                user_id="bg-insight-user",
-                photo_uri="r2://art-bg-insight-cached",
-                artist_name="Hilma af Klint",
-                artwork_name="The Swan",
-                params={},
-                is_recognized=1,
-                insights=cached,
-            )
-        )
-        db.commit()
-
-    asyncio.run(generate_fun_facts("art-bg-insight-cached", "Hilma af Klint", "The Swan", "en"))
-
-    with TestingSessionLocal() as db:
-        artwork = db.query(SavedArtwork).filter(SavedArtwork.id == "art-bg-insight-cached").one()
-        assert artwork.insights == cached

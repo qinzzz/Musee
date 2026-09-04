@@ -197,7 +197,6 @@ def test_saved_artwork_stream_updates_pending_record_in_place(client, monkeypatc
     monkeypatch.setattr(artwork_ingest, "start_ai_usage", lambda **_kwargs: "usage-1")
     monkeypatch.setattr(artwork_ingest, "succeed_ai_usage", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(artwork_ingest, "run_artwork_analysis", noop)
-    monkeypatch.setattr(artwork_ingest, "generate_fun_facts", noop)
     monkeypatch.setattr(artwork_ingest, "do_artist_bio", noop)
     monkeypatch.setattr(
         artwork_ingest.AIServiceFactory,

@@ -40,7 +40,6 @@ from app.services.authorization_service import (
 )
 from app.services.artwork_background_service import (
     check_artwork_quota,
-    generate_fun_facts,
     track_artwork_task,
 )
 from app.services.artwork_enrichment_service import (
@@ -408,27 +407,6 @@ async def analyze_artwork_unified(
                     run_artwork_analysis(str(existing_artwork.id), image_bytes=image_bytes, force=True)
                 )
             )
-        if existing_artwork.artist_name and existing_artwork.artist_name != "Unknown Artist":
-            if background_tasks:
-                background_tasks.add_task(
-                    generate_fun_facts,
-                    str(existing_artwork.id),
-                    existing_artwork.artist_name,
-                    existing_artwork.artwork_name or "Untitled",
-                    language,
-                )
-            else:
-                track_artwork_task(
-                    asyncio.create_task(
-                        generate_fun_facts(
-                            str(existing_artwork.id),
-                            existing_artwork.artist_name,
-                            existing_artwork.artwork_name or "Untitled",
-                            language,
-                        )
-                    )
-                )
-
         return {
             "artist_name": parsed_result["artist_name"],
             "artwork_name": parsed_result["artwork_name"],
@@ -494,17 +472,6 @@ async def analyze_artwork_unified(
                 track_artwork_task(
                     asyncio.create_task(run_artwork_analysis(artwork_id_result, image_bytes=image_bytes))
                 )
-        if artwork_id_result and parsed_result["artist_name"] and parsed_result["artist_name"] != "Unknown Artist":
-            track_artwork_task(
-                asyncio.create_task(
-                    generate_fun_facts(
-                        artwork_id_result,
-                        parsed_result["artist_name"],
-                        parsed_result["artwork_name"],
-                        language,
-                    )
-                )
-            )
         if session_id and background_tasks:
             background_tasks.add_task(
                 update_session_narrative_task,
@@ -667,18 +634,6 @@ async def analyze_saved_artwork_stream(
             track_artwork_task(
                 asyncio.create_task(run_artwork_analysis(artwork_id, image_bytes=image_bytes, force=True))
             )
-            if artwork.artist_name and artwork.artist_name != "Unknown Artist":
-                track_artwork_task(
-                    asyncio.create_task(
-                        generate_fun_facts(
-                            artwork_id,
-                            artwork.artist_name,
-                            artwork.artwork_name or "Untitled",
-                            language,
-                        )
-                    )
-                )
-
             completed_at = time.time()
             metrics = {
                 "type": "metrics",

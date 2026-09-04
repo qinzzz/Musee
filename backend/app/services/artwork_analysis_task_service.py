@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.models.ai_job import AIJobType
+from app.prompts.registry import ArtworkAnalysisPromptContext, render_prompt
 from app.config.taste_taxonomy import (
     ANALYZABILITY_OK,
     ANALYZABILITY_STATUSES,
@@ -42,7 +43,6 @@ from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import determine_ai_provider, load_stored_image_bytes
-from app.utils.prompt_loader import load_instruction
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,6 @@ ARTWORK_ANALYSIS_MAX_TOKENS = 3000
 # Dimension scoring should be as repeatable as possible across artworks.
 ARTWORK_ANALYSIS_TEMPERATURE = 0.2
 
-UNKNOWN_METADATA_VALUE = "unknown"
 _UNKNOWN_ARTIST_NAMES = {"unknown artist", "unknown"}
 _UNKNOWN_TITLE_NAMES = {"untitled", "unknown"}
 
@@ -79,17 +78,6 @@ def build_metadata_snapshot(artwork: SavedArtwork) -> Dict[str, Optional[str]]:
         "medium": medium or None,
         "context": "; ".join(context_parts) or None,
     }
-
-
-def build_artwork_analysis_prompt(snapshot: Dict[str, Optional[str]]) -> str:
-    template = load_instruction("artwork_analysis")
-    return template.format(
-        artist=snapshot.get("artist") or UNKNOWN_METADATA_VALUE,
-        title=snapshot.get("title") or UNKNOWN_METADATA_VALUE,
-        year=snapshot.get("year") or UNKNOWN_METADATA_VALUE,
-        medium=snapshot.get("medium") or UNKNOWN_METADATA_VALUE,
-        context=snapshot.get("context") or "none",
-    )
 
 
 def get_current_analysis(db: Session, artwork_id: str) -> Optional[ArtworkAnalysis]:
@@ -207,7 +195,10 @@ async def run_artwork_analysis(
                     failure_detail="Could not load artwork image for artwork analysis",
                 )
 
-            prompt = build_artwork_analysis_prompt(snapshot)
+            prompt = render_prompt(
+                AIJobType.ARTWORK_ANALYSIS,
+                ArtworkAnalysisPromptContext(metadata=snapshot),
+            )
             ai_provider = determine_ai_provider(AIProvider.GEMINI)
             ai_service = AIServiceFactory.get_service(ai_provider)
             row.model = get_ai_model_name(ai_service, ai_provider.value)

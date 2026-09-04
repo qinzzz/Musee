@@ -91,7 +91,9 @@ export function useArtworkAnalysis({
       applyArtworkAnalysisResult(targetItem.id, result, {
         referenceUrls: result.reference_urls || [],
       });
-      hydrateFunFacts(targetItem.id);
+      if (result.artist_name && result.artist_name !== 'Unknown Artist') {
+        hydrateFunFacts(targetItem.id);
+      }
     } catch (error) {
       console.error('Failed to identify artwork again:', error);
       markArtworkAnalysisFailed(targetItem.id, 'Identify again failed.');
