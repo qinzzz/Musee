@@ -59,13 +59,14 @@ type ArtworkSubmissionContext = {
   analyzedArtwork?: MobileArtworkRecord;
   analysisComplete: boolean;
   artworks: MobileArtworkRecord[];
-  asset: NativeImageAsset;
   attempt?: MobileTextSessionAttempt;
   baseEvents: SessionEventRecord[];
-  isNewSession: boolean;
+  input:
+    | { asset: NativeImageAsset; kind: 'local'; source: 'capture' | 'upload' }
+    | { artwork: MobileArtworkRecord; kind: 'library' };
+  membershipPersisted: boolean;
   sessionId: string;
   sessionRecord: SessionRecord | null;
-  source: 'capture' | 'upload';
   text: string;
   uploadedArtwork?: PendingArtworkUpload;
   userInputPersisted: boolean;
@@ -90,6 +91,7 @@ export type MobileSessionMessagingController = {
   retryFailedResponse: (responseEventId: string) => Promise<void>;
   retryLastFailure: () => Promise<void>;
   sendArtwork: (asset: NativeImageAsset, text: string) => Promise<boolean>;
+  sendLibraryArtwork: (artwork: MobileArtworkRecord, text: string) => Promise<boolean>;
   sendText: (text: string) => Promise<boolean>;
 };
 
@@ -309,35 +311,52 @@ export function useMobileSessionMessaging({
     let handedToResponse = false;
 
     try {
-      if (!context.uploadedArtwork) {
+      if (context.input.kind === 'local' && !context.uploadedArtwork) {
         setArtworkPhase('uploading_artwork');
         context.uploadedArtwork = await mobileArtworkUploadService.uploadArtwork(
-          context.asset,
+          context.input.asset,
           userId,
           context.sessionRecord?.id,
         );
+        context.membershipPersisted = Boolean(context.sessionRecord);
         const pendingArtwork = mapPendingMobileArtwork(context.uploadedArtwork);
         context.artworks = upsertArtwork(context.artworks, pendingArtwork);
         setArtworks(context.artworks);
       }
+
+      const artworkId = context.input.kind === 'library'
+        ? context.input.artwork.id
+        : context.uploadedArtwork!.id;
 
       if (!context.sessionRecord) {
         stage = 'session_save';
         setArtworkPhase('starting_session');
         context.sessionRecord = await mobileSessionService.startArtworkSession(
           userId,
-          context.uploadedArtwork.id,
+          artworkId,
           context.sessionId,
           buildInitialSessionTitle(context.text, 'New Session'),
         );
+        context.membershipPersisted = true;
         setSession(context.sessionRecord);
+      }
+
+      if (!context.membershipPersisted) {
+        stage = 'session_save';
+        setArtworkPhase('saving_artwork_input');
+        await mobileSessionService.attachArtwork(
+          userId,
+          context.sessionRecord.id,
+          artworkId,
+        );
+        context.membershipPersisted = true;
       }
 
       if (!context.attempt) {
         context.attempt = mobileSessionService.createArtworkAttempt(
           userId,
-          context.uploadedArtwork.id,
-          context.source,
+          artworkId,
+          context.input.kind === 'library' ? 'library' : context.input.source,
           context.text,
           context.sessionRecord.id,
         );
@@ -351,17 +370,17 @@ export function useMobileSessionMessaging({
         context.userInputPersisted = true;
       }
 
-      if (!context.analysisComplete) {
+      if (context.input.kind === 'local' && !context.analysisComplete) {
         stage = 'analysis';
         setArtworkPhase('analyzing_artwork');
-        await mobileArtworkAnalysisService.analyzeArtwork(context.uploadedArtwork);
+        await mobileArtworkAnalysisService.analyzeArtwork(context.uploadedArtwork!);
         context.analysisComplete = true;
       }
 
       if (!context.analyzedArtwork) {
         stage = 'analysis';
         context.analyzedArtwork = await mobileArtworkLibraryService.fetchArtwork(
-          context.uploadedArtwork.id,
+          artworkId,
         );
         context.artworks = upsertArtwork(context.artworks, context.analyzedArtwork);
         setArtworks(context.artworks);
@@ -398,12 +417,15 @@ export function useMobileSessionMessaging({
     const context: ArtworkSubmissionContext = {
       analysisComplete: false,
       artworks,
-      asset,
       baseEvents: events,
-      isNewSession: !session,
+      input: {
+        asset,
+        kind: 'local',
+        source: asset.source === 'camera' ? 'capture' : 'upload',
+      },
+      membershipPersisted: false,
       sessionId: session?.id || mobileSessionService.createSessionId(),
       sessionRecord: session,
-      source: asset.source === 'camera' ? 'capture' : 'upload',
       text: rawText.trim(),
       userInputPersisted: false,
     };
@@ -411,6 +433,30 @@ export function useMobileSessionMessaging({
     void runArtworkSubmission(context);
     return true;
   }, [artworks, events, runArtworkSubmission, session, userId]);
+
+  const sendLibraryArtwork = useCallback(async (
+    artwork: MobileArtworkRecord,
+    rawText: string,
+  ) => {
+    if (!userId || isSubmitting.current) return false;
+    isSubmitting.current = true;
+    const context: ArtworkSubmissionContext = {
+      analyzedArtwork: artwork,
+      analysisComplete: true,
+      artworks: upsertArtwork(artworks, artwork),
+      baseEvents: events,
+      input: { artwork, kind: 'library' },
+      membershipPersisted: false,
+      sessionId: session?.id || mobileSessionService.createSessionId(),
+      sessionRecord: session,
+      text: rawText.trim(),
+      userInputPersisted: false,
+    };
+    artworkSubmissionContext.current = context;
+    setArtworks(context.artworks);
+    void runArtworkSubmission(context);
+    return true;
+  }, [artworks, events, runArtworkSubmission, session, setArtworks, userId]);
 
   const sendText = useCallback(async (rawText: string) => {
     const text = rawText.trim();
@@ -501,6 +547,7 @@ export function useMobileSessionMessaging({
     retryFailedResponse,
     retryLastFailure,
     sendArtwork,
+    sendLibraryArtwork,
     sendText,
   };
 }

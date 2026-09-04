@@ -6,7 +6,9 @@ import type { MobileArtworkRecord } from '../types';
 
 type ArtworkLibraryCardProps = {
   artwork: MobileArtworkRecord;
+  disabled?: boolean;
   onPress: () => void;
+  statusLabel?: string;
 };
 
 const STATUS_LABEL = {
@@ -16,13 +18,24 @@ const STATUS_LABEL = {
   analyzed: 'Analyzed',
 } as const;
 
-export function ArtworkLibraryCard({ artwork, onPress }: ArtworkLibraryCardProps) {
+export function ArtworkLibraryCard({
+  artwork,
+  disabled = false,
+  onPress,
+  statusLabel,
+}: ArtworkLibraryCardProps) {
   return (
     <Pressable
       accessibilityLabel={`${artwork.artworkName} by ${artwork.artistName}`}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.card,
+        disabled && styles.disabled,
+        pressed && styles.pressed,
+      ]}
     >
       <Image
         cachePolicy="memory-disk"
@@ -39,10 +52,10 @@ export function ArtworkLibraryCard({ artwork, onPress }: ArtworkLibraryCardProps
         <Text
           style={[
             styles.status,
-            artwork.analysisStatus === 'failed' && styles.failedStatus,
+            !statusLabel && artwork.analysisStatus === 'failed' && styles.failedStatus,
           ]}
         >
-          {STATUS_LABEL[artwork.analysisStatus]}
+          {statusLabel || STATUS_LABEL[artwork.analysisStatus]}
         </Text>
       </View>
     </Pressable>
@@ -60,6 +73,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.78,
+  },
+  disabled: {
+    opacity: 0.5,
   },
   image: {
     width: '100%',

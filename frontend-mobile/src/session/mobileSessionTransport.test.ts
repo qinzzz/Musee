@@ -32,6 +32,24 @@ function streamResponse(parts: string[]): Response {
 }
 
 describe('mobile session transport', () => {
+  it('attaches an existing library artwork to a session', async () => {
+    const client = createClient([Response.json({ inserted: 1, artworks: [] })]);
+    const transport = createMobileSessionTransport({ apiBaseUrl: '/api', apiClient: client });
+
+    await expect(transport.attachArtwork({
+      artworkId: 'artwork-1',
+      sessionId: 'session 1',
+      userId: 'user 1',
+    })).resolves.toBeUndefined();
+    expect(client.fetchWithTimeout).toHaveBeenCalledWith(
+      '/api/sessions/session%201/artworks?user_id=user%201',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ artwork_ids: ['artwork-1'] }),
+      }),
+    );
+  });
+
   it('fetches the artworks linked to a session', async () => {
     const client = createClient([Response.json({
       items: [{
@@ -77,7 +95,7 @@ describe('mobile session transport', () => {
     );
   });
 
-  it('starts a session around an uploaded artwork', async () => {
+  it('starts a session around an artwork', async () => {
     const client = createClient([Response.json({
       inserted: 1,
       session: { id: 'session-1', user_id: 'user-1', title: 'New Session' },

@@ -19,6 +19,7 @@ const SESSION: SessionRecord = {
 
 function createTransport(): MobileSessionTransport {
   return {
+    attachArtwork: vi.fn().mockResolvedValue(undefined),
     appendEvents: vi.fn().mockResolvedValue(undefined),
     fetchArtworks: vi.fn().mockResolvedValue([]),
     fetchEvents: vi.fn().mockResolvedValue([]),
@@ -31,6 +32,19 @@ function createTransport(): MobileSessionTransport {
 }
 
 describe('mobile session service', () => {
+  it('links an existing library artwork through the canonical Session endpoint', async () => {
+    const transport = createTransport();
+    const service = createMobileSessionService({ transport });
+
+    await service.attachArtwork('user-1', 'session-1', 'artwork-1');
+
+    expect(transport.attachArtwork).toHaveBeenCalledWith({
+      artworkId: 'artwork-1',
+      sessionId: 'session-1',
+      userId: 'user-1',
+    });
+  });
+
   it('creates stable correlated events for an optimistic text turn', () => {
     const ids = ['session-1', 'user-1', 'model-1'];
     const service = createMobileSessionService({
@@ -100,7 +114,25 @@ describe('mobile session service', () => {
     });
   });
 
-  it('starts a new session around an uploaded artwork', async () => {
+  it('records library as the source of a selected existing artwork', () => {
+    const service = createMobileSessionService({ transport: createTransport() });
+
+    const attempt = service.createArtworkAttempt(
+      'user-1',
+      'artwork-1',
+      'library',
+      'Compare its use of color',
+      'session-1',
+    );
+
+    expect(attempt.userEvent).toMatchObject({
+      artwork_ids: ['artwork-1'],
+      content: 'Compare its use of color',
+      payload: { artworks: [{ artwork_id: 'artwork-1', source: 'library' }] },
+    });
+  });
+
+  it('starts a new session around an artwork', async () => {
     const transport = createTransport();
     const service = createMobileSessionService({ transport });
 
