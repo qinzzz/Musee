@@ -102,7 +102,7 @@ Status meanings:
 | Artwork library and basic detail | Partial | Add complete metadata, actions, pagination, loading, and error states |
 | Artwork editing, deletion, and re-identification | Not started | Provide safe native actions with consistent persistence |
 | Text-only Sessions | Baseline complete | Continue hardening long histories, interruption, and recovery |
-| Artwork inputs and cards inside Sessions | Partial — current focus | Add existing library artworks; capture and Photos uploads already support persistent mixed turns |
+| Artwork inputs and cards inside Sessions | Baseline complete | Harden lifecycle states and long-history behavior after the single-artwork paths |
 | Session management | Partial | Complete history, titles, delete/archive behavior, and long-list UX |
 | Artwork conversation / Ask Musee | Not started | Define whether it is a detail thread, Session entry, or both |
 | Boards and collection organization | Not started | Bring over the active organization model with native interactions |
@@ -168,6 +168,12 @@ Status: not started beyond the basic library/detail baseline.
 - support edit, delete, re-identify, and relevant artwork actions;
 - add multi-select/batch intake where it improves the native workflow;
 - verify image deletion, replacement, thumbnail, and legacy-record behavior.
+
+**Phase 4 exit gate:** install a fresh development or preview build on a
+physical iPhone and test authentication restoration, camera and Photos intake,
+analysis, library actions, all three Session artwork sources, cold-start
+restoration, permissions, background/foreground transitions, and network
+failure recovery before beginning Phase 5.
 
 ### Phase 5 — Organization and discovery
 
