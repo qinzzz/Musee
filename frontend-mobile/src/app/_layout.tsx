@@ -1,15 +1,35 @@
+import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useEffect, type PropsWithChildren } from 'react';
+import { ActivityIndicator, AppState, Platform, StyleSheet, Text, View } from 'react-native';
 
+import { mobileQueryClient } from '../api/queryClient';
 import { MOBILE_API_BASE_URL } from '../api/runtime';
 import { AuthProvider, useAuth } from '../auth/AuthProvider';
 import { presentAuthError } from '../auth/authErrorPresentation';
 import { MuseeButton } from '../ui/components/MuseeButton';
+import { MuseeToast } from '../ui/components/MuseeToast';
 import { colors, spacing, typography } from '../ui/tokens/theme';
 
 const RESTORE_ERROR_TITLE = 'Musee could not start your session';
 const RETRY_LABEL = 'Try again';
+
+function MobileQueryProvider({ children }: PropsWithChildren) {
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    focusManager.setFocused(AppState.currentState === 'active');
+    const subscription = AppState.addEventListener('change', (status) => {
+      focusManager.setFocused(status === 'active');
+    });
+    return () => {
+      subscription.remove();
+      focusManager.setFocused(undefined);
+    };
+  }, []);
+
+  return <QueryClientProvider client={mobileQueryClient}>{children}</QueryClientProvider>;
+}
 
 function AuthenticatedStack() {
   const { restoreError, retryRestore, status } = useAuth();
@@ -58,10 +78,13 @@ function AuthenticatedStack() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <AuthenticatedStack />
-      <StatusBar style="dark" />
-    </AuthProvider>
+    <MobileQueryProvider>
+      <AuthProvider>
+        <AuthenticatedStack />
+        <StatusBar style="dark" />
+        <MuseeToast />
+      </AuthProvider>
+    </MobileQueryProvider>
   );
 }
 

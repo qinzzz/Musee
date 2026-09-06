@@ -14,6 +14,7 @@ import {
   mobileAuthService,
   subscribeToMobileAuthenticationRequired,
 } from '../api/runtime';
+import { mobileQueryClient } from '../api/queryClient';
 import { MobileAuthContractError } from './mobileAuthService';
 import { fetchAuthenticatedUser } from './mobileAuthSession';
 import type { MobileAuthUser } from './mobileAuthTransport';
@@ -72,6 +73,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [restore]);
 
   useEffect(() => subscribeToMobileAuthenticationRequired(() => {
+    mobileQueryClient.clear();
     setRestoreError(null);
     setUser(null);
     setStatus('signedOut');
@@ -96,6 +98,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const logout = useCallback(async () => {
     await mobileAuthService.logout();
+    mobileQueryClient.clear();
     setRestoreError(null);
     setUser(null);
     setStatus('signedOut');

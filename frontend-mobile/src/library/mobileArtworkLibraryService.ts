@@ -1,4 +1,5 @@
 import {
+  ApiHttpError,
   fetchArtworkById,
   fetchArtworkPage,
   type ApiClient,
@@ -9,7 +10,30 @@ import type { PendingArtworkUpload } from '../capture/types';
 import { resolveRemoteImageUrl } from '../platform/images/resolveRemoteImageUrl';
 import type { MobileArtworkPage, MobileArtworkRecord } from './types';
 
+export type IdentifyAgainHints = { artistName: string; artworkName: string; additionalClue: string };
+export const IDENTIFY_CLUE_REQUIRED = 'Enter at least one clue to continue.';
+
+export function buildIdentifyAgainForm(artworkId: string, hints: IdentifyAgainHints): FormData {
+  const fields = { artist_name: hints.artistName.trim(), artwork_name: hints.artworkName.trim(), additional_clue: hints.additionalClue.trim() };
+  if (!Object.values(fields).some(Boolean)) throw new Error(IDENTIFY_CLUE_REQUIRED);
+  const form = new FormData();
+  form.append('artwork_id', artworkId);
+  for (const [key, value] of Object.entries(fields)) if (value) form.append(key, value);
+  return form;
+}
+
+export type ArtworkMetadataUpdates = {
+  artworkName?: string;
+  artistName?: string;
+  date?: string;
+  medium?: string;
+  tags?: string;
+};
+
 export type MobileArtworkLibraryService = {
+  identifyAgain: (artworkId: string, hints: IdentifyAgainHints) => Promise<void>;
+  deleteArtwork: (artworkId: string, userId: string) => Promise<void>;
+  updateArtwork: (artworkId: string, updates: ArtworkMetadataUpdates) => Promise<MobileArtworkRecord>;
   fetchPage: (userId: string, offset?: number, limit?: number) => Promise<MobileArtworkPage>;
   fetchArtwork: (artworkId: string) => Promise<MobileArtworkRecord>;
 };
@@ -100,6 +124,37 @@ export function createMobileArtworkLibraryService({
   apiClient,
 }: MobileArtworkLibraryServiceOptions): MobileArtworkLibraryService {
   return {
+    async identifyAgain(artworkId, hints) {
+      const response = await apiClient.fetchWithTimeout(`${apiBaseUrl}/artworks/analyze`, {
+        method: 'POST', body: buildIdentifyAgainForm(artworkId, hints), timeout: 120000,
+      });
+      if (!response.ok) throw new ApiHttpError('Could not identify the artwork again.', response.status);
+    },
+    async deleteArtwork(artworkId, userId) {
+      const params = new URLSearchParams({ user_id: userId });
+      const response = await apiClient.fetchWithTimeout(
+        `${apiBaseUrl}/artworks/${encodeURIComponent(artworkId)}?${params}`, { method: 'DELETE' },
+      );
+      if (!response.ok) throw new ApiHttpError('Could not remove artwork.', response.status);
+    },
+    async updateArtwork(artworkId, updates) {
+      const response = await apiClient.fetchWithTimeout(
+        `${apiBaseUrl}/artworks/${encodeURIComponent(artworkId)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            artwork_name: updates.artworkName?.trim(),
+            artist_name: updates.artistName?.trim(),
+            date: updates.date?.trim(),
+            medium: updates.medium?.trim(),
+            tags: updates.tags,
+          }),
+        },
+      );
+      if (!response.ok) throw new ApiHttpError('Musee could not save your changes.', response.status);
+      return mapMobileArtwork(await response.json() as ArtworkRecord, apiBaseUrl);
+    },
     async fetchPage(userId, offset = 0, limit = 30) {
       const page = await fetchArtworkPage(apiClient, apiBaseUrl, { userId, offset, limit });
       return {

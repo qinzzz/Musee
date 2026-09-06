@@ -9,7 +9,15 @@ export type SessionArtworkGroup = {
   eventId: string | null;
   id: string;
   label: string;
-  unavailableArtworkIds: string[];
+  unavailableArtworks: SessionUnavailableArtwork[];
+};
+
+export type SessionUnavailableArtwork = {
+  artistName: string | null;
+  artworkName: string | null;
+  date: string | null;
+  id: string;
+  isDeleted: boolean;
 };
 
 export type SessionArtworkPresentation = {
@@ -83,14 +91,65 @@ function getEventArtworkLabel(event: SessionEventRecord, count: number): string 
   }
 }
 
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function getDeletedArtworkReference(
+  event: SessionEventRecord,
+  artworkId: string,
+): SessionUnavailableArtwork | null {
+  const deletedArtworks = Array.isArray(event.payload?.deleted_artworks)
+    ? event.payload.deleted_artworks
+    : [];
+  const reference = deletedArtworks.find((entry) => (
+    entry
+    && typeof entry === 'object'
+    && 'artwork_id' in entry
+    && entry.artwork_id === artworkId
+  ));
+  if (!reference || typeof reference !== 'object') return null;
+  return {
+    id: artworkId,
+    artworkName: 'artwork_name' in reference ? stringOrNull(reference.artwork_name) : null,
+    artistName: 'artist_name' in reference ? stringOrNull(reference.artist_name) : null,
+    date: 'date' in reference ? stringOrNull(reference.date) : null,
+    isDeleted: true,
+  };
+}
+
+function buildUnavailableArtwork(
+  event: SessionEventRecord,
+  artworkId: string,
+  artwork?: MobileArtworkRecord,
+): SessionUnavailableArtwork {
+  const deletedReference = getDeletedArtworkReference(event, artworkId);
+  if (deletedReference) return deletedReference;
+  if (artwork?.isDeleted) {
+    return {
+      id: artworkId,
+      artworkName: stringOrNull(artwork.artworkName),
+      artistName: stringOrNull(artwork.artistName),
+      date: stringOrNull(artwork.date),
+      isDeleted: true,
+    };
+  }
+  return {
+    id: artworkId,
+    artworkName: null,
+    artistName: null,
+    date: null,
+    isDeleted: false,
+  };
+}
+
 export function buildSessionArtworkPresentation(
   events: SessionEventRecord[],
   artworks: MobileArtworkRecord[],
 ): SessionArtworkPresentation {
+  const allArtworkById = new Map(artworks.map((artwork) => [artwork.id, artwork]));
   const artworkById = new Map(
-    artworks
-      .filter((artwork) => !artwork.isDeleted)
-      .map((artwork) => [artwork.id, artwork]),
+    artworks.filter((artwork) => !artwork.isDeleted).map((artwork) => [artwork.id, artwork]),
   );
   const presentedArtworkIds = new Set<string>();
   const eventGroups: Record<string, SessionArtworkGroup> = {};
@@ -109,7 +168,11 @@ export function buildSessionArtworkPresentation(
         const artwork = artworkById.get(artworkId);
         return artwork ? [artwork] : [];
       }),
-      unavailableArtworkIds: artworkIds.filter((artworkId) => !artworkById.has(artworkId)),
+      unavailableArtworks: artworkIds.flatMap((artworkId) => (
+        artworkById.has(artworkId)
+          ? []
+          : [buildUnavailableArtwork(event, artworkId, allArtworkById.get(artworkId))]
+      )),
     };
   });
 
@@ -124,7 +187,7 @@ export function buildSessionArtworkPresentation(
           eventId: null,
           label: orphanArtworks.length === 1 ? 'Session artwork' : 'Session artworks',
           artworks: orphanArtworks,
-          unavailableArtworkIds: [],
+          unavailableArtworks: [],
         }
       : null,
   };

@@ -8,6 +8,7 @@ import {
   mobileArtworkAnalysisService,
   mobileArtworkUploadService,
 } from '../../../api/runtime';
+import { mobileQueryClient } from '../../../api/queryClient';
 import type { RequestErrorPresentation } from '../../../api/requestErrorPresentation';
 import { useAuth } from '../../../auth/AuthProvider';
 import { ArtworkAnalysisCard } from '../../../capture/components/ArtworkAnalysisCard';
@@ -22,9 +23,11 @@ import type {
   PendingArtworkUpload,
 } from '../../../capture/types';
 import { pickArtworkImage } from '../../../platform/images/pickArtworkImage';
+import { invalidateArtworkLibraryQuery } from '../../../library/artworkLibraryQuery';
 import { HomeSessionPanel } from '../../../session/components/HomeSessionPanel';
 import { MuseeButton } from '../../../ui/components/MuseeButton';
 import { Screen } from '../../../ui/components/Screen';
+import { showPendingToast, showToast } from '../../../ui/toast';
 import { colors, radii, spacing, typography } from '../../../ui/tokens/theme';
 
 const COPY = {
@@ -44,6 +47,9 @@ const COPY = {
   retryUpload: 'Try upload again',
   retryAnalysis: 'Try analysis again',
   signOut: 'Sign out',
+  uploadingToast: 'Uploading artwork…',
+  analyzingToast: 'Analyzing artwork…',
+  analyzedToast: 'Artwork analysis complete',
 } as const;
 
 type CaptureState =
@@ -96,6 +102,7 @@ export default function AuthenticatedHomeScreen() {
 
   const analyzeArtwork = async (artwork: PendingArtworkUpload) => {
     setCapture({ status: 'analyzing', artwork, receivedChunk: false });
+    showPendingToast({ label: COPY.analyzingToast });
     try {
       const analyzed = await mobileArtworkAnalysisService.analyzeArtwork(
         artwork,
@@ -106,11 +113,19 @@ export default function AuthenticatedHomeScreen() {
         )),
       );
       setCapture({ status: 'analyzed', artwork: analyzed });
+      showToast({ label: COPY.analyzedToast, icon: 'sparkles' });
     } catch (error) {
+      const presentation = presentArtworkAnalysisError(error, ERROR_PRESENTATION_OPTIONS);
       setCapture({
         status: 'analysis-error',
         artwork,
-        error: presentArtworkAnalysisError(error, ERROR_PRESENTATION_OPTIONS),
+        error: presentation,
+      });
+      showToast({
+        label: presentation.message,
+        icon: 'exclamationmark',
+        tone: 'danger',
+        durationMs: 4000,
       });
     }
   };
@@ -118,14 +133,23 @@ export default function AuthenticatedHomeScreen() {
   const uploadPhoto = async (asset: NativeImageAsset) => {
     if (!user) return;
     setCapture({ status: 'uploading', asset });
+    showPendingToast({ label: COPY.uploadingToast });
     try {
       const artwork = await mobileArtworkUploadService.uploadArtwork(asset, user.user_id);
+      invalidateArtworkLibraryQuery(mobileQueryClient, user.user_id);
       await analyzeArtwork(artwork);
     } catch (error) {
+      const presentation = presentArtworkUploadError(error, ERROR_PRESENTATION_OPTIONS);
       setCapture({
         status: 'upload-error',
         asset,
-        error: presentArtworkUploadError(error, ERROR_PRESENTATION_OPTIONS),
+        error: presentation,
+      });
+      showToast({
+        label: presentation.message,
+        icon: 'exclamationmark',
+        tone: 'danger',
+        durationMs: 4000,
       });
     }
   };

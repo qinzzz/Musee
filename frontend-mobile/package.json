@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/ui": "~57.0.14",
     "@musee/client-core": "*",
+    "@tanstack/react-query": "^5.101.2",
     "expo": "~57.0.18",
     "expo-camera": "~57.0.4",
     "expo-constants": "~57.0.16",

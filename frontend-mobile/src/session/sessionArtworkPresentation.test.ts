@@ -79,20 +79,61 @@ describe('session artwork presentation', () => {
       event('result-1', 'artwork_result', ['missing-art']),
     ], [artwork('orphan-art')]);
 
-    expect(presentation.eventGroups['result-1'].unavailableArtworkIds).toEqual(['missing-art']);
+    expect(presentation.eventGroups['result-1'].unavailableArtworks).toEqual([{
+      id: 'missing-art',
+      artworkName: null,
+      artistName: null,
+      date: null,
+      isDeleted: false,
+    }]);
     expect(presentation.orphanGroup?.artworks.map(({ id }) => id)).toEqual(['orphan-art']);
   });
 
-  it('renders a soft-deleted session artwork as unavailable', () => {
-    const deletedArtwork = { ...artwork('deleted-art'), isDeleted: true };
+  it('preserves a soft-deleted session artwork metadata in its placeholder', () => {
+    const deletedArtwork = {
+      ...artwork('deleted-art'),
+      artworkName: 'Cones',
+      artistName: 'Theaster Gates',
+      date: '2014',
+      isDeleted: true,
+    };
     const presentation = buildSessionArtworkPresentation([
       event('input-1', 'user_input', ['deleted-art']),
     ], [deletedArtwork]);
 
     expect(presentation.eventGroups['input-1']).toMatchObject({
       artworks: [],
-      unavailableArtworkIds: ['deleted-art'],
+      unavailableArtworks: [{
+        id: 'deleted-art',
+        artworkName: 'Cones',
+        artistName: 'Theaster Gates',
+        date: '2014',
+        isDeleted: true,
+      }],
     });
     expect(presentation.orphanGroup).toBeNull();
+  });
+
+  it('uses the server deleted-artwork snapshot when the linked record is absent', () => {
+    const deletedEvent = event('input-1', 'user_input', ['deleted-art']);
+    deletedEvent.payload = {
+      artwork_ids: ['deleted-art'],
+      deleted_artworks: [{
+        artwork_id: 'deleted-art',
+        artwork_name: 'Cones',
+        artist_name: 'Theaster Gates',
+        date: '2014',
+      }],
+    };
+
+    const presentation = buildSessionArtworkPresentation([deletedEvent], []);
+
+    expect(presentation.eventGroups['input-1'].unavailableArtworks).toEqual([{
+      id: 'deleted-art',
+      artworkName: 'Cones',
+      artistName: 'Theaster Gates',
+      date: '2014',
+      isDeleted: true,
+    }]);
   });
 });

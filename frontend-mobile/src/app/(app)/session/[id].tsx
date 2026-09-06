@@ -114,7 +114,7 @@ export default function MobileSessionScreen() {
           <View style={styles.centered}>
             <ActivityIndicator color={colors.foreground} />
           </View>
-        ) : controller.loadError ? (
+        ) : controller.loadError && !controller.session ? (
           <View style={styles.centered}>
             <Text style={styles.errorText}>{controller.loadError.message}</Text>
             {controller.loadError.technicalDetail ? (
@@ -134,6 +134,12 @@ export default function MobileSessionScreen() {
               ref={scrollRef}
               showsVerticalScrollIndicator={false}
             >
+              {controller.loadError ? (
+                <View style={styles.centered}>
+                  <Text accessibilityRole="alert" style={styles.errorText}>{controller.loadError.message}</Text>
+                  <MuseeButton label={COPY.retry} disabled={controller.isSending} onPress={() => void controller.reload()} />
+                </View>
+              ) : null}
               {controller.events.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyHeading}>{COPY.emptyHeading}</Text>

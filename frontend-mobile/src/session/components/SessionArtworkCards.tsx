@@ -3,7 +3,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { MobileArtworkRecord } from '../../library/types';
 import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
-import type { SessionArtworkGroup } from '../sessionArtworkPresentation';
+import type {
+  SessionArtworkGroup,
+  SessionUnavailableArtwork,
+} from '../sessionArtworkPresentation';
 
 type SessionArtworkCardsProps = {
   group: SessionArtworkGroup;
@@ -22,13 +25,35 @@ export function SessionArtworkCards({ group, onOpenArtwork }: SessionArtworkCard
             onPress={() => onOpenArtwork(artwork.id)}
           />
         ))}
-        {group.unavailableArtworkIds.map((artworkId) => (
-          <View accessibilityLabel="Artwork unavailable" key={artworkId} style={styles.card}>
-            <View style={[styles.image, styles.unavailableImage]}>
-              <Text style={styles.unavailableText}>Artwork unavailable</Text>
-            </View>
-          </View>
+        {group.unavailableArtworks.map((artwork) => (
+          <UnavailableArtworkCard artwork={artwork} key={artwork.id} />
         ))}
+      </View>
+    </View>
+  );
+}
+
+function UnavailableArtworkCard({ artwork }: { artwork: SessionUnavailableArtwork }) {
+  const title = artwork.artworkName || 'Deleted artwork';
+  const artist = artwork.artistName || 'Artist unknown';
+  const attribution = artwork.date ? `${artist} · ${artwork.date}` : artist;
+  if (!artwork.isDeleted) {
+    return (
+      <View accessibilityLabel="Artwork unavailable" style={styles.card}>
+        <View style={[styles.image, styles.unavailableImage]}>
+          <Text style={styles.unavailableText}>Artwork unavailable</Text>
+        </View>
+      </View>
+    );
+  }
+  return (
+    <View accessibilityLabel={`Deleted artwork: ${title}, ${attribution}`} style={styles.card}>
+      <View style={[styles.image, styles.unavailableImage]}>
+        <Text style={styles.unavailableText}>Deleted artwork</Text>
+      </View>
+      <View style={styles.caption}>
+        <Text numberOfLines={2} style={styles.title}>{title}</Text>
+        <Text numberOfLines={1} style={styles.attribution}>{attribution}</Text>
       </View>
     </View>
   );
