@@ -21,6 +21,7 @@ export default function AppLayout() {
           options={{ headerShown: false, presentation: 'fullScreenModal' }}
         />
         <Stack.Screen name="artwork/[id]" options={{ title: 'Artwork' }} />
+        <Stack.Screen name="artwork-upload" options={{ title: 'Add Artworks' }} />
         <Stack.Screen name="session/[id]" options={{ title: 'Session' }} />
       </Stack>
     </CaptureDraftProvider>
