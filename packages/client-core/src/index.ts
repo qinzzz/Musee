@@ -8,6 +8,14 @@ export {
   type ArtworkAnalysisStreamEvent,
 } from './artworkAnalysis';
 export {
+  retryArtworkBatchEntry,
+  runArtworkBatch,
+  type ArtworkBatchEntry,
+  type ArtworkBatchOperations,
+  type ArtworkBatchStatus,
+  type ArtworkBatchTransition,
+} from './artworkBatch';
+export {
   fetchArtworkById,
   fetchArtworkPage,
   type ArtworkPage,

@@ -14,6 +14,7 @@ import { createSecureAuthCredentialStore } from '../auth/secureAuthCredentialSto
 import { createMobileRuntimeConfiguration } from '../config/mobileRuntimeConfig';
 import { createMobileArtworkAnalysisService } from '../capture/mobileArtworkAnalysisService';
 import { createMobileArtworkAnalysisTransport } from '../capture/mobileArtworkAnalysisTransport';
+import { createMobileArtworkBatchService } from '../capture/mobileArtworkBatchService';
 import { createMobileArtworkUploadService } from '../capture/mobileArtworkUploadService';
 import { createMobileArtworkUploadTransport } from '../capture/mobileArtworkUploadTransport';
 import { expoImageCache } from '../platform/images/imageCache';
@@ -87,6 +88,11 @@ export const mobileArtworkAnalysisService = createMobileArtworkAnalysisService(
     apiClient: mobileApiClient,
   }),
 );
+
+export const mobileArtworkBatchService = createMobileArtworkBatchService({
+  analysisService: mobileArtworkAnalysisService,
+  uploadService: mobileArtworkUploadService,
+});
 
 export const mobileArtworkLibraryService = createMobileArtworkLibraryService({
   apiBaseUrl: MOBILE_API_BASE_URL,

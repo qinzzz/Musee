@@ -87,6 +87,13 @@ not an offline database and does not queue writes. UI-only state such as a
 Library scroll offset remains outside TanStack Query. Clear the query cache when
 authentication ends so one account's data cannot appear in another account.
 
+Multi-select Library intake uses the platform-neutral batch lifecycle in
+`@musee/client-core`: persist every valid selection first, then analyze each
+persisted artwork. Successful items remain saved when another item fails, and
+the failed upload or analysis stage can be retried independently. Native code
+owns Photos selection, previews, progress presentation, and Library cache
+invalidation.
+
 ## Authentication and secure storage
 
 Native and web clients use the same backend identity but different credential

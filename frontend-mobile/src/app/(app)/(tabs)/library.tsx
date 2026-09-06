@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -43,6 +44,7 @@ const COPY = {
   emptyMessage: 'Capture or choose a photo to begin your library.',
   error: 'Musee could not load your library.',
   retry: 'Try again',
+  addArtwork: 'Add artwork',
 } as const;
 
 function presentLibraryError(error: unknown): RequestErrorPresentation {
@@ -146,7 +148,17 @@ export default function LibraryScreen() {
         ) : null}
         ListHeaderComponent={(
           <View style={styles.header}>
-            <Text style={styles.brand}>{COPY.brand}</Text>
+            <View style={styles.brandRow}>
+              <Text style={styles.brand}>{COPY.brand}</Text>
+              <Pressable
+                accessibilityLabel={COPY.addArtwork}
+                accessibilityRole="button"
+                onPress={() => router.push('/artwork-upload')}
+                style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.addButtonLabel}>+ Add</Text>
+              </Pressable>
+            </View>
             <Text style={styles.heading}>{COPY.heading}</Text>
             <Text style={styles.message}>{COPY.message}</Text>
           </View>
@@ -201,12 +213,32 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
+  brandRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
   brand: {
     color: colors.foreground,
     fontSize: typography.title,
     fontWeight: '600',
     letterSpacing: -1,
-    marginBottom: spacing.sm,
+  },
+  addButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 18,
+    justifyContent: 'center',
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+  },
+  addButtonLabel: {
+    color: colors.onPrimary,
+    fontSize: typography.label,
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.78,
   },
   heading: {
     color: colors.foreground,
