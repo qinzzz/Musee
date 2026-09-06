@@ -96,7 +96,7 @@ Status meanings:
 | Email sign-in, refresh, restore, sign-out | Baseline complete | Harden lifecycle and security behavior as release approaches |
 | Social sign-in and account recovery | Not started | Define native providers and complete recovery/verification flows |
 | Camera and single-photo intake | Baseline complete | Add production capture UX and preserve reliable permission fallbacks |
-| Batch and multi-select intake | Not started | Match the intentional web batch workflow where it fits native UX |
+| Batch and multi-select intake | Partial — multi-select Library upload implemented; Session composition remains | Match the intentional web batch workflow where it fits native UX |
 | Upload and streamed artwork analysis | Baseline complete | Preserve retry, status, and persisted-result behavior |
 | Artwork thumbnails and image variants | Baseline complete | Preserve cloud derivatives, legacy fallback, and full-resolution detail/AI use |
 | Artwork library and basic detail | Partial | Add complete metadata, actions, pagination, loading, and error states |
@@ -162,7 +162,8 @@ Status: text and single-artwork baselines complete; lifecycle polish remains.
 ### Phase 4 — Complete the artwork library
 
 Status: in progress; detail, editing, Identify Again, deletion, and TanStack
-Query cache/revalidation implemented; device validation pending.
+Query cache/revalidation implemented. Multi-select Library intake now preserves
+partial upload/analysis success with per-item retry; device validation pending.
 
 - add pagination and intentional cache/revalidation behavior;
 - complete artwork metadata and analysis presentation;
@@ -253,7 +254,7 @@ Device validation of this slice remains required before calling it
 baseline complete.
 
 Next, complete the remaining relevant artwork actions and batch-intake behavior
-as small end-to-end slices.
+inside Sessions as small end-to-end slices.
 
 ## Quality gates
 

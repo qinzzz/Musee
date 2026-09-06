@@ -6,12 +6,14 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   MOBILE_API_BASE_URL,
   mobileArtworkAnalysisService,
+  mobileArtworkBatchService,
   mobileArtworkUploadService,
 } from '../../../api/runtime';
 import { mobileQueryClient } from '../../../api/queryClient';
 import type { RequestErrorPresentation } from '../../../api/requestErrorPresentation';
 import { useAuth } from '../../../auth/AuthProvider';
 import { ArtworkAnalysisCard } from '../../../capture/components/ArtworkAnalysisCard';
+import { ArtworkBatchPanel } from '../../../capture/components/ArtworkBatchPanel';
 import { useCaptureDraft } from '../../../capture/CaptureDraftProvider';
 import {
   presentArtworkAnalysisError,
@@ -22,7 +24,8 @@ import type {
   NativeImageAsset,
   PendingArtworkUpload,
 } from '../../../capture/types';
-import { pickArtworkImage } from '../../../platform/images/pickArtworkImage';
+import type { MobileArtworkBatchEntry } from '../../../capture/mobileArtworkBatchService';
+import { pickArtworkImages } from '../../../platform/images/pickArtworkImage';
 import { invalidateArtworkLibraryQuery } from '../../../library/artworkLibraryQuery';
 import { HomeSessionPanel } from '../../../session/components/HomeSessionPanel';
 import { MuseeButton } from '../../../ui/components/MuseeButton';
@@ -50,6 +53,9 @@ const COPY = {
   uploadingToast: 'Uploading artwork…',
   analyzingToast: 'Analyzing artwork…',
   analyzedToast: 'Artwork analysis complete',
+  rejectedPhotos: 'Some selected photos could not be prepared.',
+  noUsablePhotos: 'Musee could not prepare the selected photos. Choose different images.',
+  batchFailed: 'Musee could not add the selected artworks.',
 } as const;
 
 type CaptureState =
@@ -59,6 +65,7 @@ type CaptureState =
   | { status: 'uploading'; asset: NativeImageAsset }
   | { status: 'analyzing'; artwork: PendingArtworkUpload; receivedChunk: boolean }
   | { status: 'analyzed'; artwork: AnalyzedArtwork }
+  | { status: 'batch'; entries: MobileArtworkBatchEntry[]; running: boolean }
   | {
     status: 'analysis-error';
     artwork: PendingArtworkUpload;
@@ -90,12 +97,124 @@ export default function AuthenticatedHomeScreen() {
   const choosePhoto = async () => {
     setCapture({ status: 'picking' });
     try {
-      const asset = await pickArtworkImage();
-      setCapture(asset ? { status: 'preview', asset } : { status: 'idle' });
+      const selection = await pickArtworkImages();
+      if (!selection) {
+        setCapture({ status: 'idle' });
+        return;
+      }
+      if (selection.rejectedCount > 0) {
+        showToast({ label: COPY.rejectedPhotos, icon: 'exclamationmark', tone: 'neutral' });
+      }
+      if (selection.assets.length === 0) {
+        setCapture({ status: 'upload-error', error: { message: COPY.noUsablePhotos } });
+      } else if (selection.assets.length === 1) {
+        setCapture({ status: 'preview', asset: selection.assets[0] });
+      } else {
+        setCapture({
+          status: 'batch',
+          entries: mobileArtworkBatchService.createEntries(selection.assets),
+          running: false,
+        });
+      }
     } catch (error) {
       setCapture({
         status: 'upload-error',
         error: presentArtworkUploadError(error, ERROR_PRESENTATION_OPTIONS),
+      });
+    }
+  };
+
+  const batchErrorMessage = (entry: MobileArtworkBatchEntry): string => (
+    entry.status === 'upload_failed'
+      ? presentArtworkUploadError(entry.error, ERROR_PRESENTATION_OPTIONS).message
+      : presentArtworkAnalysisError(entry.error, ERROR_PRESENTATION_OPTIONS).message
+  );
+
+  const runBatch = async (entries: MobileArtworkBatchEntry[]) => {
+    if (!user || entries.length === 0) return;
+    setCapture({ status: 'batch', entries, running: true });
+    showPendingToast({ label: `Uploading artwork 1 of ${entries.length}…` });
+    const completed = await mobileArtworkBatchService.process(
+      entries,
+      user.user_id,
+      (entry, index, nextEntries) => {
+        setCapture({ status: 'batch', entries: nextEntries, running: true });
+        if (entry.status === 'uploading') {
+          showPendingToast({ label: `Uploading artwork ${index + 1} of ${entries.length}…` });
+        } else if (entry.status === 'uploaded') {
+          invalidateArtworkLibraryQuery(mobileQueryClient, user.user_id);
+        } else if (entry.status === 'analyzing') {
+          showPendingToast({ label: `Analyzing artwork ${index + 1} of ${entries.length}…` });
+        }
+      },
+    );
+    setCapture({ status: 'batch', entries: completed, running: false });
+    invalidateArtworkLibraryQuery(mobileQueryClient, user.user_id);
+    const savedCount = completed.filter((entry) => Boolean(entry.persisted)).length;
+    const analysisFailureCount = completed.filter(
+      (entry) => entry.status === 'analysis_failed',
+    ).length;
+    if (savedCount === entries.length && analysisFailureCount === 0) {
+      showToast({
+        label: `Added ${savedCount} artworks to your Library`,
+        icon: 'photo.stack',
+      });
+    } else if (savedCount > 0) {
+      showToast({
+        label: savedCount === entries.length
+          ? `Added ${savedCount} artworks; ${analysisFailureCount} need analysis`
+          : `Added ${savedCount} of ${entries.length} artworks`,
+        icon: 'exclamationmark',
+        tone: 'neutral',
+        durationMs: 4000,
+      });
+    } else {
+      showToast({
+        label: COPY.batchFailed,
+        icon: 'exclamationmark',
+        tone: 'danger',
+        durationMs: 4000,
+      });
+    }
+  };
+
+  const retryBatchEntry = async (
+    entries: MobileArtworkBatchEntry[],
+    entryId: string,
+  ) => {
+    if (!user) return;
+    const entryIndex = entries.findIndex((entry) => entry.id === entryId);
+    const entry = entries[entryIndex];
+    if (!entry) return;
+    setCapture({ status: 'batch', entries, running: true });
+    showPendingToast({
+      label: entry.persisted ? 'Analyzing artwork again…' : 'Uploading artwork again…',
+    });
+    const retried = await mobileArtworkBatchService.retry(
+      entry,
+      user.user_id,
+      (nextEntry) => {
+        setCapture((current) => current.status === 'batch' ? {
+          ...current,
+          entries: current.entries.map((item) => item.id === entryId ? nextEntry : item),
+          running: true,
+        } : current);
+        if (nextEntry.status === 'uploaded') {
+          invalidateArtworkLibraryQuery(mobileQueryClient, user.user_id);
+        }
+      },
+    );
+    const nextEntries = entries.map((item) => item.id === entryId ? retried : item);
+    setCapture({ status: 'batch', entries: nextEntries, running: false });
+    invalidateArtworkLibraryQuery(mobileQueryClient, user.user_id);
+    if (retried.status === 'complete') {
+      showToast({ label: 'Artwork added to your Library', icon: 'checkmark' });
+    } else {
+      showToast({
+        label: batchErrorMessage(retried),
+        icon: 'exclamationmark',
+        tone: 'danger',
+        durationMs: 4000,
       });
     }
   };
@@ -158,6 +277,7 @@ export default function AuthenticatedHomeScreen() {
     capture.status === 'picking'
     || capture.status === 'uploading'
     || capture.status === 'analyzing'
+    || (capture.status === 'batch' && capture.running)
   );
   const retryAsset = capture.status === 'upload-error' ? capture.asset : undefined;
 
@@ -264,6 +384,24 @@ export default function AuthenticatedHomeScreen() {
               variant="secondary"
             />
           </View>
+        ) : null}
+
+        {capture.status === 'batch' ? (
+          <ArtworkBatchPanel
+            entries={capture.entries}
+            getErrorMessage={batchErrorMessage}
+            running={capture.running}
+            onOpenLibrary={() => router.navigate('/library')}
+            onRemove={(entryId) => {
+              const remaining = capture.entries.filter((entry) => entry.id !== entryId);
+              setCapture(remaining.length > 0
+                ? { status: 'batch', entries: remaining, running: false }
+                : { status: 'idle' });
+            }}
+            onReset={() => setCapture({ status: 'idle' })}
+            onRetry={(entryId) => void retryBatchEntry(capture.entries, entryId)}
+            onStart={() => void runBatch(capture.entries)}
+          />
         ) : null}
 
         {capture.status === 'analysis-error' ? (
