@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
+import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
@@ -13,18 +14,27 @@ import {
   MOBILE_API_BASE_URL,
   mobileArtworkLibraryService,
 } from '../../../api/runtime';
+import { mobileQueryClient } from '../../../api/queryClient';
 import {
   presentRequestError,
   type RequestErrorPresentation,
 } from '../../../api/requestErrorPresentation';
 import { useAuth } from '../../../auth/AuthProvider';
+import {
+  ARTWORK_LIBRARY_PAGE_SIZE,
+  artworkLibraryQueryKey,
+  flattenArtworkLibraryPages,
+  getNextArtworkPageParam,
+} from '../../../library/artworkLibraryQuery';
 import { ArtworkLibraryCard } from '../../../library/components/ArtworkLibraryCard';
-import type { MobileArtworkRecord } from '../../../library/types';
+import {
+  getArtworkLibraryScrollOffset,
+  setArtworkLibraryScrollOffset,
+} from '../../../library/artworkLibraryViewState';
 import { MuseeButton } from '../../../ui/components/MuseeButton';
 import { Screen } from '../../../ui/components/Screen';
 import { colors, spacing, typography } from '../../../ui/tokens/theme';
 
-const PAGE_SIZE = 30;
 const COPY = {
   brand: 'Musee',
   heading: 'Library',
@@ -45,72 +55,72 @@ function presentLibraryError(error: unknown): RequestErrorPresentation {
 
 export default function LibraryScreen() {
   const { user } = useAuth();
+  const userId = user?.user_id ?? '';
   const router = useRouter();
-  const requestVersion = useRef(0);
-  const [items, setItems] = useState<MobileArtworkRecord[]>([]);
-  const [total, setTotal] = useState(0);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const initialContentOffset = useRef({
+    x: 0,
+    y: getArtworkLibraryScrollOffset(userId),
+  }).current;
   const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<RequestErrorPresentation | null>(null);
-
-  const loadFirstPage = useCallback(async (showRefresh = false) => {
-    if (!user) return;
-    const version = ++requestVersion.current;
-    setError(null);
-    if (showRefresh) setRefreshing(true);
-    else setInitialLoading(true);
-    try {
-      const page = await mobileArtworkLibraryService.fetchPage(user.user_id, 0, PAGE_SIZE);
-      if (version !== requestVersion.current) return;
-      setItems(page.items);
-      setTotal(page.total);
-    } catch (loadError) {
-      if (version === requestVersion.current) setError(presentLibraryError(loadError));
-    } finally {
-      if (version === requestVersion.current) {
-        setInitialLoading(false);
-        setRefreshing(false);
-      }
-    }
-  }, [user]);
+  const libraryQuery = useInfiniteQuery<
+    Awaited<ReturnType<typeof mobileArtworkLibraryService.fetchPage>>,
+    Error,
+    InfiniteData<Awaited<ReturnType<typeof mobileArtworkLibraryService.fetchPage>>, number>,
+    ReturnType<typeof artworkLibraryQueryKey>,
+    number
+  >({
+    enabled: Boolean(userId),
+    getNextPageParam: getNextArtworkPageParam,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => mobileArtworkLibraryService.fetchPage(
+      userId,
+      pageParam,
+      ARTWORK_LIBRARY_PAGE_SIZE,
+    ),
+    queryKey: artworkLibraryQueryKey(userId),
+  });
+  const items = useMemo(
+    () => flattenArtworkLibraryPages(libraryQuery.data),
+    [libraryQuery.data],
+  );
+  const error: RequestErrorPresentation | null = libraryQuery.error
+    ? presentLibraryError(libraryQuery.error)
+    : null;
 
   useFocusEffect(useCallback(() => {
-    void loadFirstPage();
-    return () => {
-      requestVersion.current += 1;
-    };
-  }, [loadFirstPage]));
+    if (!userId) return;
+    void mobileQueryClient.refetchQueries({
+      exact: true,
+      queryKey: artworkLibraryQueryKey(userId),
+      stale: true,
+      type: 'active',
+    });
+  }, [userId]));
 
-  const loadMore = async () => {
-    if (!user || initialLoading || refreshing || loadingMore || items.length >= total) return;
-    setLoadingMore(true);
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      const page = await mobileArtworkLibraryService.fetchPage(
-        user.user_id,
-        items.length,
-        PAGE_SIZE,
-      );
-      setItems((current) => {
-        const knownIds = new Set(current.map((item) => item.id));
-        return [...current, ...page.items.filter((item) => !knownIds.has(item.id))];
-      });
-      setTotal(page.total);
-    } catch (loadError) {
-      setError(presentLibraryError(loadError));
+      await libraryQuery.refetch();
     } finally {
-      setLoadingMore(false);
+      setRefreshing(false);
     }
-  };
+  }, [libraryQuery.refetch]);
+
+  const loadMore = useCallback(() => {
+    if (libraryQuery.hasNextPage && !libraryQuery.isFetching) {
+      void libraryQuery.fetchNextPage();
+    }
+  }, [libraryQuery.fetchNextPage, libraryQuery.hasNextPage, libraryQuery.isFetching]);
 
   return (
     <Screen>
       <FlatList
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.content}
+        contentOffset={initialContentOffset}
         data={items}
         keyExtractor={(item) => item.id}
-        ListEmptyComponent={initialLoading ? (
+        ListEmptyComponent={libraryQuery.isPending ? (
           <ActivityIndicator color={colors.foreground} style={styles.loading} />
         ) : error ? (
           <View style={styles.messageBlock}>
@@ -118,7 +128,7 @@ export default function LibraryScreen() {
             {error.technicalDetail ? (
               <Text style={styles.errorDetail}>{error.technicalDetail}</Text>
             ) : null}
-            <MuseeButton label={COPY.retry} onPress={() => void loadFirstPage()} />
+            <MuseeButton label={COPY.retry} onPress={() => void libraryQuery.refetch()} />
           </View>
         ) : (
           <View style={styles.messageBlock}>
@@ -126,12 +136,12 @@ export default function LibraryScreen() {
             <Text style={styles.emptyMessage}>{COPY.emptyMessage}</Text>
           </View>
         )}
-        ListFooterComponent={loadingMore ? (
+        ListFooterComponent={libraryQuery.isFetchingNextPage ? (
           <ActivityIndicator color={colors.foreground} style={styles.footerLoading} />
         ) : error && items.length > 0 ? (
           <View style={styles.footerError}>
             <Text style={styles.errorDetail}>{error.message}</Text>
-            <MuseeButton label={COPY.retry} onPress={() => void loadFirstPage(true)} />
+            <MuseeButton label={COPY.retry} onPress={() => void refresh()} />
           </View>
         ) : null}
         ListHeaderComponent={(
@@ -141,14 +151,18 @@ export default function LibraryScreen() {
             <Text style={styles.message}>{COPY.message}</Text>
           </View>
         )}
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         numColumns={2}
-        onEndReached={() => void loadMore()}
+        onEndReached={loadMore}
         onEndReachedThreshold={0.4}
+        onScroll={(event) => {
+          setArtworkLibraryScrollOffset(userId, event.nativeEvent.contentOffset.y);
+        }}
         refreshControl={(
           <RefreshControl
             refreshing={refreshing}
             tintColor={colors.foreground}
-            onRefresh={() => void loadFirstPage(true)}
+            onRefresh={() => void refresh()}
           />
         )}
         renderItem={({ item }) => (
@@ -162,6 +176,7 @@ export default function LibraryScreen() {
             />
           </View>
         )}
+        scrollEventThrottle={250}
         showsVerticalScrollIndicator={false}
       />
     </Screen>

@@ -36,6 +36,7 @@ The mobile client is organized by product domain and platform boundary:
 | --- | --- |
 | `src/app/` | Expo Router routes and screen composition |
 | `src/api/runtime.ts` | Composition root for configuration, API clients, services, and adapters |
+| `src/api/queryClient.ts` | TanStack Query policy for cached server reads and mobile lifecycle refresh |
 | `src/auth/` | Native authentication session and credential ownership |
 | `src/capture/` | Image intake, upload, and artwork-analysis workflow |
 | `src/library/` | Artwork library and artwork-detail data |
@@ -71,6 +72,20 @@ EXPO_PUBLIC_API_URL=http://192.168.1.10:8000/api npm run mobile:start
 The phone and Mac must be on the same reachable network. Preview and production
 builds require an explicit HTTPS API URL and `EXPO_PUBLIC_APP_ENV=preview` or
 `production`.
+
+## Server state and revalidation
+
+TanStack Query owns cached server reads. Query keys include the authenticated
+user ID, paginated lists use infinite queries, and successful mutations update
+visible records before invalidating the related query for server revalidation.
+The shared query client treats records as fresh for 30 seconds, retains inactive
+queries in memory for 30 minutes, retries transient failures twice, and connects
+React Native `AppState` changes to foreground refetching.
+
+The cache is a disposable client view; the backend remains authoritative. It is
+not an offline database and does not queue writes. UI-only state such as a
+Library scroll offset remains outside TanStack Query. Clear the query cache when
+authentication ends so one account's data cannot appear in another account.
 
 ## Authentication and secure storage
 

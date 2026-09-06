@@ -21,7 +21,9 @@ import {
   mobileArtworkUploadService,
   mobileSessionService,
 } from '../api/runtime';
+import { mobileQueryClient } from '../api/queryClient';
 import type { NativeImageAsset, PendingArtworkUpload } from '../capture/types';
+import { invalidateArtworkLibraryQuery } from '../library/artworkLibraryQuery';
 import { mapPendingMobileArtwork } from '../library/mobileArtworkLibraryService';
 import type { MobileArtworkRecord } from '../library/types';
 import {
@@ -318,6 +320,7 @@ export function useMobileSessionMessaging({
           userId,
           context.sessionRecord?.id,
         );
+        invalidateArtworkLibraryQuery(mobileQueryClient, userId);
         context.membershipPersisted = Boolean(context.sessionRecord);
         const pendingArtwork = mapPendingMobileArtwork(context.uploadedArtwork);
         context.artworks = upsertArtwork(context.artworks, pendingArtwork);

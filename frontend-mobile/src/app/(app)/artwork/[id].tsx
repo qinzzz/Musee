@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { Stack, useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -15,19 +16,41 @@ import {
   mobileArtworkAnalysisService,
   mobileArtworkLibraryService,
 } from '../../../api/runtime';
+import { mobileQueryClient } from '../../../api/queryClient';
 import {
   presentRequestError,
   type RequestErrorPresentation,
 } from '../../../api/requestErrorPresentation';
-import { ArtworkAnalysisCard } from '../../../capture/components/ArtworkAnalysisCard';
+import { useAuth } from '../../../auth/AuthProvider';
+import { IdentifyAgainSheet } from '../../../library/components/IdentifyAgainSheet';
+import {
+  invalidateArtworkLibraryQuery,
+  removeArtworkFromLibraryQuery,
+  updateArtworkLibraryQuery,
+} from '../../../library/artworkLibraryQuery';
+import type { IdentifyAgainHints } from '../../../library/mobileArtworkLibraryService';
+import { ArtworkEditSheet } from '../../../library/components/ArtworkEditSheet';
 import { presentArtworkAnalysisError } from '../../../capture/captureErrorPresentation';
 import { toPendingArtworkUpload } from '../../../library/mobileArtworkLibraryService';
 import type { MobileArtworkRecord } from '../../../library/types';
 import { MuseeButton } from '../../../ui/components/MuseeButton';
+import { showPendingToast, showToast } from '../../../ui/toast';
 import { Screen } from '../../../ui/components/Screen';
 import { colors, radii, spacing, typography } from '../../../ui/tokens/theme';
 
 const COPY = {
+  edit: 'Edit',
+  actions: 'Artwork actions', identify: 'Identify Again', delete: 'Delete', cancel: 'Cancel',
+  removeTitle: 'Remove Artwork?', removeMessage: 'Remove this artwork from your collection?',
+  reidentifying: 'Re-identifying artwork…', deleting: 'Removing artwork…',
+  identifyError: 'Could not identify the artwork again.', deleteError: 'Could not remove artwork.',
+  savedRefreshError: 'Identification finished, but the updated artwork could not be loaded. Refresh to see it.',
+  identified: 'Artwork identified again', updated: 'Artwork updated', removed: 'Removed from collection',
+  identifyingToast: 'Identifying artwork again…',
+  deletingToast: 'Deleting artwork…', analyzingToast: 'Analyzing artwork…',
+  analysis: 'Analysis',
+  movement: 'Movement',
+  period: 'Period',
   loadError: 'Musee could not load this artwork.',
   retryLoad: 'Try again',
   analyze: 'Analyze artwork',
@@ -63,6 +86,17 @@ const STATUS_COPY = {
 export default function ArtworkDetailScreen() {
   const params = useLocalSearchParams<{ id: string | string[] }>();
   const artworkId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const router = useRouter();
+  const { user } = useAuth();
+  const userId = user?.user_id;
+  const operationLock = useRef(false);
+  const isFocused = useRef(false);
+  const [operation, setOperation] = useState<'identify' | 'delete' | null>(null);
+  const [actionError, setActionError] = useState<{ message: string; action: 'identify' | 'delete' | 'refresh' } | null>(null);
+  const [showIdentify, setShowIdentify] = useState(false);
+  const [hints, setHints] = useState<IdentifyAgainHints | null>(null);
+  const requestVersion = useRef(0);
+  const [editing, setEditing] = useState(false);
   const [artwork, setArtwork] = useState<MobileArtworkRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,6 +105,8 @@ export default function ArtworkDetailScreen() {
   const [error, setError] = useState<RequestErrorPresentation | null>(null);
 
   const loadArtwork = useCallback(async (showRefresh = false) => {
+    if (operationLock.current) return;
+    const version = ++requestVersion.current;
     if (!artworkId) {
       setError({ message: COPY.loadError });
       setLoading(false);
@@ -80,40 +116,149 @@ export default function ArtworkDetailScreen() {
     else setLoading(true);
     setError(null);
     try {
-      setArtwork(await mobileArtworkLibraryService.fetchArtwork(artworkId));
+      const loaded = await mobileArtworkLibraryService.fetchArtwork(artworkId);
+      if (version === requestVersion.current) {
+        setArtwork(loaded);
+        if (userId) updateArtworkLibraryQuery(mobileQueryClient, userId, loaded);
+      }
     } catch (loadError) {
-      setError(presentArtworkLoadError(loadError));
+      if (version === requestVersion.current) setError(presentArtworkLoadError(loadError));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (version === requestVersion.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [artworkId]);
+  }, [artworkId, userId]);
 
   useFocusEffect(useCallback(() => {
+    isFocused.current = true;
     void loadArtwork();
+    return () => { isFocused.current = false; requestVersion.current += 1; };
   }, [loadArtwork]));
 
   const analyzeArtwork = async () => {
-    if (!artwork) return;
+    if (!artwork || operationLock.current || analyzing) return;
     setAnalyzing(true);
     setReceivedChunk(false);
     setError(null);
+    showPendingToast({ label: COPY.analyzingToast });
     try {
       await mobileArtworkAnalysisService.analyzeArtwork(
         toPendingArtworkUpload(artwork),
         () => setReceivedChunk(true),
       );
       await loadArtwork();
+      if (userId) invalidateArtworkLibraryQuery(mobileQueryClient, userId);
+      showToast({ label: COPY.analyzed, icon: 'sparkles' });
     } catch (analysisError) {
       await loadArtwork();
-      setError(presentArtworkAnalysisError(
+      const presentation = presentArtworkAnalysisError(
         analysisError,
         ERROR_PRESENTATION_OPTIONS,
-      ));
+      );
+      setError(presentation);
+      showToast({
+        label: presentation.message,
+        icon: 'exclamationmark',
+        tone: 'danger',
+        durationMs: 4000,
+      });
     } finally {
       setAnalyzing(false);
     }
   };
+
+  const openIdentify = () => {
+    if (!artwork || operationLock.current) return;
+    setHints((current) => current || {
+      artistName: artwork.artistName, artworkName: artwork.artworkName, additionalClue: '',
+    });
+    setShowIdentify(true);
+  };
+
+  const identifyAgain = async () => {
+    if (!artwork || !hints || operationLock.current || !Object.values(hints).some((value) => value.trim())) return;
+    operationLock.current = true;
+    requestVersion.current += 1;
+    setRefreshing(false);
+    setOperation('identify');
+    setActionError(null);
+    setError(null);
+    setShowIdentify(false);
+    showPendingToast({ label: COPY.identifyingToast });
+    let completed = false;
+    try {
+      await mobileArtworkLibraryService.identifyAgain(artwork.id, hints);
+      completed = true;
+      setHints(null);
+      const identified = await mobileArtworkLibraryService.fetchArtwork(artwork.id);
+      setArtwork(identified);
+      if (userId) updateArtworkLibraryQuery(mobileQueryClient, userId, identified);
+      if (userId) invalidateArtworkLibraryQuery(mobileQueryClient, userId);
+      showToast({ label: COPY.identified, icon: 'viewfinder' });
+    } catch (cause) {
+      const presentation = completed
+        ? { message: COPY.savedRefreshError }
+        : presentRequestError(cause, {
+          ...ERROR_PRESENTATION_OPTIONS, fallbackMessage: COPY.identifyError,
+        });
+      setActionError({
+        action: completed ? 'refresh' : 'identify',
+        message: presentation.message,
+      });
+      showToast({
+        label: presentation.message,
+        icon: 'exclamationmark',
+        tone: 'danger',
+        durationMs: 4000,
+      });
+      if (!completed) {
+        // The request can fail after the server has persisted a result or failure.
+        try { setArtwork(await mobileArtworkLibraryService.fetchArtwork(artwork.id)); } catch { /* Keep the last loaded record. */ }
+      }
+    } finally {
+      operationLock.current = false;
+      setOperation(null);
+    }
+  };
+
+  const deleteArtwork = async () => {
+    if (!artwork || !userId || operationLock.current) return;
+    operationLock.current = true;
+    requestVersion.current += 1;
+    setRefreshing(false);
+    setOperation('delete');
+    setActionError(null);
+    showPendingToast({ label: COPY.deletingToast });
+    try {
+      await mobileArtworkLibraryService.deleteArtwork(artwork.id, userId);
+      removeArtworkFromLibraryQuery(mobileQueryClient, userId, artwork.id);
+      showToast({ label: COPY.removed, icon: 'trash' });
+      if (!isFocused.current) return;
+      if (router.canGoBack()) router.back();
+      else router.replace('/(app)/(tabs)/library');
+    } catch (cause) {
+      const presentation = presentRequestError(cause, {
+        ...ERROR_PRESENTATION_OPTIONS, fallbackMessage: COPY.deleteError,
+      });
+      setActionError({ action: 'delete', message: presentation.message });
+      showToast({
+        label: presentation.message,
+        icon: 'exclamationmark',
+        tone: 'danger',
+        durationMs: 4000,
+      });
+    } finally {
+      operationLock.current = false;
+      setOperation(null);
+    }
+  };
+
+  const confirmDelete = () => Alert.alert(COPY.removeTitle, COPY.removeMessage, [
+    { text: COPY.cancel, style: 'cancel' },
+    { text: COPY.delete, style: 'destructive', onPress: () => void deleteArtwork() },
+  ]);
 
   if (loading && !artwork) {
     return (
@@ -135,6 +280,8 @@ export default function ArtworkDetailScreen() {
     );
   }
 
+  const busy = Boolean(operation) || analyzing || editing || showIdentify;
+  const actionsDisabled = busy || artwork.analysisStatus === 'analyzing' || artwork.isDeleted;
   const canAnalyze = artwork.analysisStatus === 'pending' || artwork.analysisStatus === 'failed';
   const analysisButtonLabel = artwork.analysisStatus === 'failed'
     ? COPY.retryAnalysis
@@ -142,13 +289,22 @@ export default function ArtworkDetailScreen() {
 
   return (
     <Screen edges={['left', 'right', 'bottom']}>
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={COPY.actions} disabled={actionsDisabled}>
+          <Stack.Toolbar.MenuAction icon="viewfinder" onPress={openIdentify}>{COPY.identify}</Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.MenuAction icon="pencil" onPress={() => {
+            requestVersion.current += 1; setRefreshing(false); setEditing(true);
+          }}>{COPY.edit}</Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.MenuAction icon="trash" destructive disabled={!user} onPress={confirmDelete}>{COPY.delete}</Stack.Toolbar.MenuAction>
+        </Stack.Toolbar.Menu>
+      </Stack.Toolbar>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={(
           <RefreshControl
             refreshing={refreshing}
             tintColor={colors.foreground}
-            onRefresh={() => void loadArtwork(true)}
+            onRefresh={() => { if (!busy) void loadArtwork(true); }}
           />
         )}
         showsVerticalScrollIndicator={false}
@@ -167,14 +323,45 @@ export default function ArtworkDetailScreen() {
             artwork.analysisStatus === 'failed' && styles.failedStatus,
           ]}
         >
-          {analyzing
+          {operation ? (operation === 'identify' ? COPY.reidentifying : COPY.deleting) : analyzing
             ? (receivedChunk ? COPY.receiving : COPY.connecting)
             : STATUS_COPY[artwork.analysisStatus]}
         </Text>
 
-        {artwork.analysisStatus === 'analyzed' && artwork.analysis ? (
-          <ArtworkAnalysisCard artwork={{ ...artwork, analysis: artwork.analysis }} />
-        ) : (
+        <View style={styles.stateCard}>
+          <Text style={styles.stateTitle}>{artwork.artworkName}</Text>
+          <Text style={styles.stateMessage}>{artwork.artistName}</Text>
+          {artwork.date || artwork.medium ? <Text style={styles.stateMessage}>
+            {[artwork.date, artwork.medium].filter(Boolean).join(' · ')}
+          </Text> : null}
+          {artwork.movement ? <Text style={styles.stateMessage}>{COPY.movement}: {artwork.movement}</Text> : null}
+          {artwork.periodBucket ? <Text style={styles.stateMessage}>{COPY.period}: {artwork.periodBucket}</Text> : null}
+          {artwork.tags.length ? <Text style={styles.stateMessage}>{artwork.tags.join('  ')}</Text> : null}
+        </View>
+        {actionError ? (
+          <View style={styles.stateCard}>
+            <Text accessibilityRole="alert" style={styles.error}>{actionError.message}</Text>
+            <MuseeButton disabled={busy} label={actionError.action === 'identify' ? COPY.identify : COPY.retryLoad}
+              onPress={() => {
+                if (actionError.action === 'identify') openIdentify();
+                else if (actionError.action === 'delete') confirmDelete();
+                else { setActionError(null); void loadArtwork(true); }
+              }} />
+          </View>
+        ) : null}
+        {error ? (
+          <View style={styles.stateCard}>
+            <Text accessibilityRole="alert" style={styles.error}>{error.message}</Text>
+            <MuseeButton label={COPY.retryLoad} onPress={() => void loadArtwork(true)} />
+          </View>
+        ) : null}
+        {artwork.analysis ? (
+          <View style={styles.stateCard}>
+            <Text accessibilityRole="header" style={styles.stateTitle}>{COPY.analysis}</Text>
+            <Text selectable style={styles.analysis}>{artwork.analysis}</Text>
+          </View>
+        ) : null}
+        {!artwork.analysis || artwork.analysisStatus !== 'analyzed' ? (
           <View style={styles.stateCard}>
             <Text style={styles.stateTitle}>{artwork.artworkName}</Text>
             <Text style={styles.stateMessage}>
@@ -183,14 +370,15 @@ export default function ArtworkDetailScreen() {
             {error?.technicalDetail ? (
               <Text style={styles.errorDetail}>{error.technicalDetail}</Text>
             ) : null}
-            {canAnalyze ? (
+            {canAnalyze && !actionError && !operation ? (
               <MuseeButton
                 label={analysisButtonLabel}
                 loading={analyzing}
+                disabled={busy}
                 onPress={() => void analyzeArtwork()}
               />
             ) : null}
-            {artwork.analysisStatus === 'analyzing' && !analyzing ? (
+            {artwork.analysisStatus === 'analyzing' && !busy ? (
               <MuseeButton
                 label={COPY.refreshStatus}
                 onPress={() => void loadArtwork(true)}
@@ -198,8 +386,22 @@ export default function ArtworkDetailScreen() {
               />
             ) : null}
           </View>
-        )}
+        ) : null}
       </ScrollView>
+      {showIdentify && hints ? <IdentifyAgainSheet values={hints} onChange={setHints}
+        onClose={() => setShowIdentify(false)} onSubmit={() => void identifyAgain()} /> : null}
+      {editing ? <ArtworkEditSheet artwork={artwork} onClose={() => setEditing(false)}
+        onSaved={(saved) => {
+          requestVersion.current += 1;
+          setArtwork(saved);
+          if (userId) updateArtworkLibraryQuery(mobileQueryClient, userId, saved);
+          if (userId) invalidateArtworkLibraryQuery(mobileQueryClient, userId);
+          setHints(null);
+          setActionError(null);
+          setError(null);
+          setEditing(false);
+          showToast({ label: COPY.updated, icon: 'pencil' });
+        }} /> : null}
     </Screen>
   );
 }
@@ -246,6 +448,11 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     fontSize: typography.body,
     lineHeight: 24,
+  },
+  analysis: {
+    color: colors.foreground,
+    fontSize: typography.body,
+    lineHeight: 27,
   },
   error: {
     color: colors.danger,

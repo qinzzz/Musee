@@ -100,7 +100,7 @@ Status meanings:
 | Upload and streamed artwork analysis | Baseline complete | Preserve retry, status, and persisted-result behavior |
 | Artwork thumbnails and image variants | Baseline complete | Preserve cloud derivatives, legacy fallback, and full-resolution detail/AI use |
 | Artwork library and basic detail | Partial | Add complete metadata, actions, pagination, loading, and error states |
-| Artwork editing, deletion, and re-identification | Not started | Provide safe native actions with consistent persistence |
+| Artwork editing, deletion, and re-identification | Partial — editing, Identify Again, and deletion implemented; device validation pending | Provide safe native actions with consistent persistence |
 | Text-only Sessions | Baseline complete | Continue hardening long histories, interruption, and recovery |
 | Artwork inputs and cards inside Sessions | Baseline complete | Harden lifecycle states and long-history behavior after the single-artwork paths |
 | Session management | Partial | Complete history, titles, delete/archive behavior, and long-list UX |
@@ -161,7 +161,8 @@ Status: text and single-artwork baselines complete; lifecycle polish remains.
 
 ### Phase 4 — Complete the artwork library
 
-Status: not started beyond the basic library/detail baseline.
+Status: in progress; detail, editing, Identify Again, deletion, and TanStack
+Query cache/revalidation implemented; device validation pending.
 
 - add pagination and intentional cache/revalidation behavior;
 - complete artwork metadata and analysis presentation;
@@ -221,7 +222,7 @@ Status: development-device builds work; production pipeline not complete.
 
 ## Active milestone
 
-### Now: complete artwork-aware native Sessions
+### Completed baseline: artwork-aware native Sessions
 
 Build one complete Session artwork slice:
 
@@ -237,12 +238,22 @@ Do not attempt every advanced Session behavior in this slice. Batch semantics,
 notifications, richer model-status UI, and offline queuing should follow only
 after the single-artwork persistent path is solid.
 
-### Next: complete the native artwork library
+### Now: complete the native artwork library
 
-Move into Phase 4 with pagination and cache behavior already established. Add
-the missing metadata, analysis, edit, delete, re-identify, and relevant artwork
-actions as small end-to-end slices rather than recreating the complete web
-surface at once.
+Phase 4 has started: native detail now presents analysis, available
+metadata, and a top-right actions menu for Identify Again, Edit, and Delete.
+Editing supports title, artist, date, medium, and tags. Identify Again follows
+the web clue form and saved-image identification endpoint; deletion uses the
+existing collection soft-delete contract. The Library keeps loaded pages and
+scroll position on return, uses TanStack Query to revalidate cached records in
+the background, and applies detail edits and deletions immediately. Returning
+to a Session refreshes linked artwork records and its title, preserving
+unavailable references.
+Device validation of this slice remains required before calling it
+baseline complete.
+
+Next, complete the remaining relevant artwork actions and batch-intake behavior
+as small end-to-end slices.
 
 ## Quality gates
 

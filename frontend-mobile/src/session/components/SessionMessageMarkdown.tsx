@@ -1,131 +1,59 @@
-import {
-  EnrichedMarkdownText,
-  type MarkdownStyle,
-} from 'react-native-enriched-markdown';
-import { Linking } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
+import { colors, spacing, typography } from '../../ui/tokens/theme';
+import { tokenizeSessionMessageText } from '../sessionMessageText';
 
 type SessionMessageMarkdownProps = {
   children: string;
   streaming?: boolean;
 };
 
-const ALLOWED_LINK_PROTOCOLS = new Set(['http:', 'https:']);
+export function SessionMessageMarkdown({
+  children,
+}: SessionMessageMarkdownProps) {
+  const paragraphs = children.trim().split(/\n{2,}/);
+  return (
+    <View>
+      {paragraphs.map((paragraph, paragraphIndex) => (
+        <Text
+          key={`${paragraphIndex}-${paragraph.slice(0, 24)}`}
+          selectable
+          style={[
+            styles.paragraph,
+            paragraphIndex < paragraphs.length - 1 && styles.paragraphSpacing,
+          ]}
+        >
+          {tokenizeSessionMessageText(paragraph).map((segment, segmentIndex) => (
+            <Text
+              key={`${segmentIndex}-${segment.text.slice(0, 16)}`}
+              style={segment.kind === 'strong'
+                ? styles.strong
+                : segment.kind === 'emphasis'
+                  ? styles.emphasis
+                  : undefined}
+            >
+              {segment.text}
+            </Text>
+          ))}
+        </Text>
+      ))}
+    </View>
+  );
+}
 
-const markdownStyle: MarkdownStyle = {
+const styles = StyleSheet.create({
   paragraph: {
     color: colors.foreground,
     fontSize: typography.body,
     lineHeight: 27,
+  },
+  paragraphSpacing: {
     marginBottom: spacing.md,
-  },
-  h1: {
-    color: colors.foreground,
-    fontSize: typography.heading,
-    fontWeight: '600',
-    lineHeight: 32,
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
-  },
-  h2: {
-    color: colors.foreground,
-    fontSize: 21,
-    fontWeight: '600',
-    lineHeight: 28,
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
-  },
-  h3: {
-    color: colors.foreground,
-    fontSize: 18,
-    fontWeight: '600',
-    lineHeight: 25,
-    marginBottom: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  list: {
-    bulletColor: colors.secondary,
-    color: colors.foreground,
-    fontSize: typography.body,
-    gapWidth: spacing.sm,
-    itemSpacing: spacing.xs,
-    lineHeight: 27,
-    marginBottom: spacing.md,
-    marginLeft: spacing.lg,
-  },
-  blockquote: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radii.button,
-    borderWidth: 2,
-    color: colors.secondary,
-    fontSize: typography.body,
-    gapWidth: spacing.md,
-    lineHeight: 26,
-    marginBottom: spacing.md,
-    padding: spacing.sm,
   },
   strong: {
-    color: colors.foreground,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
-  em: {
-    color: colors.foreground,
+  emphasis: {
     fontStyle: 'italic',
   },
-  link: {
-    color: colors.foreground,
-    underline: true,
-  },
-  code: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    color: colors.foreground,
-    fontSize: 15,
-  },
-  codeBlock: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radii.button,
-    borderWidth: 1,
-    color: colors.foreground,
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: spacing.md,
-    padding: spacing.md,
-  },
-  thematicBreak: {
-    color: colors.border,
-    marginBottom: spacing.md,
-    marginTop: spacing.md,
-  },
-};
-
-async function openExternalLink(url: string): Promise<void> {
-  try {
-    const parsedUrl = new URL(url);
-    if (!ALLOWED_LINK_PROTOCOLS.has(parsedUrl.protocol)) return;
-    await Linking.openURL(parsedUrl.toString());
-  } catch {
-    // Ignore malformed or unsupported links returned in model-authored Markdown.
-  }
-}
-
-export function SessionMessageMarkdown({
-  children,
-  streaming = false,
-}: SessionMessageMarkdownProps) {
-  return (
-    <EnrichedMarkdownText
-      enableTaskListItemToggle={false}
-      flavor="github"
-      markdown={children}
-      markdownStyle={markdownStyle}
-      md4cFlags={{ latexMath: false }}
-      onLinkPress={({ url }) => void openExternalLink(url)}
-      selectable
-      streamingAnimation={streaming}
-    />
-  );
-}
+});

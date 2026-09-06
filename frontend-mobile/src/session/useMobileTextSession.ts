@@ -1,4 +1,6 @@
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import type { SessionEventRecord, SessionRecord } from '@musee/client-core';
 
@@ -29,6 +31,7 @@ const ERROR_OPTIONS = {
   apiBaseUrl: MOBILE_API_BASE_URL,
   showTechnicalDetails: __DEV__,
 };
+const SESSION_REVALIDATION_INTERVAL_MS = 15_000;
 
 export function useMobileTextSession(
   routeSessionId: string,
@@ -118,6 +121,48 @@ export function useMobileTextSession(
       requestVersion.current += 1;
     };
   }, [reload]);
+
+  // Refresh the canonical session snapshot on return without resetting an active conversation.
+  const activeSessionId = session?.id;
+  const isSending = messaging.isSending;
+  useFocusEffect(useCallback(() => {
+    if (!activeSessionId || !userId || isSending) return;
+    let cancelled = false;
+    let refreshing = false;
+    const refreshCanonicalSession = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const [records, refreshedEvents, sessions] = await Promise.all([
+          mobileSessionService.fetchArtworks(activeSessionId, userId),
+          mobileSessionService.fetchEvents(activeSessionId),
+          mobileSessionService.fetchSessions(userId),
+        ]);
+        if (cancelled) return;
+        setLoadError(null);
+        setArtworks(records.map((record) => mapMobileArtwork(record, MOBILE_API_BASE_URL)));
+        setEvents(refreshedEvents);
+        const updated = sessions.find((entry) => entry.id === activeSessionId);
+        if (updated) setSession(updated);
+      } catch (error) {
+        if (!cancelled) setLoadError(presentSessionError(error, 'load', ERROR_OPTIONS));
+      } finally {
+        refreshing = false;
+      }
+    };
+    void refreshCanonicalSession();
+    const intervalId = setInterval(() => {
+      void refreshCanonicalSession();
+    }, SESSION_REVALIDATION_INTERVAL_MS);
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') void refreshCanonicalSession();
+    });
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+      appStateSubscription.remove();
+    };
+  }, [activeSessionId, isSending, userId]));
 
   return {
     ...messaging,
