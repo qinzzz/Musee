@@ -1,29 +1,32 @@
 import { Image } from 'expo-image';
+import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import type { NativeImageAsset } from '../../capture/types';
-import type { MobileArtworkRecord } from '../../library/types';
 import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
 
-export type SessionComposerAttachment =
-  | { asset: NativeImageAsset; kind: 'local' }
-  | { artwork: MobileArtworkRecord; kind: 'library' };
+import { MAX_SESSION_ATTACHMENTS, type SessionContextInput } from '../mobileSessionContextService';
+export type SessionComposerAttachment = SessionContextInput;
 
 type SessionComposerProps = {
-  attachment: SessionComposerAttachment | null;
+  attachments: SessionComposerAttachment[];
   disabled: boolean;
   onChooseLibraryArtwork: () => void;
   onChoosePhoto: () => void;
-  onRemoveAttachment: () => void;
+  onRemoveAttachment: (index: number) => void;
   onTakePhoto: () => void;
-  onSubmit: (text: string, attachment: SessionComposerAttachment | null) => Promise<boolean>;
+  onSubmit: (text: string, attachments: SessionComposerAttachment[]) => Promise<boolean>;
 };
 
-const PLACEHOLDER = 'Ask Musee';
+const COPY = {
+  placeholder: 'Ask Musee', notePlaceholder: 'Add a note (optional)',
+  readyLabel: 'Artwork ready to upload',
+  removeLabel: 'Remove artwork',
+  camera: 'Camera', photos: 'Photos', library: 'Library', send: 'Send',
+} as const;
 
 export function SessionComposer({
-  attachment,
+  attachments,
   disabled,
   onChooseLibraryArtwork,
   onChoosePhoto,
@@ -32,60 +35,59 @@ export function SessionComposer({
   onTakePhoto,
 }: SessionComposerProps) {
   const [text, setText] = useState('');
-  const canSubmit = !disabled && Boolean(text.trim() || attachment);
+  const canSubmit = !disabled && Boolean(text.trim() || attachments.length);
 
   const submit = async () => {
     if (!canSubmit) return;
-    const submitted = await onSubmit(text, attachment);
+    const submitted = await onSubmit(text, attachments);
     if (submitted) setText('');
   };
 
   return (
     <View style={styles.container}>
-      {attachment ? (
-        <View style={styles.attachmentRow}>
-          <Image
-            accessibilityLabel={attachment.kind === 'library'
-              ? `${attachment.artwork.artworkName} by ${attachment.artwork.artistName}`
-              : 'Artwork ready to upload'}
-            contentFit="cover"
-            source={{
-              uri: attachment.kind === 'library'
-                ? attachment.artwork.resolvedThumbnailUri
-                : attachment.asset.uri,
-            }}
-            style={styles.attachmentImage}
-          />
-          <View style={styles.attachmentCopy}>
-            <Text numberOfLines={1} style={styles.attachmentTitle}>
-              {attachment.kind === 'library'
-                ? attachment.artwork.artworkName
-                : 'Artwork ready'}
-            </Text>
-            <Text style={styles.attachmentSource}>
-              {attachment.kind === 'library'
-                ? attachment.artwork.artistName
-                : attachment.asset.source === 'camera' ? 'Camera' : 'Photos'}
-            </Text>
+      {attachments.length > 0 ? <ScrollView
+        horizontal
+        style={styles.attachments}
+        contentContainerStyle={styles.attachmentStrip}
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {attachments.map((attachment, index) => (
+          <View key={attachment.kind === 'library' ? attachment.artwork.id : attachment.asset.uri} style={styles.imageContainer}>
+            <Image
+              accessibilityLabel={attachment.kind === 'library'
+                ? `${attachment.artwork.artworkName} by ${attachment.artwork.artistName}`
+                : COPY.readyLabel}
+              contentFit="cover"
+              source={{
+                uri: attachment.kind === 'library'
+                  ? attachment.artwork.resolvedThumbnailUri
+                  : attachment.asset.uri,
+              }}
+              style={styles.attachmentImage}
+            />
+            <Pressable
+              accessibilityLabel={COPY.removeLabel}
+              accessibilityRole="button"
+              accessibilityState={{ disabled }}
+              disabled={disabled}
+              onPress={() => onRemoveAttachment(index)}
+              style={({ pressed }) => [styles.closeTarget, pressed && styles.pressed]}
+            >
+              <View style={styles.closeBadge}>
+                <SymbolView name="xmark" tintColor={colors.foreground} size={12} />
+              </View>
+            </Pressable>
           </View>
-          <Pressable
-            accessibilityLabel="Remove artwork"
-            accessibilityRole="button"
-            disabled={disabled}
-            onPress={onRemoveAttachment}
-            style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.removeLabel}>Remove</Text>
-          </Pressable>
-        </View>
-      ) : null}
+        ))}
+      </ScrollView> : null}
       <View style={styles.inputRow}>
         <TextInput
-          accessibilityLabel={PLACEHOLDER}
+          accessibilityLabel={COPY.placeholder}
           editable={!disabled}
           multiline
           onChangeText={setText}
-          placeholder={attachment ? 'Add a note (optional)' : PLACEHOLDER}
+          placeholder={attachments.length ? COPY.notePlaceholder : COPY.placeholder}
           placeholderTextColor={colors.placeholder}
           style={styles.input}
           value={text}
@@ -101,10 +103,10 @@ export function SessionComposer({
             pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.sendLabel}>Send</Text>
+          <Text style={styles.sendLabel}>{COPY.send}</Text>
         </Pressable>
       </View>
-      {!attachment ? (
+      {attachments.length < MAX_SESSION_ATTACHMENTS ? (
         <View style={styles.attachmentActions}>
           <Pressable
             accessibilityRole="button"
@@ -112,7 +114,7 @@ export function SessionComposer({
             onPress={onTakePhoto}
             style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressed]}
           >
-            <Text style={styles.attachmentButtonLabel}>Camera</Text>
+            <Text style={styles.attachmentButtonLabel}>{COPY.camera}</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -120,7 +122,7 @@ export function SessionComposer({
             onPress={onChoosePhoto}
             style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressed]}
           >
-            <Text style={styles.attachmentButtonLabel}>Photos</Text>
+            <Text style={styles.attachmentButtonLabel}>{COPY.photos}</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -128,7 +130,7 @@ export function SessionComposer({
             onPress={onChooseLibraryArtwork}
             style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressed]}
           >
-            <Text style={styles.attachmentButtonLabel}>Library</Text>
+            <Text style={styles.attachmentButtonLabel}>{COPY.library}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -137,6 +139,8 @@ export function SessionComposer({
 }
 
 const styles = StyleSheet.create({
+  attachments: { flexGrow: 0 },
+  attachmentStrip: { gap: spacing.sm },
   container: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -193,38 +197,31 @@ const styles = StyleSheet.create({
     fontSize: typography.label,
     fontWeight: '600',
   },
-  attachmentRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
   attachmentImage: {
     backgroundColor: colors.border,
     borderRadius: radii.input,
     height: 64,
     width: 64,
   },
-  attachmentCopy: {
-    flex: 1,
-    gap: 2,
+  imageContainer: {
+    width: 64,
+    height: 64,
   },
-  attachmentTitle: {
-    color: colors.foreground,
-    fontSize: typography.label,
-    fontWeight: '600',
+  closeTarget: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 44,
+    height: 44,
+    alignItems: 'flex-end',
+    padding: 3,
   },
-  attachmentSource: {
-    color: colors.secondary,
-    fontSize: typography.caption,
-  },
-  removeButton: {
+  closeBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: spacing.sm,
-  },
-  removeLabel: {
-    color: colors.danger,
-    fontSize: typography.caption,
-    fontWeight: '600',
   },
 });

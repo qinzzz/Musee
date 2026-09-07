@@ -1,3 +1,4 @@
+import { buildSessionArtworkContext } from '@musee/client-core';
 import { useCallback, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { SessionAuthenticationError, streamSessionChat } from '../../api/chat';
@@ -302,8 +303,7 @@ export function useSessionMessaging({
         role: 'user',
         event_type: 'user_input',
         content: normalizedContent,
-        artwork_ids: entries.map((entry) => entry.artworkId),
-        payload: { artworks: entries.map((entry) => ({ artwork_id: entry.artworkId, source: entry.source })) },
+        ...buildSessionArtworkContext(entries.map((entry) => ({ artwork_id: entry.artworkId, source: entry.source }))),
       }]).finally(() => {
         refreshPersistedSessions();
       })

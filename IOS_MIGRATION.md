@@ -96,7 +96,7 @@ Status meanings:
 | Email sign-in, refresh, restore, sign-out | Baseline complete | Harden lifecycle and security behavior as release approaches |
 | Social sign-in and account recovery | Not started | Define native providers and complete recovery/verification flows |
 | Camera and single-photo intake | Baseline complete | Add production capture UX and preserve reliable permission fallbacks |
-| Batch and multi-select intake | Partial — multi-select Library upload implemented; Session composition remains | Match the intentional web batch workflow where it fits native UX |
+| Batch and multi-select intake | Implemented — Library intake and mixed Session composition; device validation pending | Match the intentional web batch workflow where it fits native UX |
 | Upload and streamed artwork analysis | Baseline complete | Preserve retry, status, and persisted-result behavior |
 | Artwork thumbnails and image variants | Baseline complete | Preserve cloud derivatives, legacy fallback, and full-resolution detail/AI use |
 | Artwork library and basic detail | Partial | Add complete metadata, actions, pagination, loading, and error states |
@@ -253,8 +253,13 @@ unavailable references.
 Device validation of this slice remains required before calling it
 baseline complete.
 
-Next, complete the remaining relevant artwork actions and batch-intake behavior
-inside Sessions as small end-to-end slices.
+Mixed Session composition now supports up to five Camera, Photos, and Library
+attachments in one turn through a typed shared context lifecycle and a native
+artwork adapter. Failed entries retain successful work and support individual
+retry; committed turns support interrupted-response recovery. Validate mixed
+selection, removal, partial failure, and cold-start retry on device before
+calling this slice complete. Future artist, tag, and document context needs
+concrete backend contracts, not new UI-specific orchestration.
 
 ## Quality gates
 

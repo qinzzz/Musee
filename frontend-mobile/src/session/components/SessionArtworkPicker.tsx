@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -19,13 +19,16 @@ import { useSessionArtworkPicker } from '../useSessionArtworkPicker';
 type SessionArtworkPickerProps = {
   excludedArtworkIds: string[];
   onCancel: () => void;
-  onSelect: (artwork: MobileArtworkRecord) => void;
+  onSelect: (artworks: MobileArtworkRecord[]) => void;
+  remainingSlots: number;
   userId: string;
   visible: boolean;
 };
 
 const COPY = {
   empty: 'No saved artworks yet.',
+  alreadyAdded: 'Already added',
+  add: (count: number) => `Add ${count} artwork${count === 1 ? '' : 's'}`,
   retry: 'Try again',
   title: 'Choose from Library',
 } as const;
@@ -34,9 +37,12 @@ export function SessionArtworkPicker({
   excludedArtworkIds,
   onCancel,
   onSelect,
+  remainingSlots,
   userId,
   visible,
 }: SessionArtworkPickerProps) {
+  const [selected, setSelected] = useState<MobileArtworkRecord[]>([]);
+  useEffect(() => { if (visible) setSelected([]); }, [visible]);
   const {
     error,
     isLoading,
@@ -103,21 +109,28 @@ export function SessionArtworkPicker({
           onEndReachedThreshold={0.4}
           renderItem={({ item }) => {
             const alreadyAdded = excludedIds.has(item.id);
+            const isSelected = selected.some((entry) => entry.id === item.id);
             const isAnalyzing = item.analysisStatus === 'pending'
               || item.analysisStatus === 'analyzing';
             return (
               <View style={styles.item}>
                 <ArtworkLibraryCard
                   artwork={item}
-                  disabled={alreadyAdded || isAnalyzing}
-                  onPress={() => onSelect(item)}
-                  statusLabel={alreadyAdded ? 'Already added' : undefined}
+                  selected={alreadyAdded || isSelected}
+                  disabled={alreadyAdded || isAnalyzing || (!isSelected && selected.length >= remainingSlots)}
+                  onPress={() => setSelected((current) => isSelected
+                    ? current.filter((entry) => entry.id !== item.id) : [...current, item])}
+                  statusLabel={alreadyAdded ? COPY.alreadyAdded : undefined}
                 />
               </View>
             );
           }}
           showsVerticalScrollIndicator={false}
         />
+        <View style={styles.header}>
+          <MuseeButton label={COPY.add(selected.length)}
+            disabled={!selected.length} onPress={() => onSelect(selected)} />
+        </View>
       </SafeAreaView>
     </Modal>
   );

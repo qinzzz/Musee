@@ -8,6 +8,7 @@ export type MobileArtworkUploadService = {
     asset: NativeImageAsset,
     userId: string,
     sessionId?: string,
+    requestId?: string,
   ) => Promise<PendingArtworkUpload>;
 };
 
@@ -29,11 +30,11 @@ export function createMobileArtworkUploadService({
   createRequestId = defaultRequestId,
 }: MobileArtworkUploadServiceOptions): MobileArtworkUploadService {
   return {
-    async uploadArtwork(asset, userId, sessionId) {
+    async uploadArtwork(asset, userId, sessionId, requestId) {
       const saved = await transport.uploadArtwork(
         asset,
         userId,
-        createRequestId(),
+        requestId ?? createRequestId(),
         sessionId,
       );
       const cacheKey = `artwork:${saved.id}`;
