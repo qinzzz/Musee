@@ -52,7 +52,7 @@ def _serialize_collection(collection: Collection) -> dict:
 
 
 def _get_owned_collection(db: Session, collection_id: str, user_id: str) -> Collection:
-    collection = db.query(Collection).filter(Collection.id == collection_id).first()
+    collection = db.query(Collection).filter(Collection.id == collection_id).with_for_update().first()
     if not collection:
         raise HTTPException(status_code=404, detail="Collection not found")
     if collection.user_id != user_id:
@@ -81,7 +81,7 @@ def _get_owned_artworks(db: Session, user_id: str, artwork_ids: List[str]) -> Li
         )
 
     artworks_by_id = {artwork.id: artwork for artwork in artworks}
-    return [artworks_by_id[artwork_id] for artwork_id in artwork_ids if artwork_id in artworks_by_id]
+    return [artworks_by_id[artwork_id] for artwork_id in dict.fromkeys(artwork_ids)]
 
 
 @router.post("/collections")
@@ -186,6 +186,13 @@ async def update_collection(
         if request.artwork_ids is not None:
             collection.artworks = _get_owned_artworks(db, user_id, request.artwork_ids)
 
+        if request.add_artwork_ids is not None or request.remove_artwork_ids is not None:
+            additions = _get_owned_artworks(db, user_id, request.add_artwork_ids or [])
+            removed = set(request.remove_artwork_ids or [])
+            retained = [artwork for artwork in collection.artworks if artwork.id not in removed]
+            known = {artwork.id for artwork in retained}
+            collection.artworks = retained + [artwork for artwork in additions if artwork.id not in known]
+
         db.commit()
         persisted = _collection_with_artwork_ids_query(db).filter(Collection.id == collection.id).first()
         return _serialize_collection(persisted)
@@ -218,3 +225,29 @@ async def delete_collection(
         db.rollback()
         logger.error(f"Failed to delete collection: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to delete collection: {str(e)}")
+
+
+@router.get("/collections/{collection_id}/artworks")
+def get_collection_artworks(
+    collection_id: str,
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
+):
+    collection = db.query(Collection).filter(Collection.id == collection_id).first()
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    _require_collection_capability(principal, collection.user_id, SEARCH_COLLECTION)
+    query = db.query(SavedArtwork).filter(
+        SavedArtwork.collections.any(Collection.id == collection_id),
+        SavedArtwork.user_id == collection.user_id,
+        SavedArtwork.active_filter(),
+    )
+    total = query.count()
+    items = query.options(
+        selectinload(SavedArtwork.artwork_tags),
+        selectinload(SavedArtwork.session_links),
+        selectinload(SavedArtwork.capture_museum_entity),
+    ).order_by(SavedArtwork.created_at.desc(), SavedArtwork.id).offset(offset).limit(limit).all()
+    return {"items": [artwork.to_dict() for artwork in items], "total": total, "offset": offset, "limit": limit}

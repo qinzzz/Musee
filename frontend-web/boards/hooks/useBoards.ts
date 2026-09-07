@@ -45,8 +45,7 @@ export function useBoards({ userId, enabled = true, showToast }: UseBoardsOption
     const targetBoard = boards.find((board) => board.id === boardId);
     if (!targetBoard) return;
 
-    const nextItemIds = Array.from(new Set([...targetBoard.itemIds, ...itemIds]));
-    const updatedBoard = await updateCollection(userId, boardId, { artworkIds: nextItemIds });
+    const updatedBoard = await updateCollection(userId, boardId, { addArtworkIds: itemIds });
     setBoards((prev) => prev.map((board) => (board.id === boardId ? updatedBoard : board)));
     showToast(`Added ${itemIds.length} ${itemIds.length === 1 ? 'artwork' : 'artworks'} to ${updatedBoard.name}`, 'success');
   }, [boards, setBoards, showToast, userId]);

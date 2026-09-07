@@ -76,8 +76,17 @@
 | **POST** | `/collections` | `name`, `user_id`, `description?`, `artwork_ids[]?` | Collection object with artworks |
 | **GET** | `/collections` | `user_id` (query param) | Collection[] with artworks |
 | **GET** | `/collections/{collection_id}` | - | Collection object with artworks |
-| **PUT** | `/collections/{collection_id}` | `name?`, `description?`, `artwork_ids[]?` | Collection object with artworks |
-| **DELETE** | `/collections/{collection_id}` | - | `{message}` |
+| **PUT** | `/collections/{collection_id}` | `user_id` (query); `name?`, `description?`, `artwork_ids[]?` or `add_artwork_ids[]?` / `remove_artwork_ids[]?` | Collection with member IDs |
+| **DELETE** | `/collections/{collection_id}` | `user_id` (query) | `{message}` |
+| **GET** | `/collections/{collection_id}/artworks` | `offset?` (default 0), `limit?` (default 30, max 100) | `{items, total, offset, limit}` |
+
+Boards use these collection records. List/detail responses contain lightweight
+member IDs; the artwork endpoint returns paginated active artwork records after
+checking ownership. Membership deltas are applied under a board row lock, are
+idempotent, and preserve unrelated membership changes. Do not combine replacement
+and delta fields or add and remove the same ID in one request. Board deletion
+and membership removal preserve saved artworks. Names are trimmed and must
+contain 1–200 characters.
 
 ---
 

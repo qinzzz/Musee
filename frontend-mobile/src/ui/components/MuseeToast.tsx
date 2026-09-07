@@ -65,7 +65,7 @@ export function MuseeToast() {
               colorScheme="light"
               glassEffectStyle={{ style: 'regular', animate: true, animationDuration: 0.2 }}
               style={styles.glass}
-              tintColor="rgba(245, 242, 234, 0.18)"
+              tintColor="rgba(255, 255, 255, 0.18)"
             />
             {content}
           </>

@@ -1,23 +1,19 @@
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { SessionRecord } from '@musee/client-core';
 
 import { MOBILE_API_BASE_URL, mobileSessionService } from '../../api/runtime';
 import { useAuth } from '../../auth/AuthProvider';
 import { MuseeButton } from '../../ui/components/MuseeButton';
-import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
+import { colors, spacing, typography } from '../../ui/tokens/theme';
 import {
   presentSessionError,
   type SessionErrorPresentation,
 } from '../sessionErrorPresentation';
 
 const COPY = {
-  heading: 'Sessions',
-  message: 'Ask Musee a question and return to the conversation anytime.',
-  start: 'Start Session',
-  recent: 'Recent Sessions',
   empty: 'Your conversations will appear here.',
   retry: 'Try again',
 } as const;
@@ -37,7 +33,7 @@ function formatUpdatedAt(value?: string | null): string {
   }).format(date);
 }
 
-export function HomeSessionPanel() {
+export function SessionHistoryList() {
   const { user } = useAuth();
   const router = useRouter();
   const requestVersion = useRef(0);
@@ -71,16 +67,6 @@ export function HomeSessionPanel() {
 
   return (
     <View style={styles.section}>
-      <View style={styles.headingGroup}>
-        <Text style={styles.heading}>{COPY.heading}</Text>
-        <Text style={styles.message}>{COPY.message}</Text>
-      </View>
-      <MuseeButton
-        label={COPY.start}
-        onPress={() => router.push('/session/new')}
-      />
-
-      <Text style={styles.recentLabel}>{COPY.recent}</Text>
       {loading ? (
         <ActivityIndicator color={colors.foreground} />
       ) : error ? (
@@ -94,22 +80,18 @@ export function HomeSessionPanel() {
       ) : sessions.length === 0 ? (
         <Text style={styles.statusText}>{COPY.empty}</Text>
       ) : (
-        <View style={styles.sessionList}>
-          {sessions.slice(0, 4).map((session) => (
-            <Pressable
-              accessibilityRole="button"
-              key={session.id}
-              onPress={() => router.push({
-                pathname: '/session/[id]',
-                params: { id: session.id },
-              })}
-              style={({ pressed }) => [styles.sessionRow, pressed && styles.pressed]}
-            >
+        <FlatList
+          data={sessions}
+          keyExtractor={(session) => session.id}
+          renderItem={({ item: session }) => (
+            <Pressable accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/session/[id]', params: { id: session.id } })}
+              style={({ pressed }) => [styles.sessionRow, pressed && styles.pressed]}>
               <Text numberOfLines={1} style={styles.sessionTitle}>{session.title}</Text>
               <Text style={styles.sessionDate}>{formatUpdatedAt(session.updated_at)}</Text>
             </Pressable>
-          ))}
-        </View>
+          )}
+        />
       )}
     </View>
   );
@@ -117,33 +99,9 @@ export function HomeSessionPanel() {
 
 const styles = StyleSheet.create({
   section: {
+    flex: 1,
+    paddingTop: spacing.md,
     gap: spacing.md,
-  },
-  headingGroup: {
-    gap: spacing.xs,
-  },
-  heading: {
-    color: colors.foreground,
-    fontSize: typography.heading,
-    fontWeight: '600',
-  },
-  message: {
-    color: colors.secondary,
-    fontSize: typography.body,
-    lineHeight: 24,
-  },
-  recentLabel: {
-    color: colors.secondary,
-    fontSize: typography.caption,
-    fontWeight: '600',
-    marginTop: spacing.xs,
-    textTransform: 'uppercase',
-  },
-  sessionList: {
-    borderColor: colors.border,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
   },
   sessionRow: {
     alignItems: 'center',

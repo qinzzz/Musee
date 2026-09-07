@@ -40,6 +40,9 @@ The mobile client is organized by product domain and platform boundary:
 | `src/auth/` | Native authentication session and credential ownership |
 | `src/capture/` | Image intake, upload, and artwork-analysis workflow |
 | `src/library/` | Artwork library and artwork-detail data |
+| `src/navigation/` | Global floating tab bar and navigation presentation |
+| `src/collection/` | Collection sub-tabs and artwork browsing composition |
+| `src/boards/` | Board organization, membership, and cached board reads |
 | `src/session/` | Persistent visit sessions and streamed responses |
 | `src/platform/` | Expo-backed storage, image, and media adapters |
 | `src/ui/` | Reusable native UI primitives and design tokens |
@@ -48,6 +51,27 @@ Keep route files focused on navigation and composition. HTTP details belong in
 transports, multi-step behavior belongs in domain services or hooks, and Expo
 APIs belong behind platform adapters. UI code should not call SecureStore or
 construct authenticated network requests directly.
+
+## Navigation and presentation
+
+The global shell has three icon-only tabs: Home, Collection, and Profile.
+`navigation/FloatingTabBar` renders a floating capsule above the bottom safe
+area and hides while the keyboard is open. `GlassSurface` and
+`GlassIconButton` provide native Liquid Glass when available, with a neutral
+fallback. The palette is white with neutral gray borders and secondary text.
+
+Home uses the Session composer in its centered start state. Submission passes
+text and attachments through the authenticated tree's in-memory
+`SessionDraftProvider`, consumed once by the deeper Session route; it does not
+put private draft content in URL parameters. The top-left history button opens
+the full Session list. Collection owns All Artworks, Artists, Museums, and Boards
+sub-tabs with a fixed upload button beside the scrollable labels. Artists,
+Museums, and Profile currently have explicit placeholder content.
+
+Artwork detail, individual boards, upload, history, and active Sessions are
+stack screens outside the global tabs. They show local navigation/actions;
+Collection's sub-tabs and upload action do not appear there. The legacy board
+index route redirects to Collection's Boards tab.
 
 ## Runtime and networking
 
@@ -93,6 +117,23 @@ persisted artwork. Successful items remain saved when another item fails, and
 the failed upload or analysis stage can be retried independently. Native code
 owns Photos selection, previews, progress presentation, and Library cache
 invalidation.
+
+## Boards
+
+Boards use the existing backend `collections` records. Both clients use
+`client-core/boards.ts` for the contract and API operations; native composition
+lives in `src/boards/`. Board list/detail and paginated artwork pages are cached
+under account-scoped TanStack Query keys, refreshed on screen focus,
+foregrounding, and pull-to-refresh. Writes are server-confirmed, expose pending
+and result toasts, and update/invalidate related cached reads.
+
+Membership changes send add/remove deltas to the existing update endpoint.
+The backend locks the board row and applies deltas to its current membership,
+so another client's additions are preserved. Removing membership or deleting a
+board does not delete saved artwork. Artwork contents load in pages of 30;
+the board list contract still returns lightweight member IDs, not full artwork
+records. The reusable Library artwork picker supports both Session composition
+and Boards; only Sessions impose the five-item and analysis-readiness rules.
 
 ## Authentication and secure storage
 

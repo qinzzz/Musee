@@ -115,12 +115,7 @@ export interface NeighborItem {
   coordinate: TagCoordinate; // New field for spatial mapping
 }
 
-export interface Album {
-  id: string;
-  name: string;
-  description?: string | null;
-  itemIds: string[];
-}
+export type Album = import('@musee/client-core').Board;
 
 export interface TasteProfileSnapshot {
   status: string;
