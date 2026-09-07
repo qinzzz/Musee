@@ -1,8 +1,9 @@
+import { LoadingIndicator } from '../ui/components/LoadingIndicator';
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, type PropsWithChildren } from 'react';
-import { ActivityIndicator, AppState, Platform, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { mobileQueryClient } from '../api/queryClient';
 import { MOBILE_API_BASE_URL } from '../api/runtime';
@@ -37,7 +38,7 @@ function AuthenticatedStack() {
   if (status === 'restoring') {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={colors.foreground} />
+        <LoadingIndicator color={colors.foreground} />
       </View>
     );
   }

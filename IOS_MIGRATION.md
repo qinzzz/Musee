@@ -61,7 +61,7 @@ become mobile commitments.
 
 ## Current position
 
-Last reviewed: 2026-09-03.
+Last reviewed: 2026-09-07.
 
 The native app now has a functioning foundation and four usable product
 slices:
@@ -106,7 +106,7 @@ Status meanings:
 | Session management | Partial | Complete history, titles, delete/archive behavior, and long-list UX |
 | Artwork conversation / Ask Musee | Not started | Define whether it is a detail thread, Session entry, or both |
 | Boards and collection organization | Implemented — native board management and membership; device validation pending | Bring over the active organization model with native interactions |
-| Artist, museum, and movement browsing | Artists implemented; device validation pending. Museums and movements not started | Provide first-class discovery and detail paths |
+| Artist, museum, and movement browsing | Artists and Museums implemented; device validation pending. Movements not started | Provide first-class discovery and detail paths |
 | Journals, learning, and taste profile | Not started | Port validated learning and reflection experiences in later slices |
 | Persona, language, usage, and account settings | Not started | Centralize durable preferences and account controls |
 | Guest experience, conversion, and quotas | Not started | Preserve the backend trust model and native recovery behavior |
@@ -175,20 +175,22 @@ partial upload/analysis success with per-item retry; device validation pending.
 physical iPhone and test authentication restoration, camera and Photos intake,
 analysis, library actions, all three Session artwork sources, cold-start
 restoration, permissions, background/foreground transitions, and network
-failure recovery before beginning Phase 5.
+failure recovery before marking the integrated baseline complete. Boards, Artists,
+and Museums have overlapped this validation gate; further discovery waits for
+the integrated device pass.
 
 The native navigation shell uses icon-only Home, Collection, and Profile tabs.
 Home centers Session composition and opens history from the top-left. Collection
 owns All Artworks, Artists, Museums, and Boards tabs with a persistent upload
-action. Deeper routes use local controls and hide global navigation. Museums and Profile remain placeholders; the shell does not imply those
-capabilities are implemented.
+action. Deeper routes use local controls and hide global navigation. Profile remains a placeholder; its shell does not imply account and
+personalization capabilities are implemented.
 
 ### Phase 5 — Organization and discovery
 
 Status: Boards list/detail, create/rename/delete, and artwork membership implemented;
 native validation pending. Artists now includes search, profiles, and paginated
 saved works with artwork-to-artist navigation; native validation pending.
-Museums and movement discovery remain unimplemented.
+Museums now supports search, existing venue metadata, and paginated captured artworks; device validation pending. Movement discovery remains unimplemented.
 
 - implement Boards and active collection-management workflows;
 - add artist, museum, and movement indexes and detail screens;
@@ -271,10 +273,10 @@ concrete backend contracts, not new UI-specific orchestration.
 
 ### Next: iOS build and integration validation
 
-Pause additional discovery features after Artists for a dedicated build-and-test
-session. The navigation shell, artwork library, Boards, Artists, shared services,
+Pause additional discovery features after Museums for a dedicated build-and-test
+session. The navigation shell, artwork library, Boards, Artists, Museums, shared services,
 and Session composition now form a useful integrated baseline to validate.
-Museums follows this checkpoint; a successful simulator build alone does not
+Further discovery follows this checkpoint; a successful simulator build alone does not
 establish physical-device or release readiness.
 
 - Produce a fresh iOS development build and verify cold launch, sign-in restoration,
@@ -282,13 +284,13 @@ establish physical-device or release readiness.
 - Validate Home/history, Collection sub-tabs, local back navigation, and Profile
   placeholder behavior, including camera/Photos permission paths.
 - Exercise upload, edit, Identify Again, delete, Boards membership, and Artists
-  search/profile/artwork navigation. Check pagination and return-to-list state.
+  search/profile/artwork navigation, plus Museums search/detail/artwork navigation. Check pagination and return-to-list state.
 - Repeat Session multi-attachment, streamed-response, interruption/retry, reopen,
   and cross-client persistence checks on the integrated build.
 - Test background/foreground and degraded-network recovery with web and native
   open together. Artists and Boards refresh failures improved after moving
   synchronous artist database reads off the API event loop, but the user reports
-  only partial recovery; resolving remaining timeouts is a gate before Museums.
+  only partial recovery; resolving remaining timeouts is a gate before further discovery work.
 - Review per-card artist preview request fan-out if load remains high; consider
   batched previews based on measured request timings.
 

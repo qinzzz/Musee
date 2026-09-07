@@ -2,6 +2,7 @@ import { createMobileSessionContextService } from '../session/mobileSessionConte
 import {
   createApiClient,
   createArtistService,
+  createMuseumService,
   createBoardService,
   fetchBackendHealth,
   type ApiFetch,
@@ -130,3 +131,5 @@ export const mobileSessionContextService = createMobileSessionContextService({
 export const mobileBoardService = createBoardService(mobileApiClient, MOBILE_API_BASE_URL);
 
 export const mobileArtistService = createArtistService(mobileApiClient, MOBILE_API_BASE_URL);
+
+export const mobileMuseumService = createMuseumService(mobileApiClient, MOBILE_API_BASE_URL);

@@ -1,5 +1,5 @@
+import { LoadingIndicator } from './LoadingIndicator';
 import {
-  ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
@@ -42,7 +42,7 @@ export function MuseeButton({
       {...pressableProps}
     >
       {loading ? (
-        <ActivityIndicator
+        <LoadingIndicator
           color={tone === 'inverse'
             ? (variant === 'primary' ? colors.foreground : colors.onPrimary)
             : (variant === 'primary' ? colors.onPrimary : colors.foreground)}

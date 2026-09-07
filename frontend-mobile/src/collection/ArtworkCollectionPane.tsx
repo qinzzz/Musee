@@ -1,8 +1,8 @@
+import { LoadingIndicator } from '../ui/components/LoadingIndicator';
 import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -117,7 +117,7 @@ export function ArtworkCollectionPane() {
         data={items}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={libraryQuery.isPending ? (
-          <ActivityIndicator color={colors.foreground} style={styles.loading} />
+          <LoadingIndicator color={colors.foreground} style={styles.loading} />
         ) : error ? (
           <View style={styles.messageBlock}>
             <Text style={styles.emptyHeading}>{error.message}</Text>
@@ -133,7 +133,7 @@ export function ArtworkCollectionPane() {
           </View>
         )}
         ListFooterComponent={libraryQuery.isFetchingNextPage ? (
-          <ActivityIndicator color={colors.foreground} style={styles.footerLoading} />
+          <LoadingIndicator color={colors.foreground} style={styles.footerLoading} />
         ) : error && items.length > 0 ? (
           <View style={styles.footerError}>
             <Text style={styles.errorDetail}>{error.message}</Text>

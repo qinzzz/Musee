@@ -71,3 +71,5 @@ export { createBoardService, type Board, type BoardUpdates } from './boards';
 export { filterBoardsBySearch, getBoardCoverImages } from './boardPresentation';
 
 export { createArtistService, filterArtistsBySearch, artistLifespan, type ArtistEntity, type ArtistRow } from './artists';
+
+export * from './museums';

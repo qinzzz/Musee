@@ -1,9 +1,11 @@
+import { usePullToRefresh } from '../ui/hooks/usePullToRefresh';
+import { LoadingIndicator } from '../ui/components/LoadingIndicator';
 import { filterBoardsBySearch } from '@musee/client-core';
 import { BoardCoverMosaic } from './BoardCoverMosaic';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { mobileBoardService } from '../api/runtime';
 import { useAuth } from '../auth/AuthProvider';
@@ -30,6 +32,7 @@ export function BoardsScreen() {
   const query = useQuery({
     queryKey: boardKeys.list(userId), queryFn: () => mobileBoardService.list(userId), enabled: !!userId,
   });
+  const pullToRefresh = usePullToRefresh(() => client.invalidateQueries({ queryKey: boardKeys.all(userId) }));
   return <View style={{ flex: 1 }}>
     <View style={styles.toolbar}>
       <View style={styles.search}>
@@ -43,12 +46,12 @@ export function BoardsScreen() {
       </Pressable>
     </View>
     <FlatList keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" data={filterBoardsBySearch(query.data ?? [], search)} numColumns={2} columnWrapperStyle={styles.row} keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.content} refreshing={query.isRefetching} onRefresh={() => void client.invalidateQueries({ queryKey: boardKeys.all(userId) })}
+      contentContainerStyle={styles.content} {...pullToRefresh}
       ListHeaderComponent={<View style={styles.header}>
         {query.error ? <View style={styles.header}><Text style={styles.error}>{COPY.error}</Text>
           <MuseeButton label={COPY.retry} onPress={() => void query.refetch()} /></View> : null}
       </View>}
-      ListEmptyComponent={query.isPending ? <ActivityIndicator /> : !query.error ? <Text style={styles.secondary}>{search.trim() ? COPY.noResults : COPY.empty}</Text> : null}
+      ListEmptyComponent={query.isPending ? <LoadingIndicator /> : !query.error ? <Text style={styles.secondary}>{search.trim() ? COPY.noResults : COPY.empty}</Text> : null}
       renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={item.name}
         style={styles.card} onPress={() => router.push({ pathname: '/boards/[id]', params: { id: item.id } })}>
         <BoardCoverMosaic itemIds={item.itemIds} userId={userId} />

@@ -1,3 +1,4 @@
+import { MuseumsPane } from '../museums/MuseumsPane';
 import { ArtistsPane } from '../artists/ArtistsPane';
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -13,7 +14,7 @@ const SECTIONS = [
   { id: 'museums', label: 'Museums' }, { id: 'boards', label: 'Boards' },
 ] as const;
 type Section = typeof SECTIONS[number]['id'];
-const COPY = { upload: 'Upload artwork', artists: 'Your artists will appear here.', museums: 'Your museums will appear here.' };
+const COPY = { upload: 'Upload artwork' };
 export function CollectionScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: string }>();
@@ -33,7 +34,7 @@ export function CollectionScreen() {
       <GlassIconButton icon="plus" label={COPY.upload} onPress={() => router.push('/artwork-upload')} />
     </View>
     {section === 'artworks' ? <ArtworkCollectionPane /> : section === 'boards' ? <BoardsScreen /> : section === 'artists' ? <ArtistsPane /> :
-      <View style={styles.placeholder}><Text style={styles.message}>{COPY[section]}</Text></View>}
+      <MuseumsPane />}
   </Screen>;
 }
 const styles = StyleSheet.create({
@@ -43,6 +44,4 @@ const styles = StyleSheet.create({
   active: { borderColor: colors.foreground },
   label: { fontSize: typography.label, color: colors.secondary, fontWeight: '500' },
   activeLabel: { color: colors.foreground, fontWeight: '600' },
-  placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 96 },
-  message: { color: colors.secondary, fontSize: typography.body },
 });

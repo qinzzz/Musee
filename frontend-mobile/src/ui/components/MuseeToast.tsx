@@ -1,7 +1,8 @@
+import { LoadingIndicator } from './LoadingIndicator';
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { subscribeToast, type ToastState } from '../toast';
 import { colors, spacing, typography } from '../tokens/theme';
@@ -25,7 +26,7 @@ function ToastContent({ toast }: { toast: ToastState }) {
     <View style={styles.content}>
       <View style={[styles.icon, { backgroundColor: iconBackground[toast.tone] }]}>
         {toast.loading ? (
-          <ActivityIndicator color={colors.onPrimary} size="small" />
+          <LoadingIndicator color={colors.onPrimary} />
         ) : (
           <SymbolView
             accessible={false}

@@ -1,7 +1,9 @@
+import { usePullToRefresh } from '../ui/hooks/usePullToRefresh';
+import { LoadingIndicator } from '../ui/components/LoadingIndicator';
 import { useEffect, useMemo, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 import { MOBILE_API_BASE_URL, mobileBoardService } from '../api/runtime';
 import { useAuth } from '../auth/AuthProvider';
 import { ArtworkLibraryCard } from '../library/components/ArtworkLibraryCard';
@@ -60,6 +62,7 @@ export function BoardDetailScreen() {
   }, [board.data]);
   const unavailable = board.error && 'status' in board.error && board.error.status === 404;
   async function refresh() { await Promise.all([board.refetch(), artworks.refetch()]); }
+  const pullToRefresh = usePullToRefresh(refresh);
   function confirmDelete() {
     Alert.alert(COPY.delete, COPY.deleteMessage, [
       { text: COPY.cancel, style: 'cancel' },
@@ -84,7 +87,7 @@ export function BoardDetailScreen() {
       <MuseeButton label={COPY.back} onPress={() => router.replace('/boards')} /></View> :
     <FlatList data={items} numColumns={2} columnWrapperStyle={styles.row}
       contentContainerStyle={styles.content} keyExtractor={(item) => item.id}
-      refreshing={board.isRefetching || artworks.isRefetching} onRefresh={() => void refresh()}
+      {...pullToRefresh}
       onEndReached={() => { if (artworks.hasNextPage && !artworks.isFetching) void artworks.fetchNextPage(); }}
       onEndReachedThreshold={0.4}
       ListHeaderComponent={<View style={styles.header}>
@@ -96,9 +99,9 @@ export function BoardDetailScreen() {
           <MuseeButton label={COPY.retry} onPress={() => void refresh()} /></View> : null}
         {actions.error ? <Text accessibilityRole="alert" style={styles.error}>{actions.error}</Text> : null}
       </View>}
-      ListEmptyComponent={board.isPending || (board.data && artworks.isPending) ? <ActivityIndicator /> :
+      ListEmptyComponent={board.isPending || (board.data && artworks.isPending) ? <LoadingIndicator /> :
         !board.error && !artworks.error ? <Text style={styles.secondary}>{COPY.empty}</Text> : null}
-      ListFooterComponent={artworks.isFetchingNextPage ? <ActivityIndicator /> : null}
+      ListFooterComponent={artworks.isFetchingNextPage ? <LoadingIndicator /> : null}
       renderItem={({ item }) => <View style={styles.item}><ArtworkLibraryCard artwork={item}
         disabled={actions.busy} selected={selecting ? selected.includes(item.id) : undefined}
         onPress={() => selecting

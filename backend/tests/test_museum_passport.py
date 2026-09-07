@@ -117,3 +117,34 @@ def test_user_museums_rejects_cross_user_read(client, db):
     response = client.get("/api/museums", params={"user_id": "someone-else"})
 
     assert response.status_code == 403
+
+
+def test_museum_artwork_pages_scope_filter_and_order(client, db):
+    db.add(User(user_id="passport-user", device_id="passport-user"))
+    db.add(MuseumEntity(id="venue", canonical_name="Venue", latitude=1, longitude=1,
+                        resolution_eligible=True, is_physical_venue=True, status="active"))
+    db.add_all([_artwork("a", "venue", None), _artwork("b", "venue", None),
+                _artwork("deleted", "venue", None, deleted_at=datetime(2026, 1, 1)),
+                _artwork("unlinked", None, None)])
+    db.commit()
+    params = {"user_id": "passport-user", "limit": 1}
+    first = client.get("/api/museums/venue/artworks", params=params)
+    assert first.status_code == 200
+    assert first.json()["total"] == 2
+    assert [item["id"] for item in first.json()["items"]] == ["a"]
+    second = client.get("/api/museums/venue/artworks", params={**params, "offset": 1})
+    assert [item["id"] for item in second.json()["items"]] == ["b"]
+    empty = client.get("/api/museums/venue/artworks", params={"user_id": "other"})
+    assert empty.json()["total"] == 0
+    assert client.get("/api/museums/venue/artworks", params={**params, "limit": 101}).status_code == 422
+    db.query(MuseumEntity).filter_by(id="venue").update({"resolution_eligible": False})
+    db.commit()
+    assert client.get("/api/museums/venue/artworks", params=params).json()["total"] == 0
+
+
+def test_museum_artworks_reject_cross_user_read(client, db):
+    async def fixed_principal(request: Request):
+        user = User(user_id="owner", device_id="owner", tier="free")
+        return RequestPrincipal(state="authenticated", user_id="owner", user=user)
+    app.dependency_overrides[get_request_principal] = fixed_principal
+    assert client.get("/api/museums/venue/artworks", params={"user_id": "other"}).status_code == 403

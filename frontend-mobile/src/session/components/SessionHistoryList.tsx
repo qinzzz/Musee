@@ -1,6 +1,7 @@
+import { LoadingIndicator } from '../../ui/components/LoadingIndicator';
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { SessionRecord } from '@musee/client-core';
 
@@ -68,7 +69,7 @@ export function SessionHistoryList() {
   return (
     <View style={styles.section}>
       {loading ? (
-        <ActivityIndicator color={colors.foreground} />
+        <LoadingIndicator color={colors.foreground} />
       ) : error ? (
         <View style={styles.statusGroup}>
           <Text style={styles.statusText}>{error.message}</Text>
