@@ -1,3 +1,5 @@
+import { ApiHttpError, createArtistService } from '@musee/client-core';
+export type { ArtistRow } from '@musee/client-core';
 import type { ArtworkSkill, ArtworkClassification, ReferenceItem, TasteProfileSnapshot, ArtistEntity } from '../types';
 import { API_BASE_URL, fetchWithTimeout, resolveImageUrl } from './core';
 
@@ -44,9 +46,7 @@ export interface CommunityData {
   comments: PublicComment[];
 }
 
-export type ArtistRow = ArtistEntity & {
-  artwork_count: number;
-};
+
 
 const ARTWORKS_PAGE_SIZE = 100;
 
@@ -96,29 +96,18 @@ export async function getArtworkFunFacts(
   return data.fun_facts ?? [];
 }
 
+const artistService = createArtistService({ fetchWithTimeout }, API_BASE_URL);
+
 export async function fetchArtistProfile(artistEntityId: string): Promise<import('../types').ArtistEntity | null> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/artists/${artistEntityId}`, { timeout: 15000 });
-  if (!response.ok) return null;
-  return response.json();
+  try {
+    return await artistService.profile(artistEntityId);
+  } catch (error) {
+    if (error instanceof ApiHttpError && error.status === 404) return null;
+    throw error;
+  }
 }
-
-export async function fetchUserArtists(userId: string): Promise<ArtistRow[]> {
-  const response = await fetchWithTimeout(
-    `${API_BASE_URL}/artists?user_id=${encodeURIComponent(userId)}`,
-    { timeout: 15000 },
-  );
-  if (!response.ok) return [];
-  return response.json();
-}
-
-export async function fetchArtistArtworks(artistEntityId: string, userId: string): Promise<any[]> {
-  const response = await fetchWithTimeout(
-    `${API_BASE_URL}/artists/${artistEntityId}/artworks?user_id=${encodeURIComponent(userId)}`,
-    { timeout: 15000 },
-  );
-  if (!response.ok) return [];
-  return response.json();
-}
+export const fetchUserArtists = artistService.list;
+export const fetchArtistArtworks = artistService.artworks;
 
 export async function backfillArtworkArtist(artworkId: string): Promise<import('../types').ArtistEntity | null> {
   const response = await fetchWithTimeout(`${API_BASE_URL}/artworks/${artworkId}/artist`, {

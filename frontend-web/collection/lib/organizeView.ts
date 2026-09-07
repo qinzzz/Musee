@@ -1,5 +1,5 @@
+export { filterArtistsBySearch } from '@musee/client-core';
 export { filterBoardsBySearch, getBoardCoverImages } from '@musee/client-core';
-import type { ArtistRow } from '../../api/artworks';
 import type { Board } from '../../boards/types';
 import type { GalleryItem } from '../../types';
 import type { CollectTab } from '../../lib/appNavigation';
@@ -47,16 +47,6 @@ export function groupArtworksByMonth(items: GalleryItem[]): Array<{ label: strin
 }
 
 
-export function filterArtistsBySearch(artists: ArtistRow[], query: string): ArtistRow[] {
-  const normalizedQuery = normalizeSearch(query);
-  if (!normalizedQuery) return artists;
-
-  return artists.filter((artist) =>
-    [artist.display_name, artist.nationality]
-      .filter(Boolean)
-      .some((value) => value.toLowerCase().includes(normalizedQuery)),
-  );
-}
 
 export function getCollectionSearchPlaceholder(
   collectTab: CollectTab,

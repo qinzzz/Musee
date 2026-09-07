@@ -8,6 +8,7 @@ export type ArtworkTagRecord = {
 };
 
 export type ArtworkRecord = {
+  artist_entity_id?: string | null;
   id: string;
   photo_uri: string;
   thumbnail_uri?: string | null;

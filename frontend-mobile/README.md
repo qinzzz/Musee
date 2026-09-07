@@ -42,6 +42,7 @@ The mobile client is organized by product domain and platform boundary:
 | `src/library/` | Artwork library and artwork-detail data |
 | `src/navigation/` | Global floating tab bar and navigation presentation |
 | `src/collection/` | Collection sub-tabs and artwork browsing composition |
+| `src/artists/` | Artist browsing, profiles, and paginated saved works |
 | `src/boards/` | Board organization, membership, and cached board reads |
 | `src/session/` | Persistent visit sessions and streamed responses |
 | `src/platform/` | Expo-backed storage, image, and media adapters |
@@ -65,10 +66,9 @@ text and attachments through the authenticated tree's in-memory
 `SessionDraftProvider`, consumed once by the deeper Session route; it does not
 put private draft content in URL parameters. The top-left history button opens
 the full Session list. Collection owns All Artworks, Artists, Museums, and Boards
-sub-tabs with a fixed upload button beside the scrollable labels. Artists,
-Museums, and Profile currently have explicit placeholder content.
+sub-tabs with a fixed upload button beside the scrollable labels. Museums and Profile currently have explicit placeholder content.
 
-Artwork detail, individual boards, upload, history, and active Sessions are
+Artwork detail, artist profiles, individual boards, upload, history, and active Sessions are
 stack screens outside the global tabs. They show local navigation/actions;
 Collection's sub-tabs and upload action do not appear there. The legacy board
 index route redirects to Collection's Boards tab.
@@ -117,6 +117,16 @@ persisted artwork. Successful items remain saved when another item fails, and
 the failed upload or analysis stage can be retried independently. Native code
 owns Photos selection, previews, progress presentation, and Library cache
 invalidation.
+
+## Artists
+
+Web and native use `client-core/artists.ts` for artist contracts and reads. Native
+queries are account-scoped and refresh on focus, foreground, and pull-to-refresh.
+Artist cards request three artwork previews; detail screens page through saved
+works. The backend preserves the legacy artwork array response unless `limit`
+is supplied, which returns an items/total/offset/limit envelope. Artwork details
+link existing artist entity IDs; browsing does not trigger legacy artist backfill
+or biography generation. Missing profiles and request failures have explicit states.
 
 ## Boards
 

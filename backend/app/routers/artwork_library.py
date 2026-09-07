@@ -173,7 +173,7 @@ async def get_smart_collections(
 
 
 @router.get("/artists")
-async def list_user_artists(
+def list_user_artists(
     user_id: str = Query(...),
     db: Session = Depends(get_db),
     principal: RequestPrincipal | None = Depends(get_request_principal),
@@ -191,7 +191,7 @@ async def list_user_artists(
 
 
 @router.get("/artists/{identifier}")
-async def get_artist(identifier: str, db: Session = Depends(get_db)):
+def get_artist(identifier: str, db: Session = Depends(get_db)):
     entity = db.query(ArtistEntity).filter(ArtistEntity.id == identifier).first()
     if not entity:
         canonical = identifier.replace("_", " ").lower()
@@ -202,24 +202,30 @@ async def get_artist(identifier: str, db: Session = Depends(get_db)):
 
 
 @router.get("/artists/{artist_id}/artworks")
-async def get_artist_artworks(
+def get_artist_artworks(
     artist_id: str,
     user_id: str = Query(...),
+    limit: Optional[int] = Query(None, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     principal: RequestPrincipal | None = Depends(get_request_principal),
 ):
     _require_collection_search(principal, user_id)
-    artworks = (
-        db.query(SavedArtwork)
-        .filter(
-            SavedArtwork.artist_entity_id == artist_id,
-            SavedArtwork.user_id == user_id,
-            SavedArtwork.active_filter(),
-        )
-        .order_by(SavedArtwork.created_at.desc())
-        .all()
+    query = db.query(SavedArtwork).filter(
+        SavedArtwork.artist_entity_id == artist_id,
+        SavedArtwork.user_id == user_id,
+        SavedArtwork.active_filter(),
     )
-    return [artwork.to_dict() for artwork in artworks]
+    total = query.count() if limit is not None else None
+    query = query.options(
+        selectinload(SavedArtwork.artwork_tags),
+        selectinload(SavedArtwork.session_links),
+        selectinload(SavedArtwork.capture_museum_entity),
+    ).order_by(SavedArtwork.created_at.desc(), SavedArtwork.id)
+    if limit is not None:
+        artworks = query.offset(offset).limit(limit).all()
+        return {"items": [artwork.to_dict() for artwork in artworks], "total": total, "offset": offset, "limit": limit}
+    return [artwork.to_dict() for artwork in query.all()]
 
 
 @router.post("/artworks/{artwork_id}/artist")

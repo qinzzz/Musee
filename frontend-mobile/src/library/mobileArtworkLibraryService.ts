@@ -50,6 +50,7 @@ export function mapMobileArtwork(
   const thumbnailUri = record.thumbnail_uri || null;
   return {
     id: record.id,
+    artistEntityId: record.artist_entity_id ?? null,
     photoUri: record.photo_uri,
     thumbnailUri,
     resolvedImageUri: resolveRemoteImageUrl(record.photo_uri, apiBaseUrl),

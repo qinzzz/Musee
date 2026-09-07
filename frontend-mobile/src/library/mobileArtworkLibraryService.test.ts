@@ -13,6 +13,7 @@ const RECORD: ArtworkRecord = {
   photo_uri: 'uploads/user/artwork.jpg',
   thumbnail_uri: 'uploads/user/artwork_thumbnail.jpg',
   artist_name: 'Hilma af Klint',
+  artist_entity_id: 'artist-1',
   artwork_name: 'The Swan',
   analysis: 'A symbolic abstract composition.',
   analysis_status: 'analyzed',
@@ -63,6 +64,7 @@ describe('mobile artwork library service', () => {
     });
     await expect(service.fetchArtwork('artwork-1')).resolves.toMatchObject({
       artistName: 'Hilma af Klint',
+      artistEntityId: 'artist-1',
       artworkName: 'The Swan',
     });
   });
