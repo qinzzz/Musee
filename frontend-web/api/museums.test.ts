@@ -21,6 +21,9 @@ describe('fetchUserMuseums', () => {
   it('throws instead of returning an empty passport when the request fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('denied', { status: 403 })));
     const { fetchUserMuseums } = await import('./museums');
-    await expect(fetchUserMuseums('user-1')).rejects.toThrow('API error (403)');
+    const { ApiHttpError } = await import('@musee/client-core');
+    const request = fetchUserMuseums('user-1');
+    await expect(request).rejects.toBeInstanceOf(ApiHttpError);
+    await expect(request).rejects.toMatchObject({ status: 403 });
   });
 });
