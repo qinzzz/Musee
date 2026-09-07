@@ -21,7 +21,7 @@ function presentPickerError(error: unknown): RequestErrorPresentation {
   });
 }
 
-export function useSessionArtworkPicker(userId: string, visible: boolean) {
+export function useArtworkPicker(userId: string, visible: boolean) {
   const requestVersion = useRef(0);
   const [items, setItems] = useState<MobileArtworkRecord[]>([]);
   const [total, setTotal] = useState(0);

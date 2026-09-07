@@ -79,6 +79,7 @@ describe('useBoards', () => {
     await act(async () => {
       await result.current.addItemsToBoard('b1', ['a2']);
     });
+    expect(mockUpdateCollection).toHaveBeenCalledWith('user-1', 'b1', { addArtworkIds: ['a2'] });
     await waitFor(() => {
       expect(result.current.boards[0]).toEqual(createBoard('b1', 'Favorites', ['a1', 'a2']));
     });

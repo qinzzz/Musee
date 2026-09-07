@@ -96,7 +96,7 @@ Status meanings:
 | Email sign-in, refresh, restore, sign-out | Baseline complete | Harden lifecycle and security behavior as release approaches |
 | Social sign-in and account recovery | Not started | Define native providers and complete recovery/verification flows |
 | Camera and single-photo intake | Baseline complete | Add production capture UX and preserve reliable permission fallbacks |
-| Batch and multi-select intake | Implemented — Library intake and mixed Session composition; device validation pending | Match the intentional web batch workflow where it fits native UX |
+| Batch and multi-select intake | Baseline complete — Library intake and mixed Session composition; simulator recovery checks passed | Match the intentional web batch workflow where it fits native UX |
 | Upload and streamed artwork analysis | Baseline complete | Preserve retry, status, and persisted-result behavior |
 | Artwork thumbnails and image variants | Baseline complete | Preserve cloud derivatives, legacy fallback, and full-resolution detail/AI use |
 | Artwork library and basic detail | Partial | Add complete metadata, actions, pagination, loading, and error states |
@@ -105,7 +105,7 @@ Status meanings:
 | Artwork inputs and cards inside Sessions | Baseline complete | Harden lifecycle states and long-history behavior after the single-artwork paths |
 | Session management | Partial | Complete history, titles, delete/archive behavior, and long-list UX |
 | Artwork conversation / Ask Musee | Not started | Define whether it is a detail thread, Session entry, or both |
-| Boards and collection organization | Not started | Bring over the active organization model with native interactions |
+| Boards and collection organization | Implemented — native board management and membership; device validation pending | Bring over the active organization model with native interactions |
 | Artist, museum, and movement browsing | Not started | Provide first-class discovery and detail paths |
 | Journals, learning, and taste profile | Not started | Port validated learning and reflection experiences in later slices |
 | Persona, language, usage, and account settings | Not started | Centralize durable preferences and account controls |
@@ -177,9 +177,17 @@ analysis, library actions, all three Session artwork sources, cold-start
 restoration, permissions, background/foreground transitions, and network
 failure recovery before beginning Phase 5.
 
+The native navigation shell uses icon-only Home, Collection, and Profile tabs.
+Home centers Session composition and opens history from the top-left. Collection
+owns All Artworks, Artists, Museums, and Boards tabs with a persistent upload
+action. Deeper routes use local controls and hide global navigation. Artists,
+Museums, and Profile remain placeholders; the shell does not imply those
+capabilities are implemented.
+
 ### Phase 5 — Organization and discovery
 
-Status: not started.
+Status: Boards list/detail, create/rename/delete, and artwork membership implemented;
+native validation pending. Discovery screens remain unimplemented.
 
 - implement Boards and active collection-management workflows;
 - add artist, museum, and movement indexes and detail screens;
@@ -256,9 +264,8 @@ baseline complete.
 Mixed Session composition now supports up to five Camera, Photos, and Library
 attachments in one turn through a typed shared context lifecycle and a native
 artwork adapter. Failed entries retain successful work and support individual
-retry; committed turns support interrupted-response recovery. Validate mixed
-selection, removal, partial failure, and cold-start retry on device before
-calling this slice complete. Future artist, tag, and document context needs
+retry; committed turns support interrupted-response recovery. Simulator checks for reopen, interruption/retry, and cold-start recovery passed
+and PR #144 is merged. The Session composition baseline is complete. Future artist, tag, and document context needs
 concrete backend contracts, not new UI-specific orchestration.
 
 ## Quality gates

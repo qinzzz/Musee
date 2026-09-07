@@ -1,3 +1,4 @@
+export { filterBoardsBySearch, getBoardCoverImages } from '@musee/client-core';
 import type { ArtistRow } from '../../api/artworks';
 import type { Board } from '../../boards/types';
 import type { GalleryItem } from '../../types';
@@ -45,11 +46,6 @@ export function groupArtworksByMonth(items: GalleryItem[]): Array<{ label: strin
   return Array.from(groups.entries()).map(([label, groupedItems]) => ({ label, items: groupedItems }));
 }
 
-export function filterBoardsBySearch(boards: Board[], query: string): Board[] {
-  const normalizedQuery = normalizeSearch(query);
-  if (!normalizedQuery) return boards;
-  return boards.filter((board) => board.name.toLowerCase().includes(normalizedQuery));
-}
 
 export function filterArtistsBySearch(artists: ArtistRow[], query: string): ArtistRow[] {
   const normalizedQuery = normalizeSearch(query);
@@ -85,12 +81,6 @@ export function getSavedContextLabel(activeFilter: ActiveFilter): string {
   return 'Unsorted';
 }
 
-export function getBoardCoverImages(itemIds: string[], items: GalleryItem[]): string[] {
-  return itemIds
-    .slice(0, 4)
-    .map((id) => items.find((item) => item.id === id)?.url)
-    .filter(Boolean) as string[];
-}
 
 export function getBoardArtworkCount(itemIds: string[], items: GalleryItem[]): number {
   return itemIds.filter((id) => items.some((item) => item.id === id)).length;

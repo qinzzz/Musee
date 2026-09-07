@@ -65,3 +65,7 @@ export {
   type ContextHandler,
   type SessionArtworkContext,
 } from './sessionContext';
+
+export { createBoardService, type Board, type BoardUpdates } from './boards';
+
+export { filterBoardsBySearch, getBoardCoverImages } from './boardPresentation';
