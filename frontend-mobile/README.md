@@ -43,6 +43,7 @@ The mobile client is organized by product domain and platform boundary:
 | `src/navigation/` | Global floating tab bar and navigation presentation |
 | `src/collection/` | Collection sub-tabs and artwork browsing composition |
 | `src/artists/` | Artist browsing, profiles, and paginated saved works |
+| `src/museums/` | Museum browsing and paginated captured artworks |
 | `src/boards/` | Board organization, membership, and cached board reads |
 | `src/session/` | Persistent visit sessions and streamed responses |
 | `src/platform/` | Expo-backed storage, image, and media adapters |
@@ -66,7 +67,7 @@ text and attachments through the authenticated tree's in-memory
 `SessionDraftProvider`, consumed once by the deeper Session route; it does not
 put private draft content in URL parameters. The top-left history button opens
 the full Session list. Collection owns All Artworks, Artists, Museums, and Boards
-sub-tabs with a fixed upload button beside the scrollable labels. Museums and Profile currently have explicit placeholder content.
+sub-tabs with a fixed upload button beside the scrollable labels. Profile currently has explicit placeholder content.
 
 Artwork detail, artist profiles, individual boards, upload, history, and active Sessions are
 stack screens outside the global tabs. They show local navigation/actions;
@@ -127,6 +128,16 @@ works. The backend preserves the legacy artwork array response unless `limit`
 is supplied, which returns an items/total/offset/limit envelope. Artwork details
 link existing artist entity IDs; browsing does not trigger legacy artist backfill
 or biography generation. Missing profiles and request failures have explicit states.
+
+## Museums
+
+Web and native share `client-core/museums.ts`. Museums group active saved artworks
+by their existing recognized capture venue, without generating associations during
+browsing. Native search filters the museum summaries; cards use venue thumbnails
+and attribution without per-card API calls. Detail reuses the summaries and loads
+artworks in server pages of 30, newest saved first. Queries are account-scoped and
+refresh on focus, foreground, and pull-to-refresh. The existing summary endpoint
+still includes all associated artwork IDs; only detail artwork records are paged.
 
 ## Boards
 

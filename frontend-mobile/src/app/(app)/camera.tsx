@@ -1,3 +1,4 @@
+import { LoadingIndicator } from '../../ui/components/LoadingIndicator';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Device from 'expo-device';
 import { File } from 'expo-file-system';
@@ -6,7 +7,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   AppState,
   Linking,
   Pressable,
@@ -167,7 +167,7 @@ export default function CameraScreen() {
     return (
       <View style={styles.centered}>
         <StatusBar style="light" />
-        <ActivityIndicator color={colors.onPrimary} />
+        <LoadingIndicator color={colors.onPrimary} />
       </View>
     );
   }

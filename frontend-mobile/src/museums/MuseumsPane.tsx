@@ -3,27 +3,27 @@ import { LoadingIndicator } from '../ui/components/LoadingIndicator';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { filterArtistsBySearch } from '@musee/client-core';
+import { filterMuseumsBySearch } from '@musee/client-core';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
-import { mobileArtistService } from '../api/runtime';
+import { mobileMuseumService } from '../api/runtime';
 import { useAuth } from '../auth/AuthProvider';
 import { MuseeButton } from '../ui/components/MuseeButton';
 import { colors, spacing, typography } from '../ui/tokens/theme';
-import { ArtistCard } from './ArtistCard';
-import { artistKeys, useArtistRefresh } from './artistQueries';
+import { MuseumCard } from './MuseumCard';
+import { museumKeys, useMuseumRefresh } from './museumQueries';
 
-const COPY = { search: 'Search artists', empty: 'No artists yet', noMatch: 'No matching artists',
-  hint: 'Artists linked to your saved artworks appear here.', error: 'Musee could not load artists.', retry: 'Try again' };
-export function ArtistsPane() {
+const COPY = { search: 'Search museums', empty: 'No museums yet', noMatch: 'No matching museums',
+  hint: 'Artworks captured at recognized museums appear here.', error: 'Musee could not load museums.', retry: 'Try again' };
+export function MuseumsPane() {
   const { user } = useAuth();
   const userId = user?.user_id ?? '';
   const router = useRouter();
   const client = useQueryClient();
   const [search, setSearch] = useState('');
-  useArtistRefresh(userId);
-  const query = useQuery({ queryKey: artistKeys.list(userId), queryFn: () => mobileArtistService.list(userId), enabled: !!userId });
-  const pullToRefresh = usePullToRefresh(() => client.invalidateQueries({ queryKey: artistKeys.all(userId) }));
+  useMuseumRefresh(userId);
+  const query = useQuery({ queryKey: museumKeys.list(userId), queryFn: () => mobileMuseumService.list(userId), enabled: !!userId });
+  const pullToRefresh = usePullToRefresh(() => client.invalidateQueries({ queryKey: museumKeys.all(userId) }));
   return <View style={styles.container}>
     <View style={styles.search}>
       <SymbolView name="magnifyingglass" size={16} tintColor={colors.placeholder} />
@@ -31,7 +31,7 @@ export function ArtistsPane() {
         onChangeText={setSearch} autoCapitalize="none" autoCorrect={false} clearButtonMode="while-editing"
         placeholderTextColor={colors.placeholder} style={styles.input} />
     </View>
-    <FlatList data={filterArtistsBySearch(query.data ?? [], search)} keyExtractor={(artist) => artist.id}
+    <FlatList data={filterMuseumsBySearch(query.data?.items ?? [], search)} keyExtractor={(museum) => museum.museum.id}
       contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
       {...pullToRefresh}
       ListHeaderComponent={query.error ? <View style={styles.message}><Text style={styles.error}>{COPY.error}</Text>
@@ -39,8 +39,8 @@ export function ArtistsPane() {
       ListEmptyComponent={query.isPending ? <LoadingIndicator /> : !query.error ? <View style={styles.message}>
         <Text style={styles.text}>{search.trim() ? COPY.noMatch : COPY.empty}</Text>
         {!search.trim() ? <Text style={styles.text}>{COPY.hint}</Text> : null}</View> : null}
-      renderItem={({ item }) => <ArtistCard artist={item} userId={userId}
-        onPress={() => router.push({ pathname: '/artist/[id]', params: { id: item.id } })} />} />
+      renderItem={({ item }) => <MuseumCard museum={item}
+        onPress={() => router.push({ pathname: '/museum/[id]', params: { id: item.museum.id } })} />} />
   </View>;
 }
 const styles = StyleSheet.create({

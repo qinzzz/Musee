@@ -1,6 +1,6 @@
+import { LoadingIndicator } from '../../ui/components/LoadingIndicator';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Modal,
   Pressable,
@@ -91,7 +91,7 @@ export function ArtworkPicker({
           data={visibleItems}
           keyExtractor={(item) => item.id}
           ListEmptyComponent={isLoading ? (
-            <ActivityIndicator color={colors.foreground} style={styles.loading} />
+            <LoadingIndicator color={colors.foreground} style={styles.loading} />
           ) : error ? (
             <View style={styles.messageBlock}>
               <Text style={styles.message}>{error.message}</Text>
@@ -104,7 +104,7 @@ export function ArtworkPicker({
             <Text style={styles.message}>{COPY.empty}</Text>
           )}
           ListFooterComponent={isLoadingMore ? (
-            <ActivityIndicator color={colors.foreground} style={styles.footer} />
+            <LoadingIndicator color={colors.foreground} style={styles.footer} />
           ) : error && items.length > 0 ? (
             <View style={styles.messageBlock}>
               <Text style={styles.detail}>{error.message}</Text>

@@ -1,8 +1,8 @@
+import { LoadingIndicator } from '../../../ui/components/LoadingIndicator';
 import { Image } from 'expo-image';
 import { Stack, useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   RefreshControl,
   ScrollView,
@@ -263,7 +263,7 @@ export default function ArtworkDetailScreen() {
   if (loading && !artwork) {
     return (
       <Screen contentStyle={styles.centered} edges={['left', 'right', 'bottom']}>
-        <ActivityIndicator color={colors.foreground} />
+        <LoadingIndicator color={colors.foreground} />
       </Screen>
     );
   }

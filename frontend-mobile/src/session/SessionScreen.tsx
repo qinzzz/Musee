@@ -1,10 +1,10 @@
+import { LoadingIndicator } from '../ui/components/LoadingIndicator';
 import { useSessionDraft } from './SessionDraftProvider';
 import { GlassIconButton } from '../ui/components/GlassIconButton';
 import { MAX_SESSION_ATTACHMENTS } from '../session/mobileSessionContextService';
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -136,7 +136,7 @@ export function SessionScreen({ home = false }: { home?: boolean }) {
       >
         {controller.isLoading ? (
           <View style={styles.centered}>
-            <ActivityIndicator color={colors.foreground} />
+            <LoadingIndicator color={colors.foreground} />
           </View>
         ) : controller.loadError && !controller.session ? (
           <View style={styles.centered}>

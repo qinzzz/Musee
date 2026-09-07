@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, selectinload
 
 from app.database.connection import get_db
-from app.database.models import SavedArtwork
+from app.database.models import MuseumEntity, SavedArtwork
 from app.services.authorization_service import (
     SEARCH_COLLECTION,
     RequestPrincipal,
@@ -145,3 +145,33 @@ def get_user_museums(
         reverse=True,
     )
     return {"items": items, "count": len(items)}
+
+
+@router.get("/museums/{museum_id}/artworks")
+def get_museum_artworks(
+    museum_id: str,
+    user_id: str = Query(...),
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
+):
+    resolved_principal = require_principal_for_user(principal, user_id)
+    require_capability(resolved_principal, SEARCH_COLLECTION)
+    query = db.query(SavedArtwork).join(
+        MuseumEntity, SavedArtwork.capture_museum_entity_id == MuseumEntity.id,
+    ).filter(
+        MuseumEntity.id == museum_id,
+        MuseumEntity.status == "active",
+        MuseumEntity.is_physical_venue.is_(True),
+        MuseumEntity.resolution_eligible.is_(True),
+        SavedArtwork.user_id == user_id,
+        SavedArtwork.active_filter(),
+    )
+    total = query.count()
+    artworks = query.options(
+        selectinload(SavedArtwork.artwork_tags),
+        selectinload(SavedArtwork.session_links),
+        selectinload(SavedArtwork.capture_museum_entity),
+    ).order_by(SavedArtwork.created_at.desc(), SavedArtwork.id).offset(offset).limit(limit).all()
+    return {"items": [artwork.to_dict() for artwork in artworks], "total": total, "offset": offset, "limit": limit}
