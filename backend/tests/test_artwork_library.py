@@ -240,3 +240,79 @@ def test_backfill_artwork_artist_marks_failure_when_bio_enrichment_raises(monkey
 
     entity = db.query(ArtistEntity).filter(ArtistEntity.canonical_name == "frank stella").first()
     assert entity is not None
+
+
+def test_artist_artwork_pagination_preserves_legacy_reads_and_owner_filter(client, db):
+    from datetime import datetime
+
+    timestamp = datetime(2026, 1, 1)
+    db.add_all([
+        User(user_id="art-user", device_id="art-user"),
+        User(user_id="other-user", device_id="other-user"),
+        ArtistEntity(id="page-artist", canonical_name="page artist", display_name="Page Artist"),
+    ])
+    db.flush()
+    for identifier, owner, deleted in [
+        ("a", "art-user", False), ("b", "art-user", False),
+        ("c", "art-user", False), ("d", "art-user", True),
+        ("e", "other-user", False),
+    ]:
+        db.add(SavedArtwork(id=identifier, user_id=owner, artist_entity_id="page-artist",
+                            photo_uri="r2://test", artist_name="Page Artist", artwork_name=identifier, created_at=timestamp,
+                            deleted_at=timestamp if deleted else None))
+    db.commit()
+    url = "/api/artists/page-artist/artworks"
+    params = {"user_id": "art-user", "limit": 2}
+    first = client.get(url, params=params)
+    assert first.status_code == 200
+    assert [item["id"] for item in first.json()["items"]] == ["a", "b"]
+    assert first.json()["total"] == 3
+    second = client.get(url, params={**params, "offset": 2}).json()
+    assert [item["id"] for item in second["items"]] == ["c"]
+    assert second["offset"] == 2
+    assert second["limit"] == 2
+    legacy = client.get(url, params={"user_id": "art-user"}).json()
+    assert [item["id"] for item in legacy] == ["a", "b", "c"]
+    assert client.get(url, params={**params, "limit": 101}).status_code == 422
+
+
+def test_artist_database_read_does_not_block_health_requests():
+    import asyncio
+    import time
+    import httpx
+    from app.database.connection import get_db
+
+    class SlowDatabase:
+        def query(self, *_args):
+            return self
+
+        def filter(self, *_args):
+            return self
+
+        def first(self):
+            time.sleep(0.3)
+            return ArtistEntity(id="slow-artist", display_name="Slow Artist")
+
+    async def exercise():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
+            start = time.monotonic()
+
+            async def health_during_read():
+                await asyncio.sleep(0.03)
+                response = await http.get("/health")
+                return response.status_code, time.monotonic() - start
+
+            artist, health = await asyncio.gather(http.get("/api/artists/slow-artist"), health_during_read())
+            assert artist.status_code == 200
+            assert health[0] == 200
+            assert health[1] < 0.2, "Artist database work blocked the API event loop"
+
+    previous = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: SlowDatabase()
+    try:
+        asyncio.run(exercise())
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous

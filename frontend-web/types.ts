@@ -23,18 +23,7 @@ export interface TagCoordinate {
   y: number;
 }
 
-export interface ArtistEntity {
-  id: string;
-  display_name: string;
-  bio?: string | null;
-  nationality?: string | null;
-  birth_year?: number | null;
-  death_year?: number | null;
-  movements?: string[];
-  profile_image_url?: string | null;
-  instance_count: number;
-  bio_status: string;
-}
+export type ArtistEntity = import('@musee/client-core').ArtistEntity;
 
 export type ArtworkClassification = 'unsorted' | 'love' | 'respect' | 'not_for_me';
 export type ArtworkAnalysisStatus = 'pending' | 'analyzing' | 'reidentifying' | 'failed' | 'analyzed';

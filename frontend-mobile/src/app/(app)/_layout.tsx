@@ -24,6 +24,7 @@ export default function AppLayout() {
         <Stack.Screen name="artwork/[id]" options={{ title: 'Artwork' }} />
         <Stack.Screen name="artwork-upload" options={{ title: 'Add Artworks' }} />
         <Stack.Screen name="history" options={{ title: 'Sessions' }} />
+        <Stack.Screen name="artist/[id]" options={{ title: 'Artist' }} />
         <Stack.Screen name="boards/index" options={{ title: 'Boards' }} />
         <Stack.Screen name="boards/[id]" options={{ title: 'Board' }} />
         <Stack.Screen name="session/[id]" options={{ title: 'Session' }} />

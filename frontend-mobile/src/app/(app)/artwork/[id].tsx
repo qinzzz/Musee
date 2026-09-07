@@ -330,7 +330,10 @@ export default function ArtworkDetailScreen() {
 
         <View style={styles.stateCard}>
           <Text style={styles.stateTitle}>{artwork.artworkName}</Text>
-          <Text style={styles.stateMessage}>{artwork.artistName}</Text>
+          {artwork.artistEntityId ? <Text accessibilityRole="link" style={[styles.stateMessage, { textDecorationLine: 'underline' }]}
+            onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artwork.artistEntityId! } })}>
+            {artwork.artistName}
+          </Text> : <Text style={styles.stateMessage}>{artwork.artistName}</Text>}
           {artwork.date || artwork.medium ? <Text style={styles.stateMessage}>
             {[artwork.date, artwork.medium].filter(Boolean).join(' · ')}
           </Text> : null}

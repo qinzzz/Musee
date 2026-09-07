@@ -1,3 +1,4 @@
+import { ArtistsPane } from '../artists/ArtistsPane';
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -31,7 +32,7 @@ export function CollectionScreen() {
       </ScrollView>
       <GlassIconButton icon="plus" label={COPY.upload} onPress={() => router.push('/artwork-upload')} />
     </View>
-    {section === 'artworks' ? <ArtworkCollectionPane /> : section === 'boards' ? <BoardsScreen /> :
+    {section === 'artworks' ? <ArtworkCollectionPane /> : section === 'boards' ? <BoardsScreen /> : section === 'artists' ? <ArtistsPane /> :
       <View style={styles.placeholder}><Text style={styles.message}>{COPY[section]}</Text></View>}
   </Screen>;
 }
