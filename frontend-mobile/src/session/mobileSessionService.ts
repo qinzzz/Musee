@@ -1,5 +1,7 @@
 import {
   buildInitialSessionTitle,
+  buildSessionArtworkContext,
+  type SessionArtworkContext,
   type ArtworkRecord,
   type SessionChatPhase,
   type SessionEventRecord,
@@ -38,6 +40,7 @@ export type MobileSessionService = {
     text: string,
     sessionId: string,
   ) => MobileTextSessionAttempt;
+  createContextAttempt: (userId: string, entries: SessionArtworkContext[], text: string, sessionId: string) => MobileTextSessionAttempt;
   fetchArtworks: (sessionId: string, userId: string) => Promise<ArtworkRecord[]>;
   fetchEvents: (sessionId: string) => Promise<SessionEventRecord[]>;
   fetchSessions: (userId: string) => Promise<SessionRecord[]>;
@@ -47,6 +50,7 @@ export type MobileSessionService = {
     sessionId: string,
     title: string,
   ) => Promise<SessionRecord>;
+  persistContextTurn: (attempt: MobileTextSessionAttempt) => Promise<void>;
   persistPendingResponse: (
     attempt: MobileTextSessionAttempt,
     replaceExisting?: boolean,
@@ -122,6 +126,41 @@ export function createMobileSessionService({
   now = () => new Date(),
   transport,
 }: MobileSessionServiceOptions): MobileSessionService {
+  const createContextAttempt: MobileSessionService['createContextAttempt'] = (userId, entries, rawText, sessionId) => {
+    const context = buildSessionArtworkContext(entries);
+    const content = rawText.trim();
+    const userEventId = createId('event');
+    const responseEventId = createId('response');
+    const createdAt = now();
+    return {
+      sessionId,
+      userId,
+      text: content,
+      title: buildInitialSessionTitle(content, DEFAULT_SESSION_TITLE),
+      userEvent: {
+        id: userEventId,
+        session_id: sessionId,
+        role: 'user',
+        event_type: 'user_input',
+        content: content || null,
+        ...context,
+        trigger_event_id: null,
+        created_at: createdAt.toISOString(),
+      },
+      responseEvent: {
+        id: responseEventId,
+        session_id: sessionId,
+        role: 'model',
+        event_type: 'model_response',
+        content: '',
+        artwork_ids: context.artwork_ids,
+        payload: { status: 'pending' },
+        trigger_event_id: userEventId,
+        created_at: new Date(createdAt.getTime() + 1).toISOString(),
+      },
+    };
+  };
+
   return {
     attachArtwork(userId, sessionId, artworkId) {
       return transport.attachArtwork({ userId, sessionId, artworkId });
@@ -171,46 +210,11 @@ export function createMobileSessionService({
       };
     },
 
-    createArtworkAttempt(
-      userId,
-      artworkId,
-      source,
-      rawText,
-      sessionId,
-    ) {
-      const content = rawText.trim();
-      const userEventId = createId('event');
-      const responseEventId = createId('response');
-      const createdAt = now();
-      return {
-        sessionId,
-        userId,
-        text: content,
-        title: buildInitialSessionTitle(content, DEFAULT_SESSION_TITLE),
-        userEvent: {
-          id: userEventId,
-          session_id: sessionId,
-          role: 'user',
-          event_type: 'user_input',
-          content: content || null,
-          artwork_ids: [artworkId],
-          payload: { artworks: [{ artwork_id: artworkId, source }] },
-          trigger_event_id: null,
-          created_at: createdAt.toISOString(),
-        },
-        responseEvent: {
-          id: responseEventId,
-          session_id: sessionId,
-          role: 'model',
-          event_type: 'model_response',
-          content: '',
-          artwork_ids: [artworkId],
-          payload: { status: 'pending' },
-          trigger_event_id: userEventId,
-          created_at: new Date(createdAt.getTime() + 1).toISOString(),
-        },
-      };
+    createArtworkAttempt(userId, artworkId, source, rawText, sessionId) {
+      return createContextAttempt(userId, [{ artwork_id: artworkId, source }], rawText, sessionId);
     },
+
+    createContextAttempt,
 
     async persistUserInput(attempt, existingSession) {
       if (!existingSession) {
@@ -223,6 +227,14 @@ export function createMobileSessionService({
       }
       await transport.appendEvents(attempt.sessionId, [toEventWrite(attempt.userEvent)]);
       return existingSession;
+    },
+
+    async persistContextTurn(attempt) {
+      // One backend transaction prevents a saved user turn without a recoverable response.
+      await transport.appendEvents(attempt.sessionId, [
+        toEventWrite(attempt.userEvent),
+        toEventWrite(attempt.responseEvent),
+      ]);
     },
 
     async persistPendingResponse(attempt, replaceExisting = false) {

@@ -1,3 +1,4 @@
+import { MAX_SESSION_ATTACHMENTS } from '../../../session/mobileSessionContextService';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -14,7 +15,7 @@ import type { SessionChatPhase } from '@musee/client-core';
 
 import { useAuth } from '../../../auth/AuthProvider';
 import { useCaptureDraft } from '../../../capture/CaptureDraftProvider';
-import { pickArtworkImage } from '../../../platform/images/pickArtworkImage';
+import { pickArtworkImages } from '../../../platform/images/pickArtworkImage';
 import { SessionArtworkPicker } from '../../../session/components/SessionArtworkPicker';
 import {
   SessionComposer,
@@ -40,6 +41,11 @@ const ARTWORK_PHASE_LABELS: Record<MobileSessionArtworkPhase, string> = {
   uploading_artwork: 'Uploading artwork…',
 };
 
+const CONTEXT_STATUS_LABELS = {
+  queued: 'Waiting', resolving: 'Saving context…', resolved: 'Saved',
+  enriching: 'Preparing context…', ready: 'Ready', failed: 'Needs attention',
+} as const;
+
 const COPY = {
   newTitle: 'New Session',
   emptyHeading: 'What are you thinking about?',
@@ -56,7 +62,7 @@ export default function MobileSessionScreen() {
   const { clearDraft, draft } = useCaptureDraft();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const [attachment, setAttachment] = useState<SessionComposerAttachment | null>(null);
+  const [attachments, setAttachments] = useState<SessionComposerAttachment[]>([]);
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [isPickingLibraryArtwork, setIsPickingLibraryArtwork] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -64,7 +70,7 @@ export default function MobileSessionScreen() {
 
   useEffect(() => {
     if (!draft || draft.destination !== 'session') return;
-    setAttachment({ asset: draft.asset, kind: 'local' });
+    setAttachments((current) => [...current, { asset: draft.asset, kind: 'local' } as const].slice(0, MAX_SESSION_ATTACHMENTS));
     setPhotoError(null);
     clearDraft();
   }, [clearDraft, draft]);
@@ -161,6 +167,18 @@ export default function MobileSessionScreen() {
                 />
               )}
 
+              {controller.contextEntries.map((entry) => (
+                <View key={entry.id} style={styles.errorCard}>
+                  <Text style={styles.processing}>
+                    {entry.input.kind === 'library' ? entry.input.artwork.artworkName : entry.input.asset.fileName}
+                    {' · '}{CONTEXT_STATUS_LABELS[entry.status]}
+                  </Text>
+                  {entry.status === 'failed' ? <MuseeButton label={COPY.retry}
+                    disabled={controller.isSending}
+                    onPress={() => void controller.retryContextEntry(entry.id)} /> : null}
+                </View>
+              ))}
+
               {processingLabel ? (
                 <Text accessibilityLiveRegion="polite" style={styles.processing}>
                   {processingLabel}
@@ -199,8 +217,8 @@ export default function MobileSessionScreen() {
                 </Text>
               ) : null}
               <SessionComposer
-                attachment={attachment}
-                disabled={controller.isSending || isPickingPhoto}
+                attachments={attachments}
+                disabled={controller.isSending || isPickingPhoto || controller.contextEntries.length > 0}
                 onChooseLibraryArtwork={() => {
                   setPhotoError(null);
                   setIsPickingLibraryArtwork(true);
@@ -208,21 +226,28 @@ export default function MobileSessionScreen() {
                 onChoosePhoto={() => {
                   setIsPickingPhoto(true);
                   setPhotoError(null);
-                  void pickArtworkImage()
-                    .then((asset) => {
-                      if (asset) setAttachment({ asset, kind: 'local' });
+                  void pickArtworkImages()
+                    .then((selection) => {
+                      if (!selection) return;
+                      setAttachments((current) => {
+                        const uris = new Set(current.flatMap((item) => item.kind === 'local' ? [item.asset.uri] : []));
+                        const additions = selection.assets.filter((asset) => !uris.has(asset.uri))
+                          .map((asset) => ({ kind: 'local' as const, asset }));
+                        return [...current, ...additions].slice(0, MAX_SESSION_ATTACHMENTS);
+                      });
+                      if (selection.rejectedCount || selection.assets.length + attachments.length > MAX_SESSION_ATTACHMENTS) {
+                        setPhotoError(`Up to ${MAX_SESSION_ATTACHMENTS} supported photos can be attached. Extra or unsupported photos were omitted.`);
+                      }
                     })
                     .catch(() => setPhotoError(COPY.photoError))
                     .finally(() => setIsPickingPhoto(false));
                 }}
-                onRemoveAttachment={() => setAttachment(null)}
-                onSubmit={async (text, selectedArtwork) => {
-                  const submitted = selectedArtwork?.kind === 'local'
-                    ? await controller.sendArtwork(selectedArtwork.asset, text)
-                    : selectedArtwork?.kind === 'library'
-                      ? await controller.sendLibraryArtwork(selectedArtwork.artwork, text)
-                      : await controller.sendText(text);
-                  if (submitted && selectedArtwork) setAttachment(null);
+                onRemoveAttachment={(index) => setAttachments((current) => current.filter((_, i) => i !== index))}
+                onSubmit={async (text, selected) => {
+                  const submitted = selected.length
+                    ? await controller.sendContext(selected, text)
+                    : await controller.sendText(text);
+                  if (submitted) setAttachments([]);
                   return submitted;
                 }}
                 onTakePhoto={() => {
@@ -235,10 +260,11 @@ export default function MobileSessionScreen() {
               />
             </View>
             <SessionArtworkPicker
-              excludedArtworkIds={controller.artworks.map((artwork) => artwork.id)}
+              excludedArtworkIds={attachments.flatMap((entry) => entry.kind === 'library' ? [entry.artwork.id] : [])}
               onCancel={() => setIsPickingLibraryArtwork(false)}
-              onSelect={(artwork) => {
-                setAttachment({ artwork, kind: 'library' });
+              remainingSlots={MAX_SESSION_ATTACHMENTS - attachments.length}
+              onSelect={(artworks) => {
+                setAttachments((current) => [...current, ...artworks.map((artwork) => ({ artwork, kind: 'library' } as const))].slice(0, MAX_SESSION_ATTACHMENTS));
                 setIsPickingLibraryArtwork(false);
               }}
               userId={user.user_id}

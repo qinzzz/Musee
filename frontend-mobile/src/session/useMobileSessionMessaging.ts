@@ -12,19 +12,17 @@ import type {
   SessionEventRecord,
   SessionRecord,
 } from '@musee/client-core';
-import { buildInitialSessionTitle } from '@musee/client-core';
+import { SessionContextCancelledError } from '@musee/client-core';
 
 import {
   MOBILE_API_BASE_URL,
-  mobileArtworkAnalysisService,
-  mobileArtworkLibraryService,
-  mobileArtworkUploadService,
+  mobileSessionContextService,
   mobileSessionService,
 } from '../api/runtime';
 import { mobileQueryClient } from '../api/queryClient';
-import type { NativeImageAsset, PendingArtworkUpload } from '../capture/types';
+import type { NativeImageAsset } from '../capture/types';
 import { invalidateArtworkLibraryQuery } from '../library/artworkLibraryQuery';
-import { mapPendingMobileArtwork } from '../library/mobileArtworkLibraryService';
+import { MAX_SESSION_ATTACHMENTS, type MobileContextEntry, type SessionContextInput } from './mobileSessionContextService';
 import type { MobileArtworkRecord } from '../library/types';
 import {
   restoreTextSessionAttempt,
@@ -48,6 +46,7 @@ type AttemptContext = {
   baseEvents: SessionEventRecord[];
   existingSession: SessionRecord | null;
   responsePersisted: boolean;
+  recoverContext?: boolean;
   result?: { response: string; retrieval?: Record<string, unknown> };
 };
 
@@ -57,22 +56,7 @@ export type MobileSessionArtworkPhase =
   | 'starting_session'
   | 'uploading_artwork';
 
-type ArtworkSubmissionContext = {
-  analyzedArtwork?: MobileArtworkRecord;
-  analysisComplete: boolean;
-  artworks: MobileArtworkRecord[];
-  attempt?: MobileTextSessionAttempt;
-  baseEvents: SessionEventRecord[];
-  input:
-    | { asset: NativeImageAsset; kind: 'local'; source: 'capture' | 'upload' }
-    | { artwork: MobileArtworkRecord; kind: 'library' };
-  membershipPersisted: boolean;
-  sessionId: string;
-  sessionRecord: SessionRecord | null;
-  text: string;
-  uploadedArtwork?: PendingArtworkUpload;
-  userInputPersisted: boolean;
-};
+type ContextJob = ReturnType<typeof mobileSessionContextService.createTurn>;
 
 type UseMobileSessionMessagingOptions = {
   artworks: MobileArtworkRecord[];
@@ -85,6 +69,9 @@ type UseMobileSessionMessagingOptions = {
 };
 
 export type MobileSessionMessagingController = {
+  contextEntries: MobileContextEntry[];
+  retryContextEntry: (id: string) => Promise<void>;
+  sendContext: (inputs: SessionContextInput[], text: string) => Promise<boolean>;
   artworkPhase: MobileSessionArtworkPhase | null;
   failure: (SessionErrorPresentation & { stage: SessionFailureStage }) | null;
   isSending: boolean;
@@ -131,7 +118,9 @@ export function useMobileSessionMessaging({
   >(null);
   const isSubmitting = useRef(false);
   const attemptContext = useRef<AttemptContext | null>(null);
-  const artworkSubmissionContext = useRef<ArtworkSubmissionContext | null>(null);
+  const contextJob = useRef<ContextJob | null>(null);
+  const contextVersion = useRef(0);
+  const [contextEntries, setContextEntries] = useState<MobileContextEntry[]>([]);
   const phaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const collectionSearchShownAt = useRef<number | null>(null);
 
@@ -186,14 +175,22 @@ export function useMobileSessionMessaging({
     setPhase(null);
   }, [clearPhaseTimer]);
 
-  useEffect(() => clearPhaseTimer, [clearPhaseTimer]);
+  useEffect(() => () => {
+    clearPhaseTimer();
+    contextVersion.current++;
+    contextJob.current?.cancel();
+    contextJob.current = null;
+  }, [clearPhaseTimer]);
 
   const reset = useCallback(() => {
     clearPhaseTimer();
     collectionSearchShownAt.current = null;
     isSubmitting.current = false;
     attemptContext.current = null;
-    artworkSubmissionContext.current = null;
+    contextVersion.current++;
+    contextJob.current?.cancel();
+    contextJob.current = null;
+    setContextEntries([]);
     setFailure(null);
     setIsSending(false);
     setPhase(null);
@@ -212,14 +209,22 @@ export function useMobileSessionMessaging({
       toPendingSessionResponse(attempt.responseEvent),
     ));
 
-    let stage: 'response_save' | 'stream' = 'stream';
+    let stage: 'response_save' | 'stream' | 'analysis' = 'stream';
     try {
       await mobileSessionService.persistPendingResponse(
         attempt,
         context.responsePersisted,
       );
       context.responsePersisted = true;
-
+      if (context.recoverContext) {
+        stage = 'analysis';
+        setArtworkPhase('analyzing_artwork');
+        const recovered = await mobileSessionContextService.recoverTurn(attempt.userEvent.artwork_ids || []);
+        setArtworks((current) => recovered.reduce(upsertArtwork, current));
+        context.recoverContext = false;
+        setArtworkPhase(null);
+      }
+      stage = 'stream';
       const result = await mobileSessionService.streamResponse(
         attempt,
         {
@@ -257,7 +262,7 @@ export function useMobileSessionMessaging({
       const presentation = presentSessionError(error, stage, ERROR_OPTIONS);
       setFailure({ ...presentation, stage });
 
-      if (stage === 'stream') {
+      if (stage === 'stream' || stage === 'analysis') {
         setEvents((current) => replaceSessionEvent(
           current,
           toFailedSessionResponse(attempt.responseEvent, presentation.message),
@@ -275,11 +280,12 @@ export function useMobileSessionMessaging({
         }
       }
     } finally {
+      setArtworkPhase(null);
       finishResponsePhase();
       setIsSending(false);
       isSubmitting.current = false;
     }
-  }, [applyResponsePhase, clearPhaseTimer, finishResponsePhase, setEvents]);
+  }, [applyResponsePhase, clearPhaseTimer, finishResponsePhase, setEvents, setArtworks]);
 
   const runAttempt = useCallback(async (context: AttemptContext) => {
     setIsSending(true);
@@ -304,166 +310,81 @@ export function useMobileSessionMessaging({
     }
   }, [runResponse, setEvents, setSession]);
 
-  const runArtworkSubmission = useCallback(async (
-    context: ArtworkSubmissionContext,
-  ) => {
+  const runContext = useCallback(async (job: ContextJob, retryId?: string) => {
+    const version = contextVersion.current;
     setIsSending(true);
     setFailure(null);
-    let stage: SessionFailureStage = 'upload';
-    let handedToResponse = false;
-
+    let stage: SessionFailureStage = 'session_save';
     try {
-      if (context.input.kind === 'local' && !context.uploadedArtwork) {
-        setArtworkPhase('uploading_artwork');
-        context.uploadedArtwork = await mobileArtworkUploadService.uploadArtwork(
-          context.input.asset,
-          userId,
-          context.sessionRecord?.id,
-        );
-        invalidateArtworkLibraryQuery(mobileQueryClient, userId);
-        context.membershipPersisted = Boolean(context.sessionRecord);
-        const pendingArtwork = mapPendingMobileArtwork(context.uploadedArtwork);
-        context.artworks = upsertArtwork(context.artworks, pendingArtwork);
-        setArtworks(context.artworks);
+      const result = await job.run((entries) => {
+        if (contextJob.current !== job) return;
+        setContextEntries(entries);
+        const active = entries.find((entry) => entry.status === 'resolving' || entry.status === 'enriching');
+        setArtworkPhase(active?.status === 'enriching' ? 'analyzing_artwork' : 'uploading_artwork');
+        const resolved = entries.flatMap((entry) => entry.resolved ? [entry.resolved.artwork] : []);
+        setArtworks((current) => resolved.reduce(upsertArtwork, current));
+      }, retryId);
+      if (contextJob.current !== job) return;
+      invalidateArtworkLibraryQuery(mobileQueryClient, userId);
+      if (result.committed) {
+        setSession(result.committed.session);
+        setEvents((current) => replaceSessionEvent(current, result.committed!.attempt.userEvent));
       }
-
-      const artworkId = context.input.kind === 'library'
-        ? context.input.artwork.id
-        : context.uploadedArtwork!.id;
-
-      if (!context.sessionRecord) {
-        stage = 'session_save';
-        setArtworkPhase('starting_session');
-        context.sessionRecord = await mobileSessionService.startArtworkSession(
-          userId,
-          artworkId,
-          context.sessionId,
-          buildInitialSessionTitle(context.text, 'New Session'),
-        );
-        context.membershipPersisted = true;
-        setSession(context.sessionRecord);
+      if (!result.ready || !result.committed) {
+        const failed = result.entries.find((entry) => entry.status === 'failed');
+        stage = failed?.failureStage === 'enrich' ? 'analysis' : 'upload';
+        const presentation = presentSessionError(failed?.error, stage, ERROR_OPTIONS);
+        setFailure({ ...presentation, stage });
+        return;
       }
-
-      if (!context.membershipPersisted) {
-        stage = 'session_save';
-        setArtworkPhase('saving_artwork_input');
-        await mobileSessionService.attachArtwork(
-          userId,
-          context.sessionRecord.id,
-          artworkId,
-        );
-        context.membershipPersisted = true;
-      }
-
-      if (!context.attempt) {
-        context.attempt = mobileSessionService.createArtworkAttempt(
-          userId,
-          artworkId,
-          context.input.kind === 'library' ? 'library' : context.input.source,
-          context.text,
-          context.sessionRecord.id,
-        );
-        setEvents((current) => replaceSessionEvent(current, context.attempt!.userEvent));
-      }
-
-      if (!context.userInputPersisted) {
-        stage = 'user_save';
-        setArtworkPhase('saving_artwork_input');
-        await mobileSessionService.persistUserInput(context.attempt, context.sessionRecord);
-        context.userInputPersisted = true;
-      }
-
-      if (context.input.kind === 'local' && !context.analysisComplete) {
-        stage = 'analysis';
-        setArtworkPhase('analyzing_artwork');
-        await mobileArtworkAnalysisService.analyzeArtwork(context.uploadedArtwork!);
-        context.analysisComplete = true;
-      }
-
-      if (!context.analyzedArtwork) {
-        stage = 'analysis';
-        context.analyzedArtwork = await mobileArtworkLibraryService.fetchArtwork(
-          artworkId,
-        );
-        context.artworks = upsertArtwork(context.artworks, context.analyzedArtwork);
-        setArtworks(context.artworks);
-      }
-
+      contextJob.current = null;
+      setContextEntries([]);
       const responseContext: AttemptContext = {
-        attempt: context.attempt,
-        artworks: context.artworks,
-        baseEvents: context.baseEvents,
-        existingSession: context.sessionRecord,
-        responsePersisted: false,
+        attempt: result.committed.attempt, existingSession: result.committed.session,
+        artworks: result.entries.map((entry) => entry.resolved!.artwork), baseEvents: [], responsePersisted: true,
       };
+      setSession(result.committed.session);
+      setEvents((current) => replaceSessionEvent(current, result.committed!.attempt.userEvent));
       attemptContext.current = responseContext;
-      artworkSubmissionContext.current = null;
       setArtworkPhase(null);
-      handedToResponse = true;
       await runResponse(responseContext);
     } catch (error) {
-      const presentation = presentSessionError(error, stage, ERROR_OPTIONS);
-      setFailure({ ...presentation, stage });
-      artworkSubmissionContext.current = context;
+      if (version === contextVersion.current && !(error instanceof SessionContextCancelledError)) {
+        setFailure({ ...presentSessionError(error, stage, ERROR_OPTIONS), stage });
+      }
     } finally {
-      if (!handedToResponse) {
+      if (version === contextVersion.current) {
         setArtworkPhase(null);
         setIsSending(false);
         isSubmitting.current = false;
       }
     }
-  }, [runResponse, setArtworks, setEvents, setSession, userId]);
+  }, [runResponse, setArtworks, setSession, setEvents, userId]);
 
-  const sendArtwork = useCallback(async (asset: NativeImageAsset, rawText: string) => {
-    if (!userId || isSubmitting.current) return false;
+  const sendContext = useCallback(async (inputs: SessionContextInput[], rawText: string) => {
+    if (!userId || isSubmitting.current || contextJob.current || !inputs.length || inputs.length > MAX_SESSION_ATTACHMENTS) return false;
+    const job = mobileSessionContextService.createTurn(inputs, userId, rawText, session);
     isSubmitting.current = true;
-    const context: ArtworkSubmissionContext = {
-      analysisComplete: false,
-      artworks,
-      baseEvents: events,
-      input: {
-        asset,
-        kind: 'local',
-        source: asset.source === 'camera' ? 'capture' : 'upload',
-      },
-      membershipPersisted: false,
-      sessionId: session?.id || mobileSessionService.createSessionId(),
-      sessionRecord: session,
-      text: rawText.trim(),
-      userInputPersisted: false,
-    };
-    artworkSubmissionContext.current = context;
-    void runArtworkSubmission(context);
+    contextJob.current = job;
+    void runContext(job);
     return true;
-  }, [artworks, events, runArtworkSubmission, session, userId]);
+  }, [runContext, session, userId]);
 
-  const sendLibraryArtwork = useCallback(async (
-    artwork: MobileArtworkRecord,
-    rawText: string,
-  ) => {
-    if (!userId || isSubmitting.current) return false;
+  const sendArtwork = useCallback((asset: NativeImageAsset, text: string) => (
+    sendContext([{ kind: 'local', asset }], text)
+  ), [sendContext]);
+  const sendLibraryArtwork = useCallback((artwork: MobileArtworkRecord, text: string) => (
+    sendContext([{ kind: 'library', artwork }], text)
+  ), [sendContext]);
+  const retryContextEntry = useCallback(async (id: string) => {
+    if (isSubmitting.current || !contextJob.current) return;
     isSubmitting.current = true;
-    const context: ArtworkSubmissionContext = {
-      analyzedArtwork: artwork,
-      analysisComplete: true,
-      artworks: upsertArtwork(artworks, artwork),
-      baseEvents: events,
-      input: { artwork, kind: 'library' },
-      membershipPersisted: false,
-      sessionId: session?.id || mobileSessionService.createSessionId(),
-      sessionRecord: session,
-      text: rawText.trim(),
-      userInputPersisted: false,
-    };
-    artworkSubmissionContext.current = context;
-    setArtworks(context.artworks);
-    void runArtworkSubmission(context);
-    return true;
-  }, [artworks, events, runArtworkSubmission, session, setArtworks, userId]);
+    await runContext(contextJob.current, id);
+  }, [runContext]);
 
   const sendText = useCallback(async (rawText: string) => {
     const text = rawText.trim();
-    if (!text || !userId || isSubmitting.current) return false;
+    if (!text || !userId || isSubmitting.current || contextJob.current) return false;
     isSubmitting.current = true;
 
     const attempt = mobileSessionService.createTextAttempt(
@@ -486,10 +407,10 @@ export function useMobileSessionMessaging({
 
   const retryLastFailure = useCallback(async () => {
     if (isSubmitting.current || !failure) return;
-    const artworkContext = artworkSubmissionContext.current;
-    if (artworkContext) {
+    const job = contextJob.current;
+    if (job) {
       isSubmitting.current = true;
-      await runArtworkSubmission(artworkContext);
+      await runContext(job);
       return;
     }
     const context = attemptContext.current;
@@ -520,10 +441,10 @@ export function useMobileSessionMessaging({
       return;
     }
     await runResponse(context);
-  }, [failure, runArtworkSubmission, runAttempt, runResponse, setEvents]);
+  }, [failure, runContext, runAttempt, runResponse, setEvents]);
 
   const retryFailedResponse = useCallback(async (responseEventId: string) => {
-    if (!session || isSubmitting.current) return;
+    if (!session || isSubmitting.current || contextJob.current) return;
     const responseEvent = events.find((event) => event.id === responseEventId);
     if (!responseEvent) return;
     const attempt = restoreTextSessionAttempt(responseEvent, events, session, userId);
@@ -537,11 +458,15 @@ export function useMobileSessionMessaging({
       existingSession: session,
       responsePersisted: true,
     };
+    context.recoverContext = true;
     attemptContext.current = context;
     await runResponse(context);
   }, [artworks, events, runResponse, session, userId]);
 
   return {
+    contextEntries,
+    sendContext,
+    retryContextEntry,
     artworkPhase,
     failure,
     isSending,

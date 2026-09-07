@@ -151,12 +151,40 @@ The response stream receives only the persisted `session_id` and
 artworks, current-artwork priority, and any model-facing fallback instruction.
 Do not construct hidden AI prompts in the native client.
 
-For camera and Photos input, the client uploads the artwork first, links it to
-the open Session (or atomically starts a new Session around it), persists the
-artwork-bearing user event, completes analysis, and then follows the same
-pending/stream/completion sequence. Upload, Session persistence, analysis, and
-model generation expose separate retryable phases. A retry resumes from the
-last durable boundary instead of uploading the image again.
+Session composition accepts up to five ordered Camera, Photos, and Library
+attachments with optional text. It uses `mobileSessionContextService`, composed
+in `api/runtime.ts`, rather than orchestration in the screen:
+
+1. Resolve each input to a durable artwork reference (upload or validate a Library reference).
+2. Create/reuse the Session and link its artworks.
+3. Append one ordered user event and its pending response in one backend transaction.
+4. Enrich each reference that still needs analysis.
+5. Generate one response from the persisted turn.
+
+`client-core/sessionContext.ts` owns the typed resolve → commit → enrich
+lifecycle, per-entry progress, cancellation between stages, and retry
+checkpoints. The adapter owns media operations and canonical event persistence;
+the backend owns prompt construction. Web and mobile use the same artwork
+context payload builder; web still owns its existing batch orchestration.
+
+The generic job accepts typed input/resolved unions. Adding an artist, tag, or
+document requires a concrete resolver/enricher and a supported backend event
+contract and context renderer. Do not encode those entities as fake artworks or
+add speculative generic payload fields. Only artwork adapters are implemented
+today.
+
+Successful resolutions and enrichments are retained during retries. The
+response waits for all selected context to be ready; unlike web's automatic
+partial continuation, failures are explicit and individually retryable.
+Event retries reuse stable IDs, and user/pending events are committed together.
+Upload request IDs are stable within a job, but the upload endpoint does not
+guarantee deduplication after an unknown network outcome.
+
+Jobs are in memory, not an offline queue. Leaving stops subsequent preparation
+stages but does not undo an in-flight request or remove saved artworks.
+Uncommitted drafts do not survive termination. Once the turn is committed, its
+pending response can be restored and retried: the service re-reads durable
+references and finishes outstanding analysis before generation.
 
 On open or cold start, the client fetches the Session and its events from the
 backend. Interrupted pending/failed responses remain visible and retryable.

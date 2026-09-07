@@ -1,3 +1,4 @@
+import { createMobileSessionContextService } from '../session/mobileSessionContextService';
 import {
   createApiClient,
   fetchBackendHealth,
@@ -116,3 +117,10 @@ export function subscribeToMobileAuthenticationRequired(
   authenticationRequiredListeners.add(listener);
   return () => authenticationRequiredListeners.delete(listener);
 }
+
+export const mobileSessionContextService = createMobileSessionContextService({
+  upload: mobileArtworkUploadService,
+  analysis: mobileArtworkAnalysisService,
+  library: mobileArtworkLibraryService,
+  sessions: mobileSessionService,
+});

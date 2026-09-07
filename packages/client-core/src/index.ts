@@ -57,3 +57,11 @@ export {
   type SessionResponseStatus,
   type SessionRole,
 } from './session';
+export {
+  createSessionContextJob,
+  SessionContextCancelledError,
+  buildSessionArtworkContext,
+  type ContextEntry,
+  type ContextHandler,
+  type SessionArtworkContext,
+} from './sessionContext';

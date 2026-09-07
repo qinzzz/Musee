@@ -70,13 +70,13 @@ describe('mobile artwork upload service', () => {
       ...dependencies,
     });
 
-    await expect(service.uploadArtwork(ASSET, 'user-1', 'session-1')).resolves.toMatchObject({
+    await expect(service.uploadArtwork(ASSET, 'user-1', 'session-1', 'stable-entry-id')).resolves.toMatchObject({
       id: 'artwork-1',
     });
     expect(dependencies.transport.uploadArtwork).toHaveBeenCalledWith(
       ASSET,
       'user-1',
-      expect.any(String),
+      'stable-entry-id',
       'session-1',
     );
   });
