@@ -9,10 +9,11 @@ import type { MobileArtworkRecord } from '../library/types';
 
 export const MAX_SESSION_ATTACHMENTS = 5;
 export type SessionContextInput =
-  | { kind: 'local'; asset: NativeImageAsset }
+  | { kind: 'local'; asset: NativeImageAsset; labelAsset?: NativeImageAsset }
   | { kind: 'library'; artwork: MobileArtworkRecord };
 export type ResolvedArtworkContext = {
   artwork: MobileArtworkRecord;
+  labelAsset?: NativeImageAsset;
   source: 'capture' | 'upload' | 'library';
 };
 export type MobileContextEntry = ContextEntry<SessionContextInput, ResolvedArtworkContext>;
@@ -23,7 +24,7 @@ export function createMobileSessionContextService(dependencies: {
   library: MobileArtworkLibraryService;
   sessions: MobileSessionService;
 }) {
-  async function enrichArtwork(artworkId: string, allowDeleted = false) {
+  async function enrichArtwork(artworkId: string, allowDeleted = false, labelAsset?: NativeImageAsset) {
     // Re-read before retry: analysis may have succeeded despite a lost response.
     let artwork = await dependencies.library.fetchArtwork(artworkId);
     if (artwork.isDeleted) {
@@ -31,7 +32,7 @@ export function createMobileSessionContextService(dependencies: {
       throw new Error('This artwork has been deleted.');
     }
     if (artwork.analysisStatus !== 'analyzed') {
-      await dependencies.analysis.analyzeArtwork(toPendingArtworkUpload(artwork));
+      await dependencies.analysis.analyzeArtwork({ ...toPendingArtworkUpload(artwork), ...(labelAsset ? { labelAsset } : {}) });
       artwork = await dependencies.library.fetchArtwork(artwork.id);
     }
     return artwork;
@@ -59,11 +60,13 @@ export function createMobileSessionContextService(dependencies: {
             const saved = await dependencies.upload.uploadArtwork(input.asset, userId, undefined, id);
             return {
               artwork: mapPendingMobileArtwork(saved),
+              ...(input.labelAsset ? { labelAsset: input.labelAsset } : {}),
               source: input.asset.source === 'camera' ? 'capture' : 'upload',
             };
           },
           async enrich(resolved) {
-            return { ...resolved, artwork: await enrichArtwork(resolved.artwork.id) };
+            const artwork = await enrichArtwork(resolved.artwork.id, false, resolved.labelAsset);
+            return { artwork, source: resolved.source };
           },
         },
         commit,

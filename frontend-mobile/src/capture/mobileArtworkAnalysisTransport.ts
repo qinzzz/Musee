@@ -6,6 +6,8 @@ import {
   type ArtworkAnalysisResult,
 } from '@musee/client-core';
 
+import type { NativeImageAsset } from './types';
+
 export type MobileArtworkAnalysisProgress =
   | { type: 'chunk'; content: string }
   | { type: 'metrics'; metrics: ArtworkAnalysisMetrics };
@@ -14,12 +16,14 @@ export type MobileArtworkAnalysisTransport = {
   analyzeArtwork: (
     artworkId: string,
     onProgress?: (progress: MobileArtworkAnalysisProgress) => void,
+    labelAsset?: NativeImageAsset,
   ) => Promise<ArtworkAnalysisResult>;
 };
 
 export type MobileArtworkAnalysisTransportOptions = {
   apiBaseUrl: string;
   apiClient: ApiClient;
+  createUploadFile?: (uri: string) => Blob;
 };
 
 const ANALYSIS_TIMEOUT_MS = 180_000;
@@ -47,11 +51,22 @@ async function readErrorDetail(response: Response): Promise<string> {
 export function createMobileArtworkAnalysisTransport({
   apiBaseUrl,
   apiClient,
+  createUploadFile,
 }: MobileArtworkAnalysisTransportOptions): MobileArtworkAnalysisTransport {
   return {
-    async analyzeArtwork(artworkId, onProgress) {
+    async analyzeArtwork(artworkId, onProgress, labelAsset) {
       const formData = new FormData();
       formData.append('client_type', 'ios');
+      if (labelAsset) {
+        if (!createUploadFile) throw new MobileArtworkAnalysisError('Label upload is unavailable.');
+        formData.append('artwork_id', artworkId);
+        formData.append('label_image', createUploadFile(labelAsset.uri), labelAsset.fileName);
+        const response = await apiClient.fetchWithTimeout(`${apiBaseUrl}/artworks/analyze`, {
+          method: 'POST', body: formData, credentials: 'omit', timeout: ANALYSIS_TIMEOUT_MS,
+        });
+        if (!response.ok) throw new MobileArtworkAnalysisError(await readErrorDetail(response), response.status);
+        return response.json() as Promise<ArtworkAnalysisResult>;
+      }
       const response = await apiClient.fetchWithTimeout(
         `${apiBaseUrl}/artworks/${encodeURIComponent(artworkId)}/analyze-stream`,
         {

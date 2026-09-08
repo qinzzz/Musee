@@ -94,8 +94,9 @@ Status meanings:
 | --- | --- | --- |
 | Workspace, Expo development client, shared core | Baseline complete | Maintain clean web/native boundaries and reproducible builds |
 | Email sign-in, refresh, restore, sign-out | Baseline complete | Harden lifecycle and security behavior as release approaches |
-| Social sign-in and account recovery | Not started | Define native providers and complete recovery/verification flows |
+| Apple and Google sign-in, account linking, and recovery | Not started | Support both native providers alongside email, with consistent account linking, restoration, and recovery/verification flows |
 | Camera and single-photo intake | Baseline complete | Add production capture UX and preserve reliable permission fallbacks |
+| Artwork with supporting/label photos in one identification flow | Implemented — one artwork plus one optional label; device validation pending | Capture or choose an artwork and its supporting/label images together; verify web behavior and backend contracts before implementing native parity |
 | Batch and multi-select intake | Baseline complete — Library intake and mixed Session composition; simulator recovery checks passed | Match the intentional web batch workflow where it fits native UX |
 | Upload and streamed artwork analysis | Baseline complete | Preserve retry, status, and persisted-result behavior |
 | Artwork thumbnails and image variants | Baseline complete | Preserve cloud derivatives, legacy fallback, and full-resolution detail/AI use |
@@ -107,7 +108,7 @@ Status meanings:
 | Artwork conversation / Ask Musee | Not started | Define whether it is a detail thread, Session entry, or both |
 | Boards and collection organization | Implemented — native board management and membership; device validation pending | Bring over the active organization model with native interactions |
 | Artist, museum, and movement browsing | Artists and Museums implemented; device validation pending. Movements not started | Provide first-class discovery and detail paths |
-| Journals, learning, and taste profile | Not started | Port validated learning and reflection experiences in later slices |
+| Personal section: journals, learning, and taste profile | Not started — Profile is a placeholder | Implement native journal and taste-profile experiences based on active web behavior |
 | Persona, language, usage, and account settings | Not started | Centralize durable preferences and account controls |
 | Guest experience, conversion, and quotas | Not started | Preserve the backend trust model and native recovery behavior |
 | Community/comments | Decision required | Confirm that the feature is active before creating native UI |
@@ -169,7 +170,19 @@ partial upload/analysis success with per-item retry; device validation pending.
 - complete artwork metadata and analysis presentation;
 - support edit, delete, re-identify, and relevant artwork actions;
 - add multi-select/batch intake where it improves the native workflow;
-- verify image deletion, replacement, thumbnail, and legacy-record behavior.
+- verify image deletion, replacement, thumbnail, and legacy-record behavior;
+- complete the artwork identification flow with a primary artwork photo and
+  supporting/label photos, including capture or Photos selection, review,
+  replacement/retake, submission, and recoverable failures. Inspect the complete
+  web flow and backend contracts first: artwork-plus-label capture is established
+  on web; verify the role and limits of any additional supporting images. Multiple
+  artworks in a Session or batch upload do not fulfill this capability.
+
+Native capture now supports a required artwork and one optional label, with
+slot selection, Photos fallback, preview, and retake. Label-assisted identification
+uses the web endpoint: the label is supporting evidence, not a saved image or a
+separate transcript. Pending labels remain in memory for retry and do not survive
+termination before identification completes; device validation remains required.
 
 **Phase 4 exit gate:** install a fresh development or preview build on a
 physical iPhone and test authentication restoration, camera and Photos intake,
@@ -205,7 +218,9 @@ Status: not started beyond Session conversation.
 - redesign the dormant web Explore angles as Session starters: selecting an
   angle should create a Session with the artwork and selected angle as the
   opening turn, rather than restoring the separate localStorage conversation;
-- port active journals, learning surfaces, and taste-profile experiences;
+- replace the Profile placeholder with native journals and taste-profile views,
+  including the active web creation, reading, update, loading, and recovery paths;
+- port other active learning surfaces;
 - expose persona, language, usage, and account preferences;
 - preserve Markdown and structured content without inheriting browser rendering
   assumptions.
@@ -214,7 +229,10 @@ Status: not started beyond Session conversation.
 
 Status: not started.
 
-- complete supported social sign-in and account recovery;
+- implement both Apple and Google sign-in alongside email authentication;
+- preserve one account identity across providers, including account linking,
+  cancellation/error recovery, sign-out, and cold-start credential restoration;
+- complete account recovery and verification flows;
 - implement guest conversion and quota presentation if guest mode is retained;
 - define offline reading, retry queues, and conflict behavior;
 - handle foreground/background transitions and interrupted uploads/streams;
@@ -310,6 +328,21 @@ Agents run automated checks and builds; the user operates simulator/device UI
 checks by default. Record confirmed outcomes and remaining blockers before
 advancing the milestone. Artist browsing currently links existing artist entity
 IDs; it does not backfill legacy links or generate biographies on navigation.
+
+### Remaining product milestones after the initial device pass
+
+The current checkpoint validates a core native baseline. It does not establish
+complete web parity or release readiness. The next product slices are:
+
+1. **Complete capture parity:** artwork plus supporting/label photos in one
+   identification flow, as described in Phase 4.
+2. **Apple and Google sign-in:** both providers, account linking, and restoration
+   alongside email. Pull this account slice forward from Phase 7.
+3. **Personal section:** journals and taste profile, replacing the Profile
+   placeholder as part of Phase 6.
+4. **Remaining parity and release gates:** continue the other capabilities in the
+   map and complete lifecycle, accessibility, security, and distribution work,
+   including TestFlight. These three product slices do not replace those gates.
 
 ## Quality gates
 

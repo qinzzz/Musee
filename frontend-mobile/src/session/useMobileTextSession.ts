@@ -44,6 +44,9 @@ export function useMobileTextSession(
   const [isLoading, setIsLoading] = useState(routeSessionId !== 'new');
   const [loadError, setLoadError] = useState<SessionErrorPresentation | null>(null);
   const requestVersion = useRef(0);
+  const currentSession = useRef(session);
+  const previousRoute = useRef({ id: routeSessionId, userId });
+  useEffect(() => { currentSession.current = session; }, [session]);
   const messaging = useMobileSessionMessaging({
     artworks,
     events,
@@ -117,11 +120,17 @@ export function useMobileTextSession(
   }, [resetMessaging, routeSessionId, userId]);
 
   useEffect(() => {
-    void reload();
+    const previous = previousRoute.current;
+    previousRoute.current = { id: routeSessionId, userId };
+    // Promoting this draft to its saved ID changes the address, not the conversation.
+    const promotedCurrentSession = previous.id === 'new'
+      && previous.userId === userId
+      && currentSession.current?.id === routeSessionId;
+    if (!promotedCurrentSession) void reload();
     return () => {
       requestVersion.current += 1;
     };
-  }, [reload]);
+  }, [reload, routeSessionId, userId]);
 
   // Refresh the canonical session snapshot on return without resetting an active conversation.
   const activeSessionId = session?.id;

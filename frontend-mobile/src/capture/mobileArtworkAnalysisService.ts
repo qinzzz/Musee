@@ -13,11 +13,15 @@ export function createMobileArtworkAnalysisService(
 ): MobileArtworkAnalysisService {
   return {
     async analyzeArtwork(artwork, onChunk) {
-      const result = await transport.analyzeArtwork(artwork.id, (progress) => {
+      const onProgress: Parameters<MobileArtworkAnalysisTransport['analyzeArtwork']>[1] = (progress) => {
         if (progress.type === 'chunk') onChunk?.(progress.content);
-      });
+      };
+      const result = await (artwork.labelAsset
+        ? transport.analyzeArtwork(artwork.id, onProgress, artwork.labelAsset)
+        : transport.analyzeArtwork(artwork.id, onProgress));
+      const { labelAsset: _labelAsset, ...savedArtwork } = artwork;
       return {
-        ...artwork,
+        ...savedArtwork,
         analysisStatus: 'analyzed',
         artistName: result.artist_name,
         artworkName: result.artwork_name,

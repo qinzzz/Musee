@@ -75,3 +75,29 @@ describe('mobile artwork analysis transport', () => {
     );
   });
 });
+
+
+describe('label-assisted identification', () => {
+  const label = { uri: 'file:///label.jpg', fileName: 'label.jpg', mimeType: 'image/jpeg', width: 100, height: 100, source: 'camera' as const };
+  it('sends the temporary label with an existing artwork ID to the web identification endpoint', async () => {
+    const result = { artwork_id: 'art-1', artist_name: 'Artist', artwork_name: 'Work', analysis: 'From label', tags: [], analysis_status: 'analyzed' };
+    const client = createClient(Response.json(result));
+    const transport = createMobileArtworkAnalysisTransport({ apiBaseUrl: '/api', apiClient: client,
+      createUploadFile: () => new Blob(['label'], { type: 'image/jpeg' }) });
+    await expect(transport.analyzeArtwork('art-1', undefined, label)).resolves.toEqual(result);
+    const [url, options] = vi.mocked(client.fetchWithTimeout).mock.calls[0];
+    expect(url).toBe('/api/artworks/analyze');
+    const body = options?.body as FormData;
+    expect(body.get('artwork_id')).toBe('art-1');
+    expect((body.get('label_image') as File).name).toBe('label.jpg');
+    expect(body.get('image')).toBeNull();
+    expect(options?.credentials).toBe('omit');
+  });
+  it('keeps label analysis errors retryable', async () => {
+    const transport = createMobileArtworkAnalysisTransport({ apiBaseUrl: '/api',
+      apiClient: createClient(Response.json({ detail: 'Try again' }, { status: 503 })),
+      createUploadFile: () => new Blob(['label']) });
+    await expect(transport.analyzeArtwork('art-1', undefined, label)).rejects.toEqual(
+      new MobileArtworkAnalysisError('Try again', 503));
+  });
+});
