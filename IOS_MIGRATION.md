@@ -103,7 +103,7 @@ Status meanings:
 | Artwork editing, deletion, and re-identification | Partial — editing, Identify Again, and deletion implemented; device validation pending | Provide safe native actions with consistent persistence |
 | Text-only Sessions | Baseline complete | Continue hardening long histories, interruption, and recovery |
 | Artwork inputs and cards inside Sessions | Baseline complete | Harden lifecycle states and long-history behavior after the single-artwork paths |
-| Session management | Partial | Complete history, titles, delete/archive behavior, and long-list UX |
+| Session management | Partial — native name/goal editing and confirmed deletion implemented; device validation pending | Validate management actions, history, and long-list UX; decide archive behavior |
 | Artwork conversation / Ask Musee | Not started | Define whether it is a detail thread, Session entry, or both |
 | Boards and collection organization | Implemented — native board management and membership; device validation pending | Bring over the active organization model with native interactions |
 | Artist, museum, and movement browsing | Artists and Museums implemented; device validation pending. Movements not started | Provide first-class discovery and detail paths |
@@ -271,7 +271,19 @@ retry; committed turns support interrupted-response recovery. Simulator checks f
 and PR #144 is merged. The Session composition baseline is complete. Future artist, tag, and document context needs
 concrete backend contracts, not new UI-specific orchestration.
 
-### Next: iOS build and integration validation
+### Active: physical-iPhone validation and stabilization
+
+The development app is running on a physical iPhone, and the user reports that
+most features work. This establishes an initial device pass, not sign-off on
+every capability or the full failure-recovery checklist. Device testing surfaced
+camera dismissal, keyboard handling, Session management, and collection-search
+reliability work. Those fixes are implemented and need a focused regression pass.
+Session goals now reach the canonical chat prompt; collection searches have
+bounded AI ranking and concise outcome logs for diagnosing failures.
+
+The next checkpoint is to confirm these fixes on-device and complete the remaining
+permission, cold-start, interruption, degraded-network, and cross-client checks.
+TestFlight and production release readiness remain separate, unfinished milestones.
 
 Pause additional discovery features after Museums for a dedicated build-and-test
 session. The navigation shell, artwork library, Boards, Artists, Museums, shared services,
@@ -279,8 +291,8 @@ and Session composition now form a useful integrated baseline to validate.
 Further discovery follows this checkpoint; a successful simulator build alone does not
 establish physical-device or release readiness.
 
-- Produce a fresh iOS development build and verify cold launch, sign-in restoration,
-  and backend configuration; include a physical iPhone pass when available.
+- The physical-iPhone development build is installed. Verify cold launch, sign-in
+  restoration, and backend configuration through a complete restart.
 - Validate Home/history, Collection sub-tabs, local back navigation, and Profile
   placeholder behavior, including camera/Photos permission paths.
 - Exercise upload, edit, Identify Again, delete, Boards membership, and Artists

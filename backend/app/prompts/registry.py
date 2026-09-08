@@ -29,6 +29,7 @@ class SessionChatTurnContext:
     artwork_labels: Sequence[str]
     artwork_sources: Sequence[str]
     is_first_turn: bool
+    user_goal: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -112,6 +113,14 @@ def _render_session_chat_prompt(context: SessionChatPromptContext) -> str:
 
 
 def _render_session_chat_turn(context: SessionChatTurnContext) -> str:
+    message = _render_session_chat_turn_content(context)
+    goal = context.user_goal.strip() if isinstance(context.user_goal, str) else ""
+    if goal:
+        return f"Visitor's saved session goal: {goal}\n\nCurrent turn:\n{message}"
+    return message
+
+
+def _render_session_chat_turn_content(context: SessionChatTurnContext) -> str:
     if context.user_text and context.user_text.strip():
         return context.user_text.strip()
     count = len(context.artwork_labels)

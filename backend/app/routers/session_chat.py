@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import json
 import logging
 from typing import Optional
@@ -185,6 +187,7 @@ async def stream_session_chat(
                             db=db,
                             user_id=current_user.user_id,
                             plan=retrieval_plan,
+                            trigger_event_id=request.trigger_event_id,
                         )
                     except Exception as exc:
                         logger.warning("Personal collection retrieval execution failed: %s", exc)
@@ -225,6 +228,9 @@ async def stream_session_chat(
                 yield f"event: chunk\ndata: {json.dumps({'type': 'text', 'content': chunk.text})}\n\n"
             succeed_ai_usage(usage_id, input_tokens=input_tokens, output_tokens=output_tokens)
             yield f"event: complete\ndata: {json.dumps({'type': 'result', 'response': full_text, 'retrieval': retrieval_outcome.trace.model_dump()})}\n\n"
+        except asyncio.CancelledError:
+            fail_ai_usage(usage_id, RuntimeError("Session chat stream cancelled"))
+            raise
         except Exception as exc:
             fail_ai_usage(usage_id, exc)
             logger.exception("Session chat stream failed")
@@ -266,6 +272,7 @@ async def _retrieve_for_request(
             user_id=current_user.user_id,
             message=request.new_message,
             history=request.conversation_history,
+            trigger_event_id=request.trigger_event.id,
         )
     except Exception as exc:
         logger.warning("Personal collection retrieval failed: %s", exc)

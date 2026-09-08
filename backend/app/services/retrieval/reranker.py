@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -12,6 +13,8 @@ from app.services.retrieval.contracts import RerankResponse, RankedArtwork, Save
 logger = logging.getLogger(__name__)
 MAX_RERANK_CANDIDATE_TEXT_CHARS = 12_000
 MAX_RERANK_OUTPUT_TOKENS = 300
+# Finish or fall back before the native stream's 60-second idle deadline.
+RERANK_TIMEOUT_SECONDS = 30
 
 RERANK_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
@@ -82,9 +85,10 @@ Return exactly one JSON object shaped like:
             "temperature": 0,
             "response_schema": RERANK_RESPONSE_SCHEMA,
         }
-        response = await call_result(**kwargs) if callable(call_result) else AITextResult(
-            text=await ai_service.ai_client.call_text_only(**kwargs)
-        )
+        async with asyncio.timeout(RERANK_TIMEOUT_SECONDS):
+            response = await call_result(**kwargs) if callable(call_result) else AITextResult(
+                text=await ai_service.ai_client.call_text_only(**kwargs)
+            )
         parsed = RerankResponse.model_validate(parse_structured_json(response.text))
         allowed = {candidate.source_id for candidate in candidates}
         seen: set[str] = set()
@@ -98,6 +102,14 @@ Return exactly one JSON object shaped like:
                 break
         succeed_ai_usage(usage_id, input_tokens=response.input_tokens, output_tokens=response.output_tokens)
         return valid
+    except asyncio.CancelledError:
+        fail_ai_usage(usage_id, RuntimeError("Saved artwork reranking cancelled"))
+        raise
+    except TimeoutError:
+        error = TimeoutError("Saved artwork reranking timed out")
+        fail_ai_usage(usage_id, error)
+        logger.warning("%s after %ss", error, RERANK_TIMEOUT_SECONDS)
+        raise error
     except Exception as exc:
         fail_ai_usage(usage_id, exc)
         logger.warning("Saved artwork reranking failed: %s", exc)

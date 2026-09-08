@@ -196,6 +196,13 @@ or database reference.
 
 ## Persistent sessions
 
+Existing Sessions expose the native glass toolbar menu for editing the name and
+session goal and for confirmed deletion. Edits use the canonical title and goal
+endpoints with explicit Save/Cancel; a partial failure retains the form for retry.
+Deleting a Session preserves its library artworks. Management actions are disabled
+while a response is being sent. The backend includes the latest persisted goal
+in subsequent chat turns for both clients; it does not rewrite prior events.
+
 The native Session flow uses the shared contracts and preserves events on the
 backend. Text and artwork events use the canonical `event_type` field. Session
 open fetches both the event timeline and linked artwork records so artwork cards
