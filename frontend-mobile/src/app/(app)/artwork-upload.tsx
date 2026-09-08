@@ -38,6 +38,7 @@ const COPY = {
   takePhoto: 'Take a Photo',
   choosePhoto: 'Choose from Photos',
   usePhoto: 'Upload to Musee',
+  labelAttached: 'Label attached · used for identification only',
   chooseDifferentPhoto: 'Choose a different photo',
   uploadAnother: 'Upload another artwork',
   openLibrary: 'Open Library',
@@ -58,8 +59,8 @@ const COPY = {
 type CaptureState =
   | { status: 'idle' }
   | { status: 'picking' }
-  | { status: 'preview'; asset: NativeImageAsset }
-  | { status: 'uploading'; asset: NativeImageAsset }
+  | { status: 'preview'; asset: NativeImageAsset; labelAsset?: NativeImageAsset }
+  | { status: 'uploading'; asset: NativeImageAsset; labelAsset?: NativeImageAsset }
   | { status: 'analyzing'; artwork: PendingArtworkUpload; receivedChunk: boolean }
   | { status: 'analyzed'; artwork: AnalyzedArtwork }
   | { status: 'batch'; entries: MobileArtworkBatchEntry[]; running: boolean }
@@ -71,6 +72,7 @@ type CaptureState =
   | {
     status: 'upload-error';
     asset?: NativeImageAsset;
+    labelAsset?: NativeImageAsset;
     error: RequestErrorPresentation;
   };
 
@@ -87,7 +89,7 @@ export default function ArtworkUploadScreen() {
 
   useEffect(() => {
     if (!draft || draft.destination !== 'library') return;
-    setCapture({ status: 'preview', asset: draft.asset });
+    setCapture({ status: 'preview', asset: draft.asset, labelAsset: draft.labelAsset });
     clearDraft();
   }, [clearDraft, draft]);
 
@@ -246,19 +248,20 @@ export default function ArtworkUploadScreen() {
     }
   };
 
-  const uploadPhoto = async (asset: NativeImageAsset) => {
+  const uploadPhoto = async (asset: NativeImageAsset, labelAsset?: NativeImageAsset) => {
     if (!user) return;
-    setCapture({ status: 'uploading', asset });
+    setCapture({ status: 'uploading', asset, labelAsset });
     showPendingToast({ label: COPY.uploadingToast });
     try {
       const artwork = await mobileArtworkUploadService.uploadArtwork(asset, user.user_id);
       invalidateArtworkLibraryQuery(mobileQueryClient, user.user_id);
-      await analyzeArtwork(artwork);
+      await analyzeArtwork({ ...artwork, labelAsset });
     } catch (error) {
       const presentation = presentArtworkUploadError(error, ERROR_PRESENTATION_OPTIONS);
       setCapture({
         status: 'upload-error',
         asset,
+        labelAsset,
         error: presentation,
       });
       showToast({
@@ -311,11 +314,16 @@ export default function ArtworkUploadScreen() {
               source={{ uri: capture.asset.uri }}
               style={styles.previewImage}
             />
+            {capture.labelAsset ? <View style={styles.actionGroup}>
+              <Image accessibilityLabel={COPY.labelAttached} contentFit="contain"
+                source={{ uri: capture.labelAsset.uri }} style={styles.labelPreview} />
+              <Text style={styles.message}>{COPY.labelAttached}</Text>
+            </View> : null}
             <View style={styles.actionGroup}>
               <MuseeButton
                 label={COPY.usePhoto}
                 loading={capture.status === 'uploading'}
-                onPress={() => void uploadPhoto(capture.asset)}
+                onPress={() => void uploadPhoto(capture.asset, capture.labelAsset)}
               />
               <MuseeButton
                 disabled={capture.status === 'uploading'}
@@ -431,7 +439,7 @@ export default function ArtworkUploadScreen() {
             {retryAsset ? (
               <MuseeButton
                 label={COPY.retryUpload}
-                onPress={() => void uploadPhoto(retryAsset)}
+                onPress={() => void uploadPhoto(retryAsset, capture.labelAsset)}
               />
             ) : null}
             <MuseeButton
@@ -470,6 +478,7 @@ const styles = StyleSheet.create({
   captureCard: {
     gap: spacing.md,
   },
+  labelPreview: { width: 96, height: 72, borderRadius: radii.input },
   previewImage: {
     width: '100%',
     aspectRatio: 1,

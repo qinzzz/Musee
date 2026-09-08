@@ -89,6 +89,7 @@ export const mobileArtworkUploadService = createMobileArtworkUploadService({
 
 export const mobileArtworkAnalysisService = createMobileArtworkAnalysisService(
   createMobileArtworkAnalysisTransport({
+    createUploadFile: (uri) => new File(uri),
     apiBaseUrl: MOBILE_API_BASE_URL,
     apiClient: mobileApiClient,
   }),

@@ -11,6 +11,7 @@ export type NativeImageAsset = {
 };
 
 export type PendingArtworkUpload = {
+  labelAsset?: NativeImageAsset;
   id: string;
   photoUri: string;
   thumbnailUri: string | null;
@@ -23,7 +24,7 @@ export type PendingArtworkUpload = {
   artworkName: string;
 };
 
-export type AnalyzedArtwork = Omit<PendingArtworkUpload, 'analysisStatus' | 'artistName' | 'artworkName'> & {
+export type AnalyzedArtwork = Omit<PendingArtworkUpload, 'analysisStatus' | 'artistName' | 'artworkName' | 'labelAsset'> & {
   analysisStatus: 'analyzed';
   artistName: string;
   artworkName: string;

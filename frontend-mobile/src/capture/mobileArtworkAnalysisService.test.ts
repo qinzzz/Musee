@@ -50,3 +50,19 @@ describe('mobile artwork analysis service', () => {
     expect(onChunk).toHaveBeenCalledWith('partial');
   });
 });
+
+
+it('retains a label on failure for retry, then omits it from completed artwork state', async () => {
+  const labelAsset = { uri: 'file:///label.jpg', fileName: 'label.jpg', mimeType: 'image/jpeg', width: 100, height: 100, source: 'camera' as const };
+  const pending = { ...ARTWORK, labelAsset };
+  const transport = { analyzeArtwork: vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({
+    artist_name: 'Artist', artwork_name: 'Title', analysis: 'Label evidence', tags: [],
+  }) };
+  const service = createMobileArtworkAnalysisService(transport);
+  await expect(service.analyzeArtwork(pending)).rejects.toThrow('offline');
+  expect(pending.labelAsset).toBe(labelAsset);
+  const result = await service.analyzeArtwork(pending);
+  expect(result).not.toHaveProperty('labelAsset');
+  expect(result.photoUri).toBe(ARTWORK.photoUri);
+  expect(transport.analyzeArtwork).toHaveBeenLastCalledWith(ARTWORK.id, expect.any(Function), labelAsset);
+});

@@ -112,3 +112,20 @@ describe('mobile Session context service', () => {
   });
 
 });
+
+
+it('keeps the label attached through failed Session analysis without uploading another artwork', async () => {
+  const { service, analysis, upload } = setup();
+  const labelAsset = { ...asset, uri: 'label', fileName: 'label.jpg' };
+  vi.mocked(analysis.analyzeArtwork).mockRejectedValueOnce(new Error('offline'));
+  const job = service.createTurn([{ kind: 'local', asset, labelAsset }], 'user', '', null);
+  const failed = await job.run();
+  expect(failed.ready).toBe(false);
+  expect(analysis.analyzeArtwork).toHaveBeenCalledWith(expect.objectContaining({ labelAsset }));
+  const complete = await job.run(undefined, failed.entries[0].id);
+  expect(complete.ready).toBe(true);
+  expect(upload.uploadArtwork).toHaveBeenCalledTimes(1);
+  expect(upload.uploadArtwork).toHaveBeenCalledWith(asset, 'user', undefined, expect.any(String));
+  expect(analysis.analyzeArtwork).toHaveBeenLastCalledWith(expect.objectContaining({ labelAsset }));
+  expect(complete.entries[0].resolved).not.toHaveProperty('labelAsset');
+});

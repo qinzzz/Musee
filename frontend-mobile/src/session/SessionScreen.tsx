@@ -81,7 +81,7 @@ export function SessionScreen({ home = false }: { home?: boolean }) {
 
   useEffect(() => {
     if (!focused || !draft || draft.destination !== 'session') return;
-    setAttachments((current) => [...current, { asset: draft.asset, kind: 'local' } as const].slice(0, MAX_SESSION_ATTACHMENTS));
+    setAttachments((current) => [...current, { asset: draft.asset, labelAsset: draft.labelAsset, kind: 'local' } as const].slice(0, MAX_SESSION_ATTACHMENTS));
     setPhotoError(null);
     clearDraft();
   }, [clearDraft, draft, focused]);
@@ -96,17 +96,16 @@ export function SessionScreen({ home = false }: { home?: boolean }) {
 
   useEffect(() => {
     if (
-      resolvedSessionId === 'new'
+      !home
+      && resolvedSessionId === 'new'
       && controller.session
       && !controller.isSending
       && !controller.failure
     ) {
-      router.replace({
-        pathname: '/session/[id]',
-        params: { id: controller.session.id },
-      });
+      router.setParams({ id: controller.session.id });
     }
   }, [
+    home,
     controller.failure,
     controller.isSending,
     controller.session,

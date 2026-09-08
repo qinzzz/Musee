@@ -61,15 +61,15 @@ become mobile commitments.
 
 ## Current position
 
-Last reviewed: 2026-09-07.
+Last reviewed: 2026-09-08.
 
 The native app now has a functioning foundation and four usable product
 slices:
 
 - renewable email authentication with refresh credentials in Keychain and
   access credentials in memory;
-- camera or Photos intake, cloud upload, streamed analysis, camera-roll saving,
-  and retry behavior;
+- custom camera or Photos intake with a required artwork and optional label,
+  cloud upload, identification, camera-roll saving, and retry behavior;
 - artwork library and basic artwork detail;
 - Sessions with persisted user/model events, streamed Markdown responses,
   retry behavior, cold-start restoration, and camera, Photos, or library
@@ -79,7 +79,13 @@ The cloud thumbnail contract and shared Session prompt ownership are complete.
 Session timelines render artwork cards durably, and camera, Photos, and existing
 library artworks can participate in mixed artwork/text turns. The remaining
 Phase 3 work is lifecycle-state vocabulary polish rather than a missing core
-input or persistence path.
+input or persistence path. New Sessions adopt their saved identity without opening
+another screen; the user confirmed the navigation jump is fixed on-device.
+
+Artwork-plus-label capture is implemented for Library and Sessions. Camera UI
+has been iterated on a physical iPhone, but the complete permission, failure,
+and interruption matrix remains unverified. This is the closeout work for capture;
+native account access is the next feature milestone.
 
 ## Capability map
 
@@ -94,8 +100,9 @@ Status meanings:
 | --- | --- | --- |
 | Workspace, Expo development client, shared core | Baseline complete | Maintain clean web/native boundaries and reproducible builds |
 | Email sign-in, refresh, restore, sign-out | Baseline complete | Harden lifecycle and security behavior as release approaches |
-| Social sign-in and account recovery | Not started | Define native providers and complete recovery/verification flows |
-| Camera and single-photo intake | Baseline complete | Add production capture UX and preserve reliable permission fallbacks |
+| Apple and Google sign-in, account linking, and recovery | Not started | Support both native providers alongside email, with consistent account linking, restoration, and recovery/verification flows |
+| Camera and single-photo intake | Baseline complete — custom capture UI refined on iPhone | Validate framing, permissions, and lifecycle recovery on the final layout |
+| Artwork with optional label in one identification flow | Implemented — Library and Sessions; full device recovery validation pending | Preserve one required artwork and one temporary optional label, using web identification semantics |
 | Batch and multi-select intake | Baseline complete — Library intake and mixed Session composition; simulator recovery checks passed | Match the intentional web batch workflow where it fits native UX |
 | Upload and streamed artwork analysis | Baseline complete | Preserve retry, status, and persisted-result behavior |
 | Artwork thumbnails and image variants | Baseline complete | Preserve cloud derivatives, legacy fallback, and full-resolution detail/AI use |
@@ -107,7 +114,7 @@ Status meanings:
 | Artwork conversation / Ask Musee | Not started | Define whether it is a detail thread, Session entry, or both |
 | Boards and collection organization | Implemented — native board management and membership; device validation pending | Bring over the active organization model with native interactions |
 | Artist, museum, and movement browsing | Artists and Museums implemented; device validation pending. Movements not started | Provide first-class discovery and detail paths |
-| Journals, learning, and taste profile | Not started | Port validated learning and reflection experiences in later slices |
+| Personal section: journals, learning, and taste profile | Not started — Profile is a placeholder | Implement native journal and taste-profile experiences based on active web behavior |
 | Persona, language, usage, and account settings | Not started | Centralize durable preferences and account controls |
 | Guest experience, conversion, and quotas | Not started | Preserve the backend trust model and native recovery behavior |
 | Community/comments | Decision required | Confirm that the feature is active before creating native UI |
@@ -169,7 +176,20 @@ partial upload/analysis success with per-item retry; device validation pending.
 - complete artwork metadata and analysis presentation;
 - support edit, delete, re-identify, and relevant artwork actions;
 - add multi-select/batch intake where it improves the native workflow;
-- verify image deletion, replacement, thumbnail, and legacy-record behavior.
+- verify image deletion, replacement, thumbnail, and legacy-record behavior;
+- validate the completed artwork-plus-label capture flow in Library and Sessions.
+
+Native capture supports a required artwork and one optional label, with Photos
+selection, review, and consistent one-tap retake. The bounded camera preview
+ends above opaque controls; the shutter row sits above the artwork/label tabs.
+Label-assisted identification uses the web endpoint: the label is supporting
+evidence, not a saved image or a separate transcript. Artwork-only identification
+streams; label-assisted identification returns a complete result. Only the artwork
+is saved to Photos. Additional supporting images are outside this slice.
+
+Pending labels remain in memory for retry and do not survive termination before
+identification completes. Completed metadata and analysis are durable. This is an
+explicit recovery limitation, not an offline draft guarantee.
 
 **Phase 4 exit gate:** install a fresh development or preview build on a
 physical iPhone and test authentication restoration, camera and Photos intake,
@@ -205,7 +225,9 @@ Status: not started beyond Session conversation.
 - redesign the dormant web Explore angles as Session starters: selecting an
   angle should create a Session with the artwork and selected angle as the
   opening turn, rather than restoring the separate localStorage conversation;
-- port active journals, learning surfaces, and taste-profile experiences;
+- replace the Profile placeholder with native journals and taste-profile views,
+  including the active web creation, reading, update, loading, and recovery paths;
+- port other active learning surfaces;
 - expose persona, language, usage, and account preferences;
 - preserve Markdown and structured content without inheriting browser rendering
   assumptions.
@@ -214,7 +236,10 @@ Status: not started beyond Session conversation.
 
 Status: not started.
 
-- complete supported social sign-in and account recovery;
+- implement both Apple and Google sign-in alongside email authentication;
+- preserve one account identity across providers, including account linking,
+  cancellation/error recovery, sign-out, and cold-start credential restoration;
+- complete account recovery and verification flows;
 - implement guest conversion and quota presentation if guest mode is retained;
 - define offline reading, retry queues, and conflict behavior;
 - handle foreground/background transitions and interrupted uploads/streams;
@@ -271,13 +296,14 @@ retry; committed turns support interrupted-response recovery. Simulator checks f
 and PR #144 is merged. The Session composition baseline is complete. Future artist, tag, and document context needs
 concrete backend contracts, not new UI-specific orchestration.
 
-### Active: physical-iPhone validation and stabilization
+### Active closeout: capture and physical-iPhone validation
 
 The development app is running on a physical iPhone, and the user reports that
 most features work. This establishes an initial device pass, not sign-off on
 every capability or the full failure-recovery checklist. Device testing surfaced
 camera dismissal, keyboard handling, Session management, and collection-search
-reliability work. Those fixes are implemented and need a focused regression pass.
+reliability work. Those fixes are implemented. The user confirmed the new-Session navigation fix;
+other fixes still need the focused regression pass.
 Session goals now reach the canonical chat prompt; collection searches have
 bounded AI ranking and concise outcome logs for diagnosing failures.
 
@@ -297,6 +323,12 @@ establish physical-device or release readiness.
   placeholder behavior, including camera/Photos permission paths.
 - Exercise upload, edit, Identify Again, delete, Boards membership, and Artists
   search/profile/artwork navigation, plus Museums search/detail/artwork navigation. Check pagination and return-to-list state.
+- Verify the final capture viewport against the saved photo, artwork-only and
+  artwork-plus-label intake in Library and Sessions, label-first capture, both
+  retake actions, Photos fallback, and denial of camera/Photos permissions. Confirm
+  that labels do not become Library artworks or camera-roll copies.
+- Verify failed label identification retries without uploading a second artwork;
+  distinguish in-app retry from the documented termination limitation.
 - Repeat Session multi-attachment, streamed-response, interruption/retry, reopen,
   and cross-client persistence checks on the integrated build.
 - Test background/foreground and degraded-network recovery with web and native
@@ -310,6 +342,48 @@ Agents run automated checks and builds; the user operates simulator/device UI
 checks by default. Record confirmed outcomes and remaining blockers before
 advancing the milestone. Artist browsing currently links existing artist entity
 IDs; it does not backfill legacy links or generate biographies on navigation.
+
+### Next build: native account access
+
+Build Apple and Google sign-in alongside email before starting the Personal
+section. This gives existing web users a path into their existing native library
+and Sessions and establishes account identity before adding more personal data.
+Capture is now implementation-complete for its agreed scope; its remaining device
+checks stay in the closeout checklist rather than becoming another capture feature.
+
+Deliver the account milestone in this order:
+
+1. **Google sign-in end to end.** Reuse the existing backend Google login and
+   native refresh-token response. Verify the iOS provider configuration and token
+   audience contract before wiring native credential acquisition into the existing
+   auth service. Do not assume the web client configuration is sufficient.
+2. **Apple sign-in and provider linking.** Add verified Apple identity support
+   through the same native login-session lifecycle. Define linking for existing
+   email/Google accounts and private-relay addresses before implementation; do not
+   infer that two different addresses belong to the same person.
+3. **Recovery and account controls.** Complete verification/password-reset re-entry
+   and the minimal signed-in account surface needed to understand the account,
+   link supported providers, and sign out. Keep journals and taste profile in the
+   subsequent Personal milestone.
+
+Acceptance: returning users reach their existing artwork and Session data;
+provider cancellation and failure leave login recoverable; refresh, sign-out,
+and cold-start restoration work on iPhone; linking does not create unintended
+accounts or expose another account's cached data. Validate the unchanged web
+login path whenever shared authentication contracts change. Provider setup and
+signing configuration are prerequisites to device sign-off.
+
+### Following product milestones
+
+1. **Personal section:** replace the Profile placeholder with journal list/detail
+   and the active web creation flow, then taste-profile views. Include loading,
+   empty, update, and recovery behavior in each slice.
+2. **Remaining parity:** finish artwork detail/conversation, preferences, and
+   other active capabilities in the map. Further discovery still waits for the
+   outstanding integrated device and timeout checks.
+3. **Release readiness:** complete lifecycle, accessibility, security, and
+   distribution gates, including TestFlight. Account and Personal work do not
+   substitute for these gates.
 
 ## Quality gates
 

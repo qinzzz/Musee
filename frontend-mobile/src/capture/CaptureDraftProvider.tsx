@@ -13,6 +13,7 @@ export type CaptureDraftDestination = 'library' | 'session';
 
 export type CaptureDraft = {
   asset: NativeImageAsset;
+  labelAsset?: NativeImageAsset;
   destination: CaptureDraftDestination;
 };
 
@@ -22,6 +23,7 @@ type CaptureDraftContextValue = {
   setDraft: (
     asset: NativeImageAsset,
     destination?: CaptureDraftDestination,
+    labelAsset?: NativeImageAsset,
   ) => void;
 };
 
@@ -33,7 +35,8 @@ export function CaptureDraftProvider({ children }: PropsWithChildren) {
   const setDraft = useCallback((
     asset: NativeImageAsset,
     destination: CaptureDraftDestination = 'library',
-  ) => setDraftState({ asset, destination }), []);
+    labelAsset?: NativeImageAsset,
+  ) => setDraftState({ asset, destination, labelAsset }), []);
   const value = useMemo(
     () => ({ draft, clearDraft, setDraft }),
     [clearDraft, draft, setDraft],

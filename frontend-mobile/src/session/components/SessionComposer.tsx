@@ -21,6 +21,8 @@ type SessionComposerProps = {
 const COPY = {
   placeholder: 'Ask Musee', notePlaceholder: 'Add a note (optional)',
   readyLabel: 'Artwork ready to upload',
+  withLabel: 'Artwork with label ready to upload',
+  labelBadge: '+ Label',
   removeLabel: 'Remove artwork',
   camera: 'Camera', photos: 'Photos', library: 'Library', send: 'Send',
 } as const;
@@ -57,7 +59,7 @@ export function SessionComposer({
             <Image
               accessibilityLabel={attachment.kind === 'library'
                 ? `${attachment.artwork.artworkName} by ${attachment.artwork.artistName}`
-                : COPY.readyLabel}
+                : attachment.labelAsset ? COPY.withLabel : COPY.readyLabel}
               contentFit="cover"
               source={{
                 uri: attachment.kind === 'library'
@@ -66,6 +68,9 @@ export function SessionComposer({
               }}
               style={styles.attachmentImage}
             />
+            {attachment.kind === 'local' && attachment.labelAsset ? (
+              <Text style={styles.labelBadge}>{COPY.labelBadge}</Text>
+            ) : null}
             <Pressable
               accessibilityLabel={COPY.removeLabel}
               accessibilityRole="button"
@@ -139,6 +144,8 @@ export function SessionComposer({
 }
 
 const styles = StyleSheet.create({
+  labelBadge: { position: 'absolute', bottom: 4, left: 4, color: colors.onPrimary,
+    backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 4, paddingHorizontal: 4, fontSize: typography.caption },
   attachments: { flexGrow: 0 },
   attachmentStrip: { gap: spacing.sm },
   container: {

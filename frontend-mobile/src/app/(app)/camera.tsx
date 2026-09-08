@@ -5,6 +5,7 @@ import { File } from 'expo-file-system';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { SymbolView } from 'expo-symbols';
 import { useEffect, useRef, useState } from 'react';
 import {
   AppState,
@@ -14,7 +15,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCaptureDraft } from '../../capture/CaptureDraftProvider';
 import {
@@ -29,7 +30,7 @@ import {
 } from '../../platform/media/cameraRoll';
 import { expoCameraRollAdapter } from '../../platform/media/expoCameraRollAdapter';
 import { MuseeButton } from '../../ui/components/MuseeButton';
-import { colors, radii, spacing, typography } from '../../ui/tokens/theme';
+import { colors, spacing, typography } from '../../ui/tokens/theme';
 
 const COPY = {
   close: 'Close',
@@ -42,12 +43,20 @@ const COPY = {
   unavailableMessage: 'The camera is not available on this device. You can still choose a photo.',
   choosePhoto: 'Choose from Photos',
   retake: 'Retake',
-  usePhoto: 'Use Photo',
+  usePhoto: 'Continue',
+  nextArtwork: 'Take artwork',
+  artwork: 'Artwork',
+  label: 'Label',
+  optional: 'Optional',
+  captured: 'Captured',
+  takeArtwork: 'Capture artwork',
+  takeLabel: 'Capture label',
+  previewArtwork: 'Artwork preview',
+  previewLabel: 'Label preview',
   retrySave: 'Try saving again',
   continueWithoutSaving: 'Continue without saving',
   captureError: 'Musee could not take this photo. Please try again.',
   saveError: 'Musee could not save this photo to Photos. You can continue without saving it.',
-  framingHint: 'Keep the full artwork inside the frame',
 } as const;
 
 export default function CameraScreen() {
@@ -68,9 +77,20 @@ export default function CameraScreen() {
   const [permission, requestPermission, refreshPermission] = useCameraPermissions();
   const [available, setAvailable] = useState<boolean | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const [capturing, setCapturing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [capturedAsset, setCapturedAsset] = useState<NativeImageAsset | null>(null);
+  const [activeTarget, setActiveTarget] = useState<'artwork' | 'label'>('artwork');
+  const [artworkAsset, setArtworkAsset] = useState<NativeImageAsset | null>(null);
+  const [labelAsset, setLabelAsset] = useState<NativeImageAsset | null>(null);
+  const [picking, setPicking] = useState(false);
+  const busy = capturing || saving || picking;
+  const capturedAsset = activeTarget === 'artwork' ? artworkAsset : labelAsset;
+  const setCapturedAsset = (asset: NativeImageAsset | null) => {
+    if (asset) setCameraReady(false);
+    if (activeTarget === 'artwork') setArtworkAsset(asset);
+    else setLabelAsset(asset);
+  };
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [allowUnsavedPhoto, setAllowUnsavedPhoto] = useState(false);
@@ -96,6 +116,7 @@ export default function CameraScreen() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
+      setAppActive(state === 'active');
       if (state === 'active') void refreshPermission();
     });
     return () => subscription.remove();
@@ -110,7 +131,7 @@ export default function CameraScreen() {
 
   const closeControl = (
     <Pressable accessibilityLabel={COPY.close} accessibilityRole="button"
-      onPress={leaveCamera} hitSlop={12}
+      onPress={leaveCamera} disabled={busy} hitSlop={12}
       style={[styles.closeButton, styles.closeOverlay, { top: insets.top + spacing.md }]}>
       <Text style={styles.closeLabel}>{COPY.closeSymbol}</Text>
     </Pressable>
@@ -118,22 +139,26 @@ export default function CameraScreen() {
 
   const finishWithAsset = (asset: NativeImageAsset) => {
     if (exited.current) return;
-    setDraft(asset, destination);
+    setDraft(asset, destination, labelAsset ?? undefined);
     leaveCamera();
   };
 
   const choosePhoto = async () => {
+    if (busy) return;
+    setPicking(true);
     setError(null);
     try {
       const asset = await pickArtworkImage();
-      if (asset) finishWithAsset(asset);
+      if (asset && !exited.current) setCapturedAsset(asset);
     } catch (pickError) {
       setError(pickError instanceof Error ? pickError.message : COPY.captureError);
+    } finally {
+      setPicking(false);
     }
   };
 
   const takePhoto = async () => {
-    if (!cameraRef.current || !cameraReady || capturing) return;
+    if (!cameraRef.current || !cameraReady || busy) return;
     setCapturing(true);
     setError(null);
     try {
@@ -156,14 +181,16 @@ export default function CameraScreen() {
   };
 
   const usePhoto = async () => {
-    if (!capturedAsset || saving) return;
+    if (!artworkAsset || busy) return;
     setSaving(true);
     setError(null);
     setShowSettings(false);
     setAllowUnsavedPhoto(false);
     try {
-      await saveCapturedImage(expoCameraRollAdapter, capturedAsset.uri);
-      finishWithAsset(capturedAsset);
+      if (artworkAsset.source === 'camera') {
+        await saveCapturedImage(expoCameraRollAdapter, artworkAsset.uri);
+      }
+      finishWithAsset(artworkAsset);
     } catch (saveError) {
       setError(
         saveError instanceof CameraRollPermissionError
@@ -196,135 +223,143 @@ export default function CameraScreen() {
     );
   }
 
-  if (!available || !permission.granted) {
-    const permissionBlocked = !permission.granted && !permission.canAskAgain;
-    return (
-      <SafeAreaView style={styles.permissionScreen}>
-        <StatusBar style="light" />
-        <View style={styles.permissionContent}>
-          <Text style={styles.permissionHeading}>
-            {!available ? COPY.unavailableHeading : COPY.permissionHeading}
-          </Text>
-          <Text style={styles.permissionMessage}>
-            {!available ? COPY.unavailableMessage : COPY.permissionMessage}
-          </Text>
-          {available ? (
-            <MuseeButton
-              label={permissionBlocked ? COPY.openSettings : COPY.enableCamera}
-              onPress={() => void (
-                permissionBlocked ? Linking.openSettings() : requestPermission()
-              )}
-              tone="inverse"
-            />
-          ) : null}
-          <MuseeButton
-            label={COPY.choosePhoto}
-            onPress={() => void choosePhoto()}
-            tone="inverse"
-            variant="secondary"
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-        </View>
-        {closeControl}
-      </SafeAreaView>
-    );
-  }
-
   return (
     <View style={styles.cameraScreen}>
       <StatusBar style="light" />
+      <View style={[styles.viewport, { marginTop: insets.top }]}>
       {capturedAsset ? (
         <Image
-          accessibilityLabel="Captured artwork preview"
+          accessibilityLabel={activeTarget === 'artwork' ? COPY.previewArtwork : COPY.previewLabel}
           contentFit="contain"
           source={{ uri: capturedAsset.uri }}
           style={StyleSheet.absoluteFill}
         />
-      ) : (
+      ) : available && permission.granted ? (
         <CameraView
-          active={!capturedAsset}
+          active={appActive}
           facing="back"
           mode="picture"
           onCameraReady={() => setCameraReady(true)}
+          onMountError={() => { setCameraReady(false); setAvailable(false); }}
           ref={cameraRef}
           style={StyleSheet.absoluteFill}
         />
+      ) : (
+        <View style={styles.permissionContent}>
+          <Text style={styles.permissionHeading}>{!available ? COPY.unavailableHeading : COPY.permissionHeading}</Text>
+          <Text style={styles.permissionMessage}>{!available ? COPY.unavailableMessage : COPY.permissionMessage}</Text>
+          {available ? <MuseeButton
+            label={permission.canAskAgain ? COPY.enableCamera : COPY.openSettings}
+            onPress={() => void (permission.canAskAgain ? requestPermission() : Linking.openSettings())}
+            tone="inverse" /> : null}
+        </View>
       )}
 
-      <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
-        {!capturedAsset ? (
-          <View pointerEvents="none" style={styles.guideArea}>
-            <View style={styles.guideFrame} />
-            <Text style={styles.framingHint}>{COPY.framingHint}</Text>
-          </View>
-        ) : <View style={styles.guideArea} />}
-
-        <View style={styles.controls}>
+      </View>
+      <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          {capturedAsset ? (
-            <View style={styles.previewActions}>
-              {showSettings ? (
-                <MuseeButton
-                  label={COPY.openSettings}
-                  onPress={() => void Linking.openSettings()}
-                  tone="inverse"
-                  variant="secondary"
-                />
-              ) : null}
-              <MuseeButton
-                label={allowUnsavedPhoto ? COPY.retrySave : COPY.usePhoto}
-                loading={saving}
-                onPress={() => void usePhoto()}
-                tone="inverse"
-              />
-              {allowUnsavedPhoto ? (
-                <MuseeButton
-                  label={COPY.continueWithoutSaving}
-                  onPress={() => finishWithAsset(capturedAsset)}
-                  tone="inverse"
-                  variant="secondary"
-                />
-              ) : null}
-              <MuseeButton
-                disabled={saving}
-                label={COPY.retake}
+          <View style={styles.actionRow}>
+            <Pressable disabled={busy} accessibilityRole="button"
+              accessibilityLabel={COPY.choosePhoto} accessibilityState={{ disabled: busy }}
+              onPress={() => void choosePhoto()}
+              style={({ pressed }) => [styles.sideAction, pressed && styles.shutterPressed, busy && styles.disabled]}>
+              <SymbolView name="photo" size={26} tintColor={colors.onPrimary} />
+            </Pressable>
+            <View style={styles.primaryAction}>
+              {capturedAsset ? (
+                <MuseeButton disabled={busy}
+                  label={artworkAsset ? (allowUnsavedPhoto ? COPY.retrySave : COPY.usePhoto) : COPY.nextArtwork}
+                  loading={saving}
+                  onPress={() => artworkAsset ? void usePhoto() : setActiveTarget('artwork')}
+                  tone="inverse" />
+              ) : available && permission.granted ? (
+                <Pressable accessibilityLabel={activeTarget === 'artwork' ? COPY.takeArtwork : COPY.takeLabel}
+                  accessibilityRole="button" accessibilityState={{ disabled: !cameraReady || busy, busy }}
+                  disabled={!cameraReady || busy} onPress={() => void takePhoto()}
+                  style={({ pressed }) => [styles.shutter, pressed && styles.shutterPressed,
+                    (!cameraReady || busy) && styles.disabled]}>
+                  <View style={styles.shutterInner} />
+                </Pressable>
+              ) : (
+                <Text style={styles.framingHint}>{COPY.choosePhoto}</Text>
+              )}
+            </View>
+            {capturedAsset ? (
+              <Pressable disabled={busy} accessibilityRole="button"
+                accessibilityLabel={COPY.retake}
+                accessibilityState={{ disabled: busy }}
                 onPress={retake}
-                tone="inverse"
-                variant="secondary"
-              />
-            </View>
-          ) : (
-            <View style={styles.captureControls}>
-              <Pressable
-                accessibilityLabel="Take photo"
-                accessibilityRole="button"
-                disabled={!cameraReady || capturing}
-                onPress={() => void takePhoto()}
-                style={({ pressed }) => [
-                  styles.shutter,
-                  pressed && styles.shutterPressed,
-                  (!cameraReady || capturing) && styles.disabled,
-                ]}
-              >
-                <View style={styles.shutterInner} />
+                style={({ pressed }) => [styles.sideAction, pressed && styles.shutterPressed, busy && styles.disabled]}>
+                <SymbolView name="arrow.counterclockwise"
+                  size={24} tintColor={colors.onPrimary} />
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void choosePhoto()}
-                style={styles.photoLibraryButton}
-              >
-                <Text style={styles.photoLibraryLabel}>{COPY.choosePhoto}</Text>
+            ) : artworkAsset ? (
+              <Pressable disabled={busy} accessibilityRole="button" accessibilityLabel={COPY.usePhoto}
+                accessibilityState={{ disabled: busy }} onPress={() => void usePhoto()}
+                style={({ pressed }) => [styles.sideAction, pressed && styles.shutterPressed, busy && styles.disabled]}>
+                {saving ? <LoadingIndicator color={colors.onPrimary} /> : (
+                  <SymbolView name="arrow.right" size={26} tintColor={colors.onPrimary} />
+                )}
               </Pressable>
-            </View>
-          )}
-        </View>
-      </SafeAreaView>
+            ) : <View style={styles.sideAction} />}
+          </View>
+          <View style={styles.slotRow}>
+            {(['artwork', 'label'] as const).map((target) => {
+              const asset = target === 'artwork' ? artworkAsset : labelAsset;
+              return <Pressable key={target} accessibilityRole="button"
+                accessibilityLabel={`${COPY[target]}${target === 'label' ? `, ${COPY.optional}` : ''}${asset ? `, ${COPY.captured}` : ''}`}
+                accessibilityState={{ selected: activeTarget === target, disabled: busy }}
+                disabled={busy}
+                onPress={() => {
+                  setActiveTarget(target);
+                  setError(null);
+                  setAllowUnsavedPhoto(false);
+                  setShowSettings(false);
+                }}
+                style={[styles.slot, activeTarget === target && styles.selectedSlot]}>
+                {asset ? <Image source={{ uri: asset.uri }} style={styles.slotThumbnail} /> : null}
+                <Text style={[styles.slotLabel, activeTarget === target && styles.activeSlotLabel]}>{COPY[target]}{asset ? ' ✓' : ''}</Text>
+                {target === 'label' && !asset ? <Text style={styles.optionalLabel}>{COPY.optional}</Text> : null}
+              </Pressable>;
+            })}
+          </View>
+          {showSettings ? <MuseeButton label={COPY.openSettings}
+            onPress={() => void Linking.openSettings()} tone="inverse" variant="secondary" /> : null}
+          {allowUnsavedPhoto && artworkAsset ? <MuseeButton
+            label={COPY.continueWithoutSaving} disabled={busy}
+            onPress={() => finishWithAsset(artworkAsset)} tone="inverse" variant="secondary" /> : null}
+      </View>
       {closeControl}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  slotRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm, flexWrap: 'wrap' },
+  slot: {
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  selectedSlot: { backgroundColor: 'rgba(255,255,255,0.16)' },
+  slotLabel: { color: '#C8C8C8', fontSize: typography.label, fontWeight: '500' },
+  activeSlotLabel: { color: colors.onPrimary, fontWeight: '600' },
+  optionalLabel: { color: '#C8C8C8', fontSize: typography.caption },
+  slotThumbnail: { width: 24, height: 24, borderRadius: 6 },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: 88,
+  },
+  sideAction: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  primaryAction: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  viewport: { flex: 1, overflow: 'hidden', backgroundColor: '#000000' },
   cameraScreen: {
     flex: 1,
     backgroundColor: '#000000',
@@ -334,9 +369,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#000000',
-  },
-  overlay: {
-    flex: 1,
   },
   closeOverlay: {
     position: 'absolute',
@@ -357,19 +389,6 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     lineHeight: 32,
   },
-  guideArea: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
-  guideFrame: {
-    aspectRatio: 0.8,
-    maxHeight: '76%',
-    borderColor: 'rgba(255, 255, 255, 0.72)',
-    borderRadius: radii.input,
-    borderWidth: 1,
-  },
   framingHint: {
     color: colors.onPrimary,
     fontSize: typography.caption,
@@ -380,15 +399,10 @@ const styles = StyleSheet.create({
   },
   controls: {
     gap: spacing.sm,
-    minHeight: 170,
+    paddingTop: spacing.sm,
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    backgroundColor: 'rgba(0, 0, 0, 0.76)',
-  },
-  captureControls: {
-    alignItems: 'center',
-    gap: spacing.md,
+    backgroundColor: '#000000',
   },
   shutter: {
     width: 74,
@@ -412,30 +426,11 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.5,
   },
-  photoLibraryButton: {
-    minHeight: 32,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  photoLibraryLabel: {
-    color: colors.onPrimary,
-    fontSize: typography.label,
-    fontWeight: '600',
-  },
-  previewActions: {
-    gap: spacing.sm,
-  },
   error: {
     color: '#FFD0C7',
     fontSize: typography.label,
     lineHeight: 20,
     textAlign: 'center',
-  },
-  permissionScreen: {
-    flex: 1,
-    backgroundColor: '#000000',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
   },
   permissionContent: {
     flex: 1,
