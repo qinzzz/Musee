@@ -1,3 +1,5 @@
+import { SessionActions } from './components/SessionActions';
+import { KeyboardScrollView } from '../ui/components/KeyboardScrollView';
 import { LoadingIndicator } from '../ui/components/LoadingIndicator';
 import { useSessionDraft } from './SessionDraftProvider';
 import { GlassIconButton } from '../ui/components/GlassIconButton';
@@ -5,6 +7,7 @@ import { MAX_SESSION_ATTACHMENTS } from '../session/mobileSessionContextService'
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -124,15 +127,78 @@ export function SessionScreen({ home = false }: { home?: boolean }) {
   const showGlobalFailure = controller.failure
     && controller.failure.stage !== 'stream';
 
+  const composer = (
+    <View style={[styles.composerContainer, home && styles.homeComposer]}>
+      {photoError ? (
+        <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+          {photoError}
+        </Text>
+      ) : null}
+      <SessionComposer
+        attachments={attachments}
+        disabled={controller.isSending || isPickingPhoto || controller.contextEntries.length > 0}
+        onChooseLibraryArtwork={() => {
+          setPhotoError(null);
+          Keyboard.dismiss();
+          setIsPickingLibraryArtwork(true);
+        }}
+        onChoosePhoto={() => {
+          Keyboard.dismiss();
+          setIsPickingPhoto(true);
+          setPhotoError(null);
+          void pickArtworkImages()
+            .then((selection) => {
+              if (!selection) return;
+              setAttachments((current) => {
+                const uris = new Set(current.flatMap((item) => item.kind === 'local' ? [item.asset.uri] : []));
+                const additions = selection.assets.filter((asset) => !uris.has(asset.uri))
+                  .map((asset) => ({ kind: 'local' as const, asset }));
+                return [...current, ...additions].slice(0, MAX_SESSION_ATTACHMENTS);
+              });
+              if (selection.rejectedCount || selection.assets.length + attachments.length > MAX_SESSION_ATTACHMENTS) {
+                setPhotoError(`Up to ${MAX_SESSION_ATTACHMENTS} supported photos can be attached. Extra or unsupported photos were omitted.`);
+              }
+            })
+            .catch(() => setPhotoError(COPY.photoError))
+            .finally(() => setIsPickingPhoto(false));
+        }}
+        onRemoveAttachment={(index) => setAttachments((current) => current.filter((_, i) => i !== index))}
+        onSubmit={async (text, selected) => {
+          if (home) {
+            sessionDraft.set({ text, inputs: selected });
+            setAttachments([]);
+            router.push('/session/new');
+            return true;
+          }
+          const submitted = selected.length
+            ? await controller.sendContext(selected, text)
+            : await controller.sendText(text);
+          if (submitted) setAttachments([]);
+          return submitted;
+        }}
+        onTakePhoto={() => {
+          setPhotoError(null);
+          Keyboard.dismiss();
+          router.push({
+            pathname: '/camera',
+            params: { destination: 'session' },
+          });
+        }}
+      />
+    </View>
+  );
+
   return (
     <Screen edges={home ? ['top', 'left', 'right', 'bottom'] : ['left', 'right', 'bottom']}>
       {home ? <View style={styles.homeHeader}>
         <GlassIconButton icon="line.3.horizontal.decrease" label="Session history" onPress={() => router.push('/history')} />
       </View> : <Stack.Screen options={{ title }} />}
+      {!home && controller.session ? <SessionActions session={controller.session} userId={user.user_id}
+        disabled={controller.isSending || controller.isLoading} onSaved={controller.updateSession} /> : null}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={88}
-        style={[styles.flex, home && styles.homeBody]}
+        keyboardVerticalOffset={home ? 0 : 88}
+        style={styles.flex}
       >
         {controller.isLoading ? (
           <View style={styles.centered}>
@@ -150,13 +216,15 @@ export function SessionScreen({ home = false }: { home?: boolean }) {
           </View>
         ) : (
           <>
-            {home ? <View style={styles.homeEmpty}>
-              <Text style={styles.emptyHeading}>{COPY.emptyHeading}</Text>
-              <Text style={styles.emptyMessage}>{COPY.emptyMessage}</Text>
-            </View> : <ScrollView
+            {home ? <KeyboardScrollView style={styles.flex}
+              contentContainerStyle={styles.homeBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.homeEmpty}>
+                <Text style={styles.emptyHeading}>{COPY.emptyHeading}</Text>
+                <Text style={styles.emptyMessage}>{COPY.emptyMessage}</Text>
+              </View>
+              {composer}
+            </KeyboardScrollView> : <KeyboardScrollView
               contentContainerStyle={styles.content}
-              keyboardDismissMode="interactive"
-              keyboardShouldPersistTaps="handled"
               onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
               ref={scrollRef}
               showsVerticalScrollIndicator={false}
@@ -230,62 +298,8 @@ export function SessionScreen({ home = false }: { home?: boolean }) {
                   />
                 </View>
               ) : null}
-            </ScrollView>}
-            <View style={[styles.composerContainer, home && styles.homeComposer]}>
-              {photoError ? (
-                <Text accessibilityLiveRegion="polite" style={styles.errorText}>
-                  {photoError}
-                </Text>
-              ) : null}
-              <SessionComposer
-                attachments={attachments}
-                disabled={controller.isSending || isPickingPhoto || controller.contextEntries.length > 0}
-                onChooseLibraryArtwork={() => {
-                  setPhotoError(null);
-                  setIsPickingLibraryArtwork(true);
-                }}
-                onChoosePhoto={() => {
-                  setIsPickingPhoto(true);
-                  setPhotoError(null);
-                  void pickArtworkImages()
-                    .then((selection) => {
-                      if (!selection) return;
-                      setAttachments((current) => {
-                        const uris = new Set(current.flatMap((item) => item.kind === 'local' ? [item.asset.uri] : []));
-                        const additions = selection.assets.filter((asset) => !uris.has(asset.uri))
-                          .map((asset) => ({ kind: 'local' as const, asset }));
-                        return [...current, ...additions].slice(0, MAX_SESSION_ATTACHMENTS);
-                      });
-                      if (selection.rejectedCount || selection.assets.length + attachments.length > MAX_SESSION_ATTACHMENTS) {
-                        setPhotoError(`Up to ${MAX_SESSION_ATTACHMENTS} supported photos can be attached. Extra or unsupported photos were omitted.`);
-                      }
-                    })
-                    .catch(() => setPhotoError(COPY.photoError))
-                    .finally(() => setIsPickingPhoto(false));
-                }}
-                onRemoveAttachment={(index) => setAttachments((current) => current.filter((_, i) => i !== index))}
-                onSubmit={async (text, selected) => {
-                  if (home) {
-                    sessionDraft.set({ text, inputs: selected });
-                    setAttachments([]);
-                    router.push('/session/new');
-                    return true;
-                  }
-                  const submitted = selected.length
-                    ? await controller.sendContext(selected, text)
-                    : await controller.sendText(text);
-                  if (submitted) setAttachments([]);
-                  return submitted;
-                }}
-                onTakePhoto={() => {
-                  setPhotoError(null);
-                  router.push({
-                    pathname: '/camera',
-                    params: { destination: 'session' },
-                  });
-                }}
-              />
-            </View>
+            </KeyboardScrollView>}
+            {!home ? composer : null}
             <SessionArtworkPicker
               excludedArtworkIds={attachments.flatMap((entry) => entry.kind === 'library' ? [entry.artwork.id] : [])}
               onCancel={() => setIsPickingLibraryArtwork(false)}
@@ -306,7 +320,7 @@ export function SessionScreen({ home = false }: { home?: boolean }) {
 
 const styles = StyleSheet.create({
   homeHeader: { paddingVertical: spacing.sm, alignItems: 'flex-start' },
-  homeBody: { justifyContent: 'center', paddingBottom: 96 },
+  homeBody: { flexGrow: 1, justifyContent: 'center', paddingBottom: 96 },
   homeEmpty: { paddingVertical: spacing.lg, gap: spacing.sm },
   homeComposer: { paddingBottom: spacing.lg },
 

@@ -521,3 +521,58 @@ def test_failed_retrieval_requires_session_scoped_fallback_without_retry_languag
     assert "among the works in this session" in outcome.context
     assert "I can't answer that from the information available" in outcome.context
     assert "Do not suggest retrying" in outcome.context
+
+
+@pytest.mark.asyncio
+async def test_stalled_reranker_times_out_and_records_failure(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    failure = Mock()
+    monkeypatch.setattr('app.services.retrieval.reranker.start_ai_usage', lambda **kwargs: 'usage')
+    monkeypatch.setattr('app.services.retrieval.reranker.fail_ai_usage', failure)
+    monkeypatch.setattr('app.services.retrieval.reranker.RERANK_TIMEOUT_SECONDS', 0.01)
+    cancelled = asyncio.Event()
+    async def stalled(**kwargs):
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+    service = SimpleNamespace(ai_client=SimpleNamespace(call_text_only_result=stalled))
+    with pytest.raises(TimeoutError, match='reranking timed out'):
+        await rerank_saved_artworks(ai_service=service, user_id='user', concept_query='quiet', candidates=[], limit=5)
+    assert cancelled.is_set()
+    assert failure.call_args.args[0] == 'usage'
+    assert isinstance(failure.call_args.args[1], TimeoutError)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure', [None, TimeoutError('provider timed out'), RuntimeError('unavailable')])
+async def test_search_result_log_is_concise_and_correlated(monkeypatch, caplog, failure):
+    import json
+    import logging
+    from app.services.retrieval import orchestrator
+    from app.services.retrieval.contracts import RetrievalOutcome, RetrievalPlan, RetrievalTrace
+    plan = RetrievalPlan(needs_retrieval=True, operation='count_saved_artworks', filters={'artist_name': 'Monet'})
+    async def execute(**kwargs):
+        if failure:
+            raise failure
+        return RetrievalOutcome(plan=plan, trace=RetrievalTrace(status='completed', total_count=7), context='private model context')
+    monkeypatch.setattr(orchestrator, '_execute_collection_retrieval', execute)
+    with caplog.at_level(logging.INFO, logger=orchestrator.__name__):
+        if failure:
+            with pytest.raises(type(failure)):
+                await orchestrator.execute_collection_retrieval(ai_service=None, db=None, user_id='user', plan=plan, trigger_event_id='turn-1')
+        else:
+            await orchestrator.execute_collection_retrieval(ai_service=None, db=None, user_id='user', plan=plan, trigger_event_id='turn-1')
+    records = [r.getMessage() for r in caplog.records if r.getMessage().startswith('COLLECTION_SEARCH ')]
+    assert len(records) == 1
+    record = json.loads(records[0].split(' ', 1)[1])
+    assert record['trigger_event_id'] == 'turn-1'
+    assert record['operation'] == 'count_saved_artworks'
+    assert record['filters'] == {'artist_name': 'Monet'}
+    assert record['status'] == ('timeout' if isinstance(failure, TimeoutError) else 'failed' if failure else 'completed')
+    if not failure:
+        assert record['count'] == 7
+        assert record['matches'] == []
+    assert 'private model context' not in records[0]

@@ -328,3 +328,23 @@ def test_resolver_uses_persisted_event_and_prioritizes_current_artwork(db):
     ]
     assert resolved.has_user_text is False
     assert resolved.new_message.startswith('The user added "Current Work" by Current Artist')
+
+
+def test_resolver_reads_latest_saved_goal_without_changing_user_event(db):
+    _, user_id = _chat_auth(db)
+    session = SessionModel(id="goal-session", user_id=user_id, title="Goal",
+                           metadata_json={"user_goal": "Study color"})
+    event = SessionEvent(id="goal-turn", session_id=session.id, role="user", type="user_input",
+                         content="What should I notice?", sequence_number=1)
+    db.add_all([session, event])
+    db.commit()
+    assert "Study color" in resolve_session_chat_request(db, session, event.id).new_message
+    session.metadata_json = {"user_goal": "Compare materials"}
+    db.commit()
+    resolved = resolve_session_chat_request(db, session, event.id)
+    assert "Compare materials" in resolved.new_message
+    assert "Study color" not in resolved.new_message
+    assert event.content == "What should I notice?"
+    session.metadata_json = {"user_goal": ""}
+    db.commit()
+    assert resolve_session_chat_request(db, session, event.id).new_message == event.content

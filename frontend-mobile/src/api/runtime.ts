@@ -1,3 +1,4 @@
+import { createMobileSessionManagement } from '../session/mobileSessionManagement';
 import { createMobileSessionContextService } from '../session/mobileSessionContextService';
 import {
   createApiClient,
@@ -133,3 +134,5 @@ export const mobileBoardService = createBoardService(mobileApiClient, MOBILE_API
 export const mobileArtistService = createArtistService(mobileApiClient, MOBILE_API_BASE_URL);
 
 export const mobileMuseumService = createMuseumService(mobileApiClient, MOBILE_API_BASE_URL);
+
+export const mobileSessionManagement = createMobileSessionManagement(mobileApiClient, MOBILE_API_BASE_URL);

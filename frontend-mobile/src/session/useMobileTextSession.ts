@@ -25,6 +25,7 @@ export type MobileTextSessionController = MobileSessionMessagingController & {
   loadError: SessionErrorPresentation | null;
   reload: () => Promise<void>;
   session: SessionRecord | null;
+  updateSession: (session: SessionRecord) => void;
 };
 
 const ERROR_OPTIONS = {
@@ -166,6 +167,7 @@ export function useMobileTextSession(
 
   return {
     ...messaging,
+    updateSession: setSession,
     artworks,
     events,
     isLoading,

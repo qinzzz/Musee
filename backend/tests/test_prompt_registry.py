@@ -141,3 +141,13 @@ def test_registry_rejects_invalid_rendered_prompts(monkeypatch, rendered):
             AIJobType.AESTHETIC_TERM_DEFINITION,
             AestheticTermPromptContext(term="dreamlike"),
         )
+
+
+@pytest.mark.parametrize("text", ["What should I notice?", None])
+def test_session_chat_goal_is_included_for_text_and_artwork_turns(text):
+    rendered = render_prompt_turn(AIJobType.SESSION_CHAT, SessionChatTurnContext(
+        user_text=text, artwork_labels=["Water Lilies"], artwork_sources=["library"],
+        is_first_turn=False, user_goal="  Study color relationships  ",
+    ))
+    assert "Visitor's saved session goal: Study color relationships" in rendered
+    assert (text or "Water Lilies") in rendered

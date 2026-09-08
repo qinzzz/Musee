@@ -14,7 +14,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCaptureDraft } from '../../capture/CaptureDraftProvider';
 import {
@@ -57,6 +57,12 @@ export default function CameraScreen() {
     : params.destination;
   const destination = destinationParam === 'session' ? 'session' : 'library';
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const exited = useRef(false);
+  useEffect(() => {
+    exited.current = false;
+    return () => { exited.current = true; };
+  }, []);
   const { setDraft } = useCaptureDraft();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission, refreshPermission] = useCameraPermissions();
@@ -95,9 +101,25 @@ export default function CameraScreen() {
     return () => subscription.remove();
   }, [refreshPermission]);
 
+  const leaveCamera = () => {
+    if (exited.current) return;
+    exited.current = true;
+    if (router.canGoBack()) router.back();
+    else router.replace(destination === 'session' ? '/' : '/artwork-upload');
+  };
+
+  const closeControl = (
+    <Pressable accessibilityLabel={COPY.close} accessibilityRole="button"
+      onPress={leaveCamera} hitSlop={12}
+      style={[styles.closeButton, styles.closeOverlay, { top: insets.top + spacing.md }]}>
+      <Text style={styles.closeLabel}>{COPY.closeSymbol}</Text>
+    </Pressable>
+  );
+
   const finishWithAsset = (asset: NativeImageAsset) => {
+    if (exited.current) return;
     setDraft(asset, destination);
-    router.back();
+    leaveCamera();
   };
 
   const choosePhoto = async () => {
@@ -116,6 +138,7 @@ export default function CameraScreen() {
     setError(null);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+      if (exited.current) return;
       const file = new File(photo.uri);
       setCapturedAsset(createCameraImageAsset({
         ...photo,
@@ -168,6 +191,7 @@ export default function CameraScreen() {
       <View style={styles.centered}>
         <StatusBar style="light" />
         <LoadingIndicator color={colors.onPrimary} />
+        {closeControl}
       </View>
     );
   }
@@ -177,14 +201,6 @@ export default function CameraScreen() {
     return (
       <SafeAreaView style={styles.permissionScreen}>
         <StatusBar style="light" />
-        <Pressable
-          accessibilityLabel={COPY.close}
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.closeButton}
-        >
-          <Text style={styles.closeLabel}>{COPY.closeSymbol}</Text>
-        </Pressable>
         <View style={styles.permissionContent}>
           <Text style={styles.permissionHeading}>
             {!available ? COPY.unavailableHeading : COPY.permissionHeading}
@@ -209,6 +225,7 @@ export default function CameraScreen() {
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
+        {closeControl}
       </SafeAreaView>
     );
   }
@@ -235,17 +252,6 @@ export default function CameraScreen() {
       )}
 
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
-        <View style={styles.topBar}>
-          <Pressable
-            accessibilityLabel={COPY.close}
-            accessibilityRole="button"
-            onPress={() => router.back()}
-            style={styles.closeButton}
-          >
-            <Text style={styles.closeLabel}>{COPY.closeSymbol}</Text>
-          </Pressable>
-        </View>
-
         {!capturedAsset ? (
           <View pointerEvents="none" style={styles.guideArea}>
             <View style={styles.guideFrame} />
@@ -313,6 +319,7 @@ export default function CameraScreen() {
           )}
         </View>
       </SafeAreaView>
+      {closeControl}
     </View>
   );
 }
@@ -331,10 +338,10 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
   },
-  topBar: {
-    alignItems: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+  closeOverlay: {
+    position: 'absolute',
+    left: spacing.md,
+    zIndex: 10,
   },
   closeButton: {
     width: 44,

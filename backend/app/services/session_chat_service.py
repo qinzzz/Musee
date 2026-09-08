@@ -159,6 +159,7 @@ def resolve_session_chat_request(
             artwork_labels=artwork_labels,
             artwork_sources=sources,
             is_first_turn=not has_prior_user_turn,
+            user_goal=(session_record.metadata_json or {}).get("user_goal"),
         ),
     )
     return ResolvedSessionChatRequest(

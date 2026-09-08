@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 
 from sqlalchemy.orm import Session
@@ -30,6 +32,7 @@ async def retrieve_collection_context(
     user_id: str,
     message: str,
     history: list[dict[str, object]],
+    trigger_event_id: str | None = None,
 ) -> RetrievalOutcome:
     plan = await plan_collection_context(
         ai_service=ai_service,
@@ -49,6 +52,7 @@ async def retrieve_collection_context(
         db=db,
         user_id=user_id,
         plan=plan,
+        trigger_event_id=trigger_event_id,
     )
 
 
@@ -70,6 +74,46 @@ async def plan_collection_context(
 
 
 async def execute_collection_retrieval(
+    *,
+    ai_service,
+    db: Session,
+    user_id: str,
+    plan: RetrievalPlan,
+    trigger_event_id: str | None = None,
+) -> RetrievalOutcome:
+    # One result record per requested search; no prompts or candidate descriptions.
+    record = {
+        "trigger_event_id": trigger_event_id,
+        "operation": plan.operation,
+        "query": plan.concept_query,
+        "filters": plan.filters.model_dump(mode="json", exclude_none=True, exclude_defaults=True),
+        "source_ids": plan.source_ids,
+        "limit": plan.limit,
+    }
+    try:
+        outcome = await _execute_collection_retrieval(
+            ai_service=ai_service, db=db, user_id=user_id, plan=plan,
+        )
+    except asyncio.CancelledError:
+        logger.warning("COLLECTION_SEARCH %s", json.dumps({**record, "status": "cancelled"}))
+        raise
+    except Exception as exc:
+        logger.warning("COLLECTION_SEARCH %s", json.dumps({
+            **record, "status": "timeout" if isinstance(exc, TimeoutError) else "failed",
+            "error_type": type(exc).__name__, "error": str(exc)[:500],
+        }))
+        raise
+    if plan.needs_retrieval:
+        logger.info("COLLECTION_SEARCH %s", json.dumps({
+            **record,
+            "status": "clarification_required" if plan.clarification_question else outcome.trace.status,
+            "count": outcome.trace.total_count if outcome.trace.total_count is not None else len(outcome.results),
+            "matches": [{"id": item.source_id, "title": item.title} for item in outcome.results],
+        }))
+    return outcome
+
+
+async def _execute_collection_retrieval(
     *,
     ai_service,
     db: Session,
