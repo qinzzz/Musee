@@ -12,7 +12,7 @@ import {
   type SessionEventTextPresentation,
 } from '../sessionEventState';
 import { SessionArtworkCards } from './SessionArtworkCards';
-import { SessionMessageMarkdown } from './SessionMessageMarkdown';
+import { MarkdownText } from '../../ui/components/MarkdownText';
 
 type SessionEventListProps = {
   artworks: MobileArtworkRecord[];
@@ -42,9 +42,9 @@ function SessionEventText({
   if (presentation.kind === 'model') {
     return (
       <View style={styles.modelRow}>
-        <SessionMessageMarkdown streaming={presentation.streaming}>
+        <MarkdownText streaming={presentation.streaming}>
           {presentation.text}
-        </SessionMessageMarkdown>
+        </MarkdownText>
       </View>
     );
   }

@@ -1,12 +1,12 @@
-export type SessionMessageTextSegment = {
+export type MarkdownTextSegment = {
   kind: 'emphasis' | 'plain' | 'strong';
   text: string;
 };
 
 const INLINE_MARKDOWN_PATTERN = /(\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_)/g;
 
-export function tokenizeSessionMessageText(value: string): SessionMessageTextSegment[] {
-  const segments: SessionMessageTextSegment[] = [];
+export function tokenizeMarkdownText(value: string): MarkdownTextSegment[] {
+  const segments: MarkdownTextSegment[] = [];
   let cursor = 0;
   for (const match of value.matchAll(INLINE_MARKDOWN_PATTERN)) {
     const index = match.index ?? cursor;

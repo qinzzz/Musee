@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { tokenizeSessionMessageText } from '../sessionMessageText';
+import { tokenizeMarkdownText } from './markdownText';
 
-describe('session message text', () => {
+describe('shared Markdown text', () => {
   it('preserves plain response text and formats inline emphasis', () => {
-    expect(tokenizeSessionMessageText(
+    expect(tokenizeMarkdownText(
       'These are **Theaster Gates** works with *playful* details.',
     )).toEqual([
       { kind: 'plain', text: 'These are ' },

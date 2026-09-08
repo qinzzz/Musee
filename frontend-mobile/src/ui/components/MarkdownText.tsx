@@ -1,16 +1,16 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, spacing, typography } from '../../ui/tokens/theme';
-import { tokenizeSessionMessageText } from '../sessionMessageText';
+import { colors, spacing, typography } from '../tokens/theme';
+import { tokenizeMarkdownText } from '../markdownText';
 
-type SessionMessageMarkdownProps = {
+type MarkdownTextProps = {
   children: string;
   streaming?: boolean;
 };
 
-export function SessionMessageMarkdown({
+export function MarkdownText({
   children,
-}: SessionMessageMarkdownProps) {
+}: MarkdownTextProps) {
   const paragraphs = children.trim().split(/\n{2,}/);
   return (
     <View>
@@ -23,7 +23,7 @@ export function SessionMessageMarkdown({
             paragraphIndex < paragraphs.length - 1 && styles.paragraphSpacing,
           ]}
         >
-          {tokenizeSessionMessageText(paragraph).map((segment, segmentIndex) => (
+          {tokenizeMarkdownText(paragraph).map((segment, segmentIndex) => (
             <Text
               key={`${segmentIndex}-${segment.text.slice(0, 16)}`}
               style={segment.kind === 'strong'

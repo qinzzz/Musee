@@ -1,3 +1,4 @@
+import { MarkdownText } from '../../../ui/components/MarkdownText';
 import { LoadingIndicator } from '../../../ui/components/LoadingIndicator';
 import { Image } from 'expo-image';
 import { Stack, useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -361,7 +362,7 @@ export default function ArtworkDetailScreen() {
         {artwork.analysis ? (
           <View style={styles.stateCard}>
             <Text accessibilityRole="header" style={styles.stateTitle}>{COPY.analysis}</Text>
-            <Text selectable style={styles.analysis}>{artwork.analysis}</Text>
+            <MarkdownText>{artwork.analysis}</MarkdownText>
           </View>
         ) : null}
         {!artwork.analysis || artwork.analysisStatus !== 'analyzed' ? (
@@ -451,11 +452,6 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     fontSize: typography.body,
     lineHeight: 24,
-  },
-  analysis: {
-    color: colors.foreground,
-    fontSize: typography.body,
-    lineHeight: 27,
   },
   error: {
     color: colors.danger,
