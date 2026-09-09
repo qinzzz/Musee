@@ -1,12 +1,10 @@
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text } from 'react-native';
-import { googleSignInAvailable } from '../../platform/auth/googleIdentityProvider';
 
 const LABEL = 'Sign in with Google';
 const GOOGLE_LOGO = require('../../../assets/auth/google-logo.png');
 
 export function GoogleSignInButton({ disabled, onPress }: { disabled: boolean; onPress: () => void }) {
-  if (!googleSignInAvailable) return null;
   return (
     <Pressable
       accessibilityLabel={LABEL}

@@ -85,7 +85,7 @@ another screen; the user confirmed the navigation jump is fixed on-device.
 Artwork-plus-label capture is implemented for Library and Sessions. Camera UI
 has been iterated on a physical iPhone, but the complete permission, failure,
 and interruption matrix remains unverified. This is the closeout work for capture;
-native account access is the next feature milestone.
+Google sign-in is implemented, and Journals is the next feature milestone.
 
 ## Capability map
 
@@ -100,7 +100,7 @@ Status meanings:
 | --- | --- | --- |
 | Workspace, Expo development client, shared core | Baseline complete | Maintain clean web/native boundaries and reproducible builds |
 | Email sign-in, refresh, restore, sign-out | Baseline complete | Harden lifecycle and security behavior as release approaches |
-| Apple and Google sign-in, account linking, and recovery | Google sign-in and sign-out confirmed by user; full device lifecycle checks pending. Apple and recovery not started | Support both native providers alongside email, with consistent account linking, restoration, and recovery/verification flows |
+| Apple and Google sign-in, account linking, and recovery | Google sign-in and sign-out confirmed by user; full device lifecycle checks pending. Apple has a disabled Coming soon placeholder; integration deferred. Recovery not started | Support both native providers alongside email, with consistent account linking, restoration, and recovery/verification flows |
 | Camera and single-photo intake | Baseline complete — custom capture UI refined on iPhone | Validate framing, permissions, and lifecycle recovery on the final layout |
 | Artwork with optional label in one identification flow | Implemented — Library and Sessions; full device recovery validation pending | Preserve one required artwork and one temporary optional label, using web identification semantics |
 | Batch and multi-select intake | Baseline complete — Library intake and mixed Session composition; simulator recovery checks passed | Match the intentional web batch workflow where it fits native UX |
@@ -234,7 +234,9 @@ Status: not started beyond Session conversation.
 
 ### Phase 7 — Account breadth and lifecycle resilience
 
-Status: not started.
+Status: Google sign-in implemented; full device lifecycle validation pending.
+Apple integration is deferred until Apple Developer membership and configuration
+are ready; its login control is a disabled Coming soon placeholder.
 
 - implement both Apple and Google sign-in alongside email authentication;
 - preserve one account identity across providers, including account linking,
@@ -343,51 +345,54 @@ checks by default. Record confirmed outcomes and remaining blockers before
 advancing the milestone. Artist browsing currently links existing artist entity
 IDs; it does not backfill legacy links or generate biographies on navigation.
 
-### Active build: native account access
-
-Complete Apple and Google sign-in alongside email before starting the Personal
-section. This gives existing web users a path into their existing native library
-and Sessions and establishes account identity before adding more personal data.
-Capture is now implementation-complete for its agreed scope; its remaining device
-checks stay in the closeout checklist rather than becoming another capture feature.
+### Account baseline: Google implemented; Apple deferred
 
 Google credential acquisition and the native backend exchange are implemented,
 including cancellation, error handling, Keychain persistence, and SDK credential
-cleanup. The iOS OAuth client is configured locally, and the user confirmed
-sign-in and sign-out work. Full physical-device refresh, cold-start, and account
-switching checks remain required. The email-first login layout places Google
-below the form; Profile exposes the account email and Sign out. Apple is the
-next implementation slice, followed by recovery.
+cleanup. The user confirmed sign-in and sign-out work. Full physical-device
+refresh, cold-start, and account-switching checks remain required.
 
-Deliver the account milestone in this order:
+The email-first login layout keeps Google visible below the form, with explicit
+errors if the build lacks its configuration or native SDK. Apple appears beneath
+Google as a disabled Coming soon placeholder. Profile exposes the account email
+and Sign out. Apple integration is deferred until Apple Developer membership and
+provider configuration are ready; it does not block the Personal milestone.
 
-1. **Google sign-in end to end.** Reuse the existing backend Google login and
-   native refresh-token response. Verify the iOS provider configuration and token
-   audience contract before wiring native credential acquisition into the existing
-   auth service. Do not assume the web client configuration is sufficient.
-2. **Apple sign-in and provider linking.** Add verified Apple identity support
-   through the same native login-session lifecycle. Define linking for existing
-   email/Google accounts and private-relay addresses before implementation; do not
-   infer that two different addresses belong to the same person.
-3. **Recovery and account controls.** Complete verification/password-reset re-entry
-   and the minimal signed-in account surface needed to understand the account,
-   link supported providers, and sign out. Keep journals and taste profile in the
-   subsequent Personal milestone.
+When Apple resumes, define verified provider linking for existing email/Google
+accounts and private-relay addresses before implementation. Do not infer that two
+different addresses belong to the same person. Recovery and verification remain
+unfinished account work. Shared authentication changes must preserve web login,
+account isolation, cancellation, refresh, and cold-start restoration.
 
-Acceptance: returning users reach their existing artwork and Session data;
-provider cancellation and failure leave login recoverable; refresh, sign-out,
-and cold-start restoration work on iPhone; linking does not create unintended
-accounts or expose another account's cached data. Validate the unchanged web
-login path whenever shared authentication contracts change. Provider setup and
-signing configuration are prerequisites to device sign-off.
+### Next build: native Journals
+
+Start this separate feature in a new coding task and a fresh branch from merged
+main after the login follow-up lands. Journals is not implemented yet.
+
+1. Inspect the active web journal creation and reading flows, backend contracts,
+   persistence, and recovery behavior before defining the native slice.
+2. Add a journal entry point in Profile, a list of saved journals, and a detail
+   screen for reading them while preserving access to account email and Sign out.
+3. Implement the active web creation workflow using existing APIs and native
+   presentation. Reuse shared contracts where appropriate; do not port dormant
+   web features or invent a new journal model.
+4. Include loading, empty, error, retry, and save-in-progress states. Ensure saved
+   journals reopen after navigation and a cold start, and account changes clear
+   account-scoped cached data.
+
+Acceptance: a user can find existing journals, create a journal through the
+supported workflow, and reopen its saved content. Failed requests leave a clear
+recovery path. Verify relevant automated checks and a focused simulator/device
+walkthrough before marking the slice complete. Existing capture and authentication
+physical-device validation gates remain outstanding.
 
 ### Following product milestones
 
-1. **Personal section:** replace the Profile placeholder with journal list/detail
-   and the active web creation flow, then taste-profile views. Include loading,
-   empty, update, and recovery behavior in each slice.
-2. **Remaining parity:** finish artwork detail/conversation, preferences, and
-   other active capabilities in the map. Further discovery still waits for the
+1. **Taste Profile:** continue the Personal section after Journals, based on active
+   web viewing and update behavior, including loading and recovery states.
+2. **Remaining parity and account work:** resume Apple when its prerequisites are
+   ready; complete recovery, artwork detail/conversation, preferences, and other
+   active capabilities in the map. Further discovery still waits for the
    outstanding integrated device and timeout checks.
 3. **Release readiness:** complete lifecycle, accessibility, security, and
    distribution gates, including TestFlight. Account and Personal work do not

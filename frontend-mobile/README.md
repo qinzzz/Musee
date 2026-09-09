@@ -194,7 +194,8 @@ These are public client IDs, not secrets. Do not include an OAuth client secret.
 `app.config.js` derives the reversed iOS client URL scheme and applies the SDK's
 Expo config plugin. Supplying only one client ID fails configuration validation;
 leaving both unset keeps email-only builds available. An old development binary
-without the SDK also keeps email login available and hides the Google button.
+without the SDK also keeps email login available. The Google button stays visible;
+if its configuration or native SDK is missing, tapping it shows an explicit error.
 
 After installing dependencies and setting the IDs, regenerate native configuration
 and rebuild; a Metro reload cannot add the native SDK or its callback scheme:
