@@ -1,3 +1,4 @@
+import { GoogleSignInError } from './googleSignIn';
 import { classifyRequestFailure } from '@musee/client-core';
 
 import { MobileRuntimeConfigurationError } from '../config/mobileRuntimeConfig';
@@ -22,6 +23,7 @@ const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const HTTP_ERROR_MESSAGES: Record<string, string> = {
   email_unverified: 'Check your inbox and verify your email before signing in.',
   invalid_credentials: 'Incorrect email or password.',
+  google_sign_in_failed: 'Musee could not verify your Google sign-in. Please try again.',
   password_not_set: 'This account uses Google sign-in and does not have a password yet.',
   rate_limited: 'Too many attempts. Wait a minute and try again.',
 };
@@ -37,6 +39,10 @@ export function presentAuthError(
   error: unknown,
   options: AuthErrorPresentationOptions,
 ): AuthErrorPresentation {
+  if (error instanceof GoogleSignInError) {
+    return { message: error.message };
+  }
+
   if (error instanceof MobileRuntimeConfigurationError) {
     return {
       message: error.message,

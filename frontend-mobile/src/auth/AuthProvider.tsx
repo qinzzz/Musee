@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
@@ -17,7 +18,7 @@ import {
 import { mobileQueryClient } from '../api/queryClient';
 import { MobileAuthContractError } from './mobileAuthService';
 import { fetchAuthenticatedUser } from './mobileAuthSession';
-import type { MobileAuthUser } from './mobileAuthTransport';
+import type { MobileAuthSessionResponse, MobileAuthUser } from './mobileAuthTransport';
 
 export type AuthStatus =
   | 'restoring'
@@ -30,6 +31,7 @@ type AuthContextValue = {
   restoreError: Error | null;
   status: AuthStatus;
   user: MobileAuthUser | null;
+  loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   retryRestore: () => Promise<void>;
@@ -42,6 +44,7 @@ function normalizeError(error: unknown): Error {
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
+  const loginInFlight = useRef(false);
   const [restoreError, setRestoreError] = useState<Error | null>(null);
   const [status, setStatus] = useState<AuthStatus>('restoring');
   const [user, setUser] = useState<MobileAuthUser | null>(null);
@@ -79,22 +82,39 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setStatus('signedOut');
   }), []);
 
-  const loginWithEmail = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (authenticate: () => Promise<MobileAuthSessionResponse | null>) => {
+    if (loginInFlight.current) return;
+    loginInFlight.current = true;
+    setRestoreError(null);
     setStatus('signingIn');
     try {
-      const response = await mobileAuthService.loginWithEmail(email, password);
+      const response = await authenticate();
+      if (!response) {
+        setStatus('signedOut');
+        return;
+      }
       if (!response.user) {
         await mobileAuthService.logout();
         throw new MobileAuthContractError();
       }
+      mobileQueryClient.clear();
       setUser(response.user);
       setStatus('authenticated');
     } catch (error) {
       setUser(null);
       setStatus('signedOut');
       throw error;
+    } finally {
+      loginInFlight.current = false;
     }
   }, []);
+
+  const loginWithEmail = useCallback((email: string, password: string) => (
+    signIn(() => mobileAuthService.loginWithEmail(email, password))
+  ), [signIn]);
+  const loginWithGoogle = useCallback(() => (
+    signIn(() => mobileAuthService.loginWithGoogle())
+  ), [signIn]);
 
   const logout = useCallback(async () => {
     await mobileAuthService.logout();
@@ -109,9 +129,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     status,
     user,
     loginWithEmail,
+    loginWithGoogle,
     logout,
     retryRestore: restore,
-  }), [loginWithEmail, logout, restore, restoreError, status, user]);
+  }), [loginWithEmail, loginWithGoogle, logout, restore, restoreError, status, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

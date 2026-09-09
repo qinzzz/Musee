@@ -1,3 +1,6 @@
+import { LoadingIndicator } from '../ui/components/LoadingIndicator';
+import { GoogleSignInButton } from '../auth/components/GoogleSignInButton';
+import { googleSignInAvailable } from '../platform/auth/googleIdentityProvider';
 import { useState } from 'react';
 import {
   Keyboard,
@@ -30,17 +33,21 @@ const COPY = {
   passwordLabel: 'Password',
   passwordPlaceholder: 'Enter your password',
   submit: 'Sign in',
+  separator: 'Or continue with',
+  signingIn: 'Signing in…',
   missingFields: 'Enter both your email and password.',
 } as const;
 
 export default function SignInScreen() {
-  const { loginWithEmail, status } = useAuth();
+  const { loginWithEmail, loginWithGoogle, status } = useAuth();
+  const [loginMethod, setLoginMethod] = useState<'email' | 'google' | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<AuthErrorPresentation | null>(null);
   const isSigningIn = status === 'signingIn';
 
   const handleSubmit = async () => {
+    if (isSigningIn) return;
     const normalizedEmail = email.trim();
     if (!normalizedEmail || !password) {
       setError({ message: COPY.missingFields });
@@ -48,9 +55,25 @@ export default function SignInScreen() {
     }
 
     Keyboard.dismiss();
+    setLoginMethod('email');
     setError(null);
     try {
       await loginWithEmail(normalizedEmail, password);
+    } catch (loginError) {
+      setError(presentAuthError(loginError, {
+        apiBaseUrl: MOBILE_API_BASE_URL,
+        showTechnicalDetails: __DEV__,
+      }));
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (isSigningIn) return;
+    Keyboard.dismiss();
+    setLoginMethod('google');
+    setError(null);
+    try {
+      await loginWithGoogle();
     } catch (loginError) {
       setError(presentAuthError(loginError, {
         apiBaseUrl: MOBILE_API_BASE_URL,
@@ -78,6 +101,7 @@ export default function SignInScreen() {
 
             <View style={styles.form}>
               <MuseeTextField
+                editable={!isSigningIn}
                 autoComplete="email"
                 keyboardType="email-address"
                 label={COPY.emailLabel}
@@ -88,6 +112,7 @@ export default function SignInScreen() {
                 value={email}
               />
               <MuseeTextField
+                editable={!isSigningIn}
                 autoComplete="current-password"
                 label={COPY.passwordLabel}
                 onChangeText={setPassword}
@@ -98,6 +123,30 @@ export default function SignInScreen() {
                 textContentType="password"
                 value={password}
               />
+              <MuseeButton
+                label={COPY.submit}
+                disabled={isSigningIn}
+                loading={isSigningIn && loginMethod === 'email'}
+                onPress={() => void handleSubmit()}
+              />
+            </View>
+
+            {googleSignInAvailable ? (
+              <View style={styles.providers}>
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.separator}>{COPY.separator}</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+                <GoogleSignInButton disabled={isSigningIn} onPress={() => void handleGoogleSignIn()} />
+                {isSigningIn && loginMethod === 'google' ? (
+                  <View accessibilityLiveRegion="polite" style={styles.googleProgress}>
+                    <LoadingIndicator color={colors.foreground} />
+                    <Text style={styles.separator}>{COPY.signingIn}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
               {error ? (
                 <View accessibilityLiveRegion="polite" style={styles.errorGroup}>
                   <Text style={styles.error}>{error.message}</Text>
@@ -106,12 +155,6 @@ export default function SignInScreen() {
                   ) : null}
                 </View>
               ) : null}
-              <MuseeButton
-                label={COPY.submit}
-                loading={isSigningIn}
-                onPress={() => void handleSubmit()}
-              />
-            </View>
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -125,23 +168,27 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 440,
     gap: spacing.xl,
-    paddingVertical: spacing.xxl,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.xxl,
   },
   header: {
     gap: spacing.sm,
   },
   brand: {
     color: colors.foreground,
-    fontSize: typography.title,
+    fontSize: typography.body,
     fontWeight: '600',
-    letterSpacing: -1,
-    marginBottom: spacing.md,
+    letterSpacing: 0.5,
+    marginBottom: spacing.lg,
   },
   heading: {
     color: colors.foreground,
-    fontSize: typography.heading,
+    fontSize: typography.title,
     fontWeight: '600',
   },
   message: {
@@ -149,6 +196,11 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     lineHeight: 24,
   },
+  providers: { gap: spacing.lg, marginTop: spacing.sm },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  googleProgress: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  separator: { color: colors.secondary, fontSize: typography.caption, textAlign: 'center' },
   form: {
     gap: spacing.md,
   },

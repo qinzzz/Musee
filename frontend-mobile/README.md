@@ -173,6 +173,45 @@ The auth credential store owns auth-specific keys and policy. Add another
 domain-specific store when a future secret needs persistence; do not turn
 SecureStore into an untyped global bag or let screens manage keys directly.
 
+### Google sign-in configuration
+
+Native Google sign-in uses `@react-native-google-signin/google-signin` for
+credential acquisition and the existing `/auth/google` backend for Musee tokens.
+The Google ID token is sent only to that endpoint; only the Musee refresh token
+is retained by our credential store. Restoration uses Musee refresh, never silent
+Google login. The SDK's cached sign-in is cleared after the exchange, on failure,
+and during logout. Cancellation returns to the sign-in form without an error.
+
+Create an iOS OAuth client in the same Google Cloud project as the existing web
+client, registered for `com.yujingtang.musee.dev` (or the bundle ID of the target
+build). Copy `frontend-mobile/.env.example` to `.env.local` and set:
+
+- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` to that iOS client ID;
+- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` to the web client ID accepted by the backend's
+  `GOOGLE_CLIENT_ID`.
+
+These are public client IDs, not secrets. Do not include an OAuth client secret.
+`app.config.js` derives the reversed iOS client URL scheme and applies the SDK's
+Expo config plugin. Supplying only one client ID fails configuration validation;
+leaving both unset keeps email-only builds available. An old development binary
+without the SDK also keeps email login available and hides the Google button.
+
+After installing dependencies and setting the IDs, regenerate native configuration
+and rebuild; a Metro reload cannot add the native SDK or its callback scheme:
+
+```bash
+cd frontend-mobile
+npx expo prebuild --platform ios
+npx expo run:ios --device
+```
+
+Keep the same environment values when restarting Metro. If Google's consent
+screen is restricted to test users, the device account must be allowed in that
+project. Validate account selection and cancellation, returning web users' existing
+data, sign-out, token refresh, and cold-start restoration on an iPhone. Verify
+email login still works. See the SDK's
+[Expo setup guide](https://react-native-google-signin.github.io/docs/setting-up/expo).
+
 ## Artwork image lifecycle
 
 An image can temporarily exist in several places, each with a different role:

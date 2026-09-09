@@ -1,3 +1,4 @@
+import { googleIdentityProvider } from '../platform/auth/googleIdentityProvider';
 import { createMobileSessionManagement } from '../session/mobileSessionManagement';
 import { createMobileSessionContextService } from '../session/mobileSessionContextService';
 import {
@@ -68,6 +69,7 @@ export const mobileApiClient = createApiClient({
 });
 
 export const mobileAuthService = createMobileAuthService({
+  googleIdentityProvider,
   apiClient: mobileApiClient,
   credentialStore: authCredentialStore,
   transport: mobileAuthTransport,

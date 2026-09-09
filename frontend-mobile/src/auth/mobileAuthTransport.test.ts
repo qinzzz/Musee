@@ -64,3 +64,21 @@ describe('mobile auth transport', () => {
     ).rejects.toEqual(new MobileAuthHttpError(401, 'invalid_credentials'));
   });
 });
+
+it('exchanges a Google ID token using the native login contract', async () => {
+  const fetch = vi.fn<ApiFetch>().mockResolvedValue(Response.json(SESSION_RESPONSE));
+  const transport = createMobileAuthTransport({ apiBaseUrl: API_BASE_URL, fetch });
+  await expect(transport.loginWithGoogle('google-token')).resolves.toEqual(SESSION_RESPONSE);
+  const [url, options] = fetch.mock.calls[0];
+  expect(url).toBe(`${API_BASE_URL}/auth/google`);
+  expect(new Headers(options?.headers).get('X-Client-Platform')).toBe('ios');
+  expect(options?.credentials).toBe('omit');
+  expect(JSON.parse(String(options?.body))).toEqual({ id_token: 'google-token' });
+});
+
+it('distinguishes Google verification failure from an incorrect email password', async () => {
+  const fetch = vi.fn<ApiFetch>().mockResolvedValue(Response.json({ detail: 'Invalid token' }, { status: 401 }));
+  const transport = createMobileAuthTransport({ apiBaseUrl: API_BASE_URL, fetch });
+  await expect(transport.loginWithGoogle('bad-token')).rejects.toEqual(
+    new MobileAuthHttpError(401, 'google_sign_in_failed'));
+});
