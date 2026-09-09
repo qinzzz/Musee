@@ -61,7 +61,7 @@ become mobile commitments.
 
 ## Current position
 
-Last reviewed: 2026-09-08.
+Last reviewed: 2026-09-09.
 
 The native app now has a functioning foundation and four usable product
 slices:
@@ -100,7 +100,7 @@ Status meanings:
 | --- | --- | --- |
 | Workspace, Expo development client, shared core | Baseline complete | Maintain clean web/native boundaries and reproducible builds |
 | Email sign-in, refresh, restore, sign-out | Baseline complete | Harden lifecycle and security behavior as release approaches |
-| Apple and Google sign-in, account linking, and recovery | Not started | Support both native providers alongside email, with consistent account linking, restoration, and recovery/verification flows |
+| Apple and Google sign-in, account linking, and recovery | Google sign-in and sign-out confirmed by user; full device lifecycle checks pending. Apple and recovery not started | Support both native providers alongside email, with consistent account linking, restoration, and recovery/verification flows |
 | Camera and single-photo intake | Baseline complete — custom capture UI refined on iPhone | Validate framing, permissions, and lifecycle recovery on the final layout |
 | Artwork with optional label in one identification flow | Implemented — Library and Sessions; full device recovery validation pending | Preserve one required artwork and one temporary optional label, using web identification semantics |
 | Batch and multi-select intake | Baseline complete — Library intake and mixed Session composition; simulator recovery checks passed | Match the intentional web batch workflow where it fits native UX |
@@ -202,8 +202,8 @@ the integrated device pass.
 The native navigation shell uses icon-only Home, Collection, and Profile tabs.
 Home centers Session composition and opens history from the top-left. Collection
 owns All Artworks, Artists, Museums, and Boards tabs with a persistent upload
-action. Deeper routes use local controls and hide global navigation. Profile remains a placeholder; its shell does not imply account and
-personalization capabilities are implemented.
+action. Deeper routes use local controls and hide global navigation. Profile shows the signed-in email and Sign out; journals, taste profile, and
+other account settings remain unimplemented.
 
 ### Phase 5 — Organization and discovery
 
@@ -343,13 +343,21 @@ checks by default. Record confirmed outcomes and remaining blockers before
 advancing the milestone. Artist browsing currently links existing artist entity
 IDs; it does not backfill legacy links or generate biographies on navigation.
 
-### Next build: native account access
+### Active build: native account access
 
-Build Apple and Google sign-in alongside email before starting the Personal
+Complete Apple and Google sign-in alongside email before starting the Personal
 section. This gives existing web users a path into their existing native library
 and Sessions and establishes account identity before adding more personal data.
 Capture is now implementation-complete for its agreed scope; its remaining device
 checks stay in the closeout checklist rather than becoming another capture feature.
+
+Google credential acquisition and the native backend exchange are implemented,
+including cancellation, error handling, Keychain persistence, and SDK credential
+cleanup. The iOS OAuth client is configured locally, and the user confirmed
+sign-in and sign-out work. Full physical-device refresh, cold-start, and account
+switching checks remain required. The email-first login layout places Google
+below the form; Profile exposes the account email and Sign out. Apple is the
+next implementation slice, followed by recovery.
 
 Deliver the account milestone in this order:
 

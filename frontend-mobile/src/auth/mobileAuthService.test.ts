@@ -41,6 +41,7 @@ function createDependencies(refreshToken: string | null = INITIAL_REFRESH_TOKEN)
     replaceRefreshToken: vi.fn().mockResolvedValue(undefined),
   };
   const transport: MobileAuthTransport = {
+    loginWithGoogle: vi.fn().mockResolvedValue(sessionResponse()),
     loginWithEmail: vi.fn().mockResolvedValue(sessionResponse()),
     logout: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(sessionResponse()),
@@ -175,5 +176,58 @@ describe('mobile auth service', () => {
     ).rejects.toBeInstanceOf(MobileAuthContractError);
     expect(dependencies.apiClient.setAccessToken).toHaveBeenCalledWith(null);
     expect(dependencies.credentialStore.clearRefreshToken).toHaveBeenCalled();
+  });
+});
+
+describe('Google login', () => {
+  function setup() {
+    const dependencies = createDependencies(null);
+    const googleIdentityProvider = {
+      signIn: vi.fn().mockResolvedValue('google-id-token'),
+      signOut: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = createMobileAuthService({ ...dependencies, googleIdentityProvider });
+    return { ...dependencies, googleIdentityProvider, service };
+  }
+
+  it('exchanges the Google identity for Musee tokens and persists only the Musee refresh credential', async () => {
+    const { service, transport, credentialStore, apiClient, googleIdentityProvider } = setup();
+    await service.loginWithGoogle();
+    expect(transport.loginWithGoogle).toHaveBeenCalledWith('google-id-token');
+    expect(credentialStore.replaceRefreshToken).toHaveBeenCalledWith(ROTATED_REFRESH_TOKEN);
+    expect(apiClient.setAccessToken).toHaveBeenCalledWith(ACCESS_TOKEN);
+    expect(googleIdentityProvider.signOut).toHaveBeenCalledOnce();
+  });
+
+  it('treats cancellation as a no-op without calling the backend or changing credentials', async () => {
+    const { service, transport, credentialStore, googleIdentityProvider } = setup();
+    googleIdentityProvider.signIn.mockResolvedValue(null);
+    await expect(service.loginWithGoogle()).resolves.toBeNull();
+    expect(transport.loginWithGoogle).not.toHaveBeenCalled();
+    expect(credentialStore.replaceRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('does not accept a rejected Google token and clears SDK state after failure', async () => {
+    const { service, transport, credentialStore, googleIdentityProvider } = setup();
+    vi.mocked(transport.loginWithGoogle).mockRejectedValue(new MobileAuthHttpError(401, 'google_sign_in_failed'));
+    await expect(service.loginWithGoogle()).rejects.toMatchObject({ status: 401 });
+    expect(credentialStore.replaceRefreshToken).not.toHaveBeenCalled();
+    expect(googleIdentityProvider.signOut).toHaveBeenCalledOnce();
+  });
+
+  it('revokes the Musee session if Keychain persistence fails', async () => {
+    const { service, transport, credentialStore, apiClient } = setup();
+    vi.mocked(credentialStore.replaceRefreshToken).mockRejectedValue(new Error('Keychain unavailable'));
+    await expect(service.loginWithGoogle()).rejects.toMatchObject({ operation: 'write' });
+    expect(transport.logout).toHaveBeenCalledWith(ROTATED_REFRESH_TOKEN);
+    expect(apiClient.setAccessToken).not.toHaveBeenCalledWith(ACCESS_TOKEN);
+  });
+
+  it('restores Google-created accounts using Musee refresh tokens without silent Google login', async () => {
+    const { service, transport, credentialStore, googleIdentityProvider } = setup();
+    vi.mocked(credentialStore.getRefreshToken).mockResolvedValue(ROTATED_REFRESH_TOKEN);
+    await expect(service.restoreSession()).resolves.toBe(true);
+    expect(transport.refresh).toHaveBeenCalledWith(ROTATED_REFRESH_TOKEN);
+    expect(googleIdentityProvider.signIn).not.toHaveBeenCalled();
   });
 });

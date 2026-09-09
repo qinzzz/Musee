@@ -17,6 +17,7 @@ export type MobileAuthSessionResponse = {
 };
 
 export type MobileAuthTransport = {
+  loginWithGoogle: (idToken: string) => Promise<MobileAuthSessionResponse>;
   loginWithEmail: (email: string, password: string) => Promise<MobileAuthSessionResponse>;
   logout: (refreshToken: string) => Promise<void>;
   refresh: (refreshToken: string) => Promise<MobileAuthSessionResponse>;
@@ -33,6 +34,7 @@ const CONTENT_TYPE_HEADER = 'Content-Type';
 const JSON_CONTENT_TYPE = 'application/json';
 const REFRESH_TOKEN_HEADER = 'X-Refresh-Token';
 const LOGIN_PATH = '/auth/login';
+const GOOGLE_LOGIN_PATH = '/auth/google';
 const LOGOUT_PATH = '/auth/logout';
 const REFRESH_PATH = '/auth/refresh';
 const AUTH_REQUEST_FAILED_MESSAGE = 'Musee authentication request failed.';
@@ -74,6 +76,17 @@ export function createMobileAuthTransport({
   }
 
   return {
+    async loginWithGoogle(idToken) {
+      const response = await fetch(`${apiBaseUrl}${GOOGLE_LOGIN_PATH}`, {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { ...platformHeaders, [CONTENT_TYPE_HEADER]: JSON_CONTENT_TYPE },
+        body: JSON.stringify({ id_token: idToken }),
+      });
+      if (response.status === 401) throw new MobileAuthHttpError(401, 'google_sign_in_failed');
+      await requireSuccess(response);
+      return response.json() as Promise<MobileAuthSessionResponse>;
+    },
     async loginWithEmail(email, password) {
       const response = await fetch(`${apiBaseUrl}${LOGIN_PATH}`, {
         method: 'POST',

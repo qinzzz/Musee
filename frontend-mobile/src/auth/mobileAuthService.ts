@@ -1,5 +1,7 @@
 import type { ApiClient } from '@musee/client-core';
 
+import type { GoogleIdentityProvider } from './googleSignIn';
+import { GoogleSignInError } from './googleSignIn';
 import type { AuthCredentialStore } from './AuthCredentialStore';
 import {
   MobileAuthHttpError,
@@ -8,6 +10,7 @@ import {
 } from './mobileAuthTransport';
 
 export type MobileAuthService = {
+  loginWithGoogle: () => Promise<MobileAuthSessionResponse | null>;
   loginWithEmail: (email: string, password: string) => Promise<MobileAuthSessionResponse>;
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<string | null>;
@@ -18,6 +21,7 @@ export type MobileAuthServiceOptions = {
   apiClient: ApiClient;
   credentialStore: AuthCredentialStore;
   transport: MobileAuthTransport;
+  googleIdentityProvider?: GoogleIdentityProvider;
 };
 
 export type AuthCredentialOperation = 'clear' | 'read' | 'write';
@@ -52,6 +56,7 @@ export function createMobileAuthService({
   apiClient,
   credentialStore,
   transport,
+  googleIdentityProvider,
 }: MobileAuthServiceOptions): MobileAuthService {
   async function clearLocalSession(): Promise<void> {
     apiClient.setAccessToken(null);
@@ -111,6 +116,19 @@ export function createMobileAuthService({
   }
 
   return {
+    async loginWithGoogle() {
+      if (!googleIdentityProvider) throw new GoogleSignInError('unavailable');
+      try {
+        const idToken = await googleIdentityProvider.signIn();
+        if (!idToken) return null;
+        const response = await transport.loginWithGoogle(idToken);
+        await persistSession(response);
+        return response;
+      } finally {
+        // Never use Google's cached credentials to restore a Musee session.
+        await googleIdentityProvider.signOut().catch(() => undefined);
+      }
+    },
     async loginWithEmail(email, password) {
       const response = await transport.loginWithEmail(email, password);
       await persistSession(response);
@@ -126,6 +144,7 @@ export function createMobileAuthService({
       }
 
       await clearLocalSession();
+      await googleIdentityProvider?.signOut().catch(() => undefined);
       if (refreshToken) {
         await transport.logout(refreshToken).catch(() => undefined);
       }
