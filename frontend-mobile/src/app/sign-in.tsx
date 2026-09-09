@@ -1,6 +1,6 @@
 import { LoadingIndicator } from '../ui/components/LoadingIndicator';
 import { GoogleSignInButton } from '../auth/components/GoogleSignInButton';
-import { googleSignInAvailable } from '../platform/auth/googleIdentityProvider';
+import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
   Keyboard,
@@ -35,6 +35,8 @@ const COPY = {
   submit: 'Sign in',
   separator: 'Or continue with',
   signingIn: 'Signing in…',
+  apple: 'Continue with Apple',
+  comingSoon: 'Coming soon',
   missingFields: 'Enter both your email and password.',
 } as const;
 
@@ -131,30 +133,37 @@ export default function SignInScreen() {
               />
             </View>
 
-            {googleSignInAvailable ? (
-              <View style={styles.providers}>
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.separator}>{COPY.separator}</Text>
-                  <View style={styles.dividerLine} />
+            <View style={styles.providers}>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.separator}>{COPY.separator}</Text>
+                <View style={styles.dividerLine} />
+              </View>
+              <GoogleSignInButton disabled={isSigningIn} onPress={() => void handleGoogleSignIn()} />
+              <View accessible accessibilityRole="button"
+                accessibilityLabel={`${COPY.apple}, ${COPY.comingSoon}`}
+                accessibilityState={{ disabled: true }} style={styles.applePlaceholder}>
+                <View style={styles.appleLabelRow}>
+                  <SymbolView name="apple.logo" size={20} tintColor={colors.secondary} />
+                  <Text style={styles.appleLabel}>{COPY.apple}</Text>
                 </View>
-                <GoogleSignInButton disabled={isSigningIn} onPress={() => void handleGoogleSignIn()} />
-                {isSigningIn && loginMethod === 'google' ? (
-                  <View accessibilityLiveRegion="polite" style={styles.googleProgress}>
-                    <LoadingIndicator color={colors.foreground} />
-                    <Text style={styles.separator}>{COPY.signingIn}</Text>
-                  </View>
+                <Text style={styles.comingSoon}>{COPY.comingSoon}</Text>
+              </View>
+              {isSigningIn && loginMethod === 'google' ? (
+                <View accessibilityLiveRegion="polite" style={styles.googleProgress}>
+                  <LoadingIndicator color={colors.foreground} />
+                  <Text style={styles.separator}>{COPY.signingIn}</Text>
+                </View>
+              ) : null}
+            </View>
+            {error ? (
+              <View accessibilityLiveRegion="polite" style={styles.errorGroup}>
+                <Text style={styles.error}>{error.message}</Text>
+                {error.technicalDetail ? (
+                  <Text style={styles.errorDetail}>{error.technicalDetail}</Text>
                 ) : null}
               </View>
             ) : null}
-              {error ? (
-                <View accessibilityLiveRegion="polite" style={styles.errorGroup}>
-                  <Text style={styles.error}>{error.message}</Text>
-                  {error.technicalDetail ? (
-                    <Text style={styles.errorDetail}>{error.technicalDetail}</Text>
-                  ) : null}
-                </View>
-              ) : null}
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -196,6 +205,20 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     lineHeight: 24,
   },
+  applePlaceholder: {
+    minHeight: 48,
+    paddingHorizontal: 16,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 4,
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+  },
+  appleLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  appleLabel: { color: colors.secondary, fontSize: 16, fontWeight: '500' },
+  comingSoon: { color: colors.secondary, fontSize: typography.caption },
   providers: { gap: spacing.lg, marginTop: spacing.sm },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
