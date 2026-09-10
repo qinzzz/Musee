@@ -54,6 +54,7 @@ export default function SignInScreen() {
 
   const handleSubmit = async () => {
     if (isSigningIn) return;
+    setLoginMethod('email');
     const normalizedEmail = email.trim();
     if (!normalizedEmail || !password) {
       setError({ message: COPY.missingFields });
@@ -61,7 +62,6 @@ export default function SignInScreen() {
     }
 
     Keyboard.dismiss();
-    setLoginMethod('email');
     setError(null);
     try {
       await loginWithEmail(normalizedEmail, password);
@@ -87,6 +87,13 @@ export default function SignInScreen() {
       }));
     }
   };
+
+  const errorMessage = error ? (
+    <View accessibilityLiveRegion="polite" style={styles.errorGroup}>
+      <Text style={styles.error}>{error.message}</Text>
+      {error.technicalDetail ? <Text style={styles.errorDetail}>{error.technicalDetail}</Text> : null}
+    </View>
+  ) : null;
 
   return (
     <Screen>
@@ -129,6 +136,7 @@ export default function SignInScreen() {
                 textContentType="password"
                 value={password}
               />
+              {loginMethod !== 'google' ? errorMessage : null}
               <MuseeButton
                 label={COPY.submit}
                 disabled={isSigningIn}
@@ -149,6 +157,7 @@ export default function SignInScreen() {
                 <View style={styles.dividerLine} />
               </View>
               <GoogleSignInButton disabled={isSigningIn} onPress={() => void handleGoogleSignIn()} />
+              {loginMethod === 'google' ? errorMessage : null}
               <View accessible accessibilityRole="button"
                 accessibilityLabel={`${COPY.apple}, ${COPY.comingSoon}`}
                 accessibilityState={{ disabled: true }} style={styles.applePlaceholder}>
@@ -165,14 +174,6 @@ export default function SignInScreen() {
                 </View>
               ) : null}
             </View>
-            {error ? (
-              <View accessibilityLiveRegion="polite" style={styles.errorGroup}>
-                <Text style={styles.error}>{error.message}</Text>
-                {error.technicalDetail ? (
-                  <Text style={styles.errorDetail}>{error.technicalDetail}</Text>
-                ) : null}
-              </View>
-            ) : null}
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>

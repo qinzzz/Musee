@@ -86,7 +86,7 @@ Artwork-plus-label capture is implemented for Library and Sessions. Camera UI
 has been iterated on a physical iPhone, but the complete permission, failure,
 and interruption matrix remains unverified. This is the closeout work for capture;
 Google sign-in and lightweight Journals are implemented; journal device validation
-is pending, and Taste Profile follows.
+is pending. Settings now hosts usage and account controls; Taste Profile is deferred.
 
 ## Capability map
 
@@ -116,7 +116,7 @@ Status meanings:
 | Boards and collection organization | Implemented — native board management and membership; device validation pending | Bring over the active organization model with native interactions |
 | Artist, museum, and movement browsing | Artists and Museums implemented; device validation pending. Movements not started | Provide first-class discovery and detail paths |
 | Personal section: journals, learning, and taste profile | Journal dates and reflections implemented in Profile; device validation pending. Taste profile and learning not started | Validate lightweight journals, then implement taste-profile experiences based on active web behavior |
-| Persona, language, usage, and account settings | Not started | Centralize durable preferences and account controls |
+| Persona, language, usage, and account settings | Settings entry in Profile, usage display, email, and Sign out implemented; device validation pending. Persona/language not started | Keep account controls and future preferences in Settings; Profile is for insights |
 | Guest experience, conversion, and quotas | Not started | Preserve the backend trust model and native recovery behavior |
 | Community/comments | Decision required | Confirm that the feature is active before creating native UI |
 | Offline and degraded-network behavior | Not started | Define cached reading and queued-write guarantees explicitly |
@@ -204,8 +204,9 @@ The native navigation shell uses icon-only Home, Collection, and Profile tabs.
 Home centers Session composition and opens history from the top-left. Collection
 owns All Artworks, Artists, Museums, and Boards tabs with a persistent upload
 action. Deeper routes use local controls and hide global navigation. Profile shows
-the signed-in email, Sign out, and journal dates and reflections; taste profile
-and other account settings remain unimplemented.
+journal dates, reflections, artwork previews, and a top-right Settings gear.
+Settings owns account email, usage, and Sign out. Taste Profile is deferred;
+persona, language, and other preferences remain unimplemented.
 
 ### Phase 5 — Organization and discovery
 
@@ -357,7 +358,7 @@ refresh, cold-start, and account-switching checks remain required.
 
 The email-first login layout keeps Google visible below the form, with explicit
 errors if the build lacks its configuration or native SDK. Apple appears beneath
-Google as a disabled Coming soon placeholder. Profile exposes the account email
+Google as a disabled Coming soon placeholder. Settings exposes the account email
 and Sign out. Apple integration is deferred until Apple Developer membership and
 provider configuration are ready; it does not block the Personal milestone.
 
@@ -373,8 +374,8 @@ account isolation, cancellation, refresh, and cold-start restoration.
 ### Native Journals: implemented, device validation pending
 
 Profile displays saved journal dates and reflections directly, newest first,
-with up to two representative artwork images beneath each reflection, alongside
-account email and Sign out. Images follow the web's single/overlapping-pair layout,
+with up to two representative artwork images beneath each reflection. Account
+controls live in Settings. Images follow the web's single/overlapping-pair layout,
 with deleted/missing artwork placeholders and failed image loads hidden. The
 lightweight slice has no location, manual generation, or tappable journal detail screen.
 Generation remains the backend's overnight workflow based on eligible Session

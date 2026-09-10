@@ -73,4 +73,5 @@ export { filterBoardsBySearch, getBoardCoverImages } from './boardPresentation';
 export { createArtistService, filterArtistsBySearch, artistLifespan, type ArtistEntity, type ArtistRow } from './artists';
 
 export * from './museums';
+export { createAccountService, getMeteredQuotas, type AccountUsage, type QuotaEntry } from './account';
 export { createJournalService, type JournalListItem, type JournalArtworkPreview } from './journals';

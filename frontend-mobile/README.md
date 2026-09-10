@@ -46,6 +46,7 @@ The mobile client is organized by product domain and platform boundary:
 | `src/museums/` | Museum browsing and paginated captured artworks |
 | `src/boards/` | Board organization, membership, and cached board reads |
 | `src/journals/` | Account-scoped journal reads and calendar-date presentation |
+| `src/settings/` | Settings screen, account usage reads, and usage presentation |
 | `src/session/` | Persistent visit sessions and streamed responses |
 | `src/platform/` | Expo-backed storage, image, and media adapters |
 | `src/ui/` | Reusable native UI primitives and design tokens |
@@ -69,7 +70,7 @@ text and attachments through the authenticated tree's in-memory
 put private draft content in URL parameters. The top-left history button opens
 the full Session list. Collection owns All Artworks, Artists, Museums, and Boards
 sub-tabs with a fixed upload button beside the scrollable labels. Profile shows
-account email, Sign out, and a read-only list of journal dates, reflections, and
+a persistent top-right Settings gear and a read-only list of journal dates, reflections, and
 up to two representative artwork images with the web's overlapping-pair layout.
 Deleted/missing artworks retain text placeholders; failed image loads are hidden.
 Journals use the shared journal service and account-scoped Query cache with focus,
@@ -81,6 +82,15 @@ Artwork detail, artist profiles, individual boards, upload, history, and active 
 stack screens outside the global tabs. They show local navigation/actions;
 Collection's sub-tabs and upload action do not appear there. The legacy board
 index route redirects to Collection's Boards tab.
+
+Settings is a dedicated stack screen outside the tabs, with account email, usage,
+and Sign out. It is the home for future preferences; Profile remains for insights.
+Web and native share the account usage API and quota filtering in `client-core`.
+Usage is read-only and backend-owned: show metered uploads, storage, and AI usage,
+or Unlimited plan when no quotas are metered. Native reads refresh on focus,
+foreground, and pull-to-refresh; failed refreshes preserve previous data and expose
+retry. Limit reset instants are displayed in device local time. Account-scoped
+query keys and the auth cache-clear lifecycle isolate usage between accounts.
 
 ## Runtime and networking
 

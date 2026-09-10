@@ -1,4 +1,5 @@
 import React from 'react';
+import { getMeteredQuotas } from '@musee/client-core';
 import type { QuotaEntry } from '../../api/account';
 import { useAccountUsageQuery } from '../hooks/useAccountUsageQuery';
 
@@ -55,8 +56,7 @@ const AccountUsageMeter: React.FC<{ userId: string }> = ({ userId }) => {
   const { usage } = useAccountUsageQuery(userId);
   if (!usage) return null;
 
-  const metered = Object.entries(usage.quotas)
-    .filter(([, entry]) => entry.limit !== null && entry.on_exceed !== 'allow');
+  const metered = getMeteredQuotas(usage);
 
   if (metered.length === 0) {
     return (
