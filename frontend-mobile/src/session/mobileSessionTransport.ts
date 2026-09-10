@@ -1,3 +1,4 @@
+import { throwIfRequestCancelled } from '../api/requestCancellation';
 import {
   createSseParser,
   parseSessionChatStreamEvent,
@@ -16,6 +17,7 @@ export type SessionEventWrite = Pick<SessionEventRecord, 'event_type' | 'role'> 
 
 export type StartTextSessionInput = {
   event: SessionEventWrite;
+  pendingResponse?: SessionEventWrite;
   sessionId: string;
   title: string;
   userId: string;
@@ -40,6 +42,7 @@ export type StreamTextSessionInput = {
 };
 
 export type StreamTextSessionCallbacks = {
+  signal?: AbortSignal;
   onChunk?: (chunk: string) => void;
   onPhase?: (phase: SessionChatPhase) => void;
 };
@@ -54,6 +57,7 @@ export type MobileSessionTransport = {
   appendEvents: (sessionId: string, events: SessionEventWrite[]) => Promise<void>;
   fetchArtworks: (sessionId: string, userId: string) => Promise<ArtworkRecord[]>;
   fetchEvents: (sessionId: string) => Promise<SessionEventRecord[]>;
+  fetchSession: (sessionId: string) => Promise<SessionRecord>;
   fetchSessions: (userId: string) => Promise<SessionRecord[]>;
   startArtworkSession: (input: StartArtworkSessionInput) => Promise<SessionRecord>;
   startTextSession: (input: StartTextSessionInput) => Promise<SessionRecord>;
@@ -172,6 +176,14 @@ export function createMobileSessionTransport({
       return body.items;
     },
 
+    async fetchSession(sessionId) {
+      const response = await apiClient.fetchWithTimeout(
+        `${apiBaseUrl}/sessions/${encodeURIComponent(sessionId)}`,
+        { timeout: SESSION_REQUEST_TIMEOUT_MS },
+      );
+      return (await requireSuccess(response)).json() as Promise<SessionRecord>;
+    },
+
     async fetchSessions(userId) {
       const response = await apiClient.fetchWithTimeout(
         `${apiBaseUrl}/sessions?user_id=${encodeURIComponent(userId)}`,
@@ -206,7 +218,7 @@ export function createMobileSessionTransport({
       return body.session;
     },
 
-    async startTextSession({ event, sessionId, title, userId }) {
+    async startTextSession({ event, pendingResponse, sessionId, title, userId }) {
       const response = await apiClient.fetchWithTimeout(
         `${apiBaseUrl}/sessions/start-with-event?user_id=${encodeURIComponent(userId)}`,
         {
@@ -216,6 +228,7 @@ export function createMobileSessionTransport({
             session_id: sessionId,
             title,
             event,
+            ...(pendingResponse ? { pending_response: pendingResponse } : {}),
           }),
           timeout: SESSION_REQUEST_TIMEOUT_MS,
         },
@@ -252,6 +265,7 @@ export function createMobileSessionTransport({
     },
 
     async streamTextResponse(input, callbacks = {}) {
+      throwIfRequestCancelled(callbacks.signal);
       const response = await apiClient.fetchWithTimeout(`${apiBaseUrl}/session/chat-stream`, {
         method: 'POST',
         headers: jsonHeaders,
@@ -260,11 +274,15 @@ export function createMobileSessionTransport({
           trigger_event_id: input.triggerEventId,
         }),
         timeout: SESSION_STREAM_CONNECT_TIMEOUT_MS,
+        signal: callbacks.signal,
       });
       await requireSuccess(response);
 
       const reader = response.body?.getReader();
       if (!reader) throw new MobileSessionStreamError('The response stream is unavailable.');
+      const cancel = () => { void reader.cancel().catch(() => undefined); };
+      callbacks.signal?.addEventListener('abort', cancel, { once: true });
+      if (callbacks.signal?.aborted) cancel();
       const decoder = new TextDecoder();
       const parser = createSseParser();
       let result: StreamTextSessionResult | null = null;
@@ -287,7 +305,9 @@ export function createMobileSessionTransport({
 
       try {
         while (!result) {
+          throwIfRequestCancelled(callbacks.signal);
           const { done, value } = await readWithIdleTimeout(reader);
+          throwIfRequestCancelled(callbacks.signal);
           if (done) {
             consume(parser.push(decoder.decode()));
             consume(parser.finish());
@@ -296,6 +316,7 @@ export function createMobileSessionTransport({
           consume(parser.push(decoder.decode(value, { stream: true })));
         }
       } finally {
+        callbacks.signal?.removeEventListener('abort', cancel);
         await reader.cancel().catch(() => undefined);
       }
 

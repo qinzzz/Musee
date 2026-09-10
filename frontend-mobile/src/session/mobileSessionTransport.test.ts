@@ -191,3 +191,31 @@ describe('mobile session transport', () => {
     })).rejects.toEqual(new MobileSessionStreamError('Musee returned an empty response.'));
   });
 });
+
+it('cancels a waiting native stream without requiring AbortSignal.throwIfAborted', async () => {
+  const { AbortController: NativeAbortController } = await import('abort-controller');
+  const controller = new NativeAbortController();
+  const cancel = vi.fn();
+  const client = createClient([new Response(new ReadableStream({ cancel }))]);
+  const transport = createMobileSessionTransport({ apiBaseUrl: '/api', apiClient: client });
+  const onChunk = vi.fn();
+  const result = transport.streamTextResponse({ sessionId: 'session', triggerEventId: 'input' }, {
+    signal: controller.signal as unknown as AbortSignal, onChunk,
+  });
+  const rejected = expect(result).rejects.toMatchObject({ name: 'AbortError' });
+  await vi.waitFor(() => expect(client.fetchWithTimeout).toHaveBeenCalled());
+  controller.abort();
+  await rejected;
+  expect(cancel).toHaveBeenCalledTimes(1);
+  expect(onChunk).not.toHaveBeenCalled();
+});
+
+it('includes the pending response in the first-turn transaction', async () => {
+  const client = createClient([Response.json({ session: { id: 'session' }, inserted: 2 })]);
+  const transport = createMobileSessionTransport({ apiBaseUrl: '/api', apiClient: client });
+  const event = { id: 'input', role: 'user' as const, event_type: 'user_input' as const, content: 'Question' };
+  const pendingResponse = { id: 'response', role: 'model' as const, event_type: 'model_response' as const, trigger_event_id: 'input', payload: { status: 'pending' } };
+  await transport.startTextSession({ event, pendingResponse, sessionId: 'session', title: 'Question', userId: 'user' });
+  const options = vi.mocked(client.fetchWithTimeout).mock.calls[0][1];
+  expect(JSON.parse(String(options?.body))).toEqual({ session_id: 'session', title: 'Question', event, pending_response: pendingResponse });
+});

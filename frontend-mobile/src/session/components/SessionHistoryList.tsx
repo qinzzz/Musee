@@ -1,17 +1,17 @@
 import { LoadingIndicator } from '../../ui/components/LoadingIndicator';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { sessionKeys, sessionListQuery } from '../sessionQueries';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { SessionRecord } from '@musee/client-core';
 
-import { MOBILE_API_BASE_URL, mobileSessionService } from '../../api/runtime';
+import { MOBILE_API_BASE_URL } from '../../api/runtime';
 import { useAuth } from '../../auth/AuthProvider';
 import { MuseeButton } from '../../ui/components/MuseeButton';
 import { colors, spacing, typography } from '../../ui/tokens/theme';
 import {
   presentSessionError,
-  type SessionErrorPresentation,
 } from '../sessionErrorPresentation';
 
 const COPY = {
@@ -37,40 +37,22 @@ function formatUpdatedAt(value?: string | null): string {
 export function SessionHistoryList() {
   const { user } = useAuth();
   const router = useRouter();
-  const requestVersion = useRef(0);
-  const [sessions, setSessions] = useState<SessionRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<SessionErrorPresentation | null>(null);
-
-  const loadSessions = useCallback(async () => {
-    if (!user) return;
-    const version = ++requestVersion.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const records = await mobileSessionService.fetchSessions(user.user_id);
-      if (version === requestVersion.current) setSessions(records);
-    } catch (loadError) {
-      if (version === requestVersion.current) {
-        setError(presentSessionError(loadError, 'load', ERROR_OPTIONS));
-      }
-    } finally {
-      if (version === requestVersion.current) setLoading(false);
-    }
-  }, [user]);
-
+  const client = useQueryClient();
+  const userId = user?.user_id || '';
+  const query = useQuery(sessionListQuery(userId));
+  const sessions = query.data || [];
+  const loading = query.isPending;
+  const error = query.error ? presentSessionError(query.error, 'load', ERROR_OPTIONS) : null;
+  const loadSessions = () => query.refetch();
   useFocusEffect(useCallback(() => {
-    void loadSessions();
-    return () => {
-      requestVersion.current += 1;
-    };
-  }, [loadSessions]));
+    if (userId) void client.invalidateQueries({ queryKey: sessionKeys.list(userId) });
+  }, [client, userId]));
 
   return (
     <View style={styles.section}>
       {loading ? (
         <LoadingIndicator color={colors.foreground} />
-      ) : error ? (
+      ) : error && !sessions.length ? (
         <View style={styles.statusGroup}>
           <Text style={styles.statusText}>{error.message}</Text>
           {error.technicalDetail ? (
@@ -83,6 +65,12 @@ export function SessionHistoryList() {
       ) : (
         <FlatList
           data={sessions}
+          refreshing={query.isRefetching}
+          onRefresh={() => void loadSessions()}
+          ListHeaderComponent={error ? <View style={styles.statusGroup}>
+            <Text style={styles.statusText}>{error.message}</Text>
+            <MuseeButton label={COPY.retry} onPress={() => void loadSessions()} />
+          </View> : null}
           keyExtractor={(session) => session.id}
           renderItem={({ item: session }) => (
             <Pressable accessibilityRole="button"

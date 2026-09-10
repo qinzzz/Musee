@@ -80,6 +80,9 @@ export function createApiClient({
     const { timeout = defaultTimeoutMs, ...requestOptions } = options;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const abortFromCaller = () => controller.abort();
+    requestOptions.signal?.addEventListener('abort', abortFromCaller, { once: true });
+    if (requestOptions.signal?.aborted) controller.abort();
     const headers = new Headers(requestOptions.headers ?? {});
     const resourceLabel = resourceToString(resource);
 
@@ -113,6 +116,7 @@ export function createApiClient({
       return response;
     } finally {
       clearTimeout(timeoutId);
+      requestOptions.signal?.removeEventListener('abort', abortFromCaller);
     }
   }
 
