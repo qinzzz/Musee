@@ -8,6 +8,7 @@ import { usePullToRefresh } from '../ui/hooks/usePullToRefresh';
 import { colors, spacing, typography } from '../ui/tokens/theme';
 import { AccountUsagePanel } from './AccountUsagePanel';
 import { useAccountUsage } from './useAccountUsage';
+import { AccountInfo } from './AccountInfo';
 
 const COPY = {
   account: 'Account', usage: 'Usage', signOut: 'Sign out', retry: 'Try again',
@@ -37,7 +38,7 @@ export function SettingsScreen() {
       refreshControl={<RefreshControl {...refresh} />}>
       <View style={styles.section}>
         <Text accessibilityRole="header" style={styles.heading}>{COPY.account}</Text>
-        {user?.email ? <Text selectable style={styles.text}>{user.email}</Text> : null}
+        <AccountInfo user={user} usage={query.data} loading={query.isPending} />
       </View>
       <View style={styles.section}>
         <Text accessibilityRole="header" style={styles.heading}>{COPY.usage}</Text>
@@ -59,7 +60,6 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.xl },
   section: { gap: spacing.md },
   heading: { fontSize: typography.heading, fontWeight: '600', color: colors.foreground },
-  text: { fontSize: typography.body, color: colors.secondary },
   feedback: { gap: spacing.sm },
   error: { fontSize: typography.caption, color: colors.danger },
 });
