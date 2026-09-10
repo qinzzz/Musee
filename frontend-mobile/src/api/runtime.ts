@@ -6,6 +6,7 @@ import {
   createArtistService,
   createMuseumService,
   createBoardService,
+  createJournalService,
   fetchBackendHealth,
   type ApiFetch,
   type BackendHealth,
@@ -137,5 +138,7 @@ export const mobileBoardService = createBoardService(mobileApiClient, MOBILE_API
 export const mobileArtistService = createArtistService(mobileApiClient, MOBILE_API_BASE_URL);
 
 export const mobileMuseumService = createMuseumService(mobileApiClient, MOBILE_API_BASE_URL);
+
+export const mobileJournalService = createJournalService(mobileApiClient, MOBILE_API_BASE_URL);
 
 export const mobileSessionManagement = createMobileSessionManagement(mobileApiClient, MOBILE_API_BASE_URL);

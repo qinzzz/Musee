@@ -85,7 +85,8 @@ another screen; the user confirmed the navigation jump is fixed on-device.
 Artwork-plus-label capture is implemented for Library and Sessions. Camera UI
 has been iterated on a physical iPhone, but the complete permission, failure,
 and interruption matrix remains unverified. This is the closeout work for capture;
-Google sign-in is implemented, and Journals is the next feature milestone.
+Google sign-in and lightweight Journals are implemented; journal device validation
+is pending, and Taste Profile follows.
 
 ## Capability map
 
@@ -114,7 +115,7 @@ Status meanings:
 | Artwork conversation / Ask Musee | Not started | Define whether it is a detail thread, Session entry, or both |
 | Boards and collection organization | Implemented — native board management and membership; device validation pending | Bring over the active organization model with native interactions |
 | Artist, museum, and movement browsing | Artists and Museums implemented; device validation pending. Movements not started | Provide first-class discovery and detail paths |
-| Personal section: journals, learning, and taste profile | Not started — Profile is a placeholder | Implement native journal and taste-profile experiences based on active web behavior |
+| Personal section: journals, learning, and taste profile | Journal dates and reflections implemented in Profile; device validation pending. Taste profile and learning not started | Validate lightweight journals, then implement taste-profile experiences based on active web behavior |
 | Persona, language, usage, and account settings | Not started | Centralize durable preferences and account controls |
 | Guest experience, conversion, and quotas | Not started | Preserve the backend trust model and native recovery behavior |
 | Community/comments | Decision required | Confirm that the feature is active before creating native UI |
@@ -202,8 +203,9 @@ the integrated device pass.
 The native navigation shell uses icon-only Home, Collection, and Profile tabs.
 Home centers Session composition and opens history from the top-left. Collection
 owns All Artworks, Artists, Museums, and Boards tabs with a persistent upload
-action. Deeper routes use local controls and hide global navigation. Profile shows the signed-in email and Sign out; journals, taste profile, and
-other account settings remain unimplemented.
+action. Deeper routes use local controls and hide global navigation. Profile shows
+the signed-in email, Sign out, and journal dates and reflections; taste profile
+and other account settings remain unimplemented.
 
 ### Phase 5 — Organization and discovery
 
@@ -219,14 +221,15 @@ Museums now supports search, existing venue metadata, and paginated captured art
 
 ### Phase 6 — Conversation, learning, and personalization
 
-Status: not started beyond Session conversation.
+Status: Session conversation and lightweight Journals implemented; journal device
+validation pending. Remaining personalization work not started.
 
 - define and implement Ask Musee from artwork detail;
 - redesign the dormant web Explore angles as Session starters: selecting an
   angle should create a Session with the artwork and selected angle as the
   opening turn, rather than restoring the separate localStorage conversation;
-- replace the Profile placeholder with native journals and taste-profile views,
-  including the active web creation, reading, update, loading, and recovery paths;
+- validate read-only journal dates and reflections in Profile, then add taste-profile
+  views with the active web generation, reading, update, loading, and recovery paths;
 - port other active learning surfaces;
 - expose persona, language, usage, and account preferences;
 - preserve Markdown and structured content without inheriting browser rendering
@@ -364,27 +367,25 @@ different addresses belong to the same person. Recovery and verification remain
 unfinished account work. Shared authentication changes must preserve web login,
 account isolation, cancellation, refresh, and cold-start restoration.
 
-### Next build: native Journals
+### Native Journals: implemented, device validation pending
 
-Start this separate feature in a new coding task and a fresh branch from merged
-main after the login follow-up lands. Journals is not implemented yet.
+Profile displays saved journal dates and reflections directly, newest first,
+with up to two representative artwork images beneath each reflection, alongside
+account email and Sign out. Images follow the web's single/overlapping-pair layout,
+with deleted/missing artwork placeholders and failed image loads hidden. The
+lightweight slice has no location, manual generation, or tappable journal detail screen.
+Generation remains the backend's overnight workflow based on eligible Session
+activity. Web and native share the existing journal-list API contract.
 
-1. Inspect the active web journal creation and reading flows, backend contracts,
-   persistence, and recovery behavior before defining the native slice.
-2. Add a journal entry point in Profile, a list of saved journals, and a detail
-   screen for reading them while preserving access to account email and Sign out.
-3. Implement the active web creation workflow using existing APIs and native
-   presentation. Reuse shared contracts where appropriate; do not port dormant
-   web features or invent a new journal model.
-4. Include loading, empty, error, retry, and save-in-progress states. Ensure saved
-   journals reopen after navigation and a cold start, and account changes clear
-   account-scoped cached data.
+Loading, empty, error, retry, and pull-to-refresh states are implemented. Failed
+refreshes retain loaded reflections; account-scoped caches clear with authentication
+changes. Cold starts refetch authoritative saved entries from the backend.
 
-Acceptance: a user can find existing journals, create a journal through the
-supported workflow, and reopen its saved content. Failed requests leave a clear
-recovery path. Verify relevant automated checks and a focused simulator/device
-walkthrough before marking the slice complete. Existing capture and authentication
-physical-device validation gates remain outstanding.
+Acceptance: verify existing and empty journals, single/paired artwork images,
+deleted/missing/broken images, refresh failure/retry, navigation,
+termination/reopen, account switching, large text, and VoiceOver on a focused
+simulator/device walkthrough. Existing capture and authentication physical-device
+validation gates remain outstanding.
 
 ### Following product milestones
 

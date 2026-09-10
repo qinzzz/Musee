@@ -45,6 +45,7 @@ The mobile client is organized by product domain and platform boundary:
 | `src/artists/` | Artist browsing, profiles, and paginated saved works |
 | `src/museums/` | Museum browsing and paginated captured artworks |
 | `src/boards/` | Board organization, membership, and cached board reads |
+| `src/journals/` | Account-scoped journal reads and calendar-date presentation |
 | `src/session/` | Persistent visit sessions and streamed responses |
 | `src/platform/` | Expo-backed storage, image, and media adapters |
 | `src/ui/` | Reusable native UI primitives and design tokens |
@@ -67,7 +68,14 @@ text and attachments through the authenticated tree's in-memory
 `SessionDraftProvider`, consumed once by the deeper Session route; it does not
 put private draft content in URL parameters. The top-left history button opens
 the full Session list. Collection owns All Artworks, Artists, Museums, and Boards
-sub-tabs with a fixed upload button beside the scrollable labels. Profile currently has explicit placeholder content.
+sub-tabs with a fixed upload button beside the scrollable labels. Profile shows
+account email, Sign out, and a read-only list of journal dates, reflections, and
+up to two representative artwork images with the web's overlapping-pair layout.
+Deleted/missing artworks retain text placeholders; failed image loads are hidden.
+Journals use the shared journal service and account-scoped Query cache with focus,
+foreground, and pull-to-refresh revalidation. Failed refreshes keep saved entries
+visible. The backend generates journals overnight; native has no generation action
+or individual journal route. Cold starts refetch saved entries from the backend.
 
 Artwork detail, artist profiles, individual boards, upload, history, and active Sessions are
 stack screens outside the global tabs. They show local navigation/actions;
