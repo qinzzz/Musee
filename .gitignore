@@ -71,5 +71,8 @@ logo/
 assets/
 dataset/
 plans/
-backend/eval/
+backend/eval/results/
+!backend/eval/dataset/
+backend/eval/dataset/*
+!backend/eval/dataset/manifest.json
 backend/.vercelignore
