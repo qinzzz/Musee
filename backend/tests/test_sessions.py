@@ -649,3 +649,47 @@ def test_delete_session_removes_messages_and_links_but_keeps_artworks(client, db
     assert db.query(SessionArtwork).filter(SessionArtwork.session_id == "delete-session").count() == 0
     assert db.query(SessionEvent).filter(SessionEvent.session_id == "delete-session").count() == 0
     assert db.query(SavedArtwork).filter(SavedArtwork.id == "delete-art").first() is not None
+
+
+def test_start_text_turn_commits_correlated_response_and_retries_idempotently(client, db):
+    payload = {
+        "session_id": "atomic-text",
+        "event": {"id": "input-atomic", "role": "user", "event_type": "user_input", "content": "Question"},
+        "pending_response": {
+            "id": "response-atomic", "role": "model", "event_type": "model_response",
+            "trigger_event_id": "input-atomic", "payload": {"status": "pending"},
+        },
+    }
+    for expected_inserted in (2, 0):
+        response = client.post("/api/sessions/start-with-event", params={"user_id": "atomic-user"}, json=payload)
+        assert response.status_code == 200
+        assert response.json()["inserted"] == expected_inserted
+    events = db.query(SessionEvent).filter(SessionEvent.session_id == "atomic-text").order_by(SessionEvent.sequence_number).all()
+    assert [event.id for event in events] == ["input-atomic", "response-atomic"]
+    assert events[1].trigger_event_id == events[0].id
+    assert events[1].payload["status"] == "pending"
+
+
+def test_invalid_pending_response_does_not_commit_a_partial_turn(client, db):
+    response = client.post("/api/sessions/start-with-event", params={"user_id": "atomic-user"}, json={
+        "session_id": "invalid-turn",
+        "event": {"id": "input-invalid", "role": "user", "event_type": "user_input", "content": "Question"},
+        "pending_response": {
+            "id": "response-invalid", "role": "model", "event_type": "model_response",
+            "trigger_event_id": "wrong-input", "payload": {"status": "pending"},
+        },
+    })
+    assert response.status_code == 400
+    assert db.query(SessionEvent).filter(SessionEvent.session_id == "invalid-turn").count() == 0
+    assert db.query(SessionModel).filter(SessionModel.id == "invalid-turn").count() == 0
+
+
+def test_single_session_read_checks_owner(client, db):
+    db.add(User(user_id="single-owner", device_id="single-owner"))
+    db.add(SessionModel(id="single-session", user_id="single-owner", title="Only this session"))
+    db.commit()
+    response = client.get("/api/sessions/single-session", headers=_auth_headers("single-owner"))
+    assert response.status_code == 200
+    assert response.json()["title"] == "Only this session"
+    assert client.get("/api/sessions/single-session", headers=_auth_headers("other-owner")).status_code == 403
+    assert client.get("/api/sessions/missing-session", headers=_auth_headers("single-owner")).status_code == 404

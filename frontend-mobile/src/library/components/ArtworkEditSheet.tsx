@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { MOBILE_API_BASE_URL, mobileArtworkLibraryService } from '../../api/runtime';
+import { MOBILE_API_BASE_URL } from '../../api/runtime';
 import { presentRequestError } from '../../api/requestErrorPresentation';
 import { MuseeButton } from '../../ui/components/MuseeButton';
 import { Screen } from '../../ui/components/Screen';
@@ -23,9 +23,10 @@ const FIELDS = [
   { key: 'tags', label: 'Tags' },
 ] as const;
 
-export function ArtworkEditSheet({ artwork, onClose, onSaved }: {
+export function ArtworkEditSheet({ artwork, onClose, onSaved, onSave }: {
   artwork: MobileArtworkRecord;
   onClose: () => void;
+  onSave: (updates: ArtworkMetadataUpdates) => Promise<MobileArtworkRecord | undefined>;
   onSaved: (artwork: MobileArtworkRecord) => void;
 }) {
   const [draft, setDraft] = useState({
@@ -52,7 +53,8 @@ export function ArtworkEditSheet({ artwork, onClose, onSaved }: {
     setSaving(true);
     setError(null);
     try {
-      onSaved(await mobileArtworkLibraryService.updateArtwork(artwork.id, updates));
+      const saved = await onSave(updates);
+      if (saved) onSaved(saved);
     } catch (cause) {
       const presentation = presentRequestError(cause, {
         apiBaseUrl: MOBILE_API_BASE_URL, fallbackMessage: COPY.error, showTechnicalDetails: false,

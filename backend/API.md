@@ -16,6 +16,18 @@
 | **POST** | `/suggest-topic` | `artist_name`, `artwork_name`, `conversation_history` (JSON), `model?`, `identity?`, `language?` | `{suggested_topics[], model_used}` |
 | **POST** | `/generate-summary` | `image` (file), `artist_name`, `artwork_name`, `conversation_history?` (JSON), `model?`, `identity?`, `language?` | `{summary, model_used}` |
 
+### Session persistence
+
+- `GET /sessions/{session_id}` returns one Session record after checking ownership.
+- `POST /sessions/start-with-event?user_id=...` accepts `{session_id?, title?, event,
+  pending_response?}`. When supplied, `pending_response` must be an empty
+  `model_response` with `role: "model"`, `payload.status: "pending"`, its own stable
+  ID, and `trigger_event_id` matching the user event ID. Session creation and both
+  events commit in one transaction. Retrying the same IDs does not duplicate events.
+  Existing clients may continue submitting only `event`.
+- `POST /sessions/{session_id}/events` accepts an event array and commits it together;
+  native text and artwork turns append their user and pending response events here.
+
 ### Session AI
 
 | Method | Path | Request Body | Response |

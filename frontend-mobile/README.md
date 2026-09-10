@@ -56,6 +56,13 @@ transports, multi-step behavior belongs in domain services or hooks, and Expo
 APIs belong behind platform adapters. UI code should not call SecureStore or
 construct authenticated network requests directly.
 
+Capture routes compose `CameraScreen` and `ArtworkUploadScreen`; their workflow
+controllers are `useCameraCapture` and `useArtworkUpload`. Artwork detail uses
+`useArtworkDetail` for queries and mutations, while its screen owns navigation
+and sheets. The edit sheet submits typed updates through its controller callback.
+Keep retry checkpoints and operation locks in these controllers rather than in
+route components.
+
 ## Navigation and presentation
 
 The global shell has three icon-only tabs: Home, Collection, and Profile.
@@ -127,6 +134,15 @@ visible records before invalidating the related query for server revalidation.
 The shared query client treats records as fresh for 30 seconds, retains inactive
 queries in memory for 30 minutes, retries transient failures twice, and connects
 React Native `AppState` changes to foreground refetching.
+
+Artwork browsing and the reusable picker share `artworkListQuery`; artwork detail
+uses `artworkDetailQuery`. Detail mutations cancel stale reads before and after
+writes, then update the detail and Library caches. Edit sheets pause detail
+revalidation so refreshes cannot change the form's original record mid-edit.
+Session history and conversation snapshots use account-scoped `sessionQueries`.
+Snapshots read one Session through `GET /sessions/{id}`, its events, and artworks;
+they do not download the history list to locate the current Session. Revalidation
+pauses during sending or an unresolved failure, and refresh failures retain data.
 
 The cache is a disposable client view; the backend remains authoritative. It is
 not an offline database and does not queue writes. UI-only state such as a
@@ -301,10 +317,22 @@ can be reconstructed with cloud thumbnails after a cold start.
 
 For a new text message, the ordering is intentional:
 
-1. Create or update the Session and persist the user event.
-2. Persist a pending model-response event.
-3. Stream the model response over SSE and update the in-memory UI.
-4. Replace the pending event with a completed or failed persisted event.
+1. Commit the user event and its correlated pending model-response event together.
+   New Sessions use `/sessions/start-with-event` with `pending_response`; existing
+   Sessions append both events in one transaction.
+2. Stream the model response over SSE and update the in-memory UI.
+3. Replace the pending event with a completed or failed persisted event.
+
+`mobileSessionExecution` owns the transient conversation, retry checkpoints,
+submission lock, and cancellation. It is independent of React and accepts typed
+service dependencies. `useMobileSessionMessaging` subscribes to that controller;
+`useMobileTextSession` hydrates idle conversations from cached server snapshots.
+`useSessionResponsePhase` owns the minimum display duration for retrieval status.
+Resetting or leaving aborts the response stream and suppresses old asynchronous
+callbacks. Already submitted writes may finish, but cannot replace a different
+conversation's state. Retrying a failed completion write saves its retained result
+without generating another response. Restored pending events are presented as
+interrupted locally; reading a Session does not write a failed status back.
 
 The response stream receives only the persisted `session_id` and
 `trigger_event_id`. The backend reconstructs conversation history, linked

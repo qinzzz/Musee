@@ -57,6 +57,7 @@ class StartSessionWithEventRequest(BaseModel):
     title: Optional[str] = None
     event: Optional[SessionEventIn] = None
     message: Optional[SessionEventIn] = None
+    pending_response: Optional[SessionEventIn] = None
 
 
 class StartSessionWithArtworksRequest(BaseModel):
@@ -220,13 +221,28 @@ async def start_session_with_event(
     reserve_guest_quota(db, resolved_principal, GUEST_MESSAGE_QUOTA, event_id)
     normalized_event["id"] = event_id
 
+    events = [normalized_event]
+    if request.pending_response is not None:
+        response = validate_and_normalize_session_event(request.pending_response.model_dump())
+        if (
+            response["event_type"] != "model_response"
+            or response["role"] != "model"
+            or response.get("trigger_event_id") != event_id
+            or (response.get("payload") or {}).get("status") != "pending"
+            or response.get("content")
+            or not request.pending_response.id
+            or request.pending_response.id == event_id
+        ):
+            raise HTTPException(status_code=400, detail="A correlated pending response is required")
+        response["id"] = request.pending_response.id
+        events.append(response)
     session_record = get_or_create_owned_session(
         db,
         user_id=user_id,
         session_id=session_id,
         requested_title=request.title,
     )
-    inserted = append_events_to_session(db, session_record, [normalized_event])
+    inserted = append_events_to_session(db, session_record, events)
     db.commit()
     db.refresh(session_record)
 
@@ -478,3 +494,14 @@ async def set_session_goal(
     refresh_session_title(db, session_record)
     db.commit()
     return {"ok": True}
+
+
+@router.get("/sessions/{session_id}")
+def get_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+    principal: Optional[RequestPrincipal] = Depends(get_request_principal),
+):
+    session_record = get_session_or_404(db, session_id)
+    require_session_principal(principal, session_record)
+    return session_record.to_dict()

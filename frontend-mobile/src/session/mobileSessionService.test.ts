@@ -23,6 +23,7 @@ function createTransport(): MobileSessionTransport {
     appendEvents: vi.fn().mockResolvedValue(undefined),
     fetchArtworks: vi.fn().mockResolvedValue([]),
     fetchEvents: vi.fn().mockResolvedValue([]),
+    fetchSession: vi.fn().mockResolvedValue(SESSION),
     fetchSessions: vi.fn().mockResolvedValue([SESSION]),
     startArtworkSession: vi.fn().mockResolvedValue(SESSION),
     startTextSession: vi.fn().mockResolvedValue(SESSION),
@@ -68,16 +69,17 @@ describe('mobile session service', () => {
     });
   });
 
-  it('atomically creates a new session with its first user event', async () => {
+  it('atomically creates a new session with its first user event and pending response', async () => {
     const transport = createTransport();
     const service = createMobileSessionService({ transport });
     const attempt = service.createTextAttempt('user-1', 'A first question', 'session-1');
 
-    await expect(service.persistUserInput(attempt, null)).resolves.toBe(SESSION);
+    await expect(service.commitTextTurn(attempt, null)).resolves.toBe(SESSION);
     expect(transport.startTextSession).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'session-1',
       userId: 'user-1',
       event: expect.objectContaining({ event_type: 'user_input' }),
+      pendingResponse: expect.objectContaining({ trigger_event_id: attempt.userEvent.id, payload: { status: 'pending' } }),
     }));
     expect(transport.appendEvents).not.toHaveBeenCalled();
   });
@@ -264,4 +266,16 @@ describe('mobile session service', () => {
       'user-1',
     )).toMatchObject({ text: '' });
   });
+});
+
+it('commits both correlated events together in an existing text Session', async () => {
+  const transport = createTransport();
+  const service = createMobileSessionService({ transport });
+  const attempt = service.createTextAttempt('user-1', 'Question', SESSION.id);
+  await service.commitTextTurn(attempt, SESSION);
+  expect(transport.appendEvents).toHaveBeenCalledTimes(1);
+  expect(transport.appendEvents).toHaveBeenCalledWith(SESSION.id, [
+    expect.objectContaining({ id: attempt.userEvent.id, event_type: 'user_input' }),
+    expect.objectContaining({ id: attempt.responseEvent.id, trigger_event_id: attempt.userEvent.id, payload: { status: 'pending' } }),
+  ]);
 });

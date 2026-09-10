@@ -1,3 +1,4 @@
+import { throwIfRequestCancelled } from '../api/requestCancellation';
 import type { SessionRecord } from '@musee/client-core';
 import type { MobileSessionService, MobileTextSessionAttempt } from './mobileSessionService';
 import { ApiHttpError, createSessionContextJob, type ContextEntry } from '@musee/client-core';
@@ -24,15 +25,17 @@ export function createMobileSessionContextService(dependencies: {
   library: MobileArtworkLibraryService;
   sessions: MobileSessionService;
 }) {
-  async function enrichArtwork(artworkId: string, allowDeleted = false, labelAsset?: NativeImageAsset) {
+  async function enrichArtwork(artworkId: string, allowDeleted = false, labelAsset?: NativeImageAsset, signal?: AbortSignal) {
     // Re-read before retry: analysis may have succeeded despite a lost response.
     let artwork = await dependencies.library.fetchArtwork(artworkId);
+    throwIfRequestCancelled(signal);
     if (artwork.isDeleted) {
       if (allowDeleted) return artwork;
       throw new Error('This artwork has been deleted.');
     }
     if (artwork.analysisStatus !== 'analyzed') {
       await dependencies.analysis.analyzeArtwork({ ...toPendingArtworkUpload(artwork), ...(labelAsset ? { labelAsset } : {}) });
+      throwIfRequestCancelled(signal);
       artwork = await dependencies.library.fetchArtwork(artwork.id);
     }
     return artwork;
@@ -75,11 +78,12 @@ export function createMobileSessionContextService(dependencies: {
   };
   return {
     ...service,
-    async recoverTurn(artworkIds: string[]) {
+    async recoverTurn(artworkIds: string[], signal?: AbortSignal) {
       const artworks: MobileArtworkRecord[] = [];
       for (const id of new Set(artworkIds)) {
+        throwIfRequestCancelled(signal);
         try {
-          artworks.push(await enrichArtwork(id, true));
+          artworks.push(await enrichArtwork(id, true, undefined, signal));
         } catch (error) {
           // Deleted references remain in the canonical timeline; there is nothing to analyze.
           if (!(error instanceof ApiHttpError) || error.status !== 404) throw error;

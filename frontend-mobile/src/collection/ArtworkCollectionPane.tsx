@@ -1,5 +1,5 @@
 import { LoadingIndicator } from '../ui/components/LoadingIndicator';
-import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -12,19 +12,16 @@ import {
 
 import {
   MOBILE_API_BASE_URL,
-  mobileArtworkLibraryService,
 } from '../api/runtime';
-import { mobileQueryClient } from '../api/queryClient';
+import { artworkListQuery } from '../library/artworkQueries';
 import {
   presentRequestError,
   type RequestErrorPresentation,
 } from '../api/requestErrorPresentation';
 import { useAuth } from '../auth/AuthProvider';
 import {
-  ARTWORK_LIBRARY_PAGE_SIZE,
   artworkLibraryQueryKey,
   flattenArtworkLibraryPages,
-  getNextArtworkPageParam,
 } from '../library/artworkLibraryQuery';
 import { ArtworkLibraryCard } from '../library/components/ArtworkLibraryCard';
 import {
@@ -58,23 +55,8 @@ export function ArtworkCollectionPane() {
     y: getArtworkLibraryScrollOffset(userId),
   }).current;
   const [refreshing, setRefreshing] = useState(false);
-  const libraryQuery = useInfiniteQuery<
-    Awaited<ReturnType<typeof mobileArtworkLibraryService.fetchPage>>,
-    Error,
-    InfiniteData<Awaited<ReturnType<typeof mobileArtworkLibraryService.fetchPage>>, number>,
-    ReturnType<typeof artworkLibraryQueryKey>,
-    number
-  >({
-    enabled: Boolean(userId),
-    getNextPageParam: getNextArtworkPageParam,
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) => mobileArtworkLibraryService.fetchPage(
-      userId,
-      pageParam,
-      ARTWORK_LIBRARY_PAGE_SIZE,
-    ),
-    queryKey: artworkLibraryQueryKey(userId),
-  });
+  const client = useQueryClient();
+  const libraryQuery = useInfiniteQuery(artworkListQuery(userId));
   const items = useMemo(
     () => flattenArtworkLibraryPages(libraryQuery.data),
     [libraryQuery.data],
@@ -85,13 +67,13 @@ export function ArtworkCollectionPane() {
 
   useFocusEffect(useCallback(() => {
     if (!userId) return;
-    void mobileQueryClient.refetchQueries({
+    void client.refetchQueries({
       exact: true,
       queryKey: artworkLibraryQueryKey(userId),
       stale: true,
       type: 'active',
     });
-  }, [userId]));
+  }, [client, userId]));
 
   const refresh = useCallback(async () => {
     setRefreshing(true);

@@ -92,3 +92,27 @@ describe('createApiClient', () => {
     expect(fetch.mock.calls[1]?.[1]?.credentials).toBe('omit');
   });
 });
+
+it('forwards caller cancellation without waiting for the request timeout', async () => {
+  const caller = new AbortController();
+  const fetch = vi.fn<ApiFetch>().mockImplementation((_resource, options) => new Promise((_resolve, reject) => {
+    options?.signal?.addEventListener('abort', () => reject(new Error('cancelled')), { once: true });
+  }));
+  const client = createApiClient({ fetch, defaultTimeoutMs: 10_000 });
+  const request = client.fetchWithTimeout(API_URL, { signal: caller.signal });
+  const rejected = expect(request).rejects.toThrow('cancelled');
+  caller.abort();
+  await rejected;
+  expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+});
+
+it('passes an already-aborted signal and removes its cancellation listener after completion', async () => {
+  const caller = new AbortController();
+  caller.abort();
+  const remove = vi.spyOn(caller.signal, 'removeEventListener');
+  const fetch = vi.fn<ApiFetch>().mockResolvedValue(new Response(null, { status: OK }));
+  const client = createApiClient({ fetch, defaultTimeoutMs: 1_000 });
+  await client.fetchWithTimeout(API_URL, { signal: caller.signal });
+  expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+});

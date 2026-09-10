@@ -43,6 +43,7 @@ export type MobileSessionService = {
   createContextAttempt: (userId: string, entries: SessionArtworkContext[], text: string, sessionId: string) => MobileTextSessionAttempt;
   fetchArtworks: (sessionId: string, userId: string) => Promise<ArtworkRecord[]>;
   fetchEvents: (sessionId: string) => Promise<SessionEventRecord[]>;
+  fetchSession: (sessionId: string) => Promise<SessionRecord>;
   fetchSessions: (userId: string) => Promise<SessionRecord[]>;
   startArtworkSession: (
     userId: string,
@@ -61,13 +62,14 @@ export type MobileSessionService = {
     result?: StreamTextSessionResult,
     errorMessage?: string,
   ) => Promise<SessionEventRecord>;
-  persistUserInput: (
+  commitTextTurn: (
     attempt: MobileTextSessionAttempt,
     existingSession: SessionRecord | null,
   ) => Promise<SessionRecord>;
   streamResponse: (
     attempt: MobileTextSessionAttempt,
     callbacks?: {
+      signal?: AbortSignal;
       onChunk?: (chunk: string) => void;
       onPhase?: (phase: SessionChatPhase) => void;
     },
@@ -170,6 +172,7 @@ export function createMobileSessionService({
     },
     fetchArtworks: transport.fetchArtworks,
     fetchEvents: transport.fetchEvents,
+    fetchSession: transport.fetchSession,
     fetchSessions: transport.fetchSessions,
     startArtworkSession(userId, artworkId, sessionId, title) {
       return transport.startArtworkSession({ userId, artworkId, sessionId, title });
@@ -216,16 +219,19 @@ export function createMobileSessionService({
 
     createContextAttempt,
 
-    async persistUserInput(attempt, existingSession) {
+    async commitTextTurn(attempt, existingSession) {
       if (!existingSession) {
         return transport.startTextSession({
           sessionId: attempt.sessionId,
           userId: attempt.userId,
           title: attempt.title,
           event: toEventWrite(attempt.userEvent),
+          pendingResponse: toEventWrite(attempt.responseEvent),
         });
       }
-      await transport.appendEvents(attempt.sessionId, [toEventWrite(attempt.userEvent)]);
+      await transport.appendEvents(attempt.sessionId, [
+        toEventWrite(attempt.userEvent), toEventWrite(attempt.responseEvent),
+      ]);
       return existingSession;
     },
 

@@ -1,3 +1,4 @@
+import { throwIfRequestCancelled } from '../api/requestCancellation';
 import {
   retryArtworkBatchEntry,
   runArtworkBatch,
@@ -27,11 +28,13 @@ export type MobileArtworkBatchService = {
     entries: MobileArtworkBatchEntry[],
     userId: string,
     onTransition?: MobileArtworkBatchTransition,
+    signal?: AbortSignal,
   ) => Promise<MobileArtworkBatchEntry[]>;
   retry: (
     entry: MobileArtworkBatchEntry,
     userId: string,
     onTransition?: (entry: MobileArtworkBatchEntry) => void,
+    signal?: AbortSignal,
   ) => Promise<MobileArtworkBatchEntry>;
 };
 
@@ -50,9 +53,9 @@ export function createMobileArtworkBatchService({
   uploadService,
   createId = defaultId,
 }: MobileArtworkBatchServiceOptions): MobileArtworkBatchService {
-  const operations = (userId: string) => ({
-    upload: (asset: NativeImageAsset) => uploadService.uploadArtwork(asset, userId),
-    analyze: (artwork: PendingArtworkUpload) => analysisService.analyzeArtwork(artwork),
+  const operations = (userId: string, signal?: AbortSignal) => ({
+    upload: (asset: NativeImageAsset) => { throwIfRequestCancelled(signal); return uploadService.uploadArtwork(asset, userId); },
+    analyze: (artwork: PendingArtworkUpload) => { throwIfRequestCancelled(signal); return analysisService.analyzeArtwork(artwork); },
   });
 
   return {
@@ -61,11 +64,11 @@ export function createMobileArtworkBatchService({
       input: asset,
       status: 'queued',
     })),
-    process: (entries, userId, onTransition) => (
-      runArtworkBatch(entries, operations(userId), onTransition)
+    process: (entries, userId, onTransition, signal) => (
+      runArtworkBatch(entries, operations(userId, signal), onTransition)
     ),
-    retry: (entry, userId, onTransition) => (
-      retryArtworkBatchEntry(entry, operations(userId), onTransition)
+    retry: (entry, userId, onTransition, signal) => (
+      retryArtworkBatchEntry(entry, operations(userId, signal), onTransition)
     ),
   };
 }
