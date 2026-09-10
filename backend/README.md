@@ -97,3 +97,27 @@ deployment option, not the active production topology.
 
 ---
 *Built for the future of art curation.*
+
+## Artwork identification evaluation
+
+`eval/run_eval.py` compares pinned GPT, Gemini, and Claude configurations, with
+optional native web search or Google Vision hints. The checked-in
+`eval/dataset/manifest.json` contains labels and paths relative to that directory;
+place the matching images in the repository-root `dataset/` directory. Images
+and generated `eval/results/` files are ignored by Git.
+
+From `backend/`, with the backend dependencies installed:
+
+```bash
+venv/bin/python eval/run_eval.py --dry-run --configs gpt,gemini,claude
+venv/bin/python eval/run_eval.py --configs gpt,gemini,claude --limit 5 --concurrency 3
+venv/bin/python eval/show_vision.py co010
+```
+
+Configure the selected providers' API keys using the normal backend environment.
+Export `GOOGLE_VISION_API_KEY` for Vision configurations and `show_vision.py`.
+`--dry-run` prints the dataset/configuration plan without making API calls.
+Results report exact, fuzzy, and substring matches for identification fields;
+these are heuristic scores, not a judgment of interpretation quality. The summary
+excludes failed and missing-image items; inspect per-item errors and skips in the
+JSON results alongside scores.
