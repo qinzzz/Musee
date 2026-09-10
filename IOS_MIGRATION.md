@@ -100,7 +100,7 @@ Status meanings:
 | Capability | iOS status | Migration target |
 | --- | --- | --- |
 | Workspace, Expo development client, shared core | Baseline complete | Maintain clean web/native boundaries and reproducible builds |
-| Email sign-in, refresh, restore, sign-out | Baseline complete | Harden lifecycle and security behavior as release approaches |
+| Email signup, verification, sign-in, refresh, restore, sign-out | Sign-in baseline complete. Native signup/resend and browser verification implemented; real email/device validation pending | Validate new-user signup through browser verification and native sign-in, then harden lifecycle behavior |
 | Apple and Google sign-in, account linking, and recovery | Google sign-in/out confirmed; full device lifecycle checks pending. Apple deferred. Native reset-link request and browser password reset implemented; email/device validation pending | Support native providers alongside email, with consistent account linking, restoration, and recovery/verification flows |
 | Camera and single-photo intake | Baseline complete — custom capture UI refined on iPhone | Validate framing, permissions, and lifecycle recovery on the final layout |
 | Artwork with optional label in one identification flow | Implemented — Library and Sessions; full device recovery validation pending | Preserve one required artwork and one temporary optional label, using web identification semantics |
@@ -368,7 +368,11 @@ different addresses belong to the same person. Native password recovery now requ
 an emailed link and uses the existing browser reset page before returning to iOS
 sign-in. Prior refresh sessions are revoked on reset; existing access tokens expire
 normally. Real email delivery and the full phone/browser round trip remain unverified.
-Native verification remains unfinished. Shared authentication changes must preserve web login,
+Native signup now requests browser verification and supports resend with a countdown,
+delivery-failure handling, and existing-account guidance. Users return to iOS to sign
+in after verifying; no native verification deep link is required for this slice.
+Real signup email delivery and phone/browser validation remain pending.
+Shared authentication changes must preserve web login,
 account isolation, cancellation, refresh, and cold-start restoration.
 
 ### Native Journals: implemented, device validation pending
@@ -393,7 +397,7 @@ validation gates remain outstanding.
 
 ### Following product milestones
 
-1. **Account recovery validation:** verify real email delivery, expired/reused links,
+1. **Email signup and recovery validation:** verify real email delivery, expired/reused links,
    browser password reset, old-password rejection, iOS sign-in, and revoked-session
    restoration. Taste Profile and artwork classification are deferred until their
    product logic is ready.

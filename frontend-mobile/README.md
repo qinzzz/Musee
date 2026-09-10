@@ -191,6 +191,22 @@ The auth credential store owns auth-specific keys and policy. Add another
 domain-specific store when a future secret needs persistence; do not turn
 SecureStore into an untyped global bag or let screens manage keys directly.
 
+### Email signup and verification
+
+The signed-out login screen offers Create an account and routes to `/sign-up`.
+Native validates email, the backend's eight-character password minimum, and password
+confirmation, then calls the existing unauthenticated signup endpoint. Signup does
+not establish a native session: the user opens the emailed browser verification
+page, returns to iOS, and signs in normally. Only verified accounts can sign in.
+
+Resend repeats signup for the pending email/password after a 60-second cooldown,
+matching the backend's replacement-link behavior. Recovery and signup share the
+deadline-based email cooldown hook and respect server throttle intervals. Passwords
+remain only in screen memory for resend; leaving/restarting requires re-entry.
+An `email_sent: false` response shows delivery failure rather than inbox confirmation.
+Existing verified accounts get a sign-in prompt. Validate actual delivery and the
+phone/browser round trip against the same backend environment before release.
+
 ### Password recovery
 
 The signed-out login screen links to `/forgot-password`. Native requests an

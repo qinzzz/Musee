@@ -35,6 +35,7 @@ const COPY = {
   passwordLabel: 'Password',
   passwordPlaceholder: 'Enter your password',
   submit: 'Sign in',
+  signup: 'Create an account',
   forgotPassword: 'Forgot password?',
   separator: 'Or continue with',
   signingIn: 'Signing in…',
@@ -148,6 +149,8 @@ export default function SignInScreen() {
                 onPress={() => { setPassword(''); router.push('/forgot-password'); }} style={styles.forgotPassword}>
                 <Text style={styles.separator}>{COPY.forgotPassword}</Text>
               </Pressable>
+              <MuseeButton label={COPY.signup} variant="secondary" disabled={isSigningIn}
+                onPress={() => { setPassword(''); router.push('/sign-up'); }} />
             </View>
 
             <View style={styles.providers}>

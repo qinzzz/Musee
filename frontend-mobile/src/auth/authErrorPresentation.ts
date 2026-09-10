@@ -21,7 +21,7 @@ export type AuthErrorPresentationOptions = {
 
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const HTTP_ERROR_MESSAGES: Record<string, string> = {
-  email_unverified: 'Check your inbox and verify your email before signing in.',
+  email_unverified: 'Verify your email before signing in. Check your inbox, or use Create an account again to send a new link.',
   invalid_credentials: 'Incorrect email or password.',
   google_sign_in_failed: 'Musee could not verify your Google sign-in. Please try again.',
   password_not_set: 'This account uses Google sign-in and does not have a password yet.',
