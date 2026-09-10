@@ -166,3 +166,11 @@ describe('Identify Again and Delete', () => {
     await expect(service.deleteArtwork(RECORD.id, 'user-1')).rejects.toMatchObject({ status });
   });
 });
+
+it('maps capture metadata and prefers the resolved museum over its legacy name', () => {
+  const artwork = mapMobileArtwork({ ...RECORD, photo_time: 'Sep 10, 2026',
+    museum_name: 'Legacy museum', capture_museum: { id: 'museum', canonical_name: 'The Met' },
+  }, '/api');
+  expect(artwork).toMatchObject({ museumName: 'The Met', capturedAt: 'Sep 10, 2026' });
+  expect(mapMobileArtwork({ ...RECORD, museum_name: 'Legacy museum' }, '/api').museumName).toBe('Legacy museum');
+});
