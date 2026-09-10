@@ -35,6 +35,8 @@ const COPY = {
   passwordLabel: 'Password',
   passwordPlaceholder: 'Enter your password',
   submit: 'Sign in',
+  signup: 'Create an account',
+  newHere: 'New to Musee?',
   forgotPassword: 'Forgot password?',
   separator: 'Or continue with',
   signingIn: 'Signing in…',
@@ -124,6 +126,7 @@ export default function SignInScreen() {
                 textContentType="emailAddress"
                 value={email}
               />
+              <View>
               <MuseeTextField
                 editable={!isSigningIn}
                 autoComplete="current-password"
@@ -137,17 +140,19 @@ export default function SignInScreen() {
                 value={password}
               />
               {loginMethod !== 'google' ? errorMessage : null}
+              <Pressable accessibilityRole="button" disabled={isSigningIn}
+                accessibilityState={{ disabled: isSigningIn }}
+                onPress={() => { setPassword(''); router.push('/forgot-password'); }}
+                style={({ pressed }) => [styles.forgotPassword, (pressed || isSigningIn) && styles.dimmed]}>
+                <Text style={styles.recoveryLabel}>{COPY.forgotPassword}</Text>
+              </Pressable>
+              </View>
               <MuseeButton
                 label={COPY.submit}
                 disabled={isSigningIn}
                 loading={isSigningIn && loginMethod === 'email'}
                 onPress={() => void handleSubmit()}
               />
-              <Pressable accessibilityRole="button" disabled={isSigningIn}
-                accessibilityState={{ disabled: isSigningIn }}
-                onPress={() => { setPassword(''); router.push('/forgot-password'); }} style={styles.forgotPassword}>
-                <Text style={styles.separator}>{COPY.forgotPassword}</Text>
-              </Pressable>
             </View>
 
             <View style={styles.providers}>
@@ -174,6 +179,15 @@ export default function SignInScreen() {
                 </View>
               ) : null}
             </View>
+            <View style={styles.signupRow}>
+              <Text style={styles.signupPrompt}>{COPY.newHere}</Text>
+              <Pressable accessibilityRole="button" disabled={isSigningIn}
+                accessibilityState={{ disabled: isSigningIn }}
+                onPress={() => { setPassword(''); router.push('/sign-up'); }}
+                style={({ pressed }) => [styles.signupLink, (pressed || isSigningIn) && styles.dimmed]}>
+                <Text style={styles.signupLabel}>{COPY.signup}</Text>
+              </Pressable>
+            </View>
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -182,7 +196,13 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  forgotPassword: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  forgotPassword: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center' },
+  recoveryLabel: { color: colors.secondary, fontSize: typography.caption },
+  signupRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', columnGap: spacing.xs },
+  signupPrompt: { color: colors.secondary, fontSize: typography.label },
+  signupLink: { minHeight: 44, justifyContent: 'center' },
+  signupLabel: { color: colors.foreground, fontSize: typography.label, fontWeight: '600' },
+  dimmed: { opacity: 0.5 },
   flex: {
     flex: 1,
   },
@@ -192,7 +212,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: '100%',
     maxWidth: 440,
-    gap: spacing.xl,
+    gap: spacing.lg,
     paddingTop: spacing.xxl,
     paddingBottom: spacing.xxl,
   },
@@ -230,7 +250,7 @@ const styles = StyleSheet.create({
   appleLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   appleLabel: { color: colors.secondary, fontSize: 16, fontWeight: '500' },
   comingSoon: { color: colors.secondary, fontSize: typography.caption },
-  providers: { gap: spacing.lg, marginTop: spacing.sm },
+  providers: { gap: spacing.md },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   googleProgress: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },

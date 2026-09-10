@@ -53,6 +53,33 @@ def _google_login(client, email, google_id="g-123", anon=None):
 
 
 class TestSignupVerifyLogin:
+    def test_native_signup_delivery_failure_stays_unverified_and_can_resend(self, client, sent_emails, monkeypatch):
+        async def fail_delivery(**kwargs):
+            return False
+        headers = {CLIENT_PLATFORM_HEADER: "ios"}
+        with monkeypatch.context() as patcher:
+            patcher.setattr("app.routers.auth_email.send_email", fail_delivery)
+            signup = client.post("/api/auth/signup", headers=headers, json={
+                "email": "ada@example.com", "password": "correct-horse",
+            })
+        assert signup.json() == {"ok": True, "verification_required": True, "email_sent": False}
+        assert settings.refresh_cookie_name not in client.cookies
+        assert client.post("/api/auth/login", headers=headers, json={
+            "email": "ada@example.com", "password": "correct-horse",
+        }).status_code == 403
+        assert client.post("/api/auth/signup", headers=headers, json={
+            "email": "ada@example.com", "password": "correct-horse",
+        }).json()["email_sent"] is True
+        assert client.post("/api/auth/verify-email", json={
+            "token": _extract_token(sent_emails[-1]["html"]),
+        }).status_code == 200
+        client.cookies.clear()
+        logged_in = client.post("/api/auth/login", headers=headers, json={
+            "email": "ada@example.com", "password": "correct-horse",
+        })
+        assert logged_in.status_code == 200
+        assert logged_in.json()["refresh_token"]
+
     def test_happy_path(self, client, sent_emails):
         r = _signup(client)
         assert r.status_code == 200

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useEmailCooldown } from './useEmailCooldown';
 import { MOBILE_API_BASE_URL, mobilePasswordRecoveryService } from '../api/runtime';
 import { presentAuthError } from './authErrorPresentation';
 
@@ -14,26 +15,10 @@ export function usePasswordRecovery() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
-  const cooldownUntil = useRef(0);
-  const [remainingSeconds, setRemainingSeconds] = useState(0);
-
-  function startCooldown(seconds: number) {
-    cooldownUntil.current = Date.now() + seconds * 1000;
-    setRemainingSeconds(Math.ceil(seconds));
-  }
-
-  const coolingDown = remainingSeconds > 0;
-  useEffect(() => {
-    if (!coolingDown) return;
-    // Calculate from a deadline so backgrounding doesn't pause the countdown.
-    const timer = setInterval(() => {
-      setRemainingSeconds(Math.max(0, Math.ceil((cooldownUntil.current - Date.now()) / 1000)));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [coolingDown]);
+  const { start: startCooldown, remainingSeconds, isActive } = useEmailCooldown();
 
   async function submit() {
-    if (inFlight.current || Date.now() < cooldownUntil.current) return;
+    if (inFlight.current || isActive()) return;
     const normalized = email.trim();
     if (!EMAIL_PATTERN.test(normalized)) { setError(INVALID_EMAIL); return; }
     inFlight.current = true;
