@@ -16,6 +16,7 @@ import { fetch as expoFetch } from 'expo/fetch';
 import { File } from 'expo-file-system';
 
 import { createMobileAuthService } from '../auth/mobileAuthService';
+import { createPasswordRecoveryService } from '../auth/passwordRecoveryService';
 import { createMobileAuthTransport } from '../auth/mobileAuthTransport';
 import { createSecureAuthCredentialStore } from '../auth/secureAuthCredentialStore';
 import { createMobileRuntimeConfiguration } from '../config/mobileRuntimeConfig';
@@ -57,6 +58,7 @@ const mobileAuthTransport = createMobileAuthTransport({
   apiBaseUrl: MOBILE_API_BASE_URL,
   fetch: (resource, options) => mobileAuthHttpClient.fetchWithTimeout(resource, options),
 });
+export const mobilePasswordRecoveryService = createPasswordRecoveryService(mobileAuthHttpClient, MOBILE_API_BASE_URL);
 let refreshAccessTokenDelegate: () => Promise<string | null> = async () => null;
 
 export const mobileApiClient = createApiClient({

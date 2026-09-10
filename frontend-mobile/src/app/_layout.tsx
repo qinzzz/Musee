@@ -69,6 +69,7 @@ function AuthenticatedStack() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={!isAuthenticated}>
         <Stack.Screen name="sign-in" />
+        <Stack.Screen name="forgot-password" />
       </Stack.Protected>
       <Stack.Protected guard={isAuthenticated}>
         <Stack.Screen name="(app)" />

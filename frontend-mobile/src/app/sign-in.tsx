@@ -2,10 +2,12 @@ import { LoadingIndicator } from '../ui/components/LoadingIndicator';
 import { GoogleSignInButton } from '../auth/components/GoogleSignInButton';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
+import { useRouter } from 'expo-router';
 import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -33,6 +35,7 @@ const COPY = {
   passwordLabel: 'Password',
   passwordPlaceholder: 'Enter your password',
   submit: 'Sign in',
+  forgotPassword: 'Forgot password?',
   separator: 'Or continue with',
   signingIn: 'Signing in…',
   apple: 'Continue with Apple',
@@ -41,6 +44,7 @@ const COPY = {
 } as const;
 
 export default function SignInScreen() {
+  const router = useRouter();
   const { loginWithEmail, loginWithGoogle, status } = useAuth();
   const [loginMethod, setLoginMethod] = useState<'email' | 'google' | null>(null);
   const [email, setEmail] = useState('');
@@ -131,6 +135,11 @@ export default function SignInScreen() {
                 loading={isSigningIn && loginMethod === 'email'}
                 onPress={() => void handleSubmit()}
               />
+              <Pressable accessibilityRole="button" disabled={isSigningIn}
+                accessibilityState={{ disabled: isSigningIn }}
+                onPress={() => { setPassword(''); router.push('/forgot-password'); }} style={styles.forgotPassword}>
+                <Text style={styles.separator}>{COPY.forgotPassword}</Text>
+              </Pressable>
             </View>
 
             <View style={styles.providers}>
@@ -172,6 +181,7 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
+  forgotPassword: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   flex: {
     flex: 1,
   },

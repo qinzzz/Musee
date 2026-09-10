@@ -101,7 +101,7 @@ Status meanings:
 | --- | --- | --- |
 | Workspace, Expo development client, shared core | Baseline complete | Maintain clean web/native boundaries and reproducible builds |
 | Email sign-in, refresh, restore, sign-out | Baseline complete | Harden lifecycle and security behavior as release approaches |
-| Apple and Google sign-in, account linking, and recovery | Google sign-in and sign-out confirmed by user; full device lifecycle checks pending. Apple has a disabled Coming soon placeholder; integration deferred. Recovery not started | Support both native providers alongside email, with consistent account linking, restoration, and recovery/verification flows |
+| Apple and Google sign-in, account linking, and recovery | Google sign-in/out confirmed; full device lifecycle checks pending. Apple deferred. Native reset-link request and browser password reset implemented; email/device validation pending | Support native providers alongside email, with consistent account linking, restoration, and recovery/verification flows |
 | Camera and single-photo intake | Baseline complete — custom capture UI refined on iPhone | Validate framing, permissions, and lifecycle recovery on the final layout |
 | Artwork with optional label in one identification flow | Implemented — Library and Sessions; full device recovery validation pending | Preserve one required artwork and one temporary optional label, using web identification semantics |
 | Batch and multi-select intake | Baseline complete — Library intake and mixed Session composition; simulator recovery checks passed | Match the intentional web batch workflow where it fits native UX |
@@ -363,8 +363,11 @@ provider configuration are ready; it does not block the Personal milestone.
 
 When Apple resumes, define verified provider linking for existing email/Google
 accounts and private-relay addresses before implementation. Do not infer that two
-different addresses belong to the same person. Recovery and verification remain
-unfinished account work. Shared authentication changes must preserve web login,
+different addresses belong to the same person. Native password recovery now requests
+an emailed link and uses the existing browser reset page before returning to iOS
+sign-in. Prior refresh sessions are revoked on reset; existing access tokens expire
+normally. Real email delivery and the full phone/browser round trip remain unverified.
+Native verification remains unfinished. Shared authentication changes must preserve web login,
 account isolation, cancellation, refresh, and cold-start restoration.
 
 ### Native Journals: implemented, device validation pending
@@ -389,8 +392,10 @@ validation gates remain outstanding.
 
 ### Following product milestones
 
-1. **Taste Profile:** continue the Personal section after Journals, based on active
-   web viewing and update behavior, including loading and recovery states.
+1. **Account recovery validation:** verify real email delivery, expired/reused links,
+   browser password reset, old-password rejection, iOS sign-in, and revoked-session
+   restoration. Taste Profile and artwork classification are deferred until their
+   product logic is ready.
 2. **Remaining parity and account work:** resume Apple when its prerequisites are
    ready; complete recovery, artwork detail/conversation, preferences, and other
    active capabilities in the map. Further discovery still waits for the

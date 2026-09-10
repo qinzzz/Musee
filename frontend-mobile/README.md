@@ -181,6 +181,20 @@ The auth credential store owns auth-specific keys and policy. Add another
 domain-specific store when a future secret needs persistence; do not turn
 SecureStore into an untyped global bag or let screens manage keys directly.
 
+### Password recovery
+
+The signed-out login screen links to `/forgot-password`. Native requests an
+emailed reset link through the unauthenticated auth HTTP client, with validation,
+duplicate-submit protection, generic account-existence messaging, and retry/throttle
+errors. The existing web page handles the token and new password; users then return
+to iOS and sign in normally. Reset tokens and passwords are not passed through
+native route parameters. No native dependency or deep-link registration is required.
+
+Successful password resets revoke prior refresh sessions for that account before
+issuing the recovery session. Existing access JWTs retain their configured lifetime
+(15 minutes by default); they cannot renew afterward. Validate actual email delivery,
+browser reset, and subsequent iOS sign-in against the same backend environment.
+
 ### Google sign-in configuration
 
 Native Google sign-in uses `@react-native-google-signin/google-signin` for

@@ -42,12 +42,14 @@ const AUTH_REQUEST_FAILED_MESSAGE = 'Musee authentication request failed.';
 export class MobileAuthHttpError extends Error {
   readonly code: string | null;
   readonly status: number;
+  readonly retryAfterSeconds?: number;
 
-  constructor(status: number, code: string | null) {
+  constructor(status: number, code: string | null, retryAfterSeconds?: number) {
     super(AUTH_REQUEST_FAILED_MESSAGE);
     this.name = 'MobileAuthHttpError';
     this.status = status;
     this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
