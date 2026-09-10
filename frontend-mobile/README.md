@@ -83,8 +83,11 @@ stack screens outside the global tabs. They show local navigation/actions;
 Collection's sub-tabs and upload action do not appear there. The legacy board
 index route redirects to Collection's Boards tab.
 
-Settings is a dedicated stack screen outside the tabs, with account email, usage,
-and Sign out. It is the home for future preferences; Profile remains for insights.
+Settings is a dedicated stack screen outside the tabs, with read-only display name,
+email, plan, and artwork storage, followed by detailed usage and Sign out. Missing
+names are shown as Not provided; no username is inferred. Plan/storage reuse the
+usage query and show loading/unavailable states rather than assuming a free plan.
+It is the home for future preferences; Profile remains for insights.
 Web and native share the account usage API and quota filtering in `client-core`.
 Usage is read-only and backend-owned: show metered uploads, storage, and AI usage,
 or Unlimited plan when no quotas are metered. Native reads refresh on focus,
