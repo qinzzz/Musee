@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../../auth/AuthProvider';
 import { MuseeButton } from '../../../ui/components/MuseeButton';
@@ -9,6 +9,7 @@ import { formatJournalDate } from '../../../journals/journalPresentation';
 import { usePullToRefresh } from '../../../ui/hooks/usePullToRefresh';
 import { LoadingIndicator } from '../../../ui/components/LoadingIndicator';
 import { JournalArtworkImages } from '../../../journals/JournalArtworkImages';
+import { GlassIconButton } from '../../../ui/components/GlassIconButton';
 
 const COPY = {
   title: 'Profile',
@@ -18,46 +19,27 @@ const COPY = {
   loadError: 'Musee could not load your journal. Please try again.',
   refreshError: 'Musee could not refresh your journal. Your saved entries are still shown.',
   retry: 'Try again',
-  signOut: 'Sign out',
-  signOutError: 'Musee could not finish signing out. Please try again.',
+  settings: 'Settings',
 } as const;
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const router = useRouter();
   const journals = useJournals(user?.user_id ?? '');
   const pullToRefresh = usePullToRefresh(() => journals.refetch());
-  const inFlight = useRef(false);
-  const [signingOut, setSigningOut] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const signOut = async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setSigningOut(true);
-    setError(null);
-    try {
-      await logout();
-    } catch {
-      setError(COPY.signOutError);
-    } finally {
-      inFlight.current = false;
-      setSigningOut(false);
-    }
-  };
 
   return (
     <Screen contentStyle={styles.screen}>
+      <View style={styles.toolbar}>
+        <Text accessibilityRole="header" style={styles.title}>{COPY.title}</Text>
+        <GlassIconButton icon="gearshape" label={COPY.settings} onPress={() => router.push('/settings')} />
+      </View>
       <FlatList
         data={journals.data ?? []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
         {...pullToRefresh}
         ListHeaderComponent={<View style={styles.header}>
-        <Text accessibilityRole="header" style={styles.title}>{COPY.title}</Text>
-        {user?.email ? <Text selectable style={styles.account}>{user.email}</Text> : null}
-        <MuseeButton label={COPY.signOut} loading={signingOut}
-          onPress={() => void signOut()} variant="secondary" />
-        {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
         <View style={styles.journalHeading}>
           <Text accessibilityRole="header" style={styles.title}>{COPY.journal}</Text>
           <Text style={styles.message}>{COPY.timing}</Text>
@@ -84,11 +66,12 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
+  toolbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
   content: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: 112 },
   header: { gap: spacing.md, paddingBottom: spacing.lg },
   title: { color: colors.foreground, fontSize: typography.heading, fontWeight: '600' },
-  account: { color: colors.secondary, fontSize: typography.body },
-  journalHeading: { gap: spacing.sm, marginTop: spacing.xl },
+  journalHeading: { gap: spacing.sm },
   message: { color: colors.secondary, fontSize: typography.body, lineHeight: 24 },
   error: { color: colors.danger, fontSize: typography.caption },
   feedback: { gap: spacing.sm },

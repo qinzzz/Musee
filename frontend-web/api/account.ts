@@ -1,27 +1,8 @@
 import { API_BASE_URL, fetchWithTimeout } from './core';
+import { createAccountService } from '@musee/client-core';
 
-export interface QuotaEntry {
-  limit: number | null;
-  used: number;
-  period: 'day' | 'month' | 'lifetime';
-  resets_at: string | null;
-  warning: boolean;
-  exceeded: boolean;
-  on_exceed: 'block' | 'warn' | 'allow';
-}
-
-export interface AccountUsage {
-  tier: string;
-  quotas: Record<string, QuotaEntry>;
-}
-
-export async function fetchAccountUsage(userId: string): Promise<AccountUsage> {
-  const response = await fetchWithTimeout(`${API_BASE_URL}/users/${encodeURIComponent(userId)}/quota`, { timeout: 8000 });
-  if (!response.ok) {
-    throw new Error(`API error (${response.status}): failed to fetch account usage`);
-  }
-  return response.json();
-}
+export type { AccountUsage, QuotaEntry } from '@musee/client-core';
+export const fetchAccountUsage = createAccountService({ fetchWithTimeout }, API_BASE_URL).usage;
 
 export type QuotaError = {
   code?: 'quota_exceeded' | 'guest_quota_exhausted';
