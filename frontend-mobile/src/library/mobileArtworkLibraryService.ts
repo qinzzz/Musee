@@ -51,6 +51,8 @@ export function mapMobileArtwork(
   return {
     id: record.id,
     artistEntityId: record.artist_entity_id ?? null,
+    museumName: record.capture_museum?.canonical_name?.trim() || record.museum_name?.trim() || null,
+    capturedAt: record.photo_time?.trim() || null,
     photoUri: record.photo_uri,
     thumbnailUri,
     resolvedImageUri: resolveRemoteImageUrl(record.photo_uri, apiBaseUrl),

@@ -1,5 +1,6 @@
 import { ApiHttpError } from './health';
 import type { ApiClient } from './apiClient';
+import type { MuseumSummary } from './museums';
 import type { ArtworkAnalysisStatus } from './artworkAnalysis';
 
 export type ArtworkTagRecord = {
@@ -8,6 +9,9 @@ export type ArtworkTagRecord = {
 };
 
 export type ArtworkRecord = {
+  capture_museum?: MuseumSummary | null;
+  museum_name?: string | null;
+  photo_time?: string | null;
   artist_entity_id?: string | null;
   id: string;
   photo_uri: string;

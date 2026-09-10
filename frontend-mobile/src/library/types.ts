@@ -1,6 +1,8 @@
 import type { ArtworkAnalysisStatus } from '@musee/client-core';
 
 export type MobileArtworkRecord = {
+  museumName?: string | null;
+  capturedAt?: string | null;
   artistEntityId?: string | null;
   id: string;
   photoUri: string;

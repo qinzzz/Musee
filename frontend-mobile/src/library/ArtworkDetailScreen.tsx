@@ -7,6 +7,8 @@ import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react
 import { useAuth } from '../auth/AuthProvider';
 import { IdentifyAgainSheet } from './components/IdentifyAgainSheet';
 import type { IdentifyAgainHints } from './mobileArtworkLibraryService';
+import { ArtworkOverview } from './components/ArtworkOverview';
+import { ArtworkCaptureMetadata } from './components/ArtworkCaptureMetadata';
 import { ArtworkEditSheet } from './components/ArtworkEditSheet';
 import { MuseeButton } from '../ui/components/MuseeButton';
 import { Screen } from '../ui/components/Screen';
@@ -107,30 +109,15 @@ export function ArtworkDetailScreen({ artworkId }: { artworkId: string }) {
           style={styles.image}
         />
 
-        <Text
-          style={[
-            styles.status,
-            artwork.analysisStatus === 'failed' && styles.failedStatus,
-          ]}
-        >
-          {operation ? (operation === 'identify' ? COPY.reidentifying : COPY.deleting) : analyzing
-            ? (receivedChunk ? COPY.receiving : COPY.connecting)
-            : STATUS_COPY[artwork.analysisStatus]}
-        </Text>
+        <ArtworkOverview artwork={artwork} onOpenArtist={() => {
+          if (artwork.artistEntityId) router.push({ pathname: '/artist/[id]', params: { id: artwork.artistEntityId } });
+        }} />
+        {operation || analyzing ? <Text accessibilityLiveRegion="polite" style={styles.status}>
+          {operation ? (operation === 'identify' ? COPY.reidentifying : COPY.deleting)
+            : receivedChunk ? COPY.receiving : COPY.connecting}
+        </Text> : null}
 
-        <View style={styles.stateCard}>
-          <Text style={styles.stateTitle}>{artwork.artworkName}</Text>
-          {artwork.artistEntityId ? <Text accessibilityRole="link" style={[styles.stateMessage, { textDecorationLine: 'underline' }]}
-            onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artwork.artistEntityId! } })}>
-            {artwork.artistName}
-          </Text> : <Text style={styles.stateMessage}>{artwork.artistName}</Text>}
-          {artwork.date || artwork.medium ? <Text style={styles.stateMessage}>
-            {[artwork.date, artwork.medium].filter(Boolean).join(' · ')}
-          </Text> : null}
-          {artwork.movement ? <Text style={styles.stateMessage}>{COPY.movement}: {artwork.movement}</Text> : null}
-          {artwork.periodBucket ? <Text style={styles.stateMessage}>{COPY.period}: {artwork.periodBucket}</Text> : null}
-          {artwork.tags.length ? <Text style={styles.stateMessage}>{artwork.tags.join('  ')}</Text> : null}
-        </View>
+        <ArtworkCaptureMetadata artwork={artwork} />
         {actionError ? (
           <View style={styles.stateCard}>
             <Text accessibilityRole="alert" style={styles.error}>{actionError.message}</Text>
@@ -149,15 +136,13 @@ export function ArtworkDetailScreen({ artworkId }: { artworkId: string }) {
           </View>
         ) : null}
         {artwork.analysis ? (
-          <View style={styles.stateCard}>
-            <Text accessibilityRole="header" style={styles.stateTitle}>{COPY.analysis}</Text>
+          <View style={styles.interpretation}>
             <MarkdownText>{artwork.analysis}</MarkdownText>
           </View>
         ) : null}
         {!artwork.analysis || artwork.analysisStatus !== 'analyzed' ? (
           <View style={styles.stateCard}>
-            <Text style={styles.stateTitle}>{artwork.artworkName}</Text>
-            <Text style={styles.stateMessage}>
+            <Text accessibilityLiveRegion="polite" style={styles.stateMessage}>
               {error?.message || artwork.analysisError || STATUS_COPY[artwork.analysisStatus]}
             </Text>
             {error?.technicalDetail ? (
@@ -180,6 +165,21 @@ export function ArtworkDetailScreen({ artworkId }: { artworkId: string }) {
             ) : null}
           </View>
         ) : null}
+        {artwork.movement || artwork.periodBucket || artwork.tags.length ? <View style={styles.classification}>
+          {artwork.movement || artwork.periodBucket ? <View style={styles.facts}>
+            {artwork.movement ? <View style={styles.fact}>
+              <Text style={styles.factLabel}>{COPY.movement}</Text>
+              <Text style={styles.factValue}>{artwork.movement}</Text>
+            </View> : null}
+            {artwork.periodBucket ? <View style={styles.fact}>
+              <Text style={styles.factLabel}>{COPY.period}</Text>
+              <Text style={styles.factValue}>{artwork.periodBucket}</Text>
+            </View> : null}
+          </View> : null}
+          {artwork.tags.length ? <View style={styles.tags}>
+            {artwork.tags.map((tag, index) => <Text key={`${tag}:${index}`} style={styles.tag}>{tag}</Text>)}
+          </View> : null}
+        </View> : null}
       </ScrollView>
       {showIdentify && hints ? <IdentifyAgainSheet values={hints} onChange={setHints}
         onClose={() => setShowIdentify(false)} onSubmit={() => void identifyAgain()} /> : null}
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   content: {
-    gap: spacing.md,
+    gap: spacing.lg,
     paddingBottom: spacing.xl,
     paddingTop: spacing.md,
   },
@@ -211,13 +211,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   status: {
-    color: colors.success,
+    color: colors.secondary,
     fontSize: typography.caption,
     fontWeight: '600',
   },
-  failedStatus: {
-    color: colors.danger,
-  },
+  interpretation: { paddingVertical: spacing.xs },
+  classification: { gap: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingTop: spacing.lg },
+  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg },
+  fact: { flexGrow: 1, flexBasis: 130, gap: spacing.xs },
+  factLabel: { color: colors.secondary, fontSize: typography.caption, lineHeight: 20 },
+  factValue: { color: colors.foreground, fontSize: typography.label, lineHeight: 22 },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.md, rowGap: spacing.xs },
+  tag: { color: colors.secondary, fontSize: typography.caption, lineHeight: 20 },
   stateCard: {
     gap: spacing.md,
     borderColor: colors.border,
@@ -225,11 +230,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     backgroundColor: colors.surface,
     padding: spacing.md,
-  },
-  stateTitle: {
-    color: colors.foreground,
-    fontSize: typography.heading,
-    fontWeight: '600',
   },
   stateMessage: {
     color: colors.secondary,
