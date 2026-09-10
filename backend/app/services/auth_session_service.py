@@ -237,3 +237,15 @@ def revoke_refresh_session(db: Session, raw_token: str | None, reason: str = "lo
         auth_session.revocation_reason = reason
         logger.info("Revoked authentication session id=%s reason=%s", auth_session.id, reason)
     db.commit()
+
+
+def revoke_user_refresh_sessions(db: Session, user_id: str, *, reason: str) -> None:
+    """Revoke prior sessions within the caller's credential-update transaction.
+
+    Existing access JWTs remain valid until their short expiry. The caller issues
+    a fresh session only after this update so recovery itself stays signed in.
+    """
+    db.query(AuthSession).filter(
+        AuthSession.user_id == user_id,
+        AuthSession.revoked_at.is_(None),
+    ).update({"revoked_at": utc_now(), "revocation_reason": reason}, synchronize_session="fetch")

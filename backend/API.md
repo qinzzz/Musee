@@ -27,6 +27,19 @@
 
 ---
 
+## Password Recovery (`/api`)
+
+- `POST /auth/request-password-reset` accepts `{email}` and returns `{ok: true}`
+  for both known and unknown accounts. Requests are limited to 3 per 5 minutes.
+  Links use the configured `APP_BASE_URL` web reset page; only the newest link
+  works and it expires after 30 minutes.
+- `POST /auth/reset-password` accepts `{token, new_password}`. On success it updates
+  the password, revokes the account's prior refresh sessions, and issues a new login
+  session. Other accounts are unaffected. Existing access JWTs remain valid until
+  their configured expiry (15 minutes by default), but revoked sessions cannot renew.
+  Browser responses use an HttpOnly refresh cookie; native clients can request the
+  existing iOS header transport. The iOS recovery UI uses the browser reset page.
+
 ## Configuration Endpoints (`/api`)
 
 | Method | Path | Response Fields |

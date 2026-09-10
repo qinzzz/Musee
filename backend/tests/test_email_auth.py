@@ -6,6 +6,7 @@ import pytest
 
 from app.config.settings import settings
 from app.database.models import (
+    AuthSession,
     DailyUsage,
     GuestWorkspace,
     SavedArtwork,
@@ -201,6 +202,51 @@ class TestAccountUnification:
 
 
 class TestPasswordReset:
+    def test_reset_revokes_prior_web_and_native_sessions_only_for_this_account(self, client, sent_emails, db):
+        _signup(client)
+        verified = client.post("/api/auth/verify-email", json={"token": _extract_token(sent_emails[-1]["html"])})
+        user_id = verified.json()["user"]["user_id"]
+        web_refresh = client.cookies.get(settings.refresh_cookie_name)
+        headers = {CLIENT_PLATFORM_HEADER: "ios"}
+        native = client.post("/api/auth/login", headers=headers, json={
+            "email": "ada@example.com", "password": "correct-horse",
+        }).json()
+        # Another account's session must remain renewable.
+        other = _google_login(client, "other@example.com", google_id="g-other")
+        other_refresh = client.cookies.get(settings.refresh_cookie_name)
+        assert other.json()["user"]["user_id"] != user_id
+        client.post("/api/auth/request-password-reset", json={"email": "ada@example.com"}, headers=headers)
+        reset = client.post("/api/auth/reset-password", json={
+            "token": _extract_token(sent_emails[-1]["html"]), "new_password": "brand-new-pass",
+        })
+        assert reset.status_code == 200
+        new_web_refresh = client.cookies.get(settings.refresh_cookie_name)
+        client.cookies.clear()  # Native requests never send the browser cookie.
+        for raw in (web_refresh, native["refresh_token"]):
+            response = client.post("/api/auth/refresh", headers={**headers, "X-Refresh-Token": raw})
+            assert response.status_code == 401
+            assert response.json()["detail"]["error_code"] == "refresh_revoked"
+        revoked = db.query(AuthSession).filter(AuthSession.user_id == user_id, AuthSession.revoked_at.isnot(None)).all()
+        assert len(revoked) == 2
+        assert all(row.revocation_reason == "password_reset" for row in revoked)
+        for raw in (other_refresh, new_web_refresh):
+            assert client.post("/api/auth/refresh", headers={**headers, "X-Refresh-Token": raw}).status_code == 200
+        assert client.post("/api/auth/login", headers=headers, json={
+            "email": "ada@example.com", "password": "brand-new-pass",
+        }).json()["user"]["user_id"] == user_id
+
+    def test_invalid_reset_does_not_revoke_current_session(self, client, sent_emails):
+        _signup(client)
+        client.post("/api/auth/verify-email", json={"token": _extract_token(sent_emails[-1]["html"])})
+        current = client.cookies.get(settings.refresh_cookie_name)
+        client.cookies.clear()
+        assert client.post("/api/auth/reset-password", json={
+            "token": "invalid", "new_password": "brand-new-pass",
+        }).status_code == 400
+        assert client.post("/api/auth/refresh", headers={
+            CLIENT_PLATFORM_HEADER: "ios", "X-Refresh-Token": current,
+        }).status_code == 200
+
     def test_reset_flow(self, client, sent_emails):
         _signup(client)
         client.post("/api/auth/verify-email", json={"token": _extract_token(sent_emails[-1]["html"])})

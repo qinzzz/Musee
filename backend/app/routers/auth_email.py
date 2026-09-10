@@ -23,6 +23,7 @@ from app.services.account_service import adopt_anonymous_account, promote_guest_
 from app.services.auth_session_service import (
     is_mobile_client,
     issue_login_session,
+    revoke_user_refresh_sessions,
     validate_auth_origin,
 )
 from app.services.authorization_service import clear_guest_cookie, resolve_guest_workspace
@@ -281,6 +282,7 @@ async def reset_password(
         raise HTTPException(status_code=400, detail={"error_code": "invalid_token"})
 
     _set_credential(db, user.user_id, request.new_password)
+    revoke_user_refresh_sessions(db, user.user_id, reason="password_reset")
     # Clicking an emailed link is proof of inbox ownership.
     user.email_verified = True
     guest_promoted = promote_guest_workspace(db, guest_token, user)
