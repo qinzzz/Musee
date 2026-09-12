@@ -47,10 +47,34 @@ it('adopts the saved ID without resetting an active conversation', async () => {
   expect(hook.result.current.session?.id).toBe('saved');
   expect(hook.result.current.events).toHaveLength(2);
   expect(hook.result.current.isSending).toBe(true);
+  expect(hook.result.current.isLoading).toBe(false);
   expect(mocks.fetchEvents).not.toHaveBeenCalled();
   mocks.fetchEvents.mockResolvedValue([userEvent, { ...responseEvent, content: 'Answer', payload: { status: 'completed' } }]);
   await act(async () => { finish({ response: 'Answer' }); });
   await waitFor(() => expect(hook.result.current.events.at(-1)?.content).toBe('Answer'));
+});
+
+it('keeps the completed conversation visible while the promoted route revalidates', async () => {
+  let finishRead!: (events: SessionEventRecord[]) => void;
+  mocks.fetchEvents.mockReturnValue(new Promise((resolve) => { finishRead = resolve; }));
+  const hook = renderHook(({ id }) => useMobileTextSession(id, 'user'), { initialProps: { id: 'new' }, wrapper });
+  await act(async () => { await hook.result.current.sendText('Question'); });
+  await waitFor(() => expect(hook.result.current.isSending).toBe(false));
+  await waitFor(() => expect(mocks.fetchEvents).toHaveBeenCalled());
+  hook.rerender({ id: 'saved' });
+  expect(hook.result.current.isLoading).toBe(false);
+  expect(hook.result.current.events.at(-1)?.content).toBe('Answer');
+  expect(client.getQueryData(sessionKeys.detail('user', 'saved'))).toBeUndefined();
+  await act(async () => { finishRead([userEvent, { ...responseEvent, content: 'Answer', payload: { status: 'completed' } }]); });
+  await waitFor(() => expect(client.getQueryData(sessionKeys.detail('user', 'saved'))).toBeDefined());
+  expect(hook.result.current.isLoading).toBe(false);
+  expect(hook.result.current.events.at(-1)?.content).toBe('Answer');
+});
+
+it('still shows loading when opening a saved Session without in-memory data', () => {
+  mocks.fetchEvents.mockReturnValue(new Promise(() => {}));
+  const hook = renderHook(() => useMobileTextSession('saved', 'user'), { wrapper });
+  expect(hook.result.current.isLoading).toBe(true);
 });
 
 it('switches Sessions and ignores a previous conversation stream', async () => {
