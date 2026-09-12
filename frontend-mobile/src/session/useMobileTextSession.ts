@@ -19,6 +19,7 @@ export function useMobileTextSession(routeSessionId: string, userId: string) {
   const lastHydrated = useRef<SessionSnapshot | undefined>(undefined);
   const previousRoute = useRef({ id: routeSessionId, userId });
   const savedId = routeSessionId === 'new' ? session?.id : routeSessionId;
+  const hasCurrentSession = session?.id === savedId && session?.user_id === userId;
   const query = useQuery({
     ...sessionSnapshotQuery(userId, savedId || 'new'),
     enabled: !!userId && !!savedId && focused && !isSending && !failure,
@@ -62,7 +63,8 @@ export function useMobileTextSession(routeSessionId: string, userId: string) {
   return {
     ...messaging,
     reload,
-    isLoading: routeSessionId !== 'new' && !query.data && query.isPending,
+    // Promoting a new route must not hide the conversation while its first read finishes.
+    isLoading: routeSessionId !== 'new' && !hasCurrentSession && !query.data && query.isPending,
     loadError: query.error ? presentSessionError(query.error, 'load', {
       apiBaseUrl: MOBILE_API_BASE_URL, showTechnicalDetails: __DEV__,
     }) : null,
