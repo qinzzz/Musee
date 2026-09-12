@@ -158,6 +158,8 @@ class SavedArtwork(Base):
     artist_name = Column(String, nullable=False)
     artwork_name = Column(String, nullable=False)
     location = Column(JSON, nullable=True)  # Geographic location where photo was taken (JSON struct)
+    # User decision, separate from original photo evidence. SQL NULL means automatic.
+    capture_location_override = Column(JSON(none_as_null=True), nullable=True)
     photo_time = Column(String, nullable=True)  # Original capture time of the photo
     museum_name = Column(String, nullable=True)  # Museum or gallery name
     analysis = Column(Text, nullable=True)  # Detailed artwork analysis from AI (markdown formatted)
@@ -226,6 +228,7 @@ class SavedArtwork(Base):
             "artist_name": self.artist_name,
             "artwork_name": self.artwork_name,
             "location": self.location,
+            "capture_location_override": self.capture_location_override,
             "photo_time": self.photo_time,
             "museum_name": self.museum_name,
             "analysis": self.analysis,
@@ -246,7 +249,9 @@ class SavedArtwork(Base):
             "artist_entity_id": self.artist_entity_id,
             "capture_museum_entity_id": self.capture_museum_entity_id,
             "capture_museum": (
-                self.capture_museum_entity.to_summary_dict()
+                {**self.capture_museum_entity.to_summary_dict(),
+                 "latitude": self.capture_museum_entity.latitude,
+                 "longitude": self.capture_museum_entity.longitude}
                 if self.capture_museum_entity is not None
                 else None
             ),

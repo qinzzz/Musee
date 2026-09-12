@@ -1,5 +1,8 @@
 import {
   ApiHttpError,
+  captureLocationLabel,
+  updateCaptureLocation,
+  type CaptureLocationUpdate,
   fetchArtworkById,
   fetchArtworkPage,
   type ApiClient,
@@ -31,6 +34,7 @@ export type ArtworkMetadataUpdates = {
 };
 
 export type MobileArtworkLibraryService = {
+  updateLocation: (artworkId: string, update: CaptureLocationUpdate) => Promise<MobileArtworkRecord>;
   identifyAgain: (artworkId: string, hints: IdentifyAgainHints) => Promise<void>;
   deleteArtwork: (artworkId: string, userId: string) => Promise<void>;
   updateArtwork: (artworkId: string, updates: ArtworkMetadataUpdates) => Promise<MobileArtworkRecord>;
@@ -51,7 +55,11 @@ export function mapMobileArtwork(
   return {
     id: record.id,
     artistEntityId: record.artist_entity_id ?? null,
-    museumName: record.capture_museum?.canonical_name?.trim() || record.museum_name?.trim() || null,
+    captureLocationOverride: record.capture_location_override,
+    originalLocation: record.location,
+    captureMuseum: record.capture_museum,
+    museumName: captureLocationLabel(record.capture_location_override,
+      record.capture_museum?.canonical_name || (!record.capture_location_override ? record.museum_name : null)),
     capturedAt: record.photo_time?.trim() || null,
     photoUri: record.photo_uri,
     thumbnailUri,
@@ -127,6 +135,9 @@ export function createMobileArtworkLibraryService({
   apiClient,
 }: MobileArtworkLibraryServiceOptions): MobileArtworkLibraryService {
   return {
+    async updateLocation(artworkId, update) {
+      return mapMobileArtwork(await updateCaptureLocation(apiClient, apiBaseUrl, artworkId, update), apiBaseUrl);
+    },
     async identifyAgain(artworkId, hints) {
       const response = await apiClient.fetchWithTimeout(`${apiBaseUrl}/artworks/analyze`, {
         method: 'POST', body: buildIdentifyAgainForm(artworkId, hints), timeout: 120000,

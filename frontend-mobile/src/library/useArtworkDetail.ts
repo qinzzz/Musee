@@ -9,6 +9,8 @@ import { artworkDetailKey, artworkDetailQuery, cacheArtwork } from './artworkQue
 import { artworkLibraryQueryKey, invalidateArtworkLibraryQuery, removeArtworkFromLibraryQuery } from './artworkLibraryQuery';
 import { showPendingToast, showToast, hideToast } from '../ui/toast';
 import { ARTWORK_DETAIL_COPY as COPY } from './artworkDetailCopy';
+import type { CaptureLocationUpdate } from '@musee/client-core';
+import { museumKeys } from '../museums/museumQueries';
 
 type Operation = 'analyze' | 'identify' | 'delete' | 'edit';
 type ActionError = { message: string; action: 'identify' | 'delete' | 'refresh' };
@@ -82,6 +84,20 @@ export function useArtworkDetail(userId: string, artworkId: string, paused = fal
     analyzing: operation === 'analyze', receivedChunk, actionError, setActionError,
     error: analysisError || (query.error ? presentRequestError(query.error, { ...ERROR_OPTIONS, fallbackMessage: COPY.loadError }) : null),
     loadArtwork,
+    updateLocation: (update: CaptureLocationUpdate) => run('edit', COPY.saving, async () => {
+      try {
+        const saved = await mobileArtworkLibraryService.updateLocation(artworkId, update);
+        await cancelReads();
+        if (!current()) return undefined;
+        cacheArtwork(client, userId, saved);
+        void client.invalidateQueries({ queryKey: museumKeys.all(userId) });
+        showToast({ label: COPY.locationUpdated, icon: 'mappin' });
+        return saved;
+      } catch (cause) {
+        if (current()) showToast({ label: COPY.locationSaveError, tone: 'danger', icon: 'exclamationmark' });
+        throw cause;
+      }
+    }),
     analyzeArtwork: () => run('analyze', COPY.analyzingToast, async () => {
       if (!query.data) return;
       setReceivedChunk(false);

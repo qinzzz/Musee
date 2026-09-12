@@ -8,6 +8,16 @@ import {
 } from './artworkDetailPresentation';
 
 describe('artworkDetailPresentation helpers', () => {
+  it('does not fall back to original GPS labels after correction or removal', () => {
+    const original = { museum: 'Old Museum', city: 'Old City' };
+    expect(getArtworkDisplayLocation(original, 'Old Museum', { status: 'removed' })).toBeNull();
+    expect(getArtworkDisplayLocation(original, 'Old Museum', {
+      status: 'selected', source: 'manual', name: 'A café',
+    })).toBe('A café');
+    expect(getArtworkDisplayLocation(original, null, {
+      status: 'selected', source: 'apple_maps', place_id: 'id',
+    })).toBe('Place saved in Apple Maps');
+  });
   it('formats structured location objects and json strings', () => {
     expect(
       getArtworkDisplayLocation({ museum: 'MoMA', city: 'New York', country: 'USA' }),

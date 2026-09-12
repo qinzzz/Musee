@@ -1,7 +1,10 @@
 import type { ArtworkAnalysisStatus } from '@musee/client-core';
 
 export type MobileArtworkRecord = {
+  captureLocationOverride?: import('@musee/client-core').CaptureLocationOverride | null;
+  originalLocation?: { latitude?: number; longitude?: number } | null;
   museumName?: string | null;
+  captureMuseum?: import('@musee/client-core').MuseumSummary | null;
   capturedAt?: string | null;
   artistEntityId?: string | null;
   id: string;

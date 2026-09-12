@@ -11,8 +11,10 @@ tasks and pull requests:
 This is a living milestone plan, not an implementation guide or work log. The
 mobile architecture and development rules live in
 [`frontend-mobile/README.md`](frontend-mobile/README.md). Detailed deferred
-feature proposals live in [`BACKLOG_PLANS.md`](BACKLOG_PLANS.md), and pull
-requests remain the implementation history.
+feature proposals live in [`BACKLOG_PLANS.md`](BACKLOG_PLANS.md). The camera-roll
+import feature and its location-correction prerequisite have a dedicated
+[roadmap](CAMERA_ROLL_IMPORT_ROADMAP.md). Pull requests remain the implementation
+history.
 
 ## Goal
 

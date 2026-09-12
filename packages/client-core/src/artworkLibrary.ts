@@ -9,6 +9,8 @@ export type ArtworkTagRecord = {
 };
 
 export type ArtworkRecord = {
+  capture_location_override?: import('./captureLocation').CaptureLocationOverride | null;
+  location?: { latitude?: number; longitude?: number } | null;
   capture_museum?: MuseumSummary | null;
   museum_name?: string | null;
   photo_time?: string | null;

@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.models.artwork import UpdateArtworkClassificationRequest, UpdateArtworkRequest
+from app.models.capture_location import CaptureLocationUpdate
+from app.services.capture_location_service import update_capture_location
+from app.services.authorization_service import RequestPrincipal, get_request_principal
 from app.services.artwork_mutation_service import (
     get_or_create_artwork_fun_facts,
     update_artwork_classification_record,
@@ -14,6 +17,20 @@ from app.services.artwork_mutation_service import (
 )
 
 router = APIRouter()
+
+
+@router.patch("/artworks/{artwork_id}/capture-location")
+async def update_artwork_capture_location(
+    artwork_id: str,
+    request: CaptureLocationUpdate,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal | None = Depends(get_request_principal),
+):
+    try:
+        return update_capture_location(db, artwork_id, request, principal)
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.put("/artworks/{artwork_id}")

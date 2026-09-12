@@ -3,7 +3,7 @@ import { colors, spacing, typography } from '../../ui/tokens/theme';
 import { artworkCaptureDetails } from '../artworkCapturePresentation';
 import type { MobileArtworkRecord } from '../types';
 
-const MUSEUM_LABEL = 'Museum';
+const MUSEUM_LABEL = 'Location';
 
 export function ArtworkCaptureMetadata({ artwork }: { artwork: MobileArtworkRecord }) {
   const details = artworkCaptureDetails(artwork);

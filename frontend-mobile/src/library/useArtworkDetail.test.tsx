@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { MobileArtworkRecord } from './types';
 
 vi.hoisted(() => { vi.stubGlobal('__DEV__', false); });
-const mocks = vi.hoisted(() => ({ fetchArtwork: vi.fn(), updateArtwork: vi.fn(), identifyAgain: vi.fn(), deleteArtwork: vi.fn(), analyzeArtwork: vi.fn() }));
+const mocks = vi.hoisted(() => ({ fetchArtwork: vi.fn(), updateLocation: vi.fn(), updateArtwork: vi.fn(), identifyAgain: vi.fn(), deleteArtwork: vi.fn(), analyzeArtwork: vi.fn() }));
 vi.mock('../api/runtime', () => ({ MOBILE_API_BASE_URL: '/api', mobileArtworkLibraryService: mocks, mobileArtworkAnalysisService: mocks }));
 vi.mock('expo-router', () => ({ useFocusEffect: (callback: () => void) => useEffect(callback, [callback]) }));
 vi.mock('../ui/toast', () => ({ showToast: vi.fn(), showPendingToast: vi.fn(), hideToast: vi.fn() }));
@@ -22,6 +22,17 @@ let client: QueryClient;
 const wrapper = ({ children }: PropsWithChildren) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 beforeEach(() => { vi.resetAllMocks(); client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } }); mocks.fetchArtwork.mockResolvedValue(artwork); });
 afterEach(() => { cleanup(); client.clear(); });
+
+it('saves a location removal and invalidates museum membership views', async () => {
+  const hook = renderHook(() => useArtworkDetail('user', 'art'), { wrapper });
+  await waitFor(() => expect(hook.result.current.artwork).not.toBeNull());
+  const saved = { ...artwork, museumName: null, captureLocationOverride: { status: 'removed' as const } };
+  mocks.updateLocation.mockResolvedValue(saved);
+  const invalidate = vi.spyOn(client, 'invalidateQueries');
+  await act(async () => { await hook.result.current.updateLocation({ status: 'removed' }); });
+  expect(client.getQueryData(artworkDetailKey('user', 'art'))).toEqual(saved);
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['museums', 'user'] });
+});
 
 it('a refresh started before an edit cannot overwrite the saved artwork', async () => {
   const hook = renderHook(() => useArtworkDetail('user', 'art'), { wrapper });

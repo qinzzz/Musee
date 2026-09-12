@@ -97,6 +97,7 @@ SCHEMA_BOOTSTRAP_STATEMENTS = (
     REFERENCES museum_entities(id) ON DELETE SET NULL
     """,
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS insights JSONB",
+    "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS capture_location_override JSONB",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS classification VARCHAR(20) NOT NULL DEFAULT 'unsorted'",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS classification_updated_at TIMESTAMP",
     "ALTER TABLE saved_artworks ADD COLUMN IF NOT EXISTS analysis_status VARCHAR(20) NOT NULL DEFAULT 'analyzed'",

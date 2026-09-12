@@ -10,6 +10,8 @@ import type { IdentifyAgainHints } from './mobileArtworkLibraryService';
 import { ArtworkOverview } from './components/ArtworkOverview';
 import { ArtworkCaptureMetadata } from './components/ArtworkCaptureMetadata';
 import { ArtworkEditSheet } from './components/ArtworkEditSheet';
+import { ArtworkLocationSheet } from './components/ArtworkLocationSheet';
+import { useCapturePlace } from './useCapturePlace';
 import { MuseeButton } from '../ui/components/MuseeButton';
 import { Screen } from '../ui/components/Screen';
 import { colors, radii, spacing, typography } from '../ui/tokens/theme';
@@ -24,9 +26,11 @@ export function ArtworkDetailScreen({ artworkId }: { artworkId: string }) {
   const [showIdentify, setShowIdentify] = useState(false);
   const [hints, setHints] = useState<IdentifyAgainHints | null>(null);
   const [editing, setEditing] = useState(false);
-  const controller = useArtworkDetail(user?.user_id || '', artworkId, editing || showIdentify);
+  const [editingLocation, setEditingLocation] = useState(false);
+  const controller = useArtworkDetail(user?.user_id || '', artworkId, editing || showIdentify || editingLocation);
   const { artwork, loading, refreshing, operation, analyzing, receivedChunk, error,
     actionError, setActionError, loadArtwork, analyzeArtwork } = controller;
+  const { placeName, mapPin, resolving: resolvingPlace } = useCapturePlace(artwork);
   const isFocused = useRef(false);
   useFocusEffect(useCallback(() => {
     isFocused.current = true;
@@ -72,7 +76,7 @@ export function ArtworkDetailScreen({ artworkId }: { artworkId: string }) {
     );
   }
 
-  const busy = controller.busy || editing || showIdentify;
+  const busy = controller.busy || editing || showIdentify || editingLocation;
   const actionsDisabled = busy || artwork.analysisStatus === 'analyzing' || artwork.isDeleted;
   const canAnalyze = artwork.analysisStatus === 'pending' || artwork.analysisStatus === 'failed';
   const analysisButtonLabel = artwork.analysisStatus === 'failed'
@@ -87,6 +91,7 @@ export function ArtworkDetailScreen({ artworkId }: { artworkId: string }) {
           <Stack.Toolbar.MenuAction icon="pencil" onPress={() => {
             setEditing(true);
           }}>{COPY.edit}</Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.MenuAction icon="mappin" onPress={() => setEditingLocation(true)}>{COPY.editLocation}</Stack.Toolbar.MenuAction>
           <Stack.Toolbar.MenuAction icon="trash" destructive disabled={!user} onPress={confirmDelete}>{COPY.delete}</Stack.Toolbar.MenuAction>
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
@@ -117,7 +122,7 @@ export function ArtworkDetailScreen({ artworkId }: { artworkId: string }) {
             : receivedChunk ? COPY.receiving : COPY.connecting}
         </Text> : null}
 
-        <ArtworkCaptureMetadata artwork={artwork} />
+        <ArtworkCaptureMetadata artwork={{ ...artwork, museumName: placeName }} />
         {actionError ? (
           <View style={styles.stateCard}>
             <Text accessibilityRole="alert" style={styles.error}>{actionError.message}</Text>
@@ -189,6 +194,9 @@ export function ArtworkDetailScreen({ artworkId }: { artworkId: string }) {
           setHints(null);
           setEditing(false);
         }} /> : null}
+      {editingLocation ? <ArtworkLocationSheet key={artwork.id} artwork={{ ...artwork, museumName: placeName }}
+        currentPlace={mapPin} resolvingCurrentPlace={resolvingPlace}
+        onClose={() => setEditingLocation(false)} onSave={controller.updateLocation} /> : null}
     </Screen>
   );
 }

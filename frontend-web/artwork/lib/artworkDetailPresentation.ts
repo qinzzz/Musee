@@ -1,4 +1,5 @@
 import type { SessionLink } from '../../types';
+import { captureLocationLabel, type CaptureLocationOverride } from '@musee/client-core';
 import type { ArtworkClientState } from '../../types';
 
 type ArtworkStreamingFields = {
@@ -12,7 +13,9 @@ type ArtworkStreamingFields = {
 export function getArtworkDisplayLocation(
   location: unknown,
   canonicalMuseumName?: string | null,
+  override?: CaptureLocationOverride | null,
 ): string | null {
+  if (override) return captureLocationLabel(override, canonicalMuseumName);
   const normalizedCanonicalMuseum = canonicalMuseumName?.trim() || null;
   if (!location) return normalizedCanonicalMuseum;
 
