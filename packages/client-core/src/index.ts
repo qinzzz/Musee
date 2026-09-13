@@ -1,4 +1,6 @@
 export const CLIENT_CORE_VERSION = '0.0.0';
+export { captureLocationLabel, updateCaptureLocation, APPLE_PLACE_SAVED,
+  type CaptureLocationOverride, type CaptureLocationUpdate } from './captureLocation';
 
 export {
   parseArtworkAnalysisStreamEvent,

@@ -22,6 +22,7 @@ type ArtworkBootstrapCacheItem = {
     createdAt?: string;
   }>;
   location?: string;
+  captureLocationOverride?: import('@musee/client-core').CaptureLocationOverride | null;
   photoTime?: string;
   captureMuseum?: {
     id: string;

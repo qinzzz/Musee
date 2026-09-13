@@ -50,6 +50,7 @@ export function mapArtworkRecordToGalleryItem(item: any): GalleryItem {
       sessionLinks,
       location: item.location && typeof item.location === 'object' ? JSON.stringify(item.location) : item.location,
       photoTime: item.photo_time,
+      captureLocationOverride: item.capture_location_override,
       captureMuseum: item.capture_museum?.id && item.capture_museum?.canonical_name
         ? {
             id: item.capture_museum.id,
@@ -111,6 +112,7 @@ export function mapCachedArtworkToGalleryItem(item: ArtworkBootstrapCacheItem): 
       sessionLinks,
       location: item.location,
       photoTime: item.photoTime,
+      captureLocationOverride: item.captureLocationOverride,
       captureMuseum: item.captureMuseum,
       movement: item.movement,
       periodBucket: item.periodBucket,
@@ -154,6 +156,7 @@ export function mapGalleryItemToCacheItem(item: GalleryItem): ArtworkBootstrapCa
     sessionLinks: record.sessionLinks,
     location: typeof record.location === 'string' ? record.location : undefined,
     photoTime: record.photoTime,
+    captureLocationOverride: record.captureLocationOverride,
     captureMuseum: record.captureMuseum,
     movement: record.movement,
     periodBucket: record.periodBucket,

@@ -56,6 +56,7 @@ export interface ArtworkRecord {
   date?: string;
   medium?: string;
   location?: any;
+  captureLocationOverride?: import('@musee/client-core').CaptureLocationOverride | null;
   photoTime?: string;
   captureMuseum?: {
     id: string;

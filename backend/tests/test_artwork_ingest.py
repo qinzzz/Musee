@@ -355,6 +355,8 @@ def test_artworks_upload_resolves_capture_museum_in_background(client, db, monke
         assert saved.to_dict()["capture_museum"] == {
             "id": museum_id,
             "canonical_name": "Musée du Louvre",
+            "latitude": 48.8606,
+            "longitude": 2.3376,
         }
         assert saved.location["source"] == "device_live"
         assert saved.location["accuracy_meters"] == 15

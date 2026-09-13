@@ -32,6 +32,31 @@ graph TD
 
 ## Developer Manual
 
+### Capture-location overrides
+
+`PATCH /api/artworks/{artwork_id}/capture-location` accepts an authenticated owner's
+explicit place selection or removal. `saved_artworks.capture_location_override`
+is nullable JSON; the additive PostgreSQL schema change runs through the existing
+startup bootstrap. SQL NULL preserves automatic behavior, while `status: removed`
+prevents automatic reassignment. Original `location`/photo GPS is not rewritten.
+
+Selections use `source: manual` with a user-authored name, `source: apple_maps`
+with a place ID, or `source: museum` with an existing eligible museum ID. An Apple
+selection may include transient name/coordinate `match_hint` evidence; only a
+unique nearby exact normalized museum-name match links the existing catalogue.
+Search details are not persisted or logged. Unmatched places remain personal
+locations; this route does not create new shared museums. Automatic association
+uses a conditional database update so in-flight results cannot overwrite a user
+decision. Changing/removing a location clears the previous museum association.
+
+Focused validation: `venv/bin/python -m pytest tests/test_capture_location.py tests/test_museum_resolution.py tests/test_artwork_mutations.py -q`.
+
+For a standalone production schema update, inspect with
+`venv/bin/python migrations/20260912_capture_location_override.py --env prod`,
+then add `--apply` to execute. This targets `NEON_DATABASE_URL_PROD` explicitly,
+uses bounded lock/statement timeouts, and verifies the column after commit.
+It adds only nullable `capture_location_override JSONB`; no backfill is required.
+
 ### Prerequisites
 - Python 3.9+
 - PostgreSQL (Neon recommended)

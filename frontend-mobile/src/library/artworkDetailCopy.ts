@@ -1,5 +1,6 @@
 export const ARTWORK_DETAIL_COPY = {
   edit: 'Edit',
+  editLocation: 'Edit location', locationUpdated: 'Location updated', locationSaveError: 'Could not save location',
   saving: 'Saving artwork…',
   saveError: 'Musee could not save your changes. Please try again.',
   actions: 'Artwork actions', identify: 'Identify Again', delete: 'Delete', cancel: 'Cancel',

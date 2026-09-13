@@ -148,6 +148,15 @@ def _record_resolution_event(
     )
 
 
+def _associate_if_automatic(db: Session, artwork_id: str, museum_id: str) -> bool:
+    """Atomically reject stale automatic results after a user decision."""
+    return db.query(SavedArtwork).filter(
+        SavedArtwork.id == artwork_id, SavedArtwork.active_filter(),
+        SavedArtwork.capture_location_override.is_(None),
+        SavedArtwork.capture_museum_entity_id.is_(None),
+    ).update({SavedArtwork.capture_museum_entity_id: museum_id}, synchronize_session=False) == 1
+
+
 def resolve_artwork_capture_museum(artwork_id: str) -> None:
     """Best-effort background association; artwork persistence never depends on it."""
     try:
@@ -156,7 +165,7 @@ def resolve_artwork_capture_museum(artwork_id: str) -> None:
                 SavedArtwork.id == artwork_id,
                 SavedArtwork.active_filter(),
             ).first()
-            if not artwork or artwork.capture_museum_entity_id:
+            if not artwork or artwork.capture_museum_entity_id or artwork.capture_location_override is not None:
                 return
 
             evidence = museum_evidence_from_location(artwork.location, artwork_id=str(artwork.id))
@@ -165,7 +174,9 @@ def resolve_artwork_capture_museum(artwork_id: str) -> None:
 
             result = resolve_museum(db, evidence)
             if result.status == "resolved" and result.museum_entity_id:
-                artwork.capture_museum_entity_id = result.museum_entity_id
+                if not _associate_if_automatic(db, artwork_id, result.museum_entity_id):
+                    db.rollback()
+                    return
                 _record_resolution_event(
                     db, artwork_id=str(artwork.id),
                     bucket=resolution_bucket(result.status, result.reason),
@@ -202,7 +213,9 @@ def resolve_artwork_capture_museum(artwork_id: str) -> None:
                 ):
                     intake_result = intake_discovered_museum(db, discovery)
                     museum = intake_result.museum
-                    artwork.capture_museum_entity_id = museum.id
+                    if not _associate_if_automatic(db, artwork_id, museum.id):
+                        db.rollback()
+                        return
                     _record_resolution_event(
                         db, artwork_id=str(artwork.id), bucket="discovery",
                         status="resolved", reason=discovery.reason,

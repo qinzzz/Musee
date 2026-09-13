@@ -168,6 +168,36 @@ or biography generation. Missing profiles and request failures have explicit sta
 
 ## Museums
 
+### Artwork capture-location editing
+
+Artwork detail's action menu includes **Edit location**. The picker searches Apple
+Maps as the user types, using original photo coordinates as an optional regional
+bias. It does not request the device's current location. Users can select a result,
+enter their own place name, or explicitly remove the location, then Save or Cancel.
+An embedded MapKit map shows the search results as selectable pins. Pin and list
+selection share the same draft; the map initially centers on valid original photo
+coordinates when no saved place is available, fits search results, and centers on
+a selected place. Reopening the picker resolves the saved Apple ID or uses the
+linked museum's catalogue coordinates to show its pin without creating a new edit.
+Manual names without coordinates remain unpinned. Panning the map
+does not change the saved location or trigger another search. Arbitrary dropped
+pins are not supported. The list remains usable if the installed native build
+does not yet include the map view.
+
+`modules/musee-places/` is a local Expo module wrapping MapKit search, place-ID
+lookup, and an `MKMapView`. It autolinks through Expo; adding it requires `pod install` in `ios/` and
+a new development build (`npx expo run:ios --device`), not just a Metro reload.
+Search/place-ID lookup requires iOS 18 or later. Older devices/builds retain
+manual entry and removal, with an explicit unavailable-search message.
+
+Only the Apple place ID is persisted for Apple selections. Search responses and
+resolved names remain transient; detail resolves the name on open and shows an
+honest saved-place fallback when unavailable. User-authored names are persisted.
+The backend keeps the original GPS, protects explicit decisions from background
+resolution, and only links uniquely matching existing museums. New museum intake
+from user-selected places remains deferred. Web reads honor overrides/removal but
+do not yet resolve Apple place details or provide the native picker.
+
 Web and native share `client-core/museums.ts`. Museums group active saved artworks
 by their existing recognized capture venue, without generating associations during
 browsing. Native search filters the museum summaries; cards use venue thumbnails

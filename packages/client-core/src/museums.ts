@@ -5,6 +5,8 @@ import { ApiHttpError } from './health';
 export interface MuseumSummary {
   id: string;
   canonical_name: string;
+  latitude?: number | null;
+  longitude?: number | null;
   thumbnail_url?: string | null;
   thumbnail_attribution?: string | null;
 }
