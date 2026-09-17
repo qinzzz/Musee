@@ -18,6 +18,7 @@ from app.database.connection import SessionLocal
 from app.database.models import SavedArtwork, Session as SessionModel, SessionArtwork, SessionEvent, User
 from app.models.ai_job import AIJobType
 from app.models.artwork import AIProvider
+from app.services.capture_place import effective_capture_place
 from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
@@ -172,11 +173,9 @@ def derive_session_system_title(session: SessionModel) -> tuple[str, str]:
             if tag_name:
                 tag_counts[tag_name] += 1
 
-        location_payload = coerce_location_payload(artwork.location)
-        museum_name = normalize_session_title(
-            (location_payload or {}).get("museum") if location_payload else artwork.museum_name
-        ) or normalize_session_title(artwork.museum_name)
-        city_name = normalize_session_title((location_payload or {}).get("city") if location_payload else None)
+        location_payload = effective_capture_place(artwork)
+        museum_name = normalize_session_title(location_payload.get("museum") or location_payload.get("name"))
+        city_name = normalize_session_title(location_payload.get("city"))
         if museum_name:
             museum_counts[museum_name] += 1
         if city_name:

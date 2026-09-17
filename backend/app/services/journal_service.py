@@ -8,7 +8,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config.settings import settings
 from app.database.models import ArtworkAnalysis, Journal, SavedArtwork, Session as SessionModel, SessionEvent, User
@@ -17,6 +17,7 @@ from app.services.ai_client_interface import AITextResult
 from app.services.ai_service import AIServiceFactory
 from app.services.ai_usage_service import fail_ai_usage, get_ai_model_name, start_ai_usage, succeed_ai_usage
 from app.services.artwork_analysis_service import determine_ai_provider
+from app.services.capture_place import effective_capture_place
 from app.services.session_event_service import derive_session_event_artwork_ids, normalize_session_event_type
 from app.utils.prompt_loader import get_journal_generation_prompt
 
@@ -76,7 +77,7 @@ def _display_location_from_evidence(evidence: Any) -> Optional[str]:
             continue
         location = artwork.get("location")
         if isinstance(location, dict):
-            museum = str(location.get("museum") or "").strip()
+            museum = str(location.get("museum") or location.get("name") or "").strip()
             city = str(location.get("city") or "").strip()
             country = str(location.get("country") or "").strip()
             if museum:
@@ -222,14 +223,7 @@ def _build_artwork_context(
         if tag.name
     ][:MAX_ARTWORK_TAGS]
     normalized_visual_description = (visual_description or "").strip()
-    location_payload = artwork.location if isinstance(artwork.location, dict) else {}
-    location_context = {
-        key: location_payload.get(key)
-        for key in ("museum", "city", "country")
-        if location_payload.get(key)
-    }
-    if artwork.museum_name and "museum" not in location_context:
-        location_context["museum"] = artwork.museum_name
+    location_context = effective_capture_place(artwork)
     return {
         "artworkId": artwork.id,
         "title": artwork.artwork_name,
@@ -313,6 +307,7 @@ def build_daily_evidence(
     )[:MAX_ARTWORKS]
     artwork_rows = (
         db.query(SavedArtwork)
+        .options(selectinload(SavedArtwork.capture_museum_entity))
         .filter(
             SavedArtwork.user_id == user_id,
             SavedArtwork.id.in_(candidate_artwork_ids),
