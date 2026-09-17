@@ -23,6 +23,7 @@ MAX_COVER_ARTWORKS = 3
 
 
 def _parse_recorded_date(value: object, fallback: object) -> date | None:
+    """Museum recording date, not evidence of a visit; fallback is save time."""
     # `value` is photo_time and `fallback` is created_at. Both are typed
     # str|None / datetime|None, but real rows carry off-type values (a non-string
     # photo_time, a stray date/str where a datetime is expected). This function
@@ -32,7 +33,8 @@ def _parse_recorded_date(value: object, fallback: object) -> date | None:
         normalized = value.strip()
         try:
             parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
-            return parsed.astimezone(UTC).date() if parsed.tzinfo is not None else parsed.date()
+            # Preserve the date recorded at capture, including its original offset.
+            return parsed.date()
         except ValueError:
             pass
         for date_format in (

@@ -87,6 +87,9 @@ def test_user_museums_aggregates_canonical_associations(client, db):
 @pytest.mark.parametrize(
     "value, fallback, expected",
     [
+        ("2025-09-05T23:30:00-07:00", None, date(2025, 9, 5)),
+        ("2025-09-05T00:30:00+09:00", None, date(2025, 9, 5)),
+        ("2025-09-05T23:30:00", None, date(2025, 9, 5)),
         ("Sep 05, 2025", None, date(2025, 9, 5)),          # normal string
         ("2024-05-10T12:00:00Z", None, date(2024, 5, 10)),  # iso with Z
         ("garbage", datetime(2026, 2, 1), date(2026, 2, 1)),  # unparsable -> created_at
@@ -148,3 +151,18 @@ def test_museum_artworks_reject_cross_user_read(client, db):
         return RequestPrincipal(state="authenticated", user_id="owner", user=user)
     app.dependency_overrides[get_request_principal] = fixed_principal
     assert client.get("/api/museums/venue/artworks", params={"user_id": "other"}).status_code == 403
+
+
+def test_museum_recording_dates_preserve_capture_day_and_save_fallback(client, db):
+    db.add(User(user_id="passport-user", device_id="passport-user"))
+    db.add(MuseumEntity(id="dated", canonical_name="Museum", latitude=1, longitude=2))
+    late = _artwork("late", "dated", "2025-09-05T23:30:00-07:00")
+    early = _artwork("early", "dated", "2025-09-06T00:30:00+09:00")
+    undated = _artwork("undated", "dated", None)
+    undated.created_at = datetime(2026, 2, 1)
+    db.add_all([late, early, undated])
+    db.commit()
+    item = client.get("/api/museums", params={"user_id": "passport-user"}).json()["items"][0]
+    assert item["first_recorded_on"] == "2025-09-05"
+    assert item["last_recorded_on"] == "2026-02-01"
+    assert item["artwork_ids"] == ["undated", "early", "late"]

@@ -77,8 +77,10 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Run retrieval tests against PostgreSQL
-        run: python -m pytest tests/test_collection_retrieval.py -q --tb=short
+      - name: Run retrieval and capture-place tests against PostgreSQL
+        run: >-
+          python -m pytest tests/test_collection_retrieval.py
+          tests/test_effective_capture_place.py tests/test_museum_passport.py -q --tb=short
         env:
           ENV: test
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/musee_test

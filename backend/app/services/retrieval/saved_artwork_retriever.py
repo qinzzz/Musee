@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from sqlalchemy import String, cast, or_
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
+from app.services.capture_place import effective_capture_place, capture_place_search_fields
 from app.database.models import ArtworkAnalysis, Collection, SavedArtwork
 from app.services.retrieval.contracts import SavedArtworkCandidate, SavedArtworkFilters
 
@@ -17,8 +18,7 @@ def _clean(value: object) -> str:
 
 
 def _display_location(artwork: SavedArtwork) -> str:
-    payload = artwork.location if isinstance(artwork.location, dict) else {}
-    return _clean(artwork.museum_name or payload.get("museum") or payload.get("city") or payload.get("country"))
+    return ", ".join(effective_capture_place(artwork).values())
 
 
 def _normalize_captured_at(value: object) -> str | None:
@@ -118,8 +118,7 @@ def _filtered_saved_artwork_query(
         )
     if filters.location:
         query = query.filter(or_(
-            SavedArtwork.museum_name.ilike(f"%{filters.location.strip()}%"),
-            cast(SavedArtwork.location, String).ilike(f"%{filters.location.strip()}%"),
+            *(field.ilike(f"%{filters.location.strip()}%") for field in capture_place_search_fields()),
         ))
     if filters.saved_after:
         query = query.filter(SavedArtwork.created_at >= filters.saved_after)
@@ -156,6 +155,7 @@ def retrieve_saved_artwork_candidates(
         filters=filters,
         source_ids=source_ids,
     ).options(
+        selectinload(SavedArtwork.capture_museum_entity),
         selectinload(SavedArtwork.artwork_tags),
         selectinload(SavedArtwork.collections),
         selectinload(SavedArtwork.analyses),
@@ -175,8 +175,8 @@ def retrieve_saved_artwork_candidates(
             artist=row.artist_name or "Unknown Artist",
             classification=row.classification or "unsorted",
             movement=row.movement,
-            museum_name=row.museum_name,
-            location=row.location if isinstance(row.location, dict) else None,
+            museum_name=effective_capture_place(row).get("museum"),
+            location=effective_capture_place(row) or None,
             captured_at=_normalize_captured_at(row.photo_time),
             saved_at=row.created_at,
             rerank_text=_build_rerank_text(row),
